@@ -1,6 +1,6 @@
 {
   "name": "@prefactor/sdk",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Automatic observability for LangChain.js agents",
   "type": "module",
   "main": "dist/index.cjs",
