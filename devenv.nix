@@ -8,6 +8,7 @@
 
   # https://devenv.sh/languages/
   languages.javascript.enable = true;
+  languages.javascript.npm.enable = true;
   languages.javascript.bun.enable = true;
 
   # https://devenv.sh/integrations/claude-code

@@ -229,8 +229,13 @@ export class HttpTransport implements Transport {
     const payload: Record<string, unknown> = {};
 
     if (this.config.agentId) payload.agent_id = this.config.agentId;
-    if (this.config.agentVersion) payload.agent_version = this.config.agentVersion;
-    if (this.config.agentName) payload.agent_name = this.config.agentName;
+    if (this.config.agentVersion) {
+      payload.agent_version = {
+        external_identifier: this.config.agentVersion,
+        name: this.config.agentName || 'Agent',
+        description: this.config.agentDescription || '',
+      };
+    }
     if (this.config.agentSchema && !this.config.skipSchema) {
       payload.agent_schema = this.config.agentSchema;
     }

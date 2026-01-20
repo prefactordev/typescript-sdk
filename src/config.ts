@@ -19,6 +19,9 @@ export const HttpTransportConfigSchema = z.object({
   /** Optional agent name */
   agentName: z.string().optional(),
 
+  /** Optional agent description */
+  agentDescription: z.string().optional(),
+
   /** Optional agent schema for validation */
   agentSchema: z.record(z.unknown()).optional(),
 
@@ -58,6 +61,7 @@ export const PartialHttpConfigSchema = z.object({
   agentId: z.string().optional(),
   agentVersion: z.string().optional(),
   agentName: z.string().optional(),
+  agentDescription: z.string().optional(),
   agentSchema: z.record(z.unknown()).optional(),
   agentSchemaVersion: z.string().optional(),
   skipSchema: z.boolean().optional(),
