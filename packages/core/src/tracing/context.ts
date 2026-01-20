@@ -1,0 +1,71 @@
+import { AsyncLocalStorage } from 'node:async_hooks';
+import type { Span } from './span.js';
+
+/**
+ * Storage for the current span in async context
+ */
+const spanStorage = new AsyncLocalStorage<Span>();
+
+/**
+ * SpanContext manages the current span in async execution contexts.
+ * This enables automatic parent-child span relationships without manual tracking.
+ *
+ * Uses Node.js AsyncLocalStorage which provides async-safe context propagation.
+ *
+ * @example
+ * ```typescript
+ * const span = tracer.startSpan({ name: 'parent', ... });
+ *
+ * await SpanContext.runAsync(span, async () => {
+ *   // Inside this function, getCurrent() returns the parent span
+ *   const parent = SpanContext.getCurrent();
+ *
+ *   const child = tracer.startSpan({
+ *     name: 'child',
+ *     parentSpanId: parent?.spanId,
+ *     traceId: parent?.traceId,
+ *   });
+ *   // ...
+ * });
+ * ```
+ */
+// biome-ignore lint/complexity/noStaticOnlyClass: Intentional API design for namespacing context operations
+export class SpanContext {
+  /**
+   * Get the current span from the async context
+   *
+   * @returns The current span, or undefined if no span is active
+   */
+  static getCurrent(): Span | undefined {
+    return spanStorage.getStore();
+  }
+
+  /**
+   * Run a synchronous function with the given span as the current context
+   *
+   * @param span - The span to set as current
+   * @param fn - The function to execute
+   * @returns The return value of the function
+   */
+  static run<T>(span: Span, fn: () => T): T {
+    return spanStorage.run(span, fn);
+  }
+
+  /**
+   * Run an asynchronous function with the given span as the current context
+   *
+   * @param span - The span to set as current
+   * @param fn - The async function to execute
+   * @returns A promise resolving to the return value of the function
+   */
+  static async runAsync<T>(span: Span, fn: () => Promise<T>): Promise<T> {
+    return spanStorage.run(span, fn);
+  }
+
+  /**
+   * Clear the current context (primarily for testing)
+   */
+  static clear(): void {
+    spanStorage.disable();
+  }
+}

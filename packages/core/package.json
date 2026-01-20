@@ -1,0 +1,36 @@
+{
+  "name": "@prefactor/core",
+  "version": "0.1.1",
+  "description": "Framework-agnostic observability primitives for Prefactor",
+  "type": "module",
+  "main": "dist/index.cjs",
+  "module": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "keywords": [
+    "prefactor",
+    "observability",
+    "tracing",
+    "llm",
+    "agent",
+    "monitoring"
+  ],
+  "author": "Prefactor",
+  "license": "MIT",
+  "dependencies": {
+    "@prefactor/pfid": "^0.1.0",
+    "zod": "^3.23.0"
+  },
+  "engines": {
+    "node": ">=24.0.0"
+  }
+}
