@@ -218,6 +218,37 @@ export class HttpTransport implements Transport {
   }
 
   /**
+   * Get default schema (v1.0.0) with span schemas for all supported types
+   */
+  private getDefaultSchema(): Record<string, unknown> {
+    return {
+      external_identifier: '1.0.0',
+      span_schemas: {
+        agent: {
+          type: 'object',
+          properties: { type: { type: 'string', const: 'agent' } },
+        },
+        llm: {
+          type: 'object',
+          properties: { type: { type: 'string', const: 'llm' } },
+        },
+        tool: {
+          type: 'object',
+          properties: { type: { type: 'string', const: 'tool' } },
+        },
+        chain: {
+          type: 'object',
+          properties: { type: { type: 'string', const: 'chain' } },
+        },
+        retriever: {
+          type: 'object',
+          properties: { type: { type: 'string', const: 'retriever' } },
+        },
+      },
+    };
+  }
+
+  /**
    * Ensure an agent instance is registered
    */
   private async ensureAgentRegistered(): Promise<void> {
@@ -236,11 +267,26 @@ export class HttpTransport implements Transport {
         description: this.config.agentDescription || '',
       };
     }
-    if (this.config.agentSchema && !this.config.skipSchema) {
-      payload.agent_schema = this.config.agentSchema;
-    }
-    if (this.config.agentSchemaVersion) {
-      payload.agent_schema_version = this.config.agentSchemaVersion;
+
+    // Schema handling - four modes:
+    // 1. skipSchema=true: No schema in payload (pre-registered on backend)
+    // 2. agentSchema provided: Use full custom schema object
+    // 3. agentSchemaVersion provided: Use version identifier only
+    // 4. None of above: Use default v1.0.0 schema
+    if (this.config.skipSchema) {
+      logger.debug('Skipping schema in registration (skipSchema=true)');
+      // Do not add agent_schema_version key
+    } else if (this.config.agentSchema) {
+      logger.debug('Using custom agent schema');
+      payload.agent_schema_version = this.config.agentSchema;
+    } else if (this.config.agentSchemaVersion) {
+      logger.debug(`Using schema version: ${this.config.agentSchemaVersion}`);
+      payload.agent_schema_version = {
+        external_identifier: this.config.agentSchemaVersion,
+      };
+    } else {
+      logger.debug('Using default hardcoded schema (v1.0.0)');
+      payload.agent_schema_version = this.getDefaultSchema();
     }
 
     try {

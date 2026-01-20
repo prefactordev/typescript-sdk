@@ -22,10 +22,10 @@ export const HttpTransportConfigSchema = z.object({
   /** Optional agent description */
   agentDescription: z.string().optional(),
 
-  /** Optional agent schema for validation */
+  /** Optional agent schema for validation (full schema object) */
   agentSchema: z.record(z.unknown()).optional(),
 
-  /** Optional agent schema version */
+  /** Optional agent schema version identifier (string) */
   agentSchemaVersion: z.string().optional(),
 
   /** Skip schema validation */
