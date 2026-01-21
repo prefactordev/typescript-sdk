@@ -10,7 +10,7 @@
  * examples/anthropic-agent/simple-agent.ts
  */
 
-import { init, shutdown } from '../src/index.js';
+import { init, shutdown } from '@prefactor/sdk';
 
 console.log('Prefactor SDK - Basic Example');
 console.log('='.repeat(40));
@@ -19,40 +19,54 @@ console.log();
 // Initialize Prefactor SDK (uses stdio transport by default)
 console.log('Initializing Prefactor SDK...');
 const middleware = init();
-console.log('✓ SDK initialized with stdio transport');
+console.log('SDK initialized with stdio transport');
 console.log('  Spans will be output as newline-delimited JSON to stdout');
 console.log();
 
 // Example: How to use the middleware with LangChain.js
 console.log('Usage with LangChain.js:');
-console.log('─'.repeat(40));
+console.log('-'.repeat(40));
 console.log(`
-import { createAgent } from 'langchain';
-import { init } from '@prefactor/sdk';
+import { createAgent, tool } from 'langchain';
+import { z } from 'zod';
+import { init, shutdown } from '@prefactor/sdk';
 
 // Initialize SDK
 const middleware = init();
 
+// Define a tool
+const myTool = tool(
+  async ({ input }) => \`Processed: \${input}\`,
+  {
+    name: 'my_tool',
+    description: 'A sample tool',
+    schema: z.object({ input: z.string() }),
+  }
+);
+
 // Create agent with Prefactor middleware
 const agent = createAgent({
   model: 'claude-sonnet-4-5-20250929',
-  tools: [myTool1, myTool2],
+  tools: [myTool],
   systemPrompt: 'You are a helpful assistant.',
-  middleware: [middleware],  // 👈 Add middleware here
+  middleware: [middleware],
 });
 
 // Run your agent - all calls are automatically traced!
 const result = await agent.invoke({
   messages: [{ role: 'user', content: 'Hello!' }],
 });
+
+// Graceful shutdown
+await shutdown();
 `);
 
 console.log('Features:');
-console.log('  ✓ Automatic tracing of LLM calls');
-console.log('  ✓ Tool execution tracking');
-console.log('  ✓ Agent workflow monitoring');
-console.log('  ✓ Token usage capture');
-console.log('  ✓ Parent-child span relationships');
+console.log('  - Automatic tracing of LLM calls');
+console.log('  - Tool execution tracking');
+console.log('  - Agent workflow monitoring');
+console.log('  - Token usage capture');
+console.log('  - Parent-child span relationships');
 console.log();
 
 console.log('Next steps:');
@@ -64,5 +78,5 @@ console.log();
 // Cleanup
 console.log('Shutting down Prefactor SDK...');
 await shutdown();
-console.log('✓ Shutdown complete');
+console.log('Shutdown complete');
 console.log();

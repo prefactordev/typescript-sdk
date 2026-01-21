@@ -4,14 +4,26 @@ Automatic observability for LangChain.js agents. Capture distributed traces of L
 
 ## Features
 
-- ✅ Automatic tracing of LLM calls with token usage
-- ✅ Tool execution tracking
-- ✅ Agent workflow visualization
-- ✅ Parent-child span relationships
-- ✅ Error tracking and debugging
-- ✅ Zero-overhead instrumentation
-- ✅ TypeScript type safety
-- ✅ Supports stdio and HTTP transports
+- Automatic tracing of LLM calls with token usage
+- Tool execution tracking
+- Agent workflow visualization
+- Parent-child span relationships
+- Error tracking and debugging
+- Zero-overhead instrumentation
+- TypeScript type safety
+- Supports stdio and HTTP transports
+
+## Monorepo Structure
+
+This repository is a Bun monorepo containing three packages:
+
+| Package | Description |
+|---------|-------------|
+| [`@prefactor/core`](./packages/core/) | Framework-agnostic observability primitives |
+| [`@prefactor/langchain`](./packages/langchain/) | LangChain.js integration |
+| [`@prefactor/sdk`](./packages/sdk/) | Unified SDK re-exporting both packages |
+
+Most users should install `@prefactor/sdk` for the complete experience.
 
 ## Installation
 
@@ -24,18 +36,18 @@ bun add @prefactor/sdk
 ## Quick Start
 
 ```typescript
-import { init } from '@prefactor/sdk';
-import { ChatAnthropic } from '@langchain/anthropic';
-import { createReactAgent } from '@langchain/langgraph/prebuilt';
+import { createAgent, tool } from 'langchain';
+import { z } from 'zod';
+import { init, shutdown } from '@prefactor/sdk';
 
 // Initialize Prefactor (defaults to stdio transport)
 const middleware = init();
 
 // Create your agent with middleware
-const model = new ChatAnthropic({ model: 'claude-sonnet-4-5-20250929' });
-const agent = createReactAgent({
-  llm: model,
+const agent = createAgent({
+  model: 'claude-sonnet-4-5-20250929',
   tools: [],
+  systemPrompt: 'You are a helpful assistant.',
   middleware: [middleware],
 });
 
@@ -45,6 +57,9 @@ const result = await agent.invoke({
 });
 
 console.log(result.messages[result.messages.length - 1].content);
+
+// Graceful shutdown
+await shutdown();
 ```
 
 ## Configuration
@@ -253,10 +268,8 @@ const config: Config = {
 
 See the `examples/` directory for complete examples:
 
-- `examples/basic.ts` - Simple LangChain.js agent with stdio transport
-- `examples/http-transport.ts` - Using HTTP transport
-- `examples/custom-tools.ts` - Tracing custom tools
-- `examples/manual-instrumentation.ts` - Manual span creation
+- [`examples/basic.ts`](./examples/basic.ts) - Simple LangChain.js agent with stdio transport
+- [`examples/anthropic-agent/simple-agent.ts`](./examples/anthropic-agent/simple-agent.ts) - Full working example with Anthropic Claude
 
 ## Architecture
 
@@ -268,39 +281,52 @@ The SDK consists of five main layers:
 4. **Configuration**: Environment variable support, validation with Zod
 5. **Utilities**: Logging, serialization helpers
 
-For more details, see `docs/architecture.md`.
-
 ## Requirements
 
-- Node.js >= 18.0.0
+- Node.js >= 24.0.0
 - TypeScript >= 5.0.0 (for TypeScript projects)
 - Bun >= 1.0.0 (optional, for development)
+- LangChain.js >= 1.0.0 (peer dependency)
 
 ## Development
 
+This project uses Bun and devenv for development.
+
 ```bash
-# Install dependencies
-bun install
+# Install dependencies (monorepo-wide)
+just install
+
+# Build all packages
+just build
 
 # Run tests
-bun test
+just test
 
 # Type check
-bun run typecheck
+just typecheck
 
 # Lint
-bun run lint
+just lint
 
 # Format
-bun run format
+just format
 
-# Build
-bun run build
+# Run all checks (typecheck + lint + test)
+just check
+
+# Clean build artifacts
+just clean
 ```
 
-## Contributing
+### Per-Package Commands
 
-Contributions are welcome! Please see `CONTRIBUTING.md` for guidelines.
+```bash
+# Build a specific package
+bun --filter @prefactor/core build
+
+# Run tests for a specific package
+bun test packages/core/tests/
+```
 
 ## License
 
