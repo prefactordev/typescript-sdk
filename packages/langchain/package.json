@@ -32,7 +32,6 @@
     "@prefactor/pfid": "^0.1.0"
   },
   "peerDependencies": {
-    "@langchain/core": "^0.3.0",
     "langchain": "^1.0.0"
   },
   "engines": {
