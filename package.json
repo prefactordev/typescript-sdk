@@ -14,10 +14,13 @@
   },
   "devDependencies": {
     "@biomejs/biome": "2.3.11",
+    "@langchain/core": "^1.1.16",
+    "@prefactor/sdk": "workspace:*",
     "@types/node": "^20.0.0",
     "bun-types": "latest",
     "langchain": "^1.0.0",
-    "typescript": "^5.3.0"
+    "typescript": "^5.3.0",
+    "zod": "^3.23.0"
   },
   "engines": {
     "node": ">=24.0.0"
