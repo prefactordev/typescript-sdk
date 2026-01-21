@@ -1,7 +1,7 @@
-import { describe, test, expect, beforeEach } from 'bun:test';
-import { isPfid, extractPartition, type Partition } from '@prefactor/pfid';
+import { beforeEach, describe, expect, test } from 'bun:test';
+import { extractPartition, isPfid, type Partition } from '@prefactor/pfid';
+import { type Span, SpanStatus, SpanType } from '../../src/tracing/span';
 import { Tracer } from '../../src/tracing/tracer';
-import { SpanType, SpanStatus, type Span } from '../../src/tracing/span';
 import type { Transport } from '../../src/transport/base';
 
 class MockTransport implements Transport {

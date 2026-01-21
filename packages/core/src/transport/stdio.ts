@@ -1,6 +1,6 @@
-import type { Transport } from './base.js';
 import type { Span } from '../tracing/span.js';
 import { serializeValue } from '../utils/serialization.js';
+import type { Transport } from './base.js';
 
 /**
  * STDIO transport emits spans as newline-delimited JSON to stdout.
@@ -38,7 +38,7 @@ export class StdioTransport implements Transport {
       try {
         const serialized = serializeValue(span);
         const json = JSON.stringify(serialized);
-        await Bun.write(Bun.stdout, json + '\n');
+        await Bun.write(Bun.stdout, `${json}\n`);
       } catch (error) {
         console.error('Failed to emit span to stdout:', error);
       }

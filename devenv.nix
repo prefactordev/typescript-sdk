@@ -8,6 +8,7 @@
 
   # https://devenv.sh/languages/
   languages.javascript.enable = true;
+  languages.javascript.package = pkgs.nodejs_24;
   languages.javascript.npm.enable = true;
   languages.javascript.bun.enable = true;
 

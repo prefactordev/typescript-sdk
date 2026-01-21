@@ -1,63 +1,111 @@
 #!/usr/bin/env bun
 
+import { existsSync, mkdirSync, rmSync } from 'node:fs';
+import { join } from 'node:path';
 import { $ } from 'bun';
-import { rmSync, cpSync, existsSync, mkdirSync } from 'fs';
-import { join } from 'path';
 
-console.log('🏗️  Building @prefactor/sdk...\n');
+const ROOT = import.meta.dir.replace('/scripts', '');
 
-// Clean dist directory
-console.log('📦 Cleaning dist directory...');
-rmSync('dist', { recursive: true, force: true });
-mkdirSync('dist', { recursive: true });
-
-// Compile TypeScript with tsc
-console.log('🔨 Compiling TypeScript...');
-await $`tsc`;
-
-// Bundle ESM
-console.log('📦 Bundling ESM...');
-const esmResult = await Bun.build({
-  entrypoints: ['./src/index.ts'],
-  outdir: './dist',
-  target: 'node',
-  format: 'esm',
-  sourcemap: 'external',
-  minify: false,
-  external: ['@langchain/core', 'langchain', 'zod'],
-});
-
-if (!esmResult.success) {
-  console.error('❌ ESM build failed:', esmResult.logs);
-  process.exit(1);
+interface PackageConfig {
+  name: string;
+  path: string;
+  entrypoint: string;
+  external: string[];
 }
 
-// Bundle CommonJS
-console.log('📦 Bundling CommonJS...');
-const cjsResult = await Bun.build({
-  entrypoints: ['./src/index.ts'],
-  outdir: './dist',
-  target: 'node',
-  format: 'cjs',
-  naming: '[dir]/[name].cjs',
-  sourcemap: 'external',
-  minify: false,
-  external: ['@langchain/core', 'langchain', 'zod'],
-});
+const packages: PackageConfig[] = [
+  {
+    name: '@prefactor/core',
+    path: 'packages/core',
+    entrypoint: './packages/core/src/index.ts',
+    external: ['@prefactor/pfid', 'zod'],
+  },
+  {
+    name: '@prefactor/langchain',
+    path: 'packages/langchain',
+    entrypoint: './packages/langchain/src/index.ts',
+    external: ['@prefactor/core', '@prefactor/pfid', '@langchain/core', 'langchain', 'zod'],
+  },
+  {
+    name: '@prefactor/sdk',
+    path: 'packages/sdk',
+    entrypoint: './packages/sdk/src/index.ts',
+    external: [
+      '@prefactor/core',
+      '@prefactor/langchain',
+      '@prefactor/pfid',
+      '@langchain/core',
+      'langchain',
+      'zod',
+    ],
+  },
+];
 
-if (!cjsResult.success) {
-  console.error('❌ CJS build failed:', cjsResult.logs);
-  process.exit(1);
-}
+async function buildPackage(pkg: PackageConfig): Promise<void> {
+  const pkgDir = join(ROOT, pkg.path);
+  const distDir = join(pkgDir, 'dist');
 
-// Copy metadata files
-console.log('📄 Copying metadata files...');
-const filesToCopy = ['package.json', 'README.md', 'LICENSE'];
+  console.log(`\n📦 Building ${pkg.name}...`);
 
-for (const file of filesToCopy) {
-  if (existsSync(file)) {
-    cpSync(file, join('dist', file));
+  // Ensure dist directory exists
+  if (!existsSync(distDir)) {
+    mkdirSync(distDir, { recursive: true });
   }
+
+  // Bundle ESM
+  console.log(`  📦 Bundling ESM...`);
+  const esmResult = await Bun.build({
+    entrypoints: [join(ROOT, pkg.entrypoint)],
+    outdir: distDir,
+    target: 'node',
+    format: 'esm',
+    sourcemap: 'external',
+    minify: false,
+    external: pkg.external,
+  });
+
+  if (!esmResult.success) {
+    console.error(`  ❌ ESM build failed:`, esmResult.logs);
+    process.exit(1);
+  }
+
+  // Bundle CommonJS
+  console.log(`  📦 Bundling CommonJS...`);
+  const cjsResult = await Bun.build({
+    entrypoints: [join(ROOT, pkg.entrypoint)],
+    outdir: distDir,
+    target: 'node',
+    format: 'cjs',
+    naming: '[dir]/[name].cjs',
+    sourcemap: 'external',
+    minify: false,
+    external: pkg.external,
+  });
+
+  if (!cjsResult.success) {
+    console.error(`  ❌ CJS build failed:`, cjsResult.logs);
+    process.exit(1);
+  }
+
+  console.log(`  ✅ ${pkg.name} built successfully`);
 }
 
-console.log('\n✅ Build completed successfully!');
+console.log('🏗️  Building @prefactor packages...\n');
+
+// Clean all dist directories first
+for (const pkg of packages) {
+  const distDir = join(ROOT, pkg.path, 'dist');
+  rmSync(distDir, { recursive: true, force: true });
+}
+
+// Compile TypeScript with tsc --build for type declarations
+// --force ensures clean rebuild after dist directories are cleaned
+console.log('🔨 Compiling TypeScript declarations...');
+await $`tsc --build --force`;
+
+// Build packages in dependency order (Bun bundler for JS)
+for (const pkg of packages) {
+  await buildPackage(pkg);
+}
+
+console.log('\n✅ All packages built successfully!');
