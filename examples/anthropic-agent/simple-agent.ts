@@ -4,11 +4,15 @@
  * This example demonstrates end-to-end tracing of a LangChain agent using
  * Anthropic's Claude model with the Prefactor SDK. It shows how the SDK
  * captures LLM calls, tool executions, and agent operations.
+ *
+ * Prerequisites:
+ * - ANTHROPIC_API_KEY environment variable set
+ * - Optional: PREFACTOR_API_URL and PREFACTOR_API_TOKEN for HTTP transport
  */
 
 import { createAgent, tool } from 'langchain';
 import { z } from 'zod';
-import { init, shutdown } from '../../src/index.js';
+import { init, shutdown } from '@prefactor/sdk';
 
 // Define simple tools for the agent
 const calculatorTool = tool(
@@ -57,7 +61,6 @@ async function main() {
   console.log('='.repeat(80));
   console.log();
 
-  console.log('Configure Prefactor SDK...');
   // Initialize Prefactor SDK
   console.log('Initializing Prefactor SDK...');
   const middleware = init({
@@ -68,7 +71,7 @@ async function main() {
       agentId: process.env.PREFACTOR_AGENT_ID,
     },
   });
-  console.log('✓ Prefactor middleware initialized');
+  console.log('Prefactor middleware initialized');
   console.log();
 
   // Create tools list
@@ -82,7 +85,7 @@ async function main() {
     systemPrompt: 'You are a helpful assistant. Use the available tools to answer questions.',
     middleware: [middleware],
   });
-  console.log('✓ Agent created with Prefactor tracing');
+  console.log('Agent created with Prefactor tracing');
   console.log();
 
   // Run test interactions
@@ -138,7 +141,7 @@ async function main() {
   // Explicitly flush pending spans (also happens automatically via beforeExit)
   console.log('Flushing pending spans...');
   await shutdown();
-  console.log('✓ Shutdown complete');
+  console.log('Shutdown complete');
   console.log();
 }
 
