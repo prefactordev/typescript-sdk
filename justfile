@@ -1,6 +1,16 @@
-# Build the SDK
+# Build all packages
 build:
     bun run scripts/build.ts
+
+# Build specific package
+build-core:
+    bun run scripts/build.ts --filter @prefactor/core
+
+build-langchain:
+    bun run scripts/build.ts --filter @prefactor/langchain
+
+build-sdk:
+    bun run scripts/build.ts --filter @prefactor/sdk
 
 # Run tests
 test:
@@ -10,9 +20,9 @@ test:
 test-watch:
     bun test --watch
 
-# Type check
+# Type check with project references
 typecheck:
-    tsc --noEmit
+    tsc --build
 
 # Lint code
 lint:
@@ -27,7 +37,7 @@ check: typecheck lint test
 
 # Clean build artifacts
 clean:
-    rm -rf dist node_modules
+    rm -rf packages/*/dist node_modules
 
 # Install dependencies
 install:

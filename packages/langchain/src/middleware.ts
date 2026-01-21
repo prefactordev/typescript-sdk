@@ -1,7 +1,4 @@
-import type { Tracer } from '../../tracing/tracer.js';
-import { SpanContext } from '../../tracing/context.js';
-import { SpanType } from '../../tracing/span.js';
-import type { Span } from '../../tracing/span.js';
+import { type Span, SpanContext, SpanType, type Tracer } from '@prefactor/core';
 import { extractTokenUsage } from './metadata-extractor.js';
 
 /**
@@ -18,7 +15,7 @@ import { extractTokenUsage } from './metadata-extractor.js';
  *
  * @example
  * ```typescript
- * import { init } from '@prefactor/sdk';
+ * import { init } from '@prefactor/langchain';
  * import { createReactAgent } from '@langchain/langgraph/prebuilt';
  *
  * const middleware = init();

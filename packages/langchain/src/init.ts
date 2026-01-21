@@ -1,11 +1,17 @@
+import {
+  type Config,
+  configureLogging,
+  createConfig,
+  getLogger,
+  HttpTransport,
+  HttpTransportConfigSchema,
+  StdioTransport,
+  Tracer,
+  type Transport,
+} from '@prefactor/core';
 import { extractPartition, type Partition } from '@prefactor/pfid';
-import { Tracer } from './tracing/tracer.js';
-import { PrefactorMiddleware } from './instrumentation/langchain/middleware.js';
-import { StdioTransport } from './transport/stdio.js';
-import { HttpTransport } from './transport/http.js';
-import { createConfig, HttpTransportConfigSchema, type Config } from './config.js';
-import { configureLogging, getLogger } from './utils/logging.js';
-import { createMiddleware, type AgentMiddleware } from 'langchain';
+import { type AgentMiddleware, createMiddleware } from 'langchain';
+import { PrefactorMiddleware } from './middleware.js';
 
 const logger = getLogger('init');
 
@@ -23,7 +29,7 @@ let globalMiddleware: AgentMiddleware | null = null;
  *
  * @example
  * ```typescript
- * import { init } from '@prefactor/sdk';
+ * import { init } from '@prefactor/langchain';
  * import { createAgent } from 'langchain';
  *
  * // Initialize with defaults (stdio transport)
@@ -55,7 +61,7 @@ export function init(config?: Partial<Config>): AgentMiddleware {
     return globalMiddleware;
   }
 
-  let transport;
+  let transport: Transport;
   if (finalConfig.transportType === 'stdio') {
     transport = new StdioTransport();
   } else {
@@ -114,7 +120,7 @@ export function init(config?: Partial<Config>): AgentMiddleware {
  *
  * @example
  * ```typescript
- * import { getTracer } from '@prefactor/sdk';
+ * import { getTracer } from '@prefactor/langchain';
  *
  * const tracer = getTracer();
  * const span = tracer.startSpan({
@@ -128,7 +134,8 @@ export function getTracer(): Tracer {
   if (!globalTracer) {
     init();
   }
-  return globalTracer!;
+  // Safe because init() always sets globalTracer
+  return globalTracer as Tracer;
 }
 
 /**
@@ -141,7 +148,7 @@ export function getTracer(): Tracer {
  *
  * @example
  * ```typescript
- * import { shutdown } from '@prefactor/sdk';
+ * import { shutdown } from '@prefactor/langchain';
  *
  * process.on('SIGTERM', async () => {
  *   await shutdown();
@@ -164,10 +171,3 @@ process.on('beforeExit', () => {
     console.error('Error during Prefactor SDK shutdown:', error);
   });
 });
-
-// Re-export types for consumer convenience
-export type { Config, HttpTransportConfig } from './config.js';
-export { SpanType, SpanStatus } from './tracing/span.js';
-export type { Span, TokenUsage, ErrorInfo } from './tracing/span.js';
-export { PrefactorMiddleware } from './instrumentation/langchain/middleware.js';
-export { Tracer } from './tracing/tracer.js';

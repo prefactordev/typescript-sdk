@@ -1,7 +1,7 @@
-import type { Transport } from './base.js';
 import type { HttpTransportConfig } from '../config.js';
 import type { Span } from '../tracing/span.js';
 import { getLogger } from '../utils/logging.js';
+import type { Transport } from './base.js';
 
 const logger = getLogger('http-transport');
 
@@ -100,7 +100,8 @@ export class HttpTransport implements Transport {
         continue;
       }
 
-      const item = this.queue.shift()!;
+      const item = this.queue.shift();
+      if (!item) continue;
 
       try {
         // Ensure agent is registered before processing spans
@@ -149,7 +150,7 @@ export class HttpTransport implements Transport {
       });
 
       if (response.ok) {
-        const data = await response.json() as { details?: { id?: string } };
+        const data = (await response.json()) as { details?: { id?: string } };
         const backendSpanId = data?.details?.id;
         if (backendSpanId) {
           this.spanIdMap.set(span.spanId, backendSpanId);
@@ -160,7 +161,7 @@ export class HttpTransport implements Transport {
       // Retry on server errors or rate limiting
       if ((response.status >= 500 || response.status === 429) && retry < this.config.maxRetries) {
         const delay = Math.min(
-          this.config.initialRetryDelay * Math.pow(this.config.retryMultiplier, retry),
+          this.config.initialRetryDelay * this.config.retryMultiplier ** retry,
           this.config.maxRetryDelay
         );
         logger.debug(`Retrying span send after ${delay}ms (attempt ${retry + 1})`);
@@ -175,7 +176,7 @@ export class HttpTransport implements Transport {
       // Retry on network errors
       if (retry < this.config.maxRetries) {
         const delay = Math.min(
-          this.config.initialRetryDelay * Math.pow(this.config.retryMultiplier, retry),
+          this.config.initialRetryDelay * this.config.retryMultiplier ** retry,
           this.config.maxRetryDelay
         );
         await new Promise((resolve) => setTimeout(resolve, delay));
@@ -224,9 +225,7 @@ export class HttpTransport implements Transport {
     }
 
     // Resolve parent span ID to backend ID
-    const parentSpanId = span.parentSpanId
-      ? (this.spanIdMap.get(span.parentSpanId) ?? null)
-      : null;
+    const parentSpanId = span.parentSpanId ? (this.spanIdMap.get(span.parentSpanId) ?? null) : null;
 
     return {
       details: {
@@ -324,7 +323,7 @@ export class HttpTransport implements Transport {
       });
 
       if (response.ok) {
-        const data = await response.json() as { details?: { id?: string } };
+        const data = (await response.json()) as { details?: { id?: string } };
         this.agentInstanceId = data?.details?.id ?? null;
         logger.debug(`Registered agent instance: ${this.agentInstanceId}`);
       } else {

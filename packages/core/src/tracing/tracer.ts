@@ -79,7 +79,10 @@ export class Tracer {
    * @param transport - The transport to use for emitting spans
    * @param partition - The partition for ID generation. If not provided, a random partition will be generated.
    */
-  constructor(private transport: Transport, partition?: Partition) {
+  constructor(
+    private transport: Transport,
+    partition?: Partition
+  ) {
     this.partition = partition ?? generatePartition();
   }
 

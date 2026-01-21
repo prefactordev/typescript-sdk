@@ -29,6 +29,7 @@ const spanStorage = new AsyncLocalStorage<Span>();
  * });
  * ```
  */
+// biome-ignore lint/complexity/noStaticOnlyClass: Intentional API design for namespacing context operations
 export class SpanContext {
   /**
    * Get the current span from the async context

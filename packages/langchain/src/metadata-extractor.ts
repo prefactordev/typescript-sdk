@@ -1,4 +1,4 @@
-import type { TokenUsage } from '../../tracing/span.js';
+import type { TokenUsage } from '@prefactor/core';
 
 /**
  * Extract token usage information from LLM responses.
