@@ -185,35 +185,58 @@ export class HttpTransport implements Transport {
   }
 
   /**
-   * Transform span to backend API format (snake_case)
+   * Transform span to backend API format with nested details/payload structure
    */
   private transformSpanToApiFormat(span: Span): Record<string, unknown> {
-    return {
-      agent_instance_id: this.agentInstanceId,
-      parent_span_id: span.parentSpanId ? (this.spanIdMap.get(span.parentSpanId) ?? null) : null,
+    const startedAt = new Date(span.startTime).toISOString();
+    const finishedAt = span.endTime ? new Date(span.endTime).toISOString() : null;
+
+    // Build payload with span data
+    const payload: Record<string, unknown> = {
+      span_id: span.spanId,
+      trace_id: span.traceId,
       name: span.name,
-      span_type: span.spanType,
-      start_time: new Date(span.startTime).toISOString(),
-      end_time: span.endTime ? new Date(span.endTime).toISOString() : null,
       status: span.status,
       inputs: span.inputs,
       outputs: span.outputs,
-      token_usage: span.tokenUsage
-        ? {
-            prompt_tokens: span.tokenUsage.promptTokens,
-            completion_tokens: span.tokenUsage.completionTokens,
-            total_tokens: span.tokenUsage.totalTokens,
-          }
-        : null,
-      error: span.error
-        ? {
-            error_type: span.error.errorType,
-            message: span.error.message,
-            stacktrace: span.error.stacktrace,
-          }
-        : null,
       metadata: span.metadata,
       tags: span.tags,
+      token_usage: null,
+      error: null,
+    };
+
+    // Add optional token_usage
+    if (span.tokenUsage) {
+      payload.token_usage = {
+        prompt_tokens: span.tokenUsage.promptTokens,
+        completion_tokens: span.tokenUsage.completionTokens,
+        total_tokens: span.tokenUsage.totalTokens,
+      };
+    }
+
+    // Add optional error
+    if (span.error) {
+      payload.error = {
+        error_type: span.error.errorType,
+        message: span.error.message,
+        stacktrace: span.error.stacktrace,
+      };
+    }
+
+    // Resolve parent span ID to backend ID
+    const parentSpanId = span.parentSpanId
+      ? (this.spanIdMap.get(span.parentSpanId) ?? null)
+      : null;
+
+    return {
+      details: {
+        agent_instance_id: this.agentInstanceId,
+        schema_name: span.spanType,
+        payload,
+        parent_span_id: parentSpanId,
+        started_at: startedAt,
+        finished_at: finishedAt,
+      },
     };
   }
 
@@ -393,7 +416,7 @@ export class HttpTransport implements Transport {
           Authorization: `Bearer ${this.config.apiToken}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ end_time: data.timestamp }),
+        body: JSON.stringify({ timestamp: data.timestamp }),
         signal: AbortSignal.timeout(this.config.requestTimeout),
       });
 
