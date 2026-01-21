@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 
-import { cpSync, existsSync, mkdirSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { $ } from 'bun';
 
@@ -44,19 +44,13 @@ const packages: PackageConfig[] = [
 async function buildPackage(pkg: PackageConfig): Promise<void> {
   const pkgDir = join(ROOT, pkg.path);
   const distDir = join(pkgDir, 'dist');
-  const tmpDir = join(pkgDir, 'dist-tmp');
 
   console.log(`\n📦 Building ${pkg.name}...`);
 
-  // Backup existing dist (contains .d.ts from tsc)
-  if (existsSync(distDir)) {
-    rmSync(tmpDir, { recursive: true, force: true });
-    cpSync(distDir, tmpDir, { recursive: true });
+  // Ensure dist directory exists
+  if (!existsSync(distDir)) {
+    mkdirSync(distDir, { recursive: true });
   }
-
-  // Clean dist directory for bundling
-  rmSync(distDir, { recursive: true, force: true });
-  mkdirSync(distDir, { recursive: true });
 
   // Bundle ESM
   console.log(`  📦 Bundling ESM...`);
@@ -93,14 +87,6 @@ async function buildPackage(pkg: PackageConfig): Promise<void> {
     process.exit(1);
   }
 
-  // Copy type declarations from tmp back to dist
-  if (existsSync(tmpDir)) {
-    console.log(`  📄 Copying type declarations...`);
-    await $`cp ${tmpDir}/index.d.ts ${distDir}/ 2>/dev/null || true`.quiet();
-    await $`cp ${tmpDir}/index.d.ts.map ${distDir}/ 2>/dev/null || true`.quiet();
-    rmSync(tmpDir, { recursive: true, force: true });
-  }
-
   console.log(`  ✅ ${pkg.name} built successfully`);
 }
 
@@ -112,11 +98,12 @@ for (const pkg of packages) {
   rmSync(distDir, { recursive: true, force: true });
 }
 
-// Compile TypeScript with tsc --build for project references
-console.log('🔨 Compiling TypeScript...');
-await $`tsc --build`;
+// Compile TypeScript with tsc --build for type declarations
+// --force ensures clean rebuild after dist directories are cleaned
+console.log('🔨 Compiling TypeScript declarations...');
+await $`tsc --build --force`;
 
-// Build packages in dependency order
+// Build packages in dependency order (Bun bundler for JS)
 for (const pkg of packages) {
   await buildPackage(pkg);
 }

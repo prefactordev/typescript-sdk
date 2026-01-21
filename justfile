@@ -42,3 +42,15 @@ clean:
 # Install dependencies
 install:
     bun install
+
+# Publish all packages (in dependency order)
+publish:
+    cd packages/core && bun publish --access public
+    cd packages/langchain && bun publish --access public
+    cd packages/sdk && bun publish --access public
+
+# Dry run publish
+publish-dry:
+    cd packages/core && bun publish --access public --dry-run
+    cd packages/langchain && bun publish --access public --dry-run
+    cd packages/sdk && bun publish --access public --dry-run

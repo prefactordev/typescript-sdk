@@ -3,7 +3,11 @@
   "compilerOptions": {
     "rootDir": "./src",
     "outDir": "./dist",
-    "composite": true
+    "composite": true,
+    "paths": {
+      "@prefactor/core": ["../core/src/index.ts"],
+      "@prefactor/langchain": ["../langchain/src/index.ts"]
+    }
   },
   "include": ["src/**/*"],
   "references": [{ "path": "../core" }, { "path": "../langchain" }]
