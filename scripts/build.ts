@@ -21,6 +21,12 @@ const packages: PackageConfig[] = [
     external: ['@prefactor/pfid', 'zod'],
   },
   {
+    name: '@prefactor/ai',
+    path: 'packages/ai',
+    entrypoint: './packages/ai/src/index.ts',
+    external: ['@prefactor/core', '@prefactor/pfid'],
+  },
+  {
     name: '@prefactor/langchain',
     path: 'packages/langchain',
     entrypoint: './packages/langchain/src/index.ts',

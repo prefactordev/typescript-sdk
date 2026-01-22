@@ -1,0 +1,45 @@
+{
+  "name": "@prefactor/ai",
+  "version": "0.1.0",
+  "description": "OpenTelemetry-compatible telemetry adapter for Vercel AI SDK with Prefactor platform",
+  "type": "module",
+  "main": "dist/index.cjs",
+  "module": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "keywords": [
+    "prefactor",
+    "ai",
+    "telemetry",
+    "opentelemetry",
+    "tracing",
+    "vercel",
+    "ai-sdk",
+    "llm",
+    "observability"
+  ],
+  "author": "Prefactor",
+  "license": "MIT",
+  "dependencies": {
+    "@prefactor/core": "workspace:*",
+    "@prefactor/pfid": "^0.1.0"
+  },
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "engines": {
+    "node": ">=24.0.0"
+  }
+}
