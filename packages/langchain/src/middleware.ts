@@ -1,5 +1,6 @@
-import { type Span, SpanContext, SpanType, type Tracer } from '@prefactor/core';
+import { type Span, SpanContext, type Tracer } from '@prefactor/core';
 import { extractTokenUsage } from './metadata-extractor.js';
+import { LangChainSpanTypes } from './span-types.js';
 
 /**
  * Prefactor middleware for LangChain.js agents.
@@ -45,7 +46,7 @@ export class PrefactorMiddleware {
 
     const span = this.tracer.startSpan({
       name: 'agent',
-      spanType: SpanType.AGENT,
+      spanType: LangChainSpanTypes.AGENT,
       inputs: { messages: messages.slice(-3).map((m: unknown) => String(m)) },
       parentSpanId: parentSpan?.spanId,
       traceId: parentSpan?.traceId,
@@ -88,7 +89,7 @@ export class PrefactorMiddleware {
 
     const span = this.tracer.startSpan({
       name: this.extractModelName(request),
-      spanType: SpanType.LLM,
+      spanType: LangChainSpanTypes.LLM,
       inputs: this.extractModelInputs(request),
       parentSpanId: parentSpan?.spanId,
       traceId: parentSpan?.traceId,
@@ -124,7 +125,7 @@ export class PrefactorMiddleware {
 
     const span = this.tracer.startSpan({
       name: this.extractToolName(request),
-      spanType: SpanType.TOOL,
+      spanType: LangChainSpanTypes.TOOL,
       inputs: this.extractToolInputs(request),
       parentSpanId: parentSpan?.spanId,
       traceId: parentSpan?.traceId,

@@ -12,6 +12,7 @@ import {
 import { extractPartition, type Partition } from '@prefactor/pfid';
 import { type AgentMiddleware, createMiddleware } from 'langchain';
 import { PrefactorMiddleware } from './middleware.js';
+import { registerLangChainSpanTypes } from './span-types.js';
 
 const logger = getLogger('init');
 
@@ -56,6 +57,9 @@ export function init(config?: Partial<Config>): AgentMiddleware {
 
   const finalConfig = createConfig(config);
   logger.info('Initializing Prefactor SDK', { transport: finalConfig.transportType });
+
+  // Register LangChain-specific span types
+  registerLangChainSpanTypes();
 
   if (globalMiddleware !== null) {
     return globalMiddleware;

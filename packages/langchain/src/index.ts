@@ -12,3 +12,5 @@ export { getTracer, init, shutdown } from './init.js';
 export { extractTokenUsage } from './metadata-extractor.js';
 // Middleware
 export { PrefactorMiddleware } from './middleware.js';
+// Span types
+export { LangChainSpanTypes, registerLangChainSpanTypes } from './span-types.js';
