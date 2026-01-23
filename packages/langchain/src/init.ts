@@ -84,7 +84,10 @@ export function init(config?: Partial<Config>): AgentMiddleware {
     }
   }
 
-  globalTracer = new Tracer(transport, partition);
+  globalTracer = new Tracer(transport, {
+    partition,
+    validateSchemas: finalConfig.validateSpanSchemas,
+  });
   const prefactorMiddleware = new PrefactorMiddleware(globalTracer);
 
   const middleware = createMiddleware({

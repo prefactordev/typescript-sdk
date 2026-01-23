@@ -43,6 +43,16 @@ export interface EndSpanOptions {
 }
 
 /**
+ * Options for creating a Tracer
+ */
+export interface TracerOptions {
+  /** Whether to validate span inputs/outputs against registered schemas (default: true) */
+  validateSchemas?: boolean;
+  /** The partition for ID generation. If not provided, a random partition will be generated. */
+  partition?: Partition;
+}
+
+/**
  * Tracer manages the lifecycle of spans.
  *
  * The tracer is responsible for:
@@ -50,6 +60,7 @@ export interface EndSpanOptions {
  * - Managing span lifecycle (start/end)
  * - Delegating to the transport layer for span emission
  * - Handling agent instance lifecycle
+ * - Validating span inputs/outputs against registered schemas
  *
  * @example
  * ```typescript
@@ -71,18 +82,38 @@ export interface EndSpanOptions {
  */
 export class Tracer {
   private partition: Partition;
+  private validateSchemas: boolean;
 
   /**
    * Initialize the tracer.
    *
    * @param transport - The transport to use for emitting spans
-   * @param partition - The partition for ID generation. If not provided, a random partition will be generated.
+   * @param options.tracerOptions_or_partition - Options for the tracer (legacy: can pass a Partition directly)
    */
   constructor(
     private transport: Transport,
-    partition?: Partition
+    tracerOptions_or_partition?: TracerOptions | Partition
   ) {
-    this.partition = partition ?? generatePartition();
+    // Handle both old signature (Partition directly) and new signature (TracerOptions)
+    if (tracerOptions_or_partition !== undefined) {
+      // Check if it's TracerOptions by seeing if it has validateSchemas property
+      if (
+        typeof tracerOptions_or_partition === 'object' &&
+        'validateSchemas' in tracerOptions_or_partition &&
+        !('then' in tracerOptions_or_partition)
+      ) {
+        // TracerOptions object - this is the new API
+        this.partition = tracerOptions_or_partition.partition ?? generatePartition();
+        this.validateSchemas = tracerOptions_or_partition.validateSchemas ?? true;
+      } else {
+        // Legacy: Partition passed directly
+        this.partition = tracerOptions_or_partition as Partition;
+        this.validateSchemas = true;
+      }
+    } else {
+      this.partition = generatePartition();
+      this.validateSchemas = true;
+    }
   }
 
   /**
@@ -111,6 +142,16 @@ export class Tracer {
       metadata: options.metadata ?? {},
       tags: options.tags ?? [],
     };
+
+    // Validate inputs if schema validation is enabled
+    if (this.validateSchemas) {
+      const validation = spanTypeRegistry.validate(options.spanType, options.inputs, 'input');
+      if (!validation.success) {
+        console.error(
+          `Span input validation failed for span type "${String(options.spanType)}": ${validation.error ?? 'Unknown error'}`
+        );
+      }
+    }
 
     // AGENT spans are emitted immediately for real-time tracking
     // They will be finished later with finishSpan()
@@ -145,6 +186,16 @@ export class Tracer {
       };
     } else {
       span.status = SpanStatus.SUCCESS;
+
+      // Validate outputs if schema validation is enabled and no error occurred
+      if (this.validateSchemas && options?.outputs) {
+        const validation = spanTypeRegistry.validate(span.spanType, options.outputs, 'output');
+        if (!validation.success) {
+          console.error(
+            `Span output validation failed for span type "${String(span.spanType)}": ${validation.error ?? 'Unknown error'}`
+          );
+        }
+      }
     }
 
     try {

@@ -8,6 +8,30 @@
 export type SpanType = string & { readonly __spanTypeBrand: unique symbol };
 
 /**
+ * Schema definition for a span type
+ *
+ * Zod schemas for validating inputs (when starting a span) and outputs (when ending a span).
+ * Both schemas are optional.
+ *
+ * @example
+ * ```typescript
+ * import { z } from 'zod';
+ *
+ * const apiFetchSchema = {
+ *   input: z.object({ url: z.string() }),
+ *   output: z.object({ status: z.number() }),
+ * } satisfies SpanTypeSchema;
+ * ```
+ */
+export interface SpanTypeSchema {
+  /** Optional schema for validating inputs when starting a span */
+  input?: unknown;
+
+  /** Optional schema for validating outputs when ending a span */
+  output?: unknown;
+}
+
+/**
  * Internal factory function to create branded span types
  */
 function createSpanType<T extends string>(type: T): SpanType {
@@ -126,6 +150,7 @@ export interface Span {
  */
 class SpanTypeRegistry {
   private knownTypes = new Set<SpanType>();
+  private schemas = new Map<SpanType, SpanTypeSchema>();
 
   constructor() {
     // Register built-in types by default
@@ -138,8 +163,11 @@ class SpanTypeRegistry {
    * @param type - The span type to register
    * @returns The same type for convenience
    */
-  register<T extends SpanType>(type: T): T {
+  register<T extends SpanType>(type: T, schema?: SpanTypeSchema): T {
     this.knownTypes.add(type);
+    if (schema) {
+      this.schemas.set(type, schema);
+    }
     return type;
   }
 
@@ -185,6 +213,50 @@ class SpanTypeRegistry {
     const typeStr = String(type);
     return typeStr === 'agent' || typeStr.startsWith('agent:') || typeStr.endsWith(':agent');
   }
+
+  /**
+   * Get the schema for a span type
+   *
+   * @param type - The span type to get schema for
+   * @returns The schema if registered, undefined otherwise
+   */
+  getSchema(type: SpanType): SpanTypeSchema | undefined {
+    return this.schemas.get(type);
+  }
+
+  /**
+   * Validate data against a span type's input or output schema
+   *
+   * @param type - The span type to validate against
+   * @param data - The data to validate
+   * @param phase - 'input' or 'output' to specify which schema to use
+   * @returns Result object with success status and optional error message
+   */
+  validate(
+    type: SpanType,
+    data: Record<string, unknown>,
+    phase: 'input' | 'output'
+  ): { success: boolean; error?: string } {
+    const schema = this.schemas.get(type);
+    if (!schema) {
+      return { success: true };
+    }
+
+    const schemaToUse = phase === 'input' ? schema.input : schema.output;
+    if (!schemaToUse) {
+      return { success: true };
+    }
+
+    try {
+      (schemaToUse as { parse: (data: unknown) => unknown }).parse(data);
+      return { success: true };
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : String(error),
+      };
+    }
+  }
 }
 
 /**
@@ -214,4 +286,54 @@ export const spanTypeRegistry = new SpanTypeRegistry();
 export function registerSpanType<T extends string>(type: T): SpanType {
   const branded = defineSpanType(type);
   return spanTypeRegistry.register(branded);
+}
+
+/**
+ * Register a span type with Zod schemas for validation
+ *
+ * This function creates a branded span type, registers it in the global
+ * registry with schemas, and enables automatic validation when creating
+ * spans of this type.
+ *
+ * @example
+ * ```typescript
+ * import { z } from 'zod';
+ *
+ * const API_FETCH = registerSpanTypeWithSchema(
+ *   'api:fetch-data',
+ *   {
+ *     input: z.object({
+ *       url: z.string().url(),
+ *       method: z.enum(['GET', 'POST']),
+ *     }),
+ *     output: z.object({
+ *       status: z.number(),
+ *       body: z.string(),
+ *     }),
+ *   }
+ * );
+ *
+ * // This will validate inputs against the input schema
+ * const span = tracer.startSpan({
+ *   spanType: API_FETCH,
+ *   name: 'fetch',
+ *   inputs: { url: 'https://api.example.com', method: 'GET' },
+ * });
+ *
+ * // This will validate outputs against the output schema
+ * tracer.endSpan(span, {
+ *   outputs: { status: 200, body: 'Success' },
+ * });
+ * ```
+ *
+ * @param type - The string value for the span type
+ * @param schemas - The input and output schemas for validation
+ * @returns A branded span type
+ */
+export function registerSpanTypeWithSchema<T extends string>(
+  type: T,
+  schemas: SpanTypeSchema
+): SpanType {
+  const branded = defineSpanType(type);
+  return spanTypeRegistry.register(branded, schemas);
 }

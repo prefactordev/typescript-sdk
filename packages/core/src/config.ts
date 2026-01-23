@@ -113,6 +113,17 @@ export const ConfigSchema = z.object({
    */
   warnOnUnknownSpanTypes: z.boolean().default(false),
 
+  /**
+   * Whether to validate span inputs/outputs against registered schemas
+   *
+   * When enabled, span data will be validated against schemas registered
+   * with registerSpanTypeWithSchema(). Validation failures are logged but
+   * do not prevent span creation.
+   *
+   * Default: true
+   */
+  validateSpanSchemas: z.boolean().default(true),
+
   /** HTTP transport configuration (required if transportType is 'http') */
   httpConfig: PartialHttpConfigSchema.optional(),
 });
@@ -158,6 +169,8 @@ export function createConfig(options?: Partial<Config>): Config {
     warnOnUnknownSpanTypes:
       options?.warnOnUnknownSpanTypes ??
       process.env.PREFACTOR_WARN_ON_UNKNOWN_SPAN_TYPES === 'true',
+    validateSpanSchemas:
+      options?.validateSpanSchemas ?? process.env.PREFACTOR_VALIDATE_SPAN_SCHEMAS !== 'false',
     httpConfig: options?.httpConfig,
   };
 
