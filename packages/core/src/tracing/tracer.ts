@@ -1,7 +1,6 @@
 import { generate, generatePartition, type Partition } from '@prefactor/pfid';
 import type { Transport } from '../transport/base.js';
-import type { Span, SpanType, TokenUsage } from './span.js';
-import { SpanStatus } from './span.js';
+import { type Span, SpanStatus, type SpanType, spanTypeRegistry, type TokenUsage } from './span.js';
 
 /**
  * Options for starting a new span
@@ -115,7 +114,7 @@ export class Tracer {
 
     // AGENT spans are emitted immediately for real-time tracking
     // They will be finished later with finishSpan()
-    if (options.spanType === 'agent') {
+    if (spanTypeRegistry.isAgentSpanType(options.spanType)) {
       try {
         this.transport.emit(span);
       } catch (error) {
@@ -151,7 +150,7 @@ export class Tracer {
     try {
       // AGENT spans use finishSpan API (they were already emitted on start)
       // Other span types are emitted here
-      if (span.spanType === 'agent') {
+      if (spanTypeRegistry.isAgentSpanType(span.spanType)) {
         this.transport.finishSpan(span.spanId, span.endTime);
       } else {
         this.transport.emit(span);

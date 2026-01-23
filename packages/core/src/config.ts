@@ -97,6 +97,22 @@ export const ConfigSchema = z.object({
   /** Maximum length for output strings */
   maxOutputLength: z.number().int().positive().default(10000),
 
+  /**
+   * Custom span types to register at SDK initialization
+   *
+   * These will be automatically registered in the SpanTypeRegistry
+   * for validation and tracking. This is optional - you can use
+   * any branded span type without registration.
+   */
+  customSpanTypes: z.array(z.string()).default([]),
+
+  /**
+   * Whether to warn when using unregistered span types
+   *
+   * Default: false (permissive mode)
+   */
+  warnOnUnknownSpanTypes: z.boolean().default(false),
+
   /** HTTP transport configuration (required if transportType is 'http') */
   httpConfig: PartialHttpConfigSchema.optional(),
 });
@@ -135,6 +151,13 @@ export function createConfig(options?: Partial<Config>): Config {
       options?.maxInputLength ?? parseInt(process.env.PREFACTOR_MAX_INPUT_LENGTH ?? '10000', 10),
     maxOutputLength:
       options?.maxOutputLength ?? parseInt(process.env.PREFACTOR_MAX_OUTPUT_LENGTH ?? '10000', 10),
+    customSpanTypes:
+      options?.customSpanTypes ??
+      process.env.PREFACTOR_CUSTOM_SPAN_TYPES?.split(',').filter(Boolean) ??
+      [],
+    warnOnUnknownSpanTypes:
+      options?.warnOnUnknownSpanTypes ??
+      process.env.PREFACTOR_WARN_ON_UNKNOWN_SPAN_TYPES === 'true',
     httpConfig: options?.httpConfig,
   };
 

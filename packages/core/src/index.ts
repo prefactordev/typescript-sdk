@@ -11,13 +11,7 @@ export {
   PartialHttpConfigSchema,
 } from './config.js';
 export { SpanContext } from './tracing/context.js';
-export {
-  type ErrorInfo,
-  type Span,
-  SpanStatus,
-  SpanType,
-  type TokenUsage,
-} from './tracing/span.js';
+export * from './tracing/span.js';
 export { type EndSpanOptions, type StartSpanOptions, Tracer } from './tracing/tracer.js';
 // Transport
 export type { Transport } from './transport/base.js';

@@ -1,6 +1,13 @@
 import { beforeEach, describe, expect, test } from 'bun:test';
 import { extractPartition, isPfid, type Partition } from '@prefactor/pfid';
-import { type Span, SpanStatus, SpanType } from '../../src/tracing/span';
+import {
+  defineSpanType,
+  registerSpanType,
+  type Span,
+  SpanStatus,
+  SpanType,
+  spanTypeRegistry,
+} from '../../src/tracing/span';
 import { Tracer } from '../../src/tracing/tracer';
 import type { Transport } from '../../src/transport/base';
 
@@ -233,6 +240,113 @@ describe('Tracer', () => {
       for (const span of spans) {
         expect(extractPartition(span.spanId)).toBe(partition);
       }
+    });
+  });
+
+  describe('Custom span types', () => {
+    test('should work with custom span types defined via defineSpanType', () => {
+      const customType = defineSpanType('custom:operation');
+
+      const span = tracer.startSpan({
+        name: 'custom_operation',
+        spanType: customType,
+        inputs: { test: 'data' },
+      });
+
+      expect(span.spanType).toBe(customType);
+      expect(span.name).toBe('custom_operation');
+      expect(span.inputs).toEqual({ test: 'data' });
+    });
+
+    test('should register custom span types in the registry', () => {
+      const customType = registerSpanType('registered:type');
+
+      expect(spanTypeRegistry.isKnown(customType)).toBe(true);
+    });
+
+    test('should detect agent-type spans with prefix convention', () => {
+      const agentType = defineSpanType('agent:task');
+
+      expect(spanTypeRegistry.isAgentSpanType(agentType)).toBe(true);
+    });
+
+    test('should detect agent-type spans with suffix convention', () => {
+      const agentType = defineSpanType('workflow:agent');
+
+      expect(spanTypeRegistry.isAgentSpanType(agentType)).toBe(true);
+    });
+
+    test('should emit agent-type custom spans immediately', () => {
+      const agentType = defineSpanType('custom:agent');
+
+      const span = tracer.startSpan({
+        name: 'custom_agent',
+        spanType: agentType,
+        inputs: {},
+      });
+
+      expect(transport.spans).toHaveLength(1);
+      expect(transport.spans[0].spanId).toBe(span.spanId);
+    });
+
+    test('should not emit non-agent custom spans immediately', () => {
+      const customType = defineSpanType('custom:operation');
+
+      tracer.startSpan({
+        name: 'custom_operation',
+        spanType: customType,
+        inputs: {},
+      });
+
+      expect(transport.spans).toHaveLength(0);
+    });
+
+    test('should use finishSpan for custom agent-type spans', () => {
+      const agentType = defineSpanType('autogen:agent');
+
+      const span = tracer.startSpan({
+        name: 'autogen_agent',
+        spanType: agentType,
+        inputs: {},
+      });
+
+      tracer.endSpan(span);
+
+      expect(transport.finishedSpans).toHaveLength(1);
+      expect(transport.finishedSpans[0].spanId).toBe(span.spanId);
+    });
+  });
+
+  describe('SpanType registry', () => {
+    test('should have all built-in types registered by default', () => {
+      const allTypes = spanTypeRegistry.getAll();
+
+      expect(allTypes).toContain(SpanType.AGENT);
+      expect(allTypes).toContain(SpanType.LLM);
+      expect(allTypes).toContain(SpanType.TOOL);
+      expect(allTypes).toContain(SpanType.CHAIN);
+      expect(allTypes).toContain(SpanType.RETRIEVER);
+      expect(allTypes.length).toBeGreaterThanOrEqual(5);
+    });
+
+    test('should allow batch registration of span types', () => {
+      const types = [defineSpanType('a'), defineSpanType('b'), defineSpanType('c')];
+
+      expect(() => spanTypeRegistry.registerBatch(types)).not.toThrow();
+
+      expect(spanTypeRegistry.isKnown(types[0] ?? SpanType.AGENT)).toBe(true);
+      expect(spanTypeRegistry.isKnown(types[1] ?? SpanType.AGENT)).toBe(true);
+      expect(spanTypeRegistry.isKnown(types[2] ?? SpanType.AGENT)).toBe(true);
+    });
+
+    test('should return all registered types', () => {
+      const initialCount = spanTypeRegistry.getAll().length;
+      const newType = registerSpanType('test:type');
+
+      const allTypes = spanTypeRegistry.getAll();
+
+      expect(allTypes.length).toBeGreaterThan(initialCount);
+      expect(allTypes).toContain(newType);
     });
   });
 });
