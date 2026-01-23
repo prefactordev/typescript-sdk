@@ -2,7 +2,7 @@
  * Simple AI SDK Example for @prefactor/ai
  *
  * This example demonstrates end-to-end tracing of Vercel AI SDK operations
- * using @prefactor/ai's OTEL adapter. Telemetry is sent to the Prefactor platform
+ * using @prefactor/ai's  adapter. Telemetry is sent to the Prefactor platform
  * via HTTP transport, or to stdout for local development.
  *
  * Prerequisites:
@@ -10,7 +10,7 @@
  * - For HTTP transport: PREFACTOR_API_URL and PREFACTOR_API_TOKEN
  */
 
-import { generateText, tool } from 'ai';
+import { generateText, stepCountIs, tool } from 'ai';
 import { anthropic } from '@ai-sdk/anthropic';
 import { z } from 'zod';
 import { init, shutdown } from '@prefactor/ai';
@@ -64,10 +64,18 @@ async function main() {
   // - PREFACTOR_AGENT_ID: Optional agent identifier
   console.log('Initializing @prefactor/ai tracer...');
 
-  const tracer = init();
-  const transportType = process.env.PREFACTOR_TRANSPORT || 'stdio';
-
-  console.log(`Tracer initialized with ${transportType} transport`);
+  const tracer = init({
+    // transportType: 'stdio',
+    httpConfig: {
+      apiToken: process.env.PREFACTOR_API_TOKEN!,
+      apiUrl: process.env.PREFACTOR_API_URL!,
+      agentId: process.env.PREFACTOR_AGENT_ID,
+      agentVersion: "1.0.0",
+      agentName: "Simple Agent",
+      agentDescription: "A simple agent for testing purposes."
+    }
+  });
+  
   console.log();
 
   // Run test interactions
@@ -83,7 +91,7 @@ async function main() {
       tools: {
         get_current_time: getCurrentTimeTool,
       },
-      maxSteps: 3,
+      stopWhen: stepCountIs(3),
       experimental_telemetry: {
         isEnabled: true,
         tracer,
@@ -118,7 +126,7 @@ async function main() {
       tools: {
         calculator: calculatorTool,
       },
-      maxSteps: 3,
+      stopWhen: stepCountIs(3),
       experimental_telemetry: {
         isEnabled: true,
         tracer,
@@ -154,7 +162,7 @@ async function main() {
         calculator: calculatorTool,
         get_current_time: getCurrentTimeTool,
       },
-      maxSteps: 5,
+      stopWhen: stepCountIs(5),
       experimental_telemetry: {
         isEnabled: true,
         tracer,
@@ -181,22 +189,7 @@ async function main() {
   console.log('Example Complete!');
   console.log('='.repeat(80));
   console.log();
-
-  if (transportType === 'http') {
-    console.log('Trace spans have been sent to the Prefactor platform.');
-    console.log('Check your Prefactor dashboard to view the traces.');
-  } else {
-    console.log('Trace spans have been output to stdout.');
-    console.log('To send to Prefactor platform, set PREFACTOR_TRANSPORT=http and configure API credentials.');
-  }
-  console.log();
-  console.log('Spans captured include:');
-  console.log('  - LLM: Model calls (generateText, etc.)');
-  console.log('  - TOOL: Tool executions (calculator, get_current_time)');
-  console.log('  - CHAIN: Other AI SDK operations');
-  console.log();
-
-  // Explicitly flush pending spans
+  
   console.log('Flushing pending spans...');
   await shutdown();
   console.log('Shutdown complete');

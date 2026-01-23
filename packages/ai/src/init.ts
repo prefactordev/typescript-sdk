@@ -21,8 +21,8 @@ import {
   type Transport,
 } from '@prefactor/core';
 import { extractPartition, type Partition } from '@prefactor/pfid';
-import { OtelTracerAdapter } from './adapter.js';
-import type { OtelTracer } from './types.js';
+import { AiTracerAdapter } from './adapter.js';
+import type { AiTracer } from './types.js';
 
 const logger = getLogger('ai-init');
 
@@ -30,7 +30,7 @@ const logger = getLogger('ai-init');
 let globalTracer: Tracer | null = null;
 
 /** Global OTEL adapter instance. */
-let globalAdapter: OtelTracerAdapter | null = null;
+let globalAdapter: AiTracerAdapter | null = null;
 
 /**
  * Initialize the Prefactor AI SDK and return an OTEL-compatible tracer.
@@ -39,9 +39,9 @@ let globalAdapter: OtelTracerAdapter | null = null;
  * instance that you can pass to the Vercel AI SDK's experimental_telemetry option.
  *
  * @param config - Optional configuration object (same as @prefactor/langchain)
- * @returns OtelTracer instance to use with AI SDK's experimental_telemetry
+ * @returns AiTracer instance to use with AI SDK's experimental_telemetry
  *
- * @example Basic usage with stdio (development)
+ * @example Basic usage with stdio
  * ```typescript
  * import { init, shutdown } from '@prefactor/ai';
  * import { generateText } from 'ai';
@@ -74,7 +74,7 @@ let globalAdapter: OtelTracerAdapter | null = null;
  * });
  * ```
  */
-export function init(config?: Partial<Config>): OtelTracer {
+export function init(config?: Partial<Config>): AiTracer {
   configureLogging();
 
   // Build httpConfig from environment if not provided but HTTP transport is requested
@@ -100,7 +100,7 @@ export function init(config?: Partial<Config>): OtelTracer {
         apiToken,
         agentId: process.env.PREFACTOR_AGENT_ID,
         agentName: process.env.PREFACTOR_AGENT_NAME,
-        agentVersion: process.env.PREFACTOR_AGENT_VERSION,
+        agentVersion: process.env.PREFACTOR_AGENT_VERSION || '1.0.0', // using this as default version if none provided
       },
     };
   }
@@ -120,6 +120,12 @@ export function init(config?: Partial<Config>): OtelTracer {
   } else {
     if (!finalConfig.httpConfig) {
       throw new Error('HTTP transport requires httpConfig to be provided in configuration');
+    }
+    if (!finalConfig.httpConfig.agentVersion) {
+      throw new Error(
+        'HTTP transport requires agentVersion to be provided in httpConfig. ' +
+          'Set httpConfig.agentVersion or the PREFACTOR_AGENT_VERSION environment variable.'
+      );
     }
     // Parse httpConfig to apply defaults from schema
     const httpConfig = HttpTransportConfigSchema.parse(finalConfig.httpConfig);
@@ -141,7 +147,7 @@ export function init(config?: Partial<Config>): OtelTracer {
   globalTracer = new Tracer(transport, partition);
 
   // Wrap with OTEL adapter
-  globalAdapter = new OtelTracerAdapter(globalTracer);
+  globalAdapter = new AiTracerAdapter(globalTracer);
 
   return globalAdapter;
 }
@@ -151,7 +157,7 @@ export function init(config?: Partial<Config>): OtelTracer {
  *
  * If no tracer has been created yet, this will call init() with default configuration.
  *
- * @returns OtelTracer instance
+ * @returns AiTracer instance
  *
  * @example
  * ```typescript
@@ -167,12 +173,12 @@ export function init(config?: Partial<Config>): OtelTracer {
  * });
  * ```
  */
-export function getTracer(): OtelTracer {
+export function getTracer(): AiTracer {
   if (!globalAdapter) {
     init();
   }
   // Safe because init() always sets globalAdapter
-  return globalAdapter as OtelTracer;
+  return globalAdapter as AiTracer;
 }
 
 /**

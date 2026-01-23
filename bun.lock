@@ -9,11 +9,11 @@
         "@biomejs/biome": "2.3.11",
         "@langchain/core": "^1.1.16",
         "@prefactor/ai": "workspace:*",
+        "@prefactor/ai-middleware": "workspace:*",
         "@prefactor/sdk": "workspace:*",
         "@types/node": "^20.0.0",
         "ai": "^6.0.44",
         "bun-types": "latest",
-        "langchain": "^1.0.0",
         "typescript": "^5.3.0",
         "zod": "^3.23.0",
       },
@@ -30,6 +30,20 @@
       },
       "peerDependencies": {
         "typescript": "^5",
+      },
+    },
+    "packages/ai-middleware": {
+      "name": "@prefactor/ai-middleware",
+      "version": "0.1.0",
+      "dependencies": {
+        "@prefactor/core": "workspace:*",
+        "@prefactor/pfid": "^0.1.0",
+      },
+      "devDependencies": {
+        "@types/bun": "latest",
+      },
+      "peerDependencies": {
+        "ai": "^4.0.0 || ^5.0.0",
       },
     },
     "packages/core": {
@@ -104,6 +118,8 @@
 
     "@prefactor/ai": ["@prefactor/ai@workspace:packages/ai"],
 
+    "@prefactor/ai-middleware": ["@prefactor/ai-middleware@workspace:packages/ai-middleware"],
+
     "@prefactor/core": ["@prefactor/core@workspace:packages/core"],
 
     "@prefactor/langchain": ["@prefactor/langchain@workspace:packages/langchain"],
@@ -154,7 +170,7 @@
 
     "json-schema": ["json-schema@0.4.0", "", {}, "sha512-es94M3nTIfsEPisRafak+HDLfHXnKBhV3vU5eqPcS3flIWqcxJWgXHXiey3YrpaNsanY5ei1VoYEbOzijuq9BA=="],
 
-    "langchain": ["langchain@1.2.10", "", { "dependencies": { "@langchain/langgraph": "^1.0.0", "@langchain/langgraph-checkpoint": "^1.0.0", "langsmith": ">=0.4.0 <1.0.0", "uuid": "^10.0.0", "zod": "^3.25.76 || ^4" }, "peerDependencies": { "@langchain/core": "1.1.15" } }, "sha512-9uVxOJE/RTECvNutQfOLwH7f6R9mcq0G/IMHwA2eptDA86R/Yz2zWMz4vARVFPxPrdSJ9nJFDPAqRQlRFwdHBw=="],
+    "langchain": ["langchain@1.2.12", "", { "dependencies": { "@langchain/langgraph": "^1.0.0", "@langchain/langgraph-checkpoint": "^1.0.0", "langsmith": ">=0.4.0 <1.0.0", "uuid": "^10.0.0", "zod": "^3.25.76 || ^4" }, "peerDependencies": { "@langchain/core": "1.1.16" } }, "sha512-08UubBUAU6scuHBlz7O1b4FQQd4YArt/M+nH5FH3cRj2UF64ii8LqfnxopZvTnXYzw8HBurd3v0n738njqzPRg=="],
 
     "langsmith": ["langsmith@0.4.7", "", { "dependencies": { "@types/uuid": "^10.0.0", "chalk": "^4.1.2", "console-table-printer": "^2.12.1", "p-queue": "^6.6.2", "semver": "^7.6.3", "uuid": "^10.0.0" }, "peerDependencies": { "@opentelemetry/api": "*", "@opentelemetry/exporter-trace-otlp-proto": "*", "@opentelemetry/sdk-trace-base": "*", "openai": "*" }, "optionalPeers": ["@opentelemetry/api", "@opentelemetry/exporter-trace-otlp-proto", "@opentelemetry/sdk-trace-base", "openai"] }, "sha512-Esv5g/J8wwRwbGQr10PB9+bLsNk0mWbrXc7nnEreQDhh0azbU57I7epSnT7GC4sS4EOWavhbxk+6p8PTXtreHw=="],
 

@@ -16,13 +16,13 @@ import {
   type TokenUsage,
 } from '@prefactor/core';
 import type {
-  OtelSpan,
-  OtelSpanContext,
-  OtelSpanOptions,
-  OtelSpanStatus,
-  OtelTracer,
+  AiSpan,
+  AiSpanContext,
+  AiSpanOptions,
+  AiSpanStatus,
+  AiTracer,
 } from './types.js';
-import { OtelSpanStatusCode } from './types.js';
+import { AiSpanStatusCode } from './types.js';
 
 // ============================================================================
 // Span Type Inference
@@ -167,7 +167,7 @@ function categorizeAttributes(attributes: Record<string, unknown>): {
 }
 
 // ============================================================================
-// OtelSpanAdapter
+// AiSpanAdapter
 // ============================================================================
 
 /**
@@ -176,7 +176,7 @@ function categorizeAttributes(attributes: Record<string, unknown>): {
  * This class accumulates attributes during the span's lifetime and maps them
  * to Prefactor's inputs/outputs/metadata when the span ends.
  */
-export class OtelSpanAdapter implements OtelSpan {
+export class AiSpanAdapter implements AiSpan {
   /** Accumulated attributes during span lifetime. */
   private attributes: Record<string, unknown> = {};
 
@@ -187,10 +187,10 @@ export class OtelSpanAdapter implements OtelSpan {
   private error: Error | null = null;
 
   /** The span's status. */
-  private status: OtelSpanStatus = { code: OtelSpanStatusCode.UNSET };
+  private status: AiSpanStatus = { code: AiSpanStatusCode.UNSET };
 
   /**
-   * Creates a new OtelSpanAdapter.
+   * Creates a new AiSpanAdapter.
    *
    * @param prefactorSpan - The underlying Prefactor span
    * @param prefactorTracer - The Prefactor tracer (for ending the span)
@@ -203,7 +203,7 @@ export class OtelSpanAdapter implements OtelSpan {
   /**
    * Returns the span context.
    */
-  spanContext(): OtelSpanContext {
+  spanContext(): AiSpanContext {
     return {
       traceId: this.prefactorSpan.traceId,
       spanId: this.prefactorSpan.spanId,
@@ -214,7 +214,7 @@ export class OtelSpanAdapter implements OtelSpan {
   /**
    * Sets a single attribute.
    */
-  setAttribute(key: string, value: unknown): OtelSpan {
+  setAttribute(key: string, value: unknown): AiSpan {
     if (!this.ended) {
       this.attributes[key] = value;
     }
@@ -224,7 +224,7 @@ export class OtelSpanAdapter implements OtelSpan {
   /**
    * Sets multiple attributes.
    */
-  setAttributes(attributes: Record<string, unknown>): OtelSpan {
+  setAttributes(attributes: Record<string, unknown>): AiSpan {
     if (!this.ended) {
       Object.assign(this.attributes, attributes);
     }
@@ -234,13 +234,36 @@ export class OtelSpanAdapter implements OtelSpan {
   /**
    * Adds a timed event (stored in metadata).
    */
-  addEvent(name: string, attributes?: Record<string, unknown>): OtelSpan {
+  addEvent(
+    name: string,
+    attributesOrStartTime?: Record<string, unknown> | number | Date | [number, number],
+    startTime?: number | Date | [number, number]
+  ): AiSpan {
     if (!this.ended) {
+      // Parse overloaded arguments
+      let attributes: Record<string, unknown> | undefined;
+      let timestamp: number;
+
+      if (attributesOrStartTime === undefined) {
+        timestamp = Date.now();
+      } else if (
+        typeof attributesOrStartTime === 'number' ||
+        attributesOrStartTime instanceof Date ||
+        Array.isArray(attributesOrStartTime)
+      ) {
+        // Second param is start time
+        timestamp = this.parseTimeInput(attributesOrStartTime);
+      } else {
+        // Second param is attributes
+        attributes = attributesOrStartTime;
+        timestamp = startTime ? this.parseTimeInput(startTime) : Date.now();
+      }
+
       // Store events in metadata as an array
       const events = (this.attributes['_events'] as Array<unknown>) ?? [];
       events.push({
         name,
-        timestamp: Date.now(),
+        timestamp,
         attributes,
       });
       this.attributes['_events'] = events;
@@ -249,25 +272,43 @@ export class OtelSpanAdapter implements OtelSpan {
   }
 
   /**
+   * Parses a TimeInput value to a timestamp in milliseconds.
+   * @internal
+   */
+  private parseTimeInput(time: number | Date | [number, number]): number {
+    if (typeof time === 'number') {
+      return time;
+    }
+    if (time instanceof Date) {
+      return time.getTime();
+    }
+    // HrTime tuple: [seconds, nanoseconds]
+    return time[0] * 1000 + time[1] / 1_000_000;
+  }
+
+  /**
    * No-op for link support.
    */
-  addLink(): OtelSpan {
+  addLink(): AiSpan {
     return this;
   }
 
   /**
    * No-op for links support.
    */
-  addLinks(): OtelSpan {
+  addLinks(): AiSpan {
     return this;
   }
 
   /**
    * Sets the span status.
    */
-  setStatus(status: OtelSpanStatus): OtelSpan {
+  setStatus(status: { code: number; message?: string }): AiSpan {
     if (!this.ended) {
-      this.status = status;
+      this.status = {
+        code: status.code as AiSpanStatusCode,
+        message: status.message,
+      };
     }
     return this;
   }
@@ -275,7 +316,7 @@ export class OtelSpanAdapter implements OtelSpan {
   /**
    * Updates the span name.
    */
-  updateName(name: string): OtelSpan {
+  updateName(name: string): AiSpan {
     if (!this.ended) {
       this.prefactorSpan.name = name;
     }
@@ -325,7 +366,7 @@ export class OtelSpanAdapter implements OtelSpan {
     if (!this.ended) {
       this.error = error;
       this.status = {
-        code: OtelSpanStatusCode.ERROR,
+        code: AiSpanStatusCode.ERROR,
         message: error.message,
       };
       // Also add as an event
@@ -347,7 +388,7 @@ export class OtelSpanAdapter implements OtelSpan {
 }
 
 // ============================================================================
-// OtelTracerAdapter
+// AiTracerAdapter
 // ============================================================================
 
 /**
@@ -356,9 +397,9 @@ export class OtelSpanAdapter implements OtelSpan {
  * This class is the main entry point for AI SDK integration, providing the
  * tracer interface expected by experimental_telemetry.
  */
-export class OtelTracerAdapter implements OtelTracer {
+export class AiTracerAdapter implements AiTracer {
   /**
-   * Creates a new OtelTracerAdapter.
+   * Creates a new AiTracerAdapter.
    *
    * @param prefactorTracer - The underlying Prefactor tracer
    */
@@ -367,7 +408,7 @@ export class OtelTracerAdapter implements OtelTracer {
   /**
    * Creates and starts a new span.
    */
-  startSpan(name: string, options?: OtelSpanOptions, _context?: unknown): OtelSpan {
+  startSpan(name: string, options?: AiSpanOptions, _context?: unknown): AiSpan {
     // Get parent span from context
     const parentSpan = SpanContext.getCurrent();
 
@@ -394,7 +435,7 @@ export class OtelTracerAdapter implements OtelTracer {
     });
 
     // Create and return the adapter
-    const adapter = new OtelSpanAdapter(prefactorSpan, this.prefactorTracer);
+    const adapter = new AiSpanAdapter(prefactorSpan, this.prefactorTracer);
 
     // Set initial attributes (non-input ones)
     if (options?.attributes) {
@@ -412,21 +453,21 @@ export class OtelTracerAdapter implements OtelTracer {
    */
   startActiveSpan<T>(
     name: string,
-    arg2?: OtelSpanOptions | ((span: OtelSpan) => T),
-    arg3?: unknown | ((span: OtelSpan) => T),
-    arg4?: (span: OtelSpan) => T
+    arg2?: AiSpanOptions | ((span: AiSpan) => T),
+    arg3?: unknown | ((span: AiSpan) => T),
+    arg4?: (span: AiSpan) => T
   ): T {
     // Parse overloaded arguments
-    let options: OtelSpanOptions | undefined;
-    let fn: ((span: OtelSpan) => T) | undefined;
+    let options: AiSpanOptions | undefined;
+    let fn: ((span: AiSpan) => T) | undefined;
 
     if (typeof arg2 === 'function') {
       fn = arg2;
     } else if (typeof arg3 === 'function') {
-      options = arg2 as OtelSpanOptions;
-      fn = arg3 as (span: OtelSpan) => T;
+      options = arg2 as AiSpanOptions;
+      fn = arg3 as (span: AiSpan) => T;
     } else if (typeof arg4 === 'function') {
-      options = arg2 as OtelSpanOptions;
+      options = arg2 as AiSpanOptions;
       fn = arg4;
     }
 
@@ -435,7 +476,7 @@ export class OtelTracerAdapter implements OtelTracer {
     }
 
     // Create the span
-    const span = this.startSpan(name, options) as OtelSpanAdapter;
+    const span = this.startSpan(name, options) as AiSpanAdapter;
     const prefactorSpan = span.getPrefactorSpan();
 
     let isAsync = false;

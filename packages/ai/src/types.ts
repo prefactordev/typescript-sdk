@@ -1,5 +1,5 @@
 /**
- * @fileoverview OpenTelemetry-compatible type definitions for AI SDK integration.
+ * @fileoverview Type definitions for AI SDK integration.
  *
  * This module defines the interfaces expected by the Vercel AI SDK's
  * experimental_telemetry feature, along with re-exports of relevant
@@ -9,19 +9,8 @@
  * @packageDocumentation
  */
 
-// Re-export core types that consumers might need
-export {
-  type Config,
-  type HttpTransportConfig,
-  SpanType,
-  SpanStatus,
-  type Span as PrefactorSpan,
-  type TokenUsage,
-  type ErrorInfo,
-} from '@prefactor/core';
-
 // ============================================================================
-// OpenTelemetry-Compatible Span Context
+// Span Context
 // ============================================================================
 
 /**
@@ -29,11 +18,11 @@ export {
  *
  * Compatible with OpenTelemetry's SpanContext interface.
  */
-export interface OtelSpanContext {
-  /** The trace ID (32-char hex string in OTEL, but we use pfid format). */
+export interface AiSpanContext {
+  /** The trace ID (pfid). */
   traceId: string;
 
-  /** The span ID (16-char hex string in OTEL, but we use pfid format). */
+  /** The span ID (pfid). */
   spanId: string;
 
   /** Trace flags (1 = sampled, 0 = not sampled). */
@@ -43,7 +32,7 @@ export interface OtelSpanContext {
 /**
  * Status codes for span completion.
  */
-export enum OtelSpanStatusCode {
+export enum AiSpanStatusCode {
   /** Default status - not explicitly set. */
   UNSET = 0,
   /** Operation completed successfully. */
@@ -55,10 +44,10 @@ export enum OtelSpanStatusCode {
 /**
  * Status information for a span.
  */
-export interface OtelSpanStatus {
+export interface AiSpanStatus {
   /** The status code. */
-  code: OtelSpanStatusCode;
-  /** Optional status message (typically for errors). */
+  code: AiSpanStatusCode;
+  /** Optional status message (pfid). */
   message?: string;
 }
 
@@ -72,11 +61,11 @@ export interface OtelSpanStatus {
  * This interface matches what the Vercel AI SDK expects from a tracer's span.
  * It provides methods for setting attributes, recording events, and ending the span.
  */
-export interface OtelSpan {
+export interface AiSpan {
   /**
    * Returns the span context containing trace and span identifiers.
    */
-  spanContext(): OtelSpanContext;
+  spanContext(): AiSpanContext;
 
   /**
    * Sets a single attribute on the span.
@@ -85,7 +74,7 @@ export interface OtelSpan {
    * @param value - Attribute value
    * @returns This span for method chaining
    */
-  setAttribute(key: string, value: unknown): OtelSpan;
+  setAttribute(key: string, value: unknown): AiSpan;
 
   /**
    * Sets multiple attributes on the span.
@@ -93,36 +82,41 @@ export interface OtelSpan {
    * @param attributes - Key-value pairs to set
    * @returns This span for method chaining
    */
-  setAttributes(attributes: Record<string, unknown>): OtelSpan;
+  setAttributes(attributes: Record<string, unknown>): AiSpan;
 
   /**
    * Adds a timed event to the span.
    *
    * @param name - Event name
-   * @param attributes - Optional event attributes
+   * @param attributesOrStartTime - Optional event attributes or start time
+   * @param startTime - Optional start time (if second param is attributes)
    * @returns This span for method chaining
    */
-  addEvent(name: string, attributes?: Record<string, unknown>): OtelSpan;
+  addEvent(
+    name: string,
+    attributesOrStartTime?: Record<string, unknown> | number | Date | [number, number],
+    startTime?: number | Date | [number, number]
+  ): AiSpan;
 
   /**
    * Adds a link to another span (no-op in this implementation).
    * @returns This span for method chaining
    */
-  addLink(): OtelSpan;
+  addLink(): AiSpan;
 
   /**
    * Adds multiple links to other spans (no-op in this implementation).
    * @returns This span for method chaining
    */
-  addLinks(): OtelSpan;
+  addLinks(): AiSpan;
 
   /**
    * Sets the status of the span.
    *
-   * @param status - Status to set
+   * @param status - Status to set (accepts OTEL SpanStatus or AiSpanStatus)
    * @returns This span for method chaining
    */
-  setStatus(status: OtelSpanStatus): OtelSpan;
+  setStatus(status: { code: number; message?: string }): AiSpan;
 
   /**
    * Updates the name of the span.
@@ -130,7 +124,7 @@ export interface OtelSpan {
    * @param name - New span name
    * @returns This span for method chaining
    */
-  updateName(name: string): OtelSpan;
+  updateName(name: string): AiSpan;
 
   /**
    * Marks the span as complete.
@@ -159,7 +153,7 @@ export interface OtelSpan {
 /**
  * Options for creating a new span.
  */
-export interface OtelSpanOptions {
+export interface AiSpanOptions {
   /**
    * The span kind (CLIENT, SERVER, INTERNAL, etc.).
    * See OpenTelemetry SpanKind for values.
@@ -186,7 +180,7 @@ export interface OtelSpanOptions {
  *
  * This interface matches what the Vercel AI SDK expects from a tracer.
  */
-export interface OtelTracer {
+export interface AiTracer {
   /**
    * Creates and starts a new span.
    *
@@ -195,7 +189,7 @@ export interface OtelTracer {
    * @param context - Optional parent context (ignored, we use SpanContext)
    * @returns A new span
    */
-  startSpan(name: string, options?: OtelSpanOptions, context?: unknown): OtelSpan;
+  startSpan(name: string, options?: AiSpanOptions, context?: unknown): AiSpan;
 
   /**
    * Creates a span and executes a function within its context.
@@ -204,7 +198,7 @@ export interface OtelTracer {
    * @param fn - Function to execute
    * @returns The function's return value
    */
-  startActiveSpan<T>(name: string, fn: (span: OtelSpan) => T): T;
+  startActiveSpan<T>(name: string, fn: (span: AiSpan) => T): T;
 
   /**
    * Creates a span with options and executes a function within its context.
@@ -214,7 +208,7 @@ export interface OtelTracer {
    * @param fn - Function to execute
    * @returns The function's return value
    */
-  startActiveSpan<T>(name: string, options: OtelSpanOptions, fn: (span: OtelSpan) => T): T;
+  startActiveSpan<T>(name: string, options: AiSpanOptions, fn: (span: AiSpan) => T): T;
 
   /**
    * Creates a span with options and context, executing a function within it.
@@ -227,8 +221,8 @@ export interface OtelTracer {
    */
   startActiveSpan<T>(
     name: string,
-    options: OtelSpanOptions,
+    options: AiSpanOptions,
     context: unknown,
-    fn: (span: OtelSpan) => T
+    fn: (span: AiSpan) => T
   ): T;
 }

@@ -50,30 +50,30 @@ export { init, getTracer, shutdown } from './init.js';
 // Adapter Exports
 // ============================================================================
 
-export { OtelSpanAdapter, OtelTracerAdapter } from './adapter.js';
+export { AiSpanAdapter, AiTracerAdapter } from './adapter.js';
 
 // ============================================================================
 // Type Exports
 // ============================================================================
 
 export type {
-  // OTEL-compatible types (what AI SDK expects)
-  OtelSpan,
-  OtelTracer,
-  OtelSpanContext,
-  OtelSpanOptions,
-  OtelSpanStatus,
+  // OTEL-compatible types
+  AiSpan,
+  AiTracer,
+  AiSpanContext,
+  AiSpanOptions,
+  AiSpanStatus,
 } from './types.js';
 
-export { OtelSpanStatusCode } from './types.js';
+export { AiSpanStatusCode } from './types.js';
 
 // Re-export relevant core types for convenience
 export type {
   Config,
   HttpTransportConfig,
-  PrefactorSpan,
+  Span,
   TokenUsage,
   ErrorInfo,
-} from './types.js';
+} from '@prefactor/core';
 
-export { SpanType, SpanStatus } from './types.js';
+export { SpanType, SpanStatus } from '@prefactor/core';

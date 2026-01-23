@@ -1,6 +1,6 @@
 # @prefactor/ai
 
-OpenTelemetry-compatible adapter for the Vercel AI SDK that sends telemetry to the Prefactor platform.
+Vercel AI SDK-compatible adapter for the Vercel AI SDK that sends telemetry to the Prefactor platform.
 
 This package bridges the Vercel AI SDK's `experimental_telemetry` feature with Prefactor's tracing infrastructure, enabling automatic observability of AI operations.
 
@@ -42,34 +42,6 @@ const result = await generateText({
 
 // Shutdown when done
 await shutdown();
-```
-
-## Architecture
-
-This package provides an adapter layer that bridges two different APIs:
-
-```
-┌─────────────────────────────────────┐
-│         Vercel AI SDK               │
-│   (expects OTEL-compatible API)     │
-└──────────────┬──────────────────────┘
-               │
-               ▼
-┌─────────────────────────────────────┐
-│         @prefactor/ai               │
-│  ┌─────────────────────────────┐   │
-│  │    OtelTracerAdapter        │   │
-│  │    OtelSpanAdapter          │   │
-│  └─────────────────────────────┘   │
-└──────────────┬──────────────────────┘
-               │
-               ▼
-┌─────────────────────────────────────┐
-│         @prefactor/core             │
-│  - Tracer, SpanContext             │
-│  - HttpTransport → Prefactor API   │
-│  - StdioTransport → stdout         │
-└─────────────────────────────────────┘
 ```
 
 ## Configuration
@@ -133,11 +105,11 @@ OTEL attributes from the AI SDK are categorized automatically:
 
 ## API Reference
 
-### `init(config?: Partial<Config>): OtelTracer`
+### `init(config?: Partial<Config>): AiTracer`
 
 Initialize the SDK and return an OTEL-compatible tracer.
 
-### `getTracer(): OtelTracer`
+### `getTracer(): AiTracer`
 
 Get the current tracer instance. Calls `init()` if not initialized.
 
