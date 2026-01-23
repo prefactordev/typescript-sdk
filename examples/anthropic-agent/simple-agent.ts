@@ -104,7 +104,6 @@ async function main() {
     console.log();
   } catch (error) {
     console.log(`Error in Example 1: ${error}`);
-    console.error(error);
     console.log();
   }
 
@@ -122,7 +121,6 @@ async function main() {
     console.log();
   } catch (error) {
     console.log(`Error in Example 2: ${error}`);
-    console.error(error);
     console.log();
   }
 
