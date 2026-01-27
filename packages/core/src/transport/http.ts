@@ -46,6 +46,7 @@ export class HttpTransport implements Transport {
     }
 
     const spanFinishes: Array<{ spanId: string; endTime: number }> = [];
+    const agentFinishes: QueueAction[] = [];
 
     for (const item of items) {
       try {
@@ -60,7 +61,7 @@ export class HttpTransport implements Transport {
             await this.startAgentInstanceHttp();
             break;
           case 'agent_finish':
-            await this.finishAgentInstanceHttp();
+            agentFinishes.push(item);
             break;
           case 'span_end':
             if (!this.agentInstanceId) {
@@ -84,6 +85,14 @@ export class HttpTransport implements Transport {
         }
         const timestamp = new Date(finish.endTime).toISOString();
         await this.finishSpanHttp({ spanId: finish.spanId, timestamp });
+      } catch (error) {
+        logger.error('Error processing batch item:', error);
+      }
+    }
+
+    for (const _finish of agentFinishes) {
+      try {
+        await this.finishAgentInstanceHttp();
       } catch (error) {
         logger.error('Error processing batch item:', error);
       }

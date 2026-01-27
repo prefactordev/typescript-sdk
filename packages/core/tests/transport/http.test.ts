@@ -166,4 +166,67 @@ describe('HttpTransport processBatch', () => {
 
     await transport.close();
   });
+
+  test('buffers agent finish until after span finishes in same batch', async () => {
+    const fetchCalls: Array<{ url: string; options?: RequestInit }> = [];
+    globalThis.fetch = async (url, options) => {
+      const urlString = String(url);
+      fetchCalls.push({ url: urlString, options });
+
+      if (urlString.endsWith('/agent_instance/register')) {
+        return new Response(JSON.stringify({ details: { id: 'agent-instance-1' } }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+
+      if (urlString.endsWith('/agent_spans')) {
+        return new Response(JSON.stringify({ details: { id: 'backend-span-1' } }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+
+      return new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    };
+
+    const transport = new HttpTransport(createConfig());
+    const endTime = 1700000001000;
+    const span: Span = {
+      spanId: 'span-2',
+      parentSpanId: null,
+      traceId: 'trace-2',
+      name: 'Agent Span',
+      spanType: SpanType.AGENT,
+      startTime: endTime - 500,
+      endTime,
+      status: SpanStatus.SUCCESS,
+      inputs: { prompt: 'hi' },
+      outputs: { result: 'ok' },
+      tokenUsage: null,
+      error: null,
+      metadata: {},
+      tags: [],
+    };
+
+    const actions: QueueAction[] = [
+      { type: 'span_end', data: span },
+      { type: 'agent_finish', data: {} },
+      { type: 'span_finish', data: { spanId: 'span-2', endTime } },
+    ];
+
+    await transport.processBatch(actions);
+
+    expect(fetchCalls.map((call) => call.url)).toEqual([
+      'https://example.com/api/v1/agent_instance/register',
+      'https://example.com/api/v1/agent_spans',
+      'https://example.com/api/v1/agent_spans/backend-span-1/finish',
+      'https://example.com/api/v1/agent_instance/agent-instance-1/finish',
+    ]);
+
+    await transport.close();
+  });
 });
