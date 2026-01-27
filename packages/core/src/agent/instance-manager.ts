@@ -18,6 +18,10 @@ export class AgentInstanceManager {
   ) {}
 
   registerSchema(schema: Record<string, unknown>): void {
+    if (this.schemaRegistry.has(this.options.schemaName, this.options.schemaVersion)) {
+      return;
+    }
+
     const registration: SchemaRegistration = {
       schemaName: this.options.schemaName,
       schemaVersion: this.options.schemaVersion,
@@ -29,6 +33,13 @@ export class AgentInstanceManager {
   }
 
   startInstance(options: AgentInstanceStartOptions = {}): void {
+    if (!this.schemaRegistry.has(this.options.schemaName, this.options.schemaVersion)) {
+      console.warn(
+        `Schema ${this.options.schemaName}@${this.options.schemaVersion} must be registered before starting an agent instance.`
+      );
+      return;
+    }
+
     const startData: AgentInstanceStart = {
       ...options,
       schemaName: this.options.schemaName,

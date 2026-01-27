@@ -7,6 +7,10 @@ export class SchemaRegistry {
     this.schemas.set(this.getKey(schema.schemaName, schema.schemaVersion), schema);
   }
 
+  has(schemaName: string, schemaVersion: string): boolean {
+    return this.schemas.has(this.getKey(schemaName, schemaVersion));
+  }
+
   get(schemaName: string, schemaVersion: string): SchemaRegistration | undefined {
     return this.schemas.get(this.getKey(schemaName, schemaVersion));
   }
