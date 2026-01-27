@@ -57,6 +57,10 @@ export class HttpTransport implements Transport {
           this.config.schemaVersion = item.data.schemaVersion;
           break;
         case 'agent_start':
+          this.config.agentId = item.data.agentId;
+          this.config.agentVersion = item.data.agentVersion;
+          this.config.agentName = item.data.agentName;
+          this.config.agentDescription = item.data.agentDescription;
           this.startAgentInstance();
           break;
         case 'agent_finish':

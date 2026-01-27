@@ -88,7 +88,15 @@ export function init(config?: Partial<Config>): AgentMiddleware {
   const core = createCore(finalConfig);
   globalCore = core;
   globalTracer = core.tracer;
-  core.agentManager.registerSchema(defaultAgentSchema);
+
+  const httpConfig = finalConfig.httpConfig;
+  if (httpConfig?.agentSchema) {
+    core.agentManager.registerSchema(httpConfig.agentSchema);
+  } else if (httpConfig?.agentSchemaVersion || httpConfig?.skipSchema) {
+    logger.debug('Skipping default schema registration based on httpConfig');
+  } else {
+    core.agentManager.registerSchema(defaultAgentSchema);
+  }
 
   const agentInfo = finalConfig.httpConfig
     ? {

@@ -151,17 +151,18 @@ export function init(
     return globalMiddleware;
   }
 
-  if (finalConfig.transportType === 'http' && !finalConfig.httpConfig?.agentVersion) {
-    throw new Error(
-      'HTTP transport requires agentVersion to be provided in httpConfig. ' +
-        'Set httpConfig.agentVersion or the PREFACTOR_AGENT_VERSION environment variable.'
-    );
-  }
-
   const core = createCore(finalConfig);
   globalCore = core;
   globalTracer = core.tracer;
-  core.agentManager.registerSchema(defaultAgentSchema);
+
+  const httpConfig = finalConfig.httpConfig;
+  if (httpConfig?.agentSchema) {
+    core.agentManager.registerSchema(httpConfig.agentSchema);
+  } else if (httpConfig?.agentSchemaVersion || httpConfig?.skipSchema) {
+    logger.debug('Skipping default schema registration based on httpConfig');
+  } else {
+    core.agentManager.registerSchema(defaultAgentSchema);
+  }
 
   const agentInfo = finalConfig.httpConfig
     ? {

@@ -25,6 +25,12 @@ export function createCore(config: Config): CoreRuntime {
     if (!config.httpConfig) {
       throw new Error('HTTP transport requires httpConfig to be provided in configuration');
     }
+    if (!config.httpConfig.agentVersion) {
+      throw new Error(
+        'HTTP transport requires agentVersion to be provided in httpConfig. ' +
+          'Set httpConfig.agentVersion or the PREFACTOR_AGENT_VERSION environment variable.'
+      );
+    }
     const httpConfig = HttpTransportConfigSchema.parse(config.httpConfig);
     transport = new HttpTransport(httpConfig);
   }
