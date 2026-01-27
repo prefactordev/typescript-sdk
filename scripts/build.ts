@@ -32,19 +32,6 @@ const packages: PackageConfig[] = [
     entrypoint: './packages/langchain/src/index.ts',
     external: ['@prefactor/core', '@prefactor/pfid', '@langchain/core', 'langchain', 'zod'],
   },
-  {
-    name: '@prefactor/sdk',
-    path: 'packages/sdk',
-    entrypoint: './packages/sdk/src/index.ts',
-    external: [
-      '@prefactor/core',
-      '@prefactor/langchain',
-      '@prefactor/pfid',
-      '@langchain/core',
-      'langchain',
-      'zod',
-    ],
-  },
 ];
 
 async function buildPackage(pkg: PackageConfig): Promise<void> {
