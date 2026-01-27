@@ -1,4 +1,4 @@
-import type { Span } from '../tracing/span.js';
+import type { QueueAction } from '../queue/actions.js';
 import { serializeValue } from '../utils/serialization.js';
 import type { Transport } from './base.js';
 
@@ -24,46 +24,29 @@ export class StdioTransport implements Transport {
   private writeLock = Promise.resolve();
 
   /**
-   * Emit a span to stdout as JSON
+   * Emit a batch of queue actions to stdout as newline-delimited JSON
    *
-   * @param span - The span to emit
+   * @param items - The queue actions to emit
    */
-  emit(span: Span): void {
-    if (this.closed) {
+  async processBatch(items: QueueAction[]): Promise<void> {
+    if (this.closed || items.length === 0) {
       return;
     }
 
     // Queue write to maintain ordering
     this.writeLock = this.writeLock.then(async () => {
-      try {
-        const serialized = serializeValue(span);
-        const json = JSON.stringify(serialized);
-        await Bun.write(Bun.stdout, `${json}\n`);
-      } catch (error) {
-        console.error('Failed to emit span to stdout:', error);
+      for (const item of items) {
+        try {
+          const serialized = serializeValue(item);
+          const json = JSON.stringify(serialized);
+          await Bun.write(Bun.stdout, `${json}\n`);
+        } catch (error) {
+          console.error('Failed to emit queue action to stdout:', error);
+        }
       }
     });
-  }
 
-  /**
-   * No-op for stdio transport (not applicable)
-   */
-  finishSpan(): void {
-    // No-op for stdio transport
-  }
-
-  /**
-   * No-op for stdio transport (not applicable)
-   */
-  startAgentInstance(): void {
-    // No-op for stdio transport
-  }
-
-  /**
-   * No-op for stdio transport (not applicable)
-   */
-  finishAgentInstance(): void {
-    // No-op for stdio transport
+    await this.writeLock;
   }
 
   /**
