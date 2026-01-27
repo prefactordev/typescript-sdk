@@ -24,6 +24,16 @@ export type { Transport } from './transport/base.js';
 export { HttpTransport } from './transport/http.js';
 export { StdioTransport } from './transport/stdio.js';
 
+// Queue
+export type {
+  AgentInstanceFinish,
+  AgentInstanceStart,
+  QueueAction,
+  SchemaRegistration,
+} from './queue/actions.js';
+export type { Queue } from './queue/base.js';
+export { InMemoryQueue } from './queue/in-memory.js';
+
 // Utilities
 export { configureLogging, getLogger } from './utils/logging.js';
 export { serializeValue, truncateString } from './utils/serialization.js';
