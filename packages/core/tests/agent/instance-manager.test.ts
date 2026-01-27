@@ -59,6 +59,32 @@ describe('AgentInstanceManager', () => {
     }
   });
 
+  test('allows agent start before schema registration when permitted', () => {
+    const { warnMessages, warnSpy } = createWarnSpy();
+    const queue = new InMemoryQueue<QueueAction>();
+    const manager = new AgentInstanceManager(queue, {
+      schemaName: 'langchain:agent',
+      schemaVersion: '1.0.0',
+      allowUnregisteredSchema: true,
+    });
+
+    try {
+      manager.startInstance({ agentId: 'agent-1' });
+
+      const items = queue.dequeueBatch(10);
+      expect(items).toHaveLength(1);
+      expect(items[0].type).toBe('agent_start');
+      if (items[0].type === 'agent_start') {
+        expect(items[0].data.schemaName).toBe('langchain:agent');
+        expect(items[0].data.schemaVersion).toBe('1.0.0');
+        expect(items[0].data.agentId).toBe('agent-1');
+      }
+      expect(warnMessages).toHaveLength(0);
+    } finally {
+      warnSpy.mockRestore();
+    }
+  });
+
   test('dedupes repeated schema registration', () => {
     const queue = new InMemoryQueue<QueueAction>();
     const manager = new AgentInstanceManager(queue, {

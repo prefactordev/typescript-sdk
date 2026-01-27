@@ -27,8 +27,7 @@ export function createCore(config: Config): CoreRuntime {
     }
     if (!config.httpConfig.agentVersion) {
       throw new Error(
-        'HTTP transport requires agentVersion to be provided in httpConfig. ' +
-          'Set httpConfig.agentVersion or the PREFACTOR_AGENT_VERSION environment variable.'
+        'HTTP transport requires agentVersion to be provided in httpConfig.'
       );
     }
     const httpConfig = HttpTransportConfigSchema.parse(config.httpConfig);
@@ -50,7 +49,14 @@ export function createCore(config: Config): CoreRuntime {
 
   const schemaName = config.httpConfig?.schemaName ?? 'prefactor:agent';
   const schemaVersion = config.httpConfig?.schemaVersion ?? '1.0.0';
-  const agentManager = new AgentInstanceManager(queue, { schemaName, schemaVersion });
+  const allowUnregisteredSchema = Boolean(
+    config.httpConfig?.skipSchema || config.httpConfig?.agentSchemaVersion
+  );
+  const agentManager = new AgentInstanceManager(queue, {
+    schemaName,
+    schemaVersion,
+    allowUnregisteredSchema,
+  });
 
   const shutdown = async (): Promise<void> => {
     await worker.close();

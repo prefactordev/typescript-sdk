@@ -12,6 +12,8 @@ describe('createCore', () => {
       },
     });
 
-    expect(() => createCore(config)).toThrow('agentVersion');
+    expect(() => createCore(config)).toThrowError(
+      new Error('HTTP transport requires agentVersion to be provided in httpConfig.')
+    );
   });
 });

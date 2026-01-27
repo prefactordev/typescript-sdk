@@ -39,6 +39,7 @@ const normalizeSchema = (value: unknown, arrayKey?: string): unknown => {
 export type AgentInstanceManagerOptions = {
   schemaName: string;
   schemaVersion: string;
+  allowUnregisteredSchema?: boolean;
 };
 
 type AgentInstanceStartOptions = Omit<AgentInstanceStart, 'schemaName' | 'schemaVersion'>;
@@ -76,7 +77,10 @@ export class AgentInstanceManager {
   }
 
   startInstance(options: AgentInstanceStartOptions = {}): void {
-    if (!this.schemaRegistry.has(this.options.schemaName, this.options.schemaVersion)) {
+    if (
+      !this.options.allowUnregisteredSchema &&
+      !this.schemaRegistry.has(this.options.schemaName, this.options.schemaVersion)
+    ) {
       console.warn(
         `Schema ${this.options.schemaName}@${this.options.schemaVersion} must be registered before starting an agent instance.`
       );
