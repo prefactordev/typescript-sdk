@@ -1,4 +1,5 @@
 import type { AgentInstanceStart, QueueAction, SchemaRegistration } from '../queue/actions.js';
+import { isDeepStrictEqual } from 'node:util';
 import type { Queue } from '../queue/base.js';
 import { SchemaRegistry } from './schema-registry.js';
 
@@ -19,6 +20,12 @@ export class AgentInstanceManager {
 
   registerSchema(schema: Record<string, unknown>): void {
     if (this.schemaRegistry.has(this.options.schemaName, this.options.schemaVersion)) {
+      const existing = this.schemaRegistry.get(this.options.schemaName, this.options.schemaVersion);
+      if (existing && !isDeepStrictEqual(existing.schema, schema)) {
+        console.warn(
+          `Schema ${this.options.schemaName}@${this.options.schemaVersion} is already registered with a different payload. Ignoring registration.`
+        );
+      }
       return;
     }
 
