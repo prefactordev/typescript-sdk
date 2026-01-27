@@ -1,7 +1,7 @@
 import { extractPartition, type Partition } from '@prefactor/pfid';
+import { AgentInstanceManager } from './agent/instance-manager.js';
 import type { Config } from './config.js';
 import { HttpTransportConfigSchema } from './config.js';
-import { AgentInstanceManager } from './agent/instance-manager.js';
 import type { QueueAction } from './queue/actions.js';
 import { InMemoryQueue } from './queue/in-memory.js';
 import { Tracer } from './tracing/tracer.js';
@@ -26,9 +26,7 @@ export function createCore(config: Config): CoreRuntime {
       throw new Error('HTTP transport requires httpConfig to be provided in configuration');
     }
     if (!config.httpConfig.agentVersion) {
-      throw new Error(
-        'HTTP transport requires agentVersion to be provided in httpConfig.'
-      );
+      throw new Error('HTTP transport requires agentVersion to be provided in httpConfig.');
     }
     const httpConfig = HttpTransportConfigSchema.parse(config.httpConfig);
     transport = new HttpTransport(httpConfig);

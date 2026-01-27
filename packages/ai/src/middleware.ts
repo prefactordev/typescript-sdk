@@ -9,12 +9,12 @@
  */
 
 import {
+  type AgentInstanceManager,
   getLogger,
   type Span,
   SpanContext,
   SpanType,
   type TokenUsage,
-  type AgentInstanceManager,
   type Tracer,
 } from '@prefactor/core';
 import type {
@@ -73,7 +73,7 @@ class WorkflowManager {
     // Look for an active workflow
     let workflow: WorkflowState | undefined;
 
-    for (const [id, state] of this.workflows.entries()) {
+    for (const [_id, state] of this.workflows.entries()) {
       const inactiveTime = now - state.lastActivityAt;
       if (inactiveTime < this.WORKFLOW_TIMEOUT && state.callCount >= this.MIN_WORKFLOW_CALLS) {
         workflow = state;
@@ -149,7 +149,7 @@ class WorkflowManager {
 
     for (const id of toDelete) {
       const workflow = this.workflows.get(id);
-      if (workflow && workflow.agentSpan) {
+      if (workflow?.agentSpan) {
         tracer.endSpan(workflow.agentSpan, {
           outputs: { status: 'timed_out' },
         });
@@ -649,12 +649,14 @@ export function createPrefactorMiddleware(
  * @internal
  */
 function wrapStreamForCompletion(
+  // biome-ignore lint/suspicious/noExplicitAny: Stream part types vary
   stream: ReadableStream<any>,
   span: Span,
   tracer: Tracer,
   config?: MiddlewareConfig,
-  workflow?: WorkflowState,
+  _workflow?: WorkflowState,
   agentManager?: AgentInstanceManager
+  // biome-ignore lint/suspicious/noExplicitAny: Stream part types vary
 ): ReadableStream<any> {
   const reader = stream.getReader();
   let finishReason: unknown | undefined;

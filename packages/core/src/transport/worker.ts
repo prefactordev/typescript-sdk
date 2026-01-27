@@ -1,5 +1,5 @@
-import type { Queue } from '../queue/base.js';
 import type { QueueAction } from '../queue/actions.js';
+import type { Queue } from '../queue/base.js';
 import type { Transport } from './base.js';
 
 type WorkerConfig = { batchSize: number; intervalMs: number };

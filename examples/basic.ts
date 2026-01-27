@@ -10,7 +10,7 @@
  * examples/anthropic-agent/simple-agent.ts
  */
 
-import { init, shutdown } from '@prefactor/sdk';
+import { init, shutdown } from '@prefactor/langchain';
 
 console.log('Prefactor SDK - Basic Example');
 console.log('='.repeat(40));
@@ -29,7 +29,7 @@ console.log('-'.repeat(40));
 console.log(`
 import { createAgent, tool } from 'langchain';
 import { z } from 'zod';
-import { init, shutdown } from '@prefactor/sdk';
+import { init, shutdown } from '@prefactor/langchain';
 
 // Initialize SDK
 const middleware = init();

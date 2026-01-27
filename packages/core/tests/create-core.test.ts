@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test';
-import { createCore } from '../src/create-core.js';
 import { createConfig } from '../src/config.js';
+import { createCore } from '../src/create-core.js';
 
 const createWarnSpy = () => {
   const warnMessages: string[] = [];

@@ -1,10 +1,10 @@
 import { beforeEach, describe, expect, test } from 'bun:test';
 import { extractPartition, isPfid, type Partition } from '@prefactor/pfid';
-import { type Span, SpanStatus, SpanType } from '../../src/tracing/span';
-import { SpanContext } from '../../src/tracing/context';
-import { Tracer } from '../../src/tracing/tracer';
-import type { Queue } from '../../src/queue/base';
 import type { QueueAction } from '../../src/queue/actions';
+import type { Queue } from '../../src/queue/base';
+import { SpanContext } from '../../src/tracing/context';
+import { type Span, SpanStatus, SpanType } from '../../src/tracing/span';
+import { Tracer } from '../../src/tracing/tracer';
 
 class MockQueue implements Queue<QueueAction> {
   items: QueueAction[] = [];

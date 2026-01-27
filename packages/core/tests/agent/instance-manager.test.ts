@@ -1,7 +1,7 @@
 import { describe, expect, spyOn, test } from 'bun:test';
+import { AgentInstanceManager } from '../../src/agent/instance-manager';
 import type { QueueAction } from '../../src/queue/actions';
 import { InMemoryQueue } from '../../src/queue/in-memory';
-import { AgentInstanceManager } from '../../src/agent/instance-manager';
 
 const createWarnSpy = () => {
   const warnMessages: string[] = [];

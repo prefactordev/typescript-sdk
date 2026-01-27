@@ -1,13 +1,13 @@
 import { describe, expect, test } from 'bun:test';
 import {
   AgentInstanceManager,
+  type Queue,
+  type QueueAction,
+  type Span,
   SpanContext,
   SpanStatus,
   SpanType,
   Tracer,
-  type Queue,
-  type QueueAction,
-  type Span,
 } from '@prefactor/core';
 import { PrefactorMiddleware } from '../src/middleware.js';
 

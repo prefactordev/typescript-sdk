@@ -10,11 +10,11 @@
 
 import {
   type Config,
+  type CoreRuntime,
   configureLogging,
   createConfig,
   createCore,
   getLogger,
-  type CoreRuntime,
   type Tracer,
 } from '@prefactor/core';
 import { createPrefactorMiddleware } from './middleware.js';

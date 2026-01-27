@@ -1,5 +1,5 @@
-import type { AgentInstanceStart, QueueAction, SchemaRegistration } from '../queue/actions.js';
 import { isDeepStrictEqual } from 'node:util';
+import type { AgentInstanceStart, QueueAction, SchemaRegistration } from '../queue/actions.js';
 import type { Queue } from '../queue/base.js';
 import { SchemaRegistry } from './schema-registry.js';
 

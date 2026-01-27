@@ -1,9 +1,9 @@
 import { generate, generatePartition, type Partition } from '@prefactor/pfid';
 import type { QueueAction } from '../queue/actions.js';
 import type { Queue } from '../queue/base.js';
+import { SpanContext } from './context.js';
 import type { Span, TokenUsage } from './span.js';
 import { SpanStatus, SpanType } from './span.js';
-import { SpanContext } from './context.js';
 
 /**
  * Options for starting a new span

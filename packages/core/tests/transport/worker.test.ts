@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
-import { InMemoryQueue } from '../../src/queue/in-memory';
 import type { QueueAction } from '../../src/queue/actions';
+import { InMemoryQueue } from '../../src/queue/in-memory';
 import { TransportWorker } from '../../src/transport/worker';
 
 class MockTransport {
@@ -26,7 +26,6 @@ const createDeferred = <T>(): Deferred<T> => {
   });
   return { promise, resolve, reject };
 };
-
 
 describe('TransportWorker', () => {
   test('drains queued actions in batches', async () => {

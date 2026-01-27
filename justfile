@@ -9,8 +9,8 @@ build-core:
 build-langchain:
     bun run scripts/build.ts --filter @prefactor/langchain
 
-build-sdk:
-    bun run scripts/build.ts --filter @prefactor/sdk
+build-ai:
+    bun run scripts/build.ts --filter @prefactor/ai
 
 # Run tests
 test:
@@ -47,10 +47,10 @@ install:
 publish:
     cd packages/core && bun publish --access public
     cd packages/langchain && bun publish --access public
-    cd packages/sdk && bun publish --access public
+    cd packages/ai && bun publish --access public
 
 # Dry run publish
 publish-dry:
     cd packages/core && bun publish --access public --dry-run
     cd packages/langchain && bun publish --access public --dry-run
-    cd packages/sdk && bun publish --access public --dry-run
+    cd packages/ai && bun publish --access public --dry-run

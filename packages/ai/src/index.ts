@@ -45,7 +45,7 @@
 // Initialization Exports
 // ============================================================================
 
-export { init, getTracer, shutdown } from './init.js';
+export { getTracer, init, shutdown } from './init.js';
 
 // ============================================================================
 // Middleware Exports
@@ -57,7 +57,7 @@ export { createPrefactorMiddleware } from './middleware.js';
 // Type Exports
 // ============================================================================
 
-export type { MiddlewareConfig, CallData } from './types.js';
+export type { CallData, MiddlewareConfig } from './types.js';
 
 // ============================================================================
 // Re-exported Core Types
@@ -66,10 +66,10 @@ export type { MiddlewareConfig, CallData } from './types.js';
 export type {
   Config,
   CoreRuntime,
+  ErrorInfo,
   HttpTransportConfig,
   Span,
   TokenUsage,
-  ErrorInfo,
 } from '@prefactor/core';
 
-export { SpanType, SpanStatus } from '@prefactor/core';
+export { SpanStatus, SpanType } from '@prefactor/core';

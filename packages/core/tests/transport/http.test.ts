@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { HttpTransport } from '../../src/transport/http.js';
 import type { QueueAction } from '../../src/queue/actions.js';
-import { SpanStatus, SpanType, type Span } from '../../src/tracing/span.js';
+import { type Span, SpanStatus, SpanType } from '../../src/tracing/span.js';
+import { HttpTransport } from '../../src/transport/http.js';
 
 const createConfig = () => ({
   apiUrl: 'https://example.com',

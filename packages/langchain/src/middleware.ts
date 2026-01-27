@@ -1,9 +1,4 @@
-import {
-  type AgentInstanceManager,
-  SpanContext,
-  SpanType,
-  type Tracer,
-} from '@prefactor/core';
+import { type AgentInstanceManager, SpanContext, SpanType, type Tracer } from '@prefactor/core';
 import { extractTokenUsage } from './metadata-extractor.js';
 
 /**

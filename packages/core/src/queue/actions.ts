@@ -15,7 +15,7 @@ export type AgentInstanceStart = {
   schemaVersion: string;
 };
 
-export type AgentInstanceFinish = {};
+export type AgentInstanceFinish = Record<string, never>;
 
 export type QueueAction =
   | { type: 'schema_register'; data: SchemaRegistration }
