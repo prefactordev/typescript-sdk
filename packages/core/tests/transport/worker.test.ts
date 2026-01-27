@@ -27,6 +27,8 @@ const createDeferred = <T>(): Deferred<T> => {
   return { promise, resolve, reject };
 };
 
+const waitFor = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+
 describe('TransportWorker', () => {
   test('drains queued actions in batches', async () => {
     const queue = new InMemoryQueue<QueueAction>();
@@ -109,6 +111,92 @@ describe('TransportWorker', () => {
     expect(transport.batches.length).toBe(2);
     expect(transport.batches[0]).toEqual(transport.batches[1]);
     expect(transport.batches[0]?.length).toBe(1);
+  });
+
+  test('flush waits for pending batch retry to finish', async () => {
+    const queue = new InMemoryQueue<QueueAction>();
+    const firstAttempt = createDeferred<void>();
+    const firstAttemptStarted = createDeferred<void>();
+    const secondAttemptStarted = createDeferred<void>();
+    const secondAttempt = createDeferred<void>();
+    const transport = {
+      attempt: 0,
+      async processBatch(): Promise<void> {
+        this.attempt += 1;
+        if (this.attempt === 1) {
+          firstAttemptStarted.resolve();
+          return firstAttempt.promise;
+        }
+        secondAttemptStarted.resolve();
+        await secondAttempt.promise;
+      },
+      async close(): Promise<void> {},
+    };
+    const worker = new TransportWorker(queue, transport, { batchSize: 1, intervalMs: 1 });
+
+    queue.enqueue({ type: 'agent_finish', data: {} });
+
+    let flushResolved = false;
+    const flushPromise = worker.flush(100).then(() => {
+      flushResolved = true;
+    });
+
+    await firstAttemptStarted.promise;
+    firstAttempt.reject(new Error('boom'));
+
+    await secondAttemptStarted.promise;
+
+    expect(flushResolved).toBe(false);
+
+    secondAttempt.resolve();
+    await flushPromise;
+
+    expect(flushResolved).toBe(true);
+  });
+
+  test('close drains pending batch before finishing', async () => {
+    const queue = new InMemoryQueue<QueueAction>();
+    const firstAttempt = createDeferred<void>();
+    const firstAttemptStarted = createDeferred<void>();
+    const secondAttemptStarted = createDeferred<void>();
+    const secondAttempt = createDeferred<void>();
+    const transport = {
+      attempt: 0,
+      async processBatch(): Promise<void> {
+        this.attempt += 1;
+        if (this.attempt === 1) {
+          firstAttemptStarted.resolve();
+          return firstAttempt.promise;
+        }
+        secondAttemptStarted.resolve();
+        await secondAttempt.promise;
+      },
+      async close(): Promise<void> {},
+    };
+    const worker = new TransportWorker(queue, transport, { batchSize: 1, intervalMs: 1 });
+
+    queue.enqueue({ type: 'agent_finish', data: {} });
+
+    await firstAttemptStarted.promise;
+    firstAttempt.reject(new Error('boom'));
+
+    let closeResolved = false;
+    const closePromise = worker.close(100).then(() => {
+      closeResolved = true;
+    });
+
+    const retryStarted = await Promise.race([
+      secondAttemptStarted.promise.then(() => true),
+      waitFor(20).then(() => false),
+    ]);
+
+    expect(retryStarted).toBe(true);
+    expect(closeResolved).toBe(false);
+
+    secondAttempt.resolve();
+    await closePromise;
+
+    expect(transport.attempt).toBe(2);
   });
 
   test('close times out when in-flight batch never resolves', async () => {

@@ -19,7 +19,7 @@ export class TransportWorker {
   }
 
   private async start(): Promise<void> {
-    while (!this.closed) {
+    while (!this.closed || this.pendingBatch || this.queue.size() > 0 || this.inFlightPromise) {
       const batch = this.pendingBatch ?? this.queue.dequeueBatch(this.config.batchSize);
       if (batch.length === 0) {
         await new Promise((resolve) => setTimeout(resolve, this.config.intervalMs));
@@ -43,7 +43,10 @@ export class TransportWorker {
 
   async flush(timeoutMs: number): Promise<void> {
     const start = Date.now();
-    while ((this.queue.size() > 0 || this.inFlightPromise) && Date.now() - start < timeoutMs) {
+    while (
+      (this.queue.size() > 0 || this.pendingBatch || this.inFlightPromise) &&
+      Date.now() - start < timeoutMs
+    ) {
       await new Promise((resolve) => setTimeout(resolve, this.config.intervalMs));
     }
   }
@@ -62,6 +65,8 @@ export class TransportWorker {
     if (!loopCompleted) {
       console.warn('TransportWorker.close timed out waiting for loop to finish');
     }
-    await this.transport.close();
+    if (loopCompleted) {
+      await this.transport.close();
+    }
   }
 }
