@@ -1,4 +1,4 @@
-import { AsyncLocalStorage } from 'node:async_hooks';
+import { AsyncLocalStorage, AsyncResource } from 'node:async_hooks';
 import type { Span } from './span.js';
 
 /**
@@ -73,23 +73,13 @@ export class SpanContext {
    * @returns The return value of the function
    */
   static run<T>(span: Span, fn: () => T): T {
-    const stack = spanStorage.getStore();
+    const stack = spanStorage.getStore() ?? [];
+    const resource = new AsyncResource('SpanContext.run');
 
-    if (stack) {
-      stack.push(span);
-      try {
-        return fn();
-      } finally {
-        stack.pop();
-      }
-    }
-
-    const nextStack = [span];
-    spanStorage.enterWith(nextStack);
     try {
-      return fn();
+      return resource.runInAsyncScope(() => spanStorage.run([...stack, span], fn));
     } finally {
-      nextStack.pop();
+      resource.emitDestroy();
     }
   }
 
@@ -101,23 +91,13 @@ export class SpanContext {
    * @returns A promise resolving to the return value of the function
    */
   static async runAsync<T>(span: Span, fn: () => Promise<T>): Promise<T> {
-    const stack = spanStorage.getStore();
+    const stack = spanStorage.getStore() ?? [];
+    const resource = new AsyncResource('SpanContext.runAsync');
 
-    if (stack) {
-      stack.push(span);
-      try {
-        return await fn();
-      } finally {
-        stack.pop();
-      }
-    }
-
-    const nextStack = [span];
-    spanStorage.enterWith(nextStack);
     try {
-      return await fn();
+      return await resource.runInAsyncScope(() => spanStorage.run([...stack, span], fn));
     } finally {
-      nextStack.pop();
+      resource.emitDestroy();
     }
   }
 

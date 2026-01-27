@@ -69,4 +69,49 @@ describe('SpanContext', () => {
     expect(seen).toEqual(['1', '2', '1']);
     expect(SpanContext.getCurrent()).toBeUndefined();
   });
+
+  test('runAsync isolates sibling branch stacks', async () => {
+    SpanContext.clear();
+
+    const root = { spanId: 'root' } as any;
+    const spanA = { spanId: 'A' } as any;
+    const spanB = { spanId: 'B' } as any;
+
+    const defer = () => {
+      let resolve!: () => void;
+      const promise = new Promise<void>((resolver) => {
+        resolve = resolver;
+      });
+      return { promise, resolve };
+    };
+
+    await SpanContext.runAsync(root, async () => {
+      const stacks: { a?: string[]; b?: string[] } = {};
+      const aStarted = defer();
+      const bStarted = defer();
+      const allowRead = defer();
+
+      const branchA = SpanContext.runAsync(spanA, async () => {
+        aStarted.resolve();
+        await bStarted.promise;
+        await allowRead.promise;
+        stacks.a = SpanContext.getStack().map((span) => span.spanId);
+      });
+
+      const branchB = SpanContext.runAsync(spanB, async () => {
+        bStarted.resolve();
+        await aStarted.promise;
+        await allowRead.promise;
+        stacks.b = SpanContext.getStack().map((span) => span.spanId);
+      });
+
+      await Promise.all([aStarted.promise, bStarted.promise]);
+      allowRead.resolve();
+
+      await Promise.all([branchA, branchB]);
+
+      expect(stacks.a).toEqual(['root', 'A']);
+      expect(stacks.b).toEqual(['root', 'B']);
+    });
+  });
 });
