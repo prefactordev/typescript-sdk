@@ -45,7 +45,7 @@ export class SpanContext {
    * Get the full span stack from the async context
    */
   static getStack(): Span[] {
-    return spanStorage.getStore() ?? [];
+    return [...(spanStorage.getStore() ?? [])];
   }
 
   /**
@@ -73,8 +73,24 @@ export class SpanContext {
    * @returns The return value of the function
    */
   static run<T>(span: Span, fn: () => T): T {
-    const stack = [...(spanStorage.getStore() ?? []), span];
-    return spanStorage.run(stack, fn);
+    const stack = spanStorage.getStore();
+
+    if (stack) {
+      stack.push(span);
+      try {
+        return fn();
+      } finally {
+        stack.pop();
+      }
+    }
+
+    const nextStack = [span];
+    spanStorage.enterWith(nextStack);
+    try {
+      return fn();
+    } finally {
+      nextStack.pop();
+    }
   }
 
   /**
@@ -85,8 +101,24 @@ export class SpanContext {
    * @returns A promise resolving to the return value of the function
    */
   static async runAsync<T>(span: Span, fn: () => Promise<T>): Promise<T> {
-    const stack = [...(spanStorage.getStore() ?? []), span];
-    return spanStorage.run(stack, fn);
+    const stack = spanStorage.getStore();
+
+    if (stack) {
+      stack.push(span);
+      try {
+        return await fn();
+      } finally {
+        stack.pop();
+      }
+    }
+
+    const nextStack = [span];
+    spanStorage.enterWith(nextStack);
+    try {
+      return await fn();
+    } finally {
+      nextStack.pop();
+    }
   }
 
   /**
