@@ -50,7 +50,9 @@ export function createCore(config: Config): CoreRuntime {
   const schemaName = config.httpConfig?.schemaName ?? 'prefactor:agent';
   const schemaVersion = config.httpConfig?.schemaVersion ?? '1.0.0';
   const allowUnregisteredSchema = Boolean(
-    config.httpConfig?.skipSchema || config.httpConfig?.agentSchemaVersion
+    config.httpConfig?.skipSchema ||
+      config.httpConfig?.agentSchema ||
+      config.httpConfig?.agentSchemaVersion
   );
   const agentManager = new AgentInstanceManager(queue, {
     schemaName,
