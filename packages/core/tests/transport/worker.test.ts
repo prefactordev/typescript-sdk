@@ -193,10 +193,10 @@ describe('TransportWorker', () => {
     expect(transport.attempt).toBe(2);
   });
 
-  test('close times out when in-flight batch never resolves', async () => {
+  test('close resolves after loop timeout even if transport close never resolves', async () => {
     const queue = new InMemoryQueue<QueueAction>();
     const batchStarted = createDeferred<void>();
-    const closeStarted = createDeferred<void>();
+    const closeCalled = createDeferred<void>();
     const closeBlocked = createDeferred<void>();
     const transport = {
       async processBatch(): Promise<void> {
@@ -204,7 +204,7 @@ describe('TransportWorker', () => {
         return new Promise(() => {});
       },
       async close(): Promise<void> {
-        closeStarted.resolve();
+        closeCalled.resolve();
         await closeBlocked.promise;
       },
     };
@@ -213,18 +213,22 @@ describe('TransportWorker', () => {
     queue.enqueue({ type: 'agent_finish', data: {} });
     await batchStarted.promise;
 
-    let warned = false;
+    const warnMessages: string[] = [];
     const originalWarn = console.warn;
-    console.warn = () => {
-      warned = true;
+    console.warn = (...args: unknown[]) => {
+      warnMessages.push(args.map(String).join(' '));
     };
 
-    const closePromise = worker.close(10);
-    await closeStarted.promise;
+    let closeResolved = false;
+    const closePromise = worker.close(0).then(() => {
+      closeResolved = true;
+    });
+    await closeCalled.promise;
     await closePromise;
 
     console.warn = originalWarn;
 
-    expect(warned).toBe(true);
+    expect(warnMessages.some((message) => message.includes('potential data loss'))).toBe(true);
+    expect(closeResolved).toBe(true);
   });
 });
