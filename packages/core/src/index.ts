@@ -19,6 +19,7 @@ export {
   type TokenUsage,
 } from './tracing/span.js';
 export { type EndSpanOptions, type StartSpanOptions, Tracer } from './tracing/tracer.js';
+export { createCore, type CoreRuntime } from './create-core.js';
 // Transport
 export type { Transport } from './transport/base.js';
 export { HttpTransport } from './transport/http.js';

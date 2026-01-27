@@ -3,6 +3,7 @@
 // Convenience re-exports from core
 export {
   type Config,
+  type CoreRuntime,
   type HttpTransportConfig,
   type Span,
   SpanStatus,

@@ -1,4 +1,5 @@
 import type { HttpTransportConfig } from '../config.js';
+import type { QueueAction } from '../queue/actions.js';
 import type { Span } from '../tracing/span.js';
 import { getLogger } from '../utils/logging.js';
 import type { Transport } from './base.js';
@@ -40,6 +41,35 @@ export class HttpTransport implements Transport {
 
   constructor(private config: HttpTransportConfig) {
     this.startProcessing();
+  }
+
+  async processBatch(items: QueueAction[]): Promise<void> {
+    if (items.length === 0) {
+      return;
+    }
+
+    for (const item of items) {
+      switch (item.type) {
+        case 'schema_register':
+          this.config.agentSchema = item.data.schema;
+          this.config.agentSchemaVersion = item.data.schemaVersion;
+          this.config.schemaName = item.data.schemaName;
+          this.config.schemaVersion = item.data.schemaVersion;
+          break;
+        case 'agent_start':
+          this.startAgentInstance();
+          break;
+        case 'agent_finish':
+          this.finishAgentInstance();
+          break;
+        case 'span_end':
+          this.emit(item.data);
+          break;
+        case 'span_finish':
+          this.finishSpan(item.data.spanId, item.data.endTime);
+          break;
+      }
+    }
   }
 
   /**

@@ -14,6 +14,7 @@ import {
   SpanContext,
   SpanType,
   type TokenUsage,
+  type AgentInstanceManager,
   type Tracer,
 } from '@prefactor/core';
 import type {
@@ -96,8 +97,6 @@ class WorkflowManager {
       name: 'agent',
       spanType: SpanType.AGENT,
       inputs: { workflowId },
-      parentSpanId,
-      traceId,
     });
 
     const newWorkflow: WorkflowState = {
@@ -264,11 +263,7 @@ function extractToolResults(
  * @returns The created span
  * @internal
  */
-function createToolSpan(
-  tracer: Tracer,
-  toolCall: ToolCallInfo,
-  parentSpan: Span | undefined
-): Span {
+function createToolSpan(tracer: Tracer, toolCall: ToolCallInfo): Span {
   return tracer.startSpan({
     name: toolCall.toolName,
     spanType: SpanType.TOOL,
@@ -277,8 +272,6 @@ function createToolSpan(
       toolCallId: toolCall.toolCallId,
       input: toolCall.input,
     },
-    parentSpanId: parentSpan?.spanId,
-    traceId: parentSpan?.traceId,
   });
 }
 
@@ -474,9 +467,15 @@ function extractTokenUsage(
  */
 export function createPrefactorMiddleware(
   tracer: Tracer,
-  config?: MiddlewareConfig
+  config?: MiddlewareConfig,
+  coreOptions?: {
+    agentManager: AgentInstanceManager;
+    agentInfo?: Parameters<AgentInstanceManager['startInstance']>[0];
+  }
 ): LanguageModelMiddleware {
   const enableWorkflowTracking = config?.enableWorkflowTracking !== false;
+  const agentManager = coreOptions?.agentManager;
+  const agentInfo = coreOptions?.agentInfo;
 
   return {
     specificationVersion: 'v3',
@@ -485,6 +484,8 @@ export function createPrefactorMiddleware(
      */
     wrapGenerate: async ({ doGenerate, params, model }) => {
       const parentSpan = SpanContext.getCurrent();
+
+      agentManager?.startInstance(agentInfo);
 
       // Get or create workflow for this call
       const workflowManager = getWorkflowManager(tracer);
@@ -506,17 +507,27 @@ export function createPrefactorMiddleware(
       const llmParentSpan = workflow?.agentSpan ?? parentSpan;
 
       // Create LLM span
-      const span = tracer.startSpan({
-        name: `${model.provider ?? 'unknown'}.${model.modelId ?? 'unknown'}`,
-        spanType: SpanType.LLM,
-        inputs: {
-          'ai.model.id': model.modelId,
-          'ai.model.provider': model.provider,
-          ...extractInputs(params, config),
-        },
-        parentSpanId: llmParentSpan?.spanId,
-        traceId: llmParentSpan?.traceId,
-      });
+      const span = llmParentSpan
+        ? SpanContext.run(llmParentSpan, () =>
+            tracer.startSpan({
+              name: `${model.provider ?? 'unknown'}.${model.modelId ?? 'unknown'}`,
+              spanType: SpanType.LLM,
+              inputs: {
+                'ai.model.id': model.modelId,
+                'ai.model.provider': model.provider,
+                ...extractInputs(params, config),
+              },
+            })
+          )
+        : tracer.startSpan({
+            name: `${model.provider ?? 'unknown'}.${model.modelId ?? 'unknown'}`,
+            spanType: SpanType.LLM,
+            inputs: {
+              'ai.model.id': model.modelId,
+              'ai.model.provider': model.provider,
+              ...extractInputs(params, config),
+            },
+          });
 
       try {
         // Execute the generation within the LLM span context
@@ -527,14 +538,16 @@ export function createPrefactorMiddleware(
           const toolCalls = extractToolCalls(result);
           const toolResults = extractToolResults(result);
 
-          for (const toolCall of toolCalls) {
-            const toolSpan = createToolSpan(tracer, toolCall, span);
+          SpanContext.run(span, () => {
+            for (const toolCall of toolCalls) {
+              const toolSpan = createToolSpan(tracer, toolCall);
 
-            const output = toolResults.get(toolCall.toolCallId);
-            tracer.endSpan(toolSpan, {
-              outputs: output !== undefined ? { output } : undefined,
-            });
-          }
+              const output = toolResults.get(toolCall.toolCallId);
+              tracer.endSpan(toolSpan, {
+                outputs: output !== undefined ? { output } : undefined,
+              });
+            }
+          });
         }
 
         // End the span with outputs
@@ -548,6 +561,8 @@ export function createPrefactorMiddleware(
         // End the span with error
         tracer.endSpan(span, { error: error as Error });
         throw error;
+      } finally {
+        agentManager?.finishInstance();
       }
     },
 
@@ -556,6 +571,8 @@ export function createPrefactorMiddleware(
      */
     wrapStream: async ({ doStream, params, model }) => {
       const parentSpan = SpanContext.getCurrent();
+
+      agentManager?.startInstance(agentInfo);
 
       // Get or create workflow for this call
       const workflowManager = getWorkflowManager(tracer);
@@ -570,17 +587,27 @@ export function createPrefactorMiddleware(
       const llmParentSpan = workflow?.agentSpan ?? parentSpan;
 
       // Create LLM span
-      const span = tracer.startSpan({
-        name: `${model.provider ?? 'unknown'}.${model.modelId ?? 'unknown'}`,
-        spanType: SpanType.LLM,
-        inputs: {
-          'ai.model.id': model.modelId,
-          'ai.model.provider': model.provider,
-          ...extractInputs(params, config),
-        },
-        parentSpanId: llmParentSpan?.spanId,
-        traceId: llmParentSpan?.traceId,
-      });
+      const span = llmParentSpan
+        ? SpanContext.run(llmParentSpan, () =>
+            tracer.startSpan({
+              name: `${model.provider ?? 'unknown'}.${model.modelId ?? 'unknown'}`,
+              spanType: SpanType.LLM,
+              inputs: {
+                'ai.model.id': model.modelId,
+                'ai.model.provider': model.provider,
+                ...extractInputs(params, config),
+              },
+            })
+          )
+        : tracer.startSpan({
+            name: `${model.provider ?? 'unknown'}.${model.modelId ?? 'unknown'}`,
+            spanType: SpanType.LLM,
+            inputs: {
+              'ai.model.id': model.modelId,
+              'ai.model.provider': model.provider,
+              ...extractInputs(params, config),
+            },
+          });
 
       try {
         // Execute the stream within the span context
@@ -592,7 +619,8 @@ export function createPrefactorMiddleware(
           span,
           tracer,
           config,
-          workflow
+          workflow,
+          agentManager
         );
 
         return {
@@ -602,6 +630,7 @@ export function createPrefactorMiddleware(
       } catch (error) {
         // End the span with error
         tracer.endSpan(span, { error: error as Error });
+        agentManager?.finishInstance();
         throw error;
       }
     },
@@ -624,7 +653,8 @@ function wrapStreamForCompletion(
   span: Span,
   tracer: Tracer,
   config?: MiddlewareConfig,
-  workflow?: WorkflowState
+  workflow?: WorkflowState,
+  agentManager?: AgentInstanceManager
 ): ReadableStream<any> {
   const reader = stream.getReader();
   let finishReason: unknown | undefined;
@@ -652,17 +682,21 @@ function wrapStreamForCompletion(
 
           // Instrument tool calls
           if (config?.captureTools !== false && toolCalls.length > 0) {
-            for (const toolCall of toolCalls) {
-              const toolSpan = createToolSpan(tracer, toolCall, span);
-              // Tool output is not available in streaming mode
-              tracer.endSpan(toolSpan, {});
-            }
+            SpanContext.run(span, () => {
+              for (const toolCall of toolCalls) {
+                const toolSpan = createToolSpan(tracer, toolCall);
+                // Tool output is not available in streaming mode
+                tracer.endSpan(toolSpan, {});
+              }
+            });
           }
 
           tracer.endSpan(span, {
             outputs,
             tokenUsage: usage,
           });
+
+          agentManager?.finishInstance();
 
           controller.close();
           return;
@@ -713,6 +747,7 @@ function wrapStreamForCompletion(
       tracer.endSpan(span, {
         outputs: { 'ai.finishReason': 'cancelled' },
       });
+      agentManager?.finishInstance();
       reader.cancel();
     },
   });

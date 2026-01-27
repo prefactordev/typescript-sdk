@@ -65,6 +65,7 @@ export type { MiddlewareConfig, CallData } from './types.js';
 
 export type {
   Config,
+  CoreRuntime,
   HttpTransportConfig,
   Span,
   TokenUsage,
