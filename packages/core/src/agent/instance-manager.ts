@@ -3,6 +3,28 @@ import { isDeepStrictEqual } from 'node:util';
 import type { Queue } from '../queue/base.js';
 import { SchemaRegistry } from './schema-registry.js';
 
+const normalizeSchema = (value: unknown): unknown => {
+  if (Array.isArray(value)) {
+    return value.map((item) => normalizeSchema(item));
+  }
+
+  if (value && typeof value === 'object') {
+    const proto = Object.getPrototypeOf(value);
+    if (proto === Object.prototype || proto === null) {
+      const entries = Object.entries(value as Record<string, unknown>).sort(([left], [right]) =>
+        left.localeCompare(right)
+      );
+      const normalized: Record<string, unknown> = {};
+      for (const [key, entryValue] of entries) {
+        normalized[key] = normalizeSchema(entryValue);
+      }
+      return normalized;
+    }
+  }
+
+  return value;
+};
+
 export type AgentInstanceManagerOptions = {
   schemaName: string;
   schemaVersion: string;
@@ -21,7 +43,10 @@ export class AgentInstanceManager {
   registerSchema(schema: Record<string, unknown>): void {
     if (this.schemaRegistry.has(this.options.schemaName, this.options.schemaVersion)) {
       const existing = this.schemaRegistry.get(this.options.schemaName, this.options.schemaVersion);
-      if (existing && !isDeepStrictEqual(existing.schema, schema)) {
+      if (
+        existing &&
+        !isDeepStrictEqual(normalizeSchema(existing.schema), normalizeSchema(schema))
+      ) {
         console.warn(
           `Schema ${this.options.schemaName}@${this.options.schemaVersion} is already registered with a different payload. Ignoring registration.`
         );

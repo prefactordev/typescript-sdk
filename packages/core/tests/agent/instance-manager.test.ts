@@ -1,9 +1,24 @@
-import { describe, expect, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import type { QueueAction } from '../../src/queue/actions';
 import { InMemoryQueue } from '../../src/queue/in-memory';
 import { AgentInstanceManager } from '../../src/agent/instance-manager';
 
 describe('AgentInstanceManager', () => {
+  let warnMessages: string[] = [];
+  let originalWarn: typeof console.warn;
+
+  beforeEach(() => {
+    warnMessages = [];
+    originalWarn = console.warn;
+    console.warn = (...args: unknown[]) => {
+      warnMessages.push(args.map(String).join(' '));
+    };
+  });
+
+  afterEach(() => {
+    console.warn = originalWarn;
+  });
+
   test('enqueues schema registration before agent start with schema payloads', () => {
     const queue = new InMemoryQueue<QueueAction>();
     const manager = new AgentInstanceManager(queue, {
@@ -34,17 +49,7 @@ describe('AgentInstanceManager', () => {
       schemaVersion: '1.0.0',
     });
 
-    const warnMessages: string[] = [];
-    const originalWarn = console.warn;
-    console.warn = (...args: unknown[]) => {
-      warnMessages.push(args.map(String).join(' '));
-    };
-
-    try {
-      manager.startInstance({ agentId: 'agent-1' });
-    } finally {
-      console.warn = originalWarn;
-    }
+    manager.startInstance({ agentId: 'agent-1' });
 
     const items = queue.dequeueBatch(10);
     expect(items).toHaveLength(0);
@@ -74,6 +79,50 @@ describe('AgentInstanceManager', () => {
     }
   });
 
+  test('does not warn for repeated identical schema registration', () => {
+    const queue = new InMemoryQueue<QueueAction>();
+    const manager = new AgentInstanceManager(queue, {
+      schemaName: 'langchain:agent',
+      schemaVersion: '1.0.0',
+    });
+
+    manager.registerSchema({ type: 'object' });
+    manager.registerSchema({ type: 'object' });
+
+    expect(warnMessages).toHaveLength(0);
+  });
+
+  test('dedupes schema registration with reordered keys', () => {
+    const queue = new InMemoryQueue<QueueAction>();
+    const manager = new AgentInstanceManager(queue, {
+      schemaName: 'langchain:agent',
+      schemaVersion: '1.0.0',
+    });
+
+    const schemaA = {
+      type: 'object',
+      properties: {
+        alpha: { type: 'string' },
+        beta: { type: 'number' },
+      },
+    };
+
+    const schemaB = {
+      type: 'object',
+      properties: {
+        beta: { type: 'number' },
+        alpha: { type: 'string' },
+      },
+    };
+
+    manager.registerSchema(schemaA);
+    manager.registerSchema(schemaB);
+
+    const items = queue.dequeueBatch(10);
+    expect(items).toHaveLength(1);
+    expect(warnMessages).toHaveLength(0);
+  });
+
   test('warns and ignores schema registration with different payload', () => {
     const queue = new InMemoryQueue<QueueAction>();
     const manager = new AgentInstanceManager(queue, {
@@ -81,18 +130,8 @@ describe('AgentInstanceManager', () => {
       schemaVersion: '1.0.0',
     });
 
-    const warnMessages: string[] = [];
-    const originalWarn = console.warn;
-    console.warn = (...args: unknown[]) => {
-      warnMessages.push(args.map(String).join(' '));
-    };
-
-    try {
-      manager.registerSchema({ type: 'object' });
-      manager.registerSchema({ type: 'object', title: 'Agent' });
-    } finally {
-      console.warn = originalWarn;
-    }
+    manager.registerSchema({ type: 'object' });
+    manager.registerSchema({ type: 'object', title: 'Agent' });
 
     const items = queue.dequeueBatch(10);
     expect(items).toHaveLength(1);
