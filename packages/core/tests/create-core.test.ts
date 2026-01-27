@@ -1,6 +1,4 @@
 import { describe, expect, spyOn, test } from 'bun:test';
-import type { QueueAction } from '../src/queue/actions.js';
-import { InMemoryQueue } from '../src/queue/in-memory.js';
 import { createCore } from '../src/create-core.js';
 import { createConfig } from '../src/config.js';
 
@@ -11,10 +9,6 @@ const createWarnSpy = () => {
   });
 
   return { warnMessages, warnSpy };
-};
-
-const getQueue = (core: ReturnType<typeof createCore>): InMemoryQueue<QueueAction> => {
-  return (core.agentManager as unknown as { queue: InMemoryQueue<QueueAction> }).queue;
 };
 
 describe('createCore', () => {
@@ -30,7 +24,53 @@ describe('createCore', () => {
     expect(() => createCore(config)).toThrowError(/agentVersion/);
   });
 
-  test('allows agent start before schema registration when skipSchema is true', async () => {
+  test('does not warn when skipSchema is enabled for HTTP transport', async () => {
+    const { warnMessages, warnSpy } = createWarnSpy();
+    const config = createConfig({
+      transportType: 'http',
+      httpConfig: {
+        apiUrl: 'https://example.com',
+        apiToken: 'test-token',
+        agentVersion: '1.0.0',
+        skipSchema: true,
+      },
+    });
+    const core = createCore(config);
+
+    try {
+      core.agentManager.startInstance({ agentId: 'agent-1' });
+
+      expect(warnMessages).toHaveLength(0);
+    } finally {
+      warnSpy.mockRestore();
+      await core.shutdown();
+    }
+  });
+
+  test('does not warn when agentSchema is provided for HTTP transport', async () => {
+    const { warnMessages, warnSpy } = createWarnSpy();
+    const config = createConfig({
+      transportType: 'http',
+      httpConfig: {
+        apiUrl: 'https://example.com',
+        apiToken: 'test-token',
+        agentVersion: '1.0.0',
+        agentSchema: { type: 'object' },
+      },
+    });
+    const core = createCore(config);
+
+    try {
+      core.agentManager.startInstance({ agentId: 'agent-1' });
+
+      expect(warnMessages).toHaveLength(0);
+    } finally {
+      warnSpy.mockRestore();
+      await core.shutdown();
+    }
+  });
+
+  test('warns when skipSchema is set for stdio transport', async () => {
     const { warnMessages, warnSpy } = createWarnSpy();
     const config = createConfig({
       transportType: 'stdio',
@@ -45,35 +85,8 @@ describe('createCore', () => {
     try {
       core.agentManager.startInstance({ agentId: 'agent-1' });
 
-      const items = getQueue(core).dequeueBatch(10);
-      expect(items).toHaveLength(1);
-      expect(items[0].type).toBe('agent_start');
-      expect(warnMessages).toHaveLength(0);
-    } finally {
-      warnSpy.mockRestore();
-      await core.shutdown();
-    }
-  });
-
-  test('allows agent start before schema registration when agentSchema is provided', async () => {
-    const { warnMessages, warnSpy } = createWarnSpy();
-    const config = createConfig({
-      transportType: 'stdio',
-      httpConfig: {
-        apiUrl: 'https://example.com',
-        apiToken: 'test-token',
-        agentSchema: { type: 'object' },
-      },
-    });
-    const core = createCore(config);
-
-    try {
-      core.agentManager.startInstance({ agentId: 'agent-1' });
-
-      const items = getQueue(core).dequeueBatch(10);
-      expect(items).toHaveLength(1);
-      expect(items[0].type).toBe('agent_start');
-      expect(warnMessages).toHaveLength(0);
+      expect(warnMessages).toHaveLength(1);
+      expect(warnMessages[0]).toMatch(/must be registered/);
     } finally {
       warnSpy.mockRestore();
       await core.shutdown();
