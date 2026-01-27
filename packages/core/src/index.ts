@@ -34,6 +34,10 @@ export type {
 export type { Queue } from './queue/base.js';
 export { InMemoryQueue } from './queue/in-memory.js';
 
+// Agent
+export { AgentInstanceManager } from './agent/instance-manager.js';
+export { SchemaRegistry } from './agent/schema-registry.js';
+
 // Utilities
 export { configureLogging, getLogger } from './utils/logging.js';
 export { serializeValue, truncateString } from './utils/serialization.js';

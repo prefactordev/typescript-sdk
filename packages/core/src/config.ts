@@ -22,6 +22,12 @@ export const HttpTransportConfigSchema = z.object({
   /** Optional agent description */
   agentDescription: z.string().optional(),
 
+  /** Optional schema name identifier */
+  schemaName: z.string().optional(),
+
+  /** Optional schema version identifier */
+  schemaVersion: z.string().optional(),
+
   /** Optional agent schema for validation (full schema object) */
   agentSchema: z.record(z.unknown()).optional(),
 
@@ -62,6 +68,8 @@ export const PartialHttpConfigSchema = z.object({
   agentVersion: z.string().optional(),
   agentName: z.string().optional(),
   agentDescription: z.string().optional(),
+  schemaName: z.string().optional(),
+  schemaVersion: z.string().optional(),
   agentSchema: z.record(z.unknown()).optional(),
   agentSchemaVersion: z.string().optional(),
   skipSchema: z.boolean().optional(),
