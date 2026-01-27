@@ -43,6 +43,7 @@ describe('ai init schema registration', () => {
   test('skips default schema when agentSchemaVersion is set', () => {
     init({
       ...baseConfig,
+      transportType: 'http',
       httpConfig: { ...baseConfig.httpConfig, agentSchemaVersion: '2.0.0' },
     });
 
