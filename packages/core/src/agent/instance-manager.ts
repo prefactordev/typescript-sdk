@@ -3,7 +3,7 @@ import { isDeepStrictEqual } from 'node:util';
 import type { Queue } from '../queue/base.js';
 import { SchemaRegistry } from './schema-registry.js';
 
-const orderInsensitiveArrayKeys = new Set(['required', 'enum', 'oneOf', 'allOf', 'anyOf']);
+const orderInsensitiveArrayKeys = new Set(['required', 'enum', 'oneOf', 'allOf', 'anyOf', 'type']);
 
 const stableStringify = (value: unknown): string => JSON.stringify(value) ?? 'undefined';
 

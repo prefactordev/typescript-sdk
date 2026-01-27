@@ -170,6 +170,34 @@ describe('AgentInstanceManager', () => {
     }
   });
 
+  test('does not warn when type arrays are reordered', () => {
+    const { warnMessages, warnSpy } = createWarnSpy();
+    const queue = new InMemoryQueue<QueueAction>();
+    const manager = new AgentInstanceManager(queue, {
+      schemaName: 'langchain:agent',
+      schemaVersion: '1.0.0',
+    });
+
+    const schemaA = {
+      type: ['null', 'string'],
+    };
+
+    const schemaB = {
+      type: ['string', 'null'],
+    };
+
+    try {
+      manager.registerSchema(schemaA);
+      manager.registerSchema(schemaB);
+
+      const items = queue.dequeueBatch(10);
+      expect(items).toHaveLength(1);
+      expect(warnMessages).toHaveLength(0);
+    } finally {
+      warnSpy.mockRestore();
+    }
+  });
+
   test('warns and ignores schema registration with different payload', () => {
     const { warnMessages, warnSpy } = createWarnSpy();
     const queue = new InMemoryQueue<QueueAction>();
