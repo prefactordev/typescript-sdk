@@ -40,13 +40,13 @@ describe('langchain init schema registration', () => {
     expect(registeredSchemas).toEqual([customSchema]);
   });
 
-  test('skips default schema when skipSchema is true', () => {
+  test('ignores skipSchema for stdio transport', () => {
     init({
       ...baseConfig,
       httpConfig: { ...baseConfig.httpConfig, skipSchema: true },
     });
 
-    expect(registeredSchemas).toEqual([]);
+    expect(registeredSchemas.length).toBe(1);
   });
 
   test('registers default schema when no schema config is provided', () => {

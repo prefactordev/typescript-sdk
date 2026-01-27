@@ -1,4 +1,4 @@
-import { describe, expect, spyOn, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test';
 import { createCore } from '../src/create-core.js';
 import { createConfig } from '../src/config.js';
 
@@ -12,6 +12,20 @@ const createWarnSpy = () => {
 };
 
 describe('createCore', () => {
+  const originalFetch = globalThis.fetch;
+
+  beforeEach(() => {
+    globalThis.fetch = async () =>
+      new Response(JSON.stringify({ details: { id: 'test-span' } }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+  });
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+  });
+
   test('requires agentVersion when using HTTP transport', () => {
     const config = createConfig({
       transportType: 'http',
