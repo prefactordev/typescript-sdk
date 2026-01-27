@@ -31,7 +31,7 @@ describe('HttpTransport processBatch', () => {
     globalThis.fetch = originalFetch;
   });
 
-  test('updates config and starts agent instance directly', async () => {
+  test('applies schema updates before starting agent instance', async () => {
     const fetchCalls: Array<{ url: string; options?: RequestInit }> = [];
     globalThis.fetch = async (url, options) => {
       fetchCalls.push({ url: String(url), options });
@@ -44,14 +44,6 @@ describe('HttpTransport processBatch', () => {
     const transport = new HttpTransport(createConfig());
     const actions: QueueAction[] = [
       {
-        type: 'schema_register',
-        data: {
-          schemaName: 'prefactor:agent',
-          schemaVersion: '2.0.0',
-          schema: { type: 'object' },
-        },
-      },
-      {
         type: 'agent_start',
         data: {
           agentId: 'agent-123',
@@ -60,6 +52,14 @@ describe('HttpTransport processBatch', () => {
           agentDescription: 'Test description',
           schemaName: 'prefactor:agent',
           schemaVersion: '2.0.0',
+        },
+      },
+      {
+        type: 'schema_register',
+        data: {
+          schemaName: 'prefactor:agent',
+          schemaVersion: '2.0.0',
+          schema: { type: 'object' },
         },
       },
     ];
@@ -100,7 +100,7 @@ describe('HttpTransport processBatch', () => {
     await transport.close();
   });
 
-  test('sends span end and finish directly in batch order', async () => {
+  test('buffers span finish until after span end', async () => {
     const fetchCalls: Array<{ url: string; options?: RequestInit }> = [];
     globalThis.fetch = async (url, options) => {
       const urlString = String(url);
@@ -146,8 +146,8 @@ describe('HttpTransport processBatch', () => {
     };
 
     const actions: QueueAction[] = [
-      { type: 'span_end', data: span },
       { type: 'span_finish', data: { spanId: 'span-1', endTime } },
+      { type: 'span_end', data: span },
     ];
 
     await transport.processBatch(actions);

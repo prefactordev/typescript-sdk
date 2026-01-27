@@ -35,13 +35,22 @@ export class HttpTransport implements Transport {
     }
 
     for (const item of items) {
+      if (item.type !== 'schema_register') {
+        continue;
+      }
+
+      this.config.agentSchema = item.data.schema;
+      this.config.agentSchemaVersion = item.data.schemaVersion;
+      this.config.schemaName = item.data.schemaName;
+      this.config.schemaVersion = item.data.schemaVersion;
+    }
+
+    const spanFinishes: Array<{ spanId: string; endTime: number }> = [];
+
+    for (const item of items) {
       try {
         switch (item.type) {
           case 'schema_register':
-            this.config.agentSchema = item.data.schema;
-            this.config.agentSchemaVersion = item.data.schemaVersion;
-            this.config.schemaName = item.data.schemaName;
-            this.config.schemaVersion = item.data.schemaVersion;
             break;
           case 'agent_start':
             this.config.agentId = item.data.agentId;
@@ -59,15 +68,22 @@ export class HttpTransport implements Transport {
             }
             await this.sendSpan(item.data);
             break;
-          case 'span_finish': {
-            if (!this.agentInstanceId) {
-              await this.ensureAgentRegistered();
-            }
-            const timestamp = new Date(item.data.endTime).toISOString();
-            await this.finishSpanHttp({ spanId: item.data.spanId, timestamp });
+          case 'span_finish':
+            spanFinishes.push({ spanId: item.data.spanId, endTime: item.data.endTime });
             break;
-          }
         }
+      } catch (error) {
+        logger.error('Error processing batch item:', error);
+      }
+    }
+
+    for (const finish of spanFinishes) {
+      try {
+        if (!this.agentInstanceId) {
+          await this.ensureAgentRegistered();
+        }
+        const timestamp = new Date(finish.endTime).toISOString();
+        await this.finishSpanHttp({ spanId: finish.spanId, timestamp });
       } catch (error) {
         logger.error('Error processing batch item:', error);
       }
