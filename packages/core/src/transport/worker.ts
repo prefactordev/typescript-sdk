@@ -8,6 +8,7 @@ export class TransportWorker {
   private closed = false;
   private inFlightPromise: Promise<void> | null = null;
   private loopPromise: Promise<void>;
+  private pendingBatch: QueueAction[] | null = null;
 
   constructor(
     private queue: Queue<QueueAction>,
@@ -19,7 +20,7 @@ export class TransportWorker {
 
   private async start(): Promise<void> {
     while (!this.closed) {
-      const batch = this.queue.dequeueBatch(this.config.batchSize);
+      const batch = this.pendingBatch ?? this.queue.dequeueBatch(this.config.batchSize);
       if (batch.length === 0) {
         await new Promise((resolve) => setTimeout(resolve, this.config.intervalMs));
         continue;
@@ -29,7 +30,9 @@ export class TransportWorker {
         const inFlight = this.transport.processBatch(batch);
         this.inFlightPromise = inFlight;
         await inFlight;
+        this.pendingBatch = null;
       } catch (error) {
+        this.pendingBatch = batch;
         console.error('TransportWorker.processBatch failed', error);
         await new Promise((resolve) => setTimeout(resolve, this.config.intervalMs));
       } finally {
@@ -45,9 +48,20 @@ export class TransportWorker {
     }
   }
 
-  async close(): Promise<void> {
+  async close(timeoutMs = this.config.intervalMs * 50): Promise<void> {
     this.closed = true;
-    await this.loopPromise;
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+    const timeoutPromise = new Promise<false>((resolve) => {
+      timeoutId = setTimeout(() => resolve(false), timeoutMs);
+    });
+    const loopPromise = this.loopPromise.then(() => true);
+    const loopCompleted = await Promise.race([loopPromise, timeoutPromise]);
+    if (loopCompleted && timeoutId) {
+      clearTimeout(timeoutId);
+    }
+    if (!loopCompleted) {
+      console.warn('TransportWorker.close timed out waiting for loop to finish');
+    }
     await this.transport.close();
   }
 }
