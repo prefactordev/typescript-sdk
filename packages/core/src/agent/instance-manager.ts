@@ -3,9 +3,20 @@ import { isDeepStrictEqual } from 'node:util';
 import type { Queue } from '../queue/base.js';
 import { SchemaRegistry } from './schema-registry.js';
 
-const normalizeSchema = (value: unknown): unknown => {
+const orderInsensitiveArrayKeys = new Set(['required', 'enum', 'oneOf', 'allOf', 'anyOf']);
+
+const stableStringify = (value: unknown): string => JSON.stringify(value) ?? 'undefined';
+
+const normalizeSchema = (value: unknown, arrayKey?: string): unknown => {
   if (Array.isArray(value)) {
-    return value.map((item) => normalizeSchema(item));
+    const normalizedItems = value.map((item) => normalizeSchema(item));
+    if (arrayKey && orderInsensitiveArrayKeys.has(arrayKey)) {
+      return normalizedItems
+        .map((item) => ({ item, key: stableStringify(item) }))
+        .sort((left, right) => left.key.localeCompare(right.key))
+        .map(({ item }) => item);
+    }
+    return normalizedItems;
   }
 
   if (value && typeof value === 'object') {
@@ -16,7 +27,7 @@ const normalizeSchema = (value: unknown): unknown => {
       );
       const normalized: Record<string, unknown> = {};
       for (const [key, entryValue] of entries) {
-        normalized[key] = normalizeSchema(entryValue);
+        normalized[key] = normalizeSchema(entryValue, key);
       }
       return normalized;
     }
