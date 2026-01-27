@@ -23,7 +23,42 @@ describe('TransportWorker', () => {
 
     await worker.flush(100);
 
-    expect(transport.batches.length).toBeGreaterThan(0);
-    expect(transport.batches[0].length).toBeLessThanOrEqual(2);
+    const totalItems = transport.batches.reduce((count, batch) => count + batch.length, 0);
+
+    expect(totalItems).toBe(3);
+    expect(transport.batches.every((batch) => batch.length <= 2)).toBe(true);
+  });
+
+  test('flush waits for in-flight batch completion', async () => {
+    const queue = new InMemoryQueue<QueueAction>();
+    let resolveBatch: (() => void) | undefined;
+    const batchPromise = new Promise<void>((resolve) => {
+      resolveBatch = resolve;
+    });
+    const transport = {
+      batches: [] as QueueAction[][],
+      async processBatch(items: QueueAction[]): Promise<void> {
+        this.batches.push(items);
+        await batchPromise;
+      },
+      async close(): Promise<void> {},
+    };
+    const worker = new TransportWorker(queue, transport, { batchSize: 2, intervalMs: 1 });
+
+    queue.enqueue({ type: 'agent_finish', data: {} });
+
+    let flushResolved = false;
+    const flushPromise = worker.flush(100).then(() => {
+      flushResolved = true;
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 5));
+
+    expect(flushResolved).toBe(false);
+
+    resolveBatch?.();
+    await flushPromise;
+
+    expect(flushResolved).toBe(true);
   });
 });
