@@ -27,7 +27,6 @@ const createDeferred = <T>(): Deferred<T> => {
   return { promise, resolve, reject };
 };
 
-const waitFor = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
 describe('TransportWorker', () => {
   test('drains queued actions in batches', async () => {
@@ -185,12 +184,7 @@ describe('TransportWorker', () => {
       closeResolved = true;
     });
 
-    const retryStarted = await Promise.race([
-      secondAttemptStarted.promise.then(() => true),
-      waitFor(20).then(() => false),
-    ]);
-
-    expect(retryStarted).toBe(true);
+    await secondAttemptStarted.promise;
     expect(closeResolved).toBe(false);
 
     secondAttempt.resolve();
@@ -202,12 +196,17 @@ describe('TransportWorker', () => {
   test('close times out when in-flight batch never resolves', async () => {
     const queue = new InMemoryQueue<QueueAction>();
     const batchStarted = createDeferred<void>();
+    const closeStarted = createDeferred<void>();
+    const closeBlocked = createDeferred<void>();
     const transport = {
       async processBatch(): Promise<void> {
         batchStarted.resolve();
         return new Promise(() => {});
       },
-      async close(): Promise<void> {},
+      async close(): Promise<void> {
+        closeStarted.resolve();
+        await closeBlocked.promise;
+      },
     };
     const worker = new TransportWorker(queue, transport, { batchSize: 1, intervalMs: 1 });
 
@@ -220,7 +219,9 @@ describe('TransportWorker', () => {
       warned = true;
     };
 
-    await worker.close(10);
+    const closePromise = worker.close(10);
+    await closeStarted.promise;
+    await closePromise;
 
     console.warn = originalWarn;
 

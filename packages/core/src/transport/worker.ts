@@ -53,20 +53,26 @@ export class TransportWorker {
 
   async close(timeoutMs = this.config.intervalMs * 50): Promise<void> {
     this.closed = true;
-    let timeoutId: ReturnType<typeof setTimeout> | null = null;
-    const timeoutPromise = new Promise<false>((resolve) => {
-      timeoutId = setTimeout(() => resolve(false), timeoutMs);
-    });
-    const loopPromise = this.loopPromise.then(() => true);
-    const loopCompleted = await Promise.race([loopPromise, timeoutPromise]);
-    if (loopCompleted && timeoutId) {
-      clearTimeout(timeoutId);
-    }
-    if (!loopCompleted) {
-      console.warn('TransportWorker.close timed out waiting for loop to finish');
-    }
-    if (loopCompleted) {
-      await this.transport.close();
-    }
+    const awaitWithTimeout = async (
+      promise: Promise<void> | void,
+      label: string
+    ): Promise<boolean> => {
+      const resolvedPromise = Promise.resolve(promise);
+      let timeoutId: ReturnType<typeof setTimeout> | null = null;
+      const timeoutPromise = new Promise<false>((resolve) => {
+        timeoutId = setTimeout(() => resolve(false), timeoutMs);
+      });
+      const completed = await Promise.race([resolvedPromise.then(() => true), timeoutPromise]);
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+      if (!completed) {
+        console.warn(`TransportWorker.close timed out waiting for ${label}`);
+      }
+      return completed;
+    };
+
+    await awaitWithTimeout(this.loopPromise, 'loop to finish');
+    await awaitWithTimeout(this.transport.close(), 'transport to close');
   }
 }
