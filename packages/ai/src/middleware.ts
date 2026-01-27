@@ -485,7 +485,6 @@ export function createPrefactorMiddleware(
      */
     wrapGenerate: async ({ doGenerate, params, model }) => {
       const parentSpan = SpanContext.getCurrent();
-      logger.info('wrapGenerate', { parentSpan });
 
       // Get or create workflow for this call
       const workflowManager = getWorkflowManager(tracer);
@@ -557,7 +556,6 @@ export function createPrefactorMiddleware(
      */
     wrapStream: async ({ doStream, params, model }) => {
       const parentSpan = SpanContext.getCurrent();
-      logger.info('wrapStream', { parentSpan });
 
       // Get or create workflow for this call
       const workflowManager = getWorkflowManager(tracer);

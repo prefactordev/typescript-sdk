@@ -1,44 +1,113 @@
 /**
- * Simple AI SDK Example for @prefactor/ai
+ * Middleware AI SDK Example for @prefactor/ai-middleware
  *
  * This example demonstrates end-to-end tracing of Vercel AI SDK operations
- * using @prefactor/ai's  adapter. Telemetry is sent to the Prefactor platform
- * via HTTP transport, or to stdout for local development.
+ * using @prefactor/ai-middleware's wrapLanguageModel approach. This is an
+ * alternative to the experimental_telemetry tracer approach.
  *
  * Prerequisites:
  * - ANTHROPIC_API_KEY environment variable set
  * - For HTTP transport: PREFACTOR_API_URL and PREFACTOR_API_TOKEN
  */
 
-import { generateText, stepCountIs, tool } from 'ai';
+import { generateText, wrapLanguageModel, tool, stepCountIs } from 'ai';
 import { anthropic } from '@ai-sdk/anthropic';
 import { z } from 'zod';
 import { init, shutdown } from '@prefactor/ai';
 
-// Define simple tools for the agent
-const calculatorTool = tool({
-  description: 'Evaluate a mathematical expression.',
+const calculateTool = tool({
+  description: 'Perform basic arithmetic operations (+, -, *, /).',
   inputSchema: z.object({
-    expression: z.string().describe('The mathematical expression to evaluate'),
+    operation: z.enum(['+', '-', '*', '/']).describe('The arithmetic operation'),
+    left: z.number().describe('Left operand'),
+    right: z.number().describe('Right operand'),
   }),
-  execute: async ({ expression }) => {
-    try {
-      // Simple evaluation for demo purposes
-      // In production, use a proper math parser
-      const result = eval(expression);
-      return `Result: ${result}`;
-    } catch (error) {
-      return `Error: ${error instanceof Error ? error.message : String(error)}`;
+  execute: async ({ operation, left, right }) => {
+    let result: number;
+    switch (operation) {
+      case '+':
+        result = left + right;
+        break;
+      case '-':
+        result = left - right;
+        break;
+      case '*':
+        result = left * right;
+        break;
+      case '/':
+        if (right === 0) return 'Error: Division by zero';
+        result = left / right;
+        break;
     }
+    return `Result: ${Math.round(result * 1000) / 1000}`;
   },
 });
 
 const getCurrentTimeTool = tool({
-  description: 'Get the current date and time.',
+  description: 'Get the current time as hours, minutes, and seconds since midnight.',
   inputSchema: z.object({}),
   execute: async () => {
     const now = new Date();
-    return now.toISOString().replace('T', ' ').substring(0, 19);
+    const hours = now.getHours();
+    const minutes = now.getMinutes();
+    const seconds = now.getSeconds();
+    const totalSeconds = hours * 3600 + minutes * 60 + seconds;
+    return JSON.stringify({
+      hours,
+      minutes,
+      seconds,
+      totalSeconds,
+      formatted: `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`,
+    });
+  },
+});
+
+const getTimeDifferenceTool = tool({
+  description: 'Calculate the difference between two times in seconds.',
+  inputSchema: z.object({
+    seconds1: z.number().describe('First time in seconds since midnight'),
+    seconds2: z.number().describe('Second time in seconds since midnight'),
+  }),
+  execute: async ({ seconds1, seconds2 }) => {
+    const diff = Math.abs(seconds2 - seconds1);
+    const hours = Math.floor(diff / 3600);
+    const minutes = Math.floor((diff % 3600) / 60);
+    const seconds = diff % 60;
+    return JSON.stringify({
+      totalSeconds: diff,
+      hours,
+      minutes,
+      seconds,
+      formatted: `${hours}h ${minutes}m ${seconds}s`,
+    });
+  },
+});
+
+const addTimeTool = tool({
+  description: 'Add minutes to a time (given in seconds since midnight) and return the new time.',
+  inputSchema: z.object({
+    currentSeconds: z.number().describe('Current time in seconds since midnight'),
+    minutesToAdd: z.number().describe('Number of minutes to add (1-59)'),
+  }),
+  execute: async ({ currentSeconds, minutesToAdd }) => {
+    const newSeconds = currentSeconds + minutesToAdd * 60;
+    const hours = Math.floor((newSeconds % 86400) / 3600);
+    const minutes = Math.floor((newSeconds % 3600) / 60);
+    return JSON.stringify({
+      totalSeconds: newSeconds % 86400,
+      hours,
+      minutes,
+      formatted: `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`,
+    });
+  },
+});
+
+const randomMinutesTool = tool({
+  description: 'Generate a random number of minutes between 1 and 59.',
+  inputSchema: z.object({}),
+  execute: async () => {
+    const minutes = Math.floor(Math.random() * 59) + 1;
+    return String(minutes);
   },
 });
 
@@ -52,148 +121,75 @@ async function main() {
   }
 
   console.log('='.repeat(80));
-  console.log('@prefactor/ai - Vercel AI SDK Example');
+  console.log('@prefactor/ai-middleware - Vercel AI SDK Middleware Example');
   console.log('='.repeat(80));
   console.log();
 
-  // Initialize @prefactor/ai tracer
+  // Initialize @prefactor/ai-middleware
   // Config is picked up from environment variables:
   // - PREFACTOR_TRANSPORT: 'stdio' or 'http' (default: 'stdio')
   // - PREFACTOR_API_URL: API endpoint for HTTP transport
   // - PREFACTOR_API_TOKEN: API token for HTTP transport
   // - PREFACTOR_AGENT_ID: Optional agent identifier
-  console.log('Initializing @prefactor/ai tracer...');
+  console.log('Initializing @prefactor/ai-middleware...');
 
-  const tracer = init({
-    // transportType: 'stdio',
+  const middleware = init({
     httpConfig: {
       apiToken: process.env.PREFACTOR_API_TOKEN!,
       apiUrl: process.env.PREFACTOR_API_URL!,
       agentId: process.env.PREFACTOR_AGENT_ID,
-      agentVersion: "1.0.0",
-      agentName: "Simple Agent",
-      agentDescription: "A simple agent for testing purposes."
-    }
+      agentVersion: '1.0.0',
+      agentName: 'Middleware Agent',
+      agentDescription: 'An agent demonstrating the middleware approach.',
+    },
   });
-  
+
+  // Wrap the model with our middleware
+  // This is the key difference from the experimental_telemetry approach
+  const model = wrapLanguageModel({
+    model: anthropic('claude-3-haiku-20240307'),
+    middleware,
+  });
+
+  console.log('Model wrapped with Prefactor middleware');
   console.log();
 
-  // Run test interactions
-  console.log('='.repeat(80));
-  console.log('Example 1: Getting Current Time');
-  console.log('='.repeat(80));
-  console.log();
-
+  // Example: Use the tools to generate everything
   try {
-    const result1 = await generateText({
-      model: anthropic('claude-3-haiku-20240307'),
-      prompt: 'What is the current date and time?',
+    const result = await generateText({
+      model,
+      prompt:
+        'Get the current time, generate a random number of minutes, add those minutes to the current time to get a future time, then calculate the difference in seconds between the two times.',
       tools: {
+        calculate: calculateTool,
         get_current_time: getCurrentTimeTool,
+        get_time_difference: getTimeDifferenceTool,
+        add_time: addTimeTool,
+        random_minutes: randomMinutesTool,
       },
-      stopWhen: stepCountIs(3),
-      experimental_telemetry: {
-        isEnabled: true,
-        tracer,
-      },
+      stopWhen: stepCountIs(8),
     });
 
-    console.log('\nAgent Response:');
-    console.log(result1.text);
+    console.log('Agent Response:');
+    console.log(result.text);
     console.log();
 
-    if (result1.toolCalls.length > 0) {
+    if (result.toolCalls.length > 0) {
       console.log('Tool calls made:');
-      for (const toolCall of result1.toolCalls) {
+      for (const toolCall of result.toolCalls) {
         console.log(`  - ${toolCall.toolName}: ${JSON.stringify(toolCall.input)}`);
       }
       console.log();
     }
   } catch (error) {
-    console.log(`Error in Example 1: ${error}`);
+    console.log(`Error in Example: ${error}`);
     console.log();
   }
 
-  console.log('='.repeat(80));
-  console.log('Example 2: Simple Calculation');
-  console.log('='.repeat(80));
-  console.log();
-
-  try {
-    const result2 = await generateText({
-      model: anthropic('claude-3-haiku-20240307'),
-      prompt: 'What is 42 multiplied by 17?',
-      tools: {
-        calculator: calculatorTool,
-      },
-      stopWhen: stepCountIs(3),
-      experimental_telemetry: {
-        isEnabled: true,
-        tracer,
-      },
-    });
-
-    console.log('\nAgent Response:');
-    console.log(result2.text);
-    console.log();
-
-    if (result2.toolCalls.length > 0) {
-      console.log('Tool calls made:');
-      for (const toolCall of result2.toolCalls) {
-        console.log(`  - ${toolCall.toolName}: ${JSON.stringify(toolCall.input)}`);
-      }
-      console.log();
-    }
-  } catch (error) {
-    console.log(`Error in Example 2: ${error}`);
-    console.log();
-  }
-
-  console.log('='.repeat(80));
-  console.log('Example 3: Multi-turn Conversation with Multiple Tools');
-  console.log('='.repeat(80));
-  console.log();
-
-  try {
-    const result3 = await generateText({
-      model: anthropic('claude-3-haiku-20240307'),
-      prompt: 'What time is it now, and what is 123 plus 456?',
-      tools: {
-        calculator: calculatorTool,
-        get_current_time: getCurrentTimeTool,
-      },
-      stopWhen: stepCountIs(5),
-      experimental_telemetry: {
-        isEnabled: true,
-        tracer,
-      },
-    });
-
-    console.log('\nAgent Response:');
-    console.log(result3.text);
-    console.log();
-
-    if (result3.toolCalls.length > 0) {
-      console.log('Tool calls made:');
-      for (const toolCall of result3.toolCalls) {
-        console.log(`  - ${toolCall.toolName}: ${JSON.stringify(toolCall.input)}`);
-      }
-      console.log();
-    }
-  } catch (error) {
-    console.log(`Error in Example 3: ${error}`);
-    console.log();
-  }
-
-  console.log('='.repeat(80));
-  console.log('Example Complete!');
-  console.log('='.repeat(80));
-  console.log();
-  
-  console.log('Flushing pending spans...');
   await shutdown();
   console.log('Shutdown complete');
   console.log();
+  process.exit(0);
 }
 
 main().catch((error) => {

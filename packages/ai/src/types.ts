@@ -1,228 +1,115 @@
 /**
- * @fileoverview Type definitions for AI SDK integration.
+ * @fileoverview Type definitions for AI SDK middleware integration.
  *
- * This module defines the interfaces expected by the Vercel AI SDK's
- * experimental_telemetry feature, along with re-exports of relevant
- * types from @prefactor/core.
+ * This module defines the configuration options and data structures
+ * used by the Prefactor middleware for Vercel AI SDK.
  *
  * @module types
  * @packageDocumentation
  */
 
-// ============================================================================
-// Span Context
-// ============================================================================
+import type { TokenUsage } from '@prefactor/core';
 
 /**
- * Context information that uniquely identifies a span within a trace.
- *
- * Compatible with OpenTelemetry's SpanContext interface.
+ * Configuration options for the Prefactor middleware.
  */
-export interface AiSpanContext {
-  /** The trace ID (pfid). */
-  traceId: string;
+export interface MiddlewareConfig {
+  /**
+   * Whether to capture prompt and response content in span inputs/outputs.
+   * Set to false to reduce data volume or for privacy reasons.
+   * @default true
+   */
+  captureContent?: boolean;
 
-  /** The span ID (pfid). */
-  spanId: string;
+  /**
+   * Whether to capture tool call information.
+   * @default true
+   */
+  captureTools?: boolean;
 
-  /** Trace flags (1 = sampled, 0 = not sampled). */
-  traceFlags: number;
+  /**
+   * Whether to create AGENT spans for multi-step workflows.
+   * When enabled, the middleware will automatically detect multi-step conversations
+   * and create a root AGENT span to establish proper hierarchy.
+   * @default true
+   */
+  enableWorkflowTracking?: boolean;
 }
 
 /**
- * Status codes for span completion.
+ * Data extracted from a generate or stream call.
+ * Used internally for building span data.
  */
-export enum AiSpanStatusCode {
-  /** Default status - not explicitly set. */
-  UNSET = 0,
-  /** Operation completed successfully. */
-  OK = 1,
-  /** Operation encountered an error. */
-  ERROR = 2,
+export interface CallData {
+  /** The model identifier (e.g., 'claude-3-haiku-20240307') */
+  modelId: string;
+
+  /** The provider name (e.g., 'anthropic', 'openai') */
+  provider: string;
+
+  /** Start timestamp in milliseconds */
+  startTime: number;
+
+  /** End timestamp in milliseconds */
+  endTime: number;
+
+  /** Duration in milliseconds */
+  durationMs: number;
+
+  /** Input data (prompt, settings, etc.) */
+  inputs: Record<string, unknown>;
+
+  /** Output data (response content, etc.) */
+  outputs: Record<string, unknown>;
+
+  /** Token usage statistics */
+  tokenUsage?: TokenUsage;
+
+  /** Reason the generation finished */
+  finishReason?: string;
+
+  /** Error if the call failed */
+  error?: Error;
 }
 
 /**
- * Status information for a span.
+ * LanguageModelV3Middleware type
  */
-export interface AiSpanStatus {
-  /** The status code. */
-  code: AiSpanStatusCode;
-  /** Optional status message (pfid). */
-  message?: string;
-}
-
-// ============================================================================
-// OpenTelemetry-Compatible Span Interface
-// ============================================================================
+export type { LanguageModelMiddleware } from 'ai';
 
 /**
- * OpenTelemetry-compatible Span interface.
- *
- * This interface matches what the Vercel AI SDK expects from a tracer's span.
- * It provides methods for setting attributes, recording events, and ending the span.
+ * Workflow state for tracking multi-step conversations.
  */
-export interface AiSpan {
-  /**
-   * Returns the span context containing trace and span identifiers.
-   */
-  spanContext(): AiSpanContext;
+export interface WorkflowState {
+  /** The root AGENT span for this workflow */
+  agentSpan?: import('@prefactor/core').Span;
 
-  /**
-   * Sets a single attribute on the span.
-   *
-   * @param key - Attribute key
-   * @param value - Attribute value
-   * @returns This span for method chaining
-   */
-  setAttribute(key: string, value: unknown): AiSpan;
+  /** Timestamp when workflow was created */
+  createdAt: number;
 
-  /**
-   * Sets multiple attributes on the span.
-   *
-   * @param attributes - Key-value pairs to set
-   * @returns This span for method chaining
-   */
-  setAttributes(attributes: Record<string, unknown>): AiSpan;
+  /** Timestamp of last activity in this workflow */
+  lastActivityAt: number;
 
-  /**
-   * Adds a timed event to the span.
-   *
-   * @param name - Event name
-   * @param attributesOrStartTime - Optional event attributes or start time
-   * @param startTime - Optional start time (if second param is attributes)
-   * @returns This span for method chaining
-   */
-  addEvent(
-    name: string,
-    attributesOrStartTime?: Record<string, unknown> | number | Date | [number, number],
-    startTime?: number | Date | [number, number]
-  ): AiSpan;
+  /** Number of LLM calls in this workflow */
+  callCount: number;
 
-  /**
-   * Adds a link to another span (no-op in this implementation).
-   * @returns This span for method chaining
-   */
-  addLink(): AiSpan;
-
-  /**
-   * Adds multiple links to other spans (no-op in this implementation).
-   * @returns This span for method chaining
-   */
-  addLinks(): AiSpan;
-
-  /**
-   * Sets the status of the span.
-   *
-   * @param status - Status to set (accepts OTEL SpanStatus or AiSpanStatus)
-   * @returns This span for method chaining
-   */
-  setStatus(status: { code: number; message?: string }): AiSpan;
-
-  /**
-   * Updates the name of the span.
-   *
-   * @param name - New span name
-   * @returns This span for method chaining
-   */
-  updateName(name: string): AiSpan;
-
-  /**
-   * Marks the span as complete.
-   */
-  end(): void;
-
-  /**
-   * Checks if the span is still recording.
-   *
-   * @returns true if the span has not been ended
-   */
-  isRecording(): boolean;
-
-  /**
-   * Records an exception that occurred during the span's operation.
-   *
-   * @param error - The error to record
-   */
-  recordException(error: Error): void;
+  /** Unique identifier for this workflow */
+  workflowId: string;
 }
 
-// ============================================================================
-// OpenTelemetry-Compatible Span Options
-// ============================================================================
-
 /**
- * Options for creating a new span.
+ * Tool call extracted from AI SDK response.
  */
-export interface AiSpanOptions {
-  /**
-   * The span kind (CLIENT, SERVER, INTERNAL, etc.).
-   * See OpenTelemetry SpanKind for values.
-   */
-  kind?: number;
+export interface ToolCallInfo {
+  /** Name of the tool */
+  toolName: string;
 
-  /**
-   * Initial attributes to set on the span.
-   */
-  attributes?: Record<string, unknown>;
+  /** Tool call ID */
+  toolCallId: string;
 
-  /**
-   * Override the default start time.
-   */
-  startTime?: number | Date | [number, number];
-}
+  /** Input parameters for the tool */
+  input?: unknown;
 
-// ============================================================================
-// OpenTelemetry-Compatible Tracer Interface
-// ============================================================================
-
-/**
- * OpenTelemetry-compatible Tracer interface.
- *
- * This interface matches what the Vercel AI SDK expects from a tracer.
- */
-export interface AiTracer {
-  /**
-   * Creates and starts a new span.
-   *
-   * @param name - The span name
-   * @param options - Optional span configuration
-   * @param context - Optional parent context (ignored, we use SpanContext)
-   * @returns A new span
-   */
-  startSpan(name: string, options?: AiSpanOptions, context?: unknown): AiSpan;
-
-  /**
-   * Creates a span and executes a function within its context.
-   *
-   * @param name - The span name
-   * @param fn - Function to execute
-   * @returns The function's return value
-   */
-  startActiveSpan<T>(name: string, fn: (span: AiSpan) => T): T;
-
-  /**
-   * Creates a span with options and executes a function within its context.
-   *
-   * @param name - The span name
-   * @param options - Span configuration
-   * @param fn - Function to execute
-   * @returns The function's return value
-   */
-  startActiveSpan<T>(name: string, options: AiSpanOptions, fn: (span: AiSpan) => T): T;
-
-  /**
-   * Creates a span with options and context, executing a function within it.
-   *
-   * @param name - The span name
-   * @param options - Span configuration
-   * @param context - Parent context
-   * @param fn - Function to execute
-   * @returns The function's return value
-   */
-  startActiveSpan<T>(
-    name: string,
-    options: AiSpanOptions,
-    context: unknown,
-    fn: (span: AiSpan) => T
-  ): T;
+  /** Output from the tool (if available) */
+  output?: unknown;
 }

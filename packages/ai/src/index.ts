@@ -1,22 +1,21 @@
 /**
- * @fileoverview Prefactor AI SDK - OpenTelemetry-compatible telemetry for Vercel AI SDK.
+ * @fileoverview Prefactor AI Middleware - Vercel AI SDK integration via middleware.
  *
- * This package provides an adapter that bridges the Vercel AI SDK's
- * `experimental_telemetry` feature with the Prefactor platform for
- * observability and tracing of AI operations.
+ * This package provides middleware for the Vercel AI SDK that captures telemetry
+ * data and sends it to the Prefactor platform for observability.
  *
  * ## Quick Start
  *
  * ```ts
- * import { init, shutdown } from "@prefactor/ai";
- * import { generateText } from "ai";
+ * import { init, shutdown } from "@prefactor/ai-middleware";
+ * import { generateText, wrapLanguageModel } from "ai";
  * import { anthropic } from "@ai-sdk/anthropic";
  *
  * // Initialize with defaults (stdio transport for development)
- * const tracer = init();
+ * const middleware = init();
  *
  * // Or with HTTP transport for production
- * const tracer = init({
+ * const middleware = init({
  *   transportType: 'http',
  *   httpConfig: {
  *     apiUrl: 'https://api.prefactor.ai',
@@ -24,19 +23,21 @@
  *   },
  * });
  *
+ * // Wrap your model with the middleware
+ * const model = wrapLanguageModel({
+ *   model: anthropic("claude-3-haiku-20240307"),
+ *   middleware,
+ * });
+ *
  * const result = await generateText({
- *   model: anthropic("claude-haiku-4-5"),
+ *   model,
  *   prompt: "Hello!",
- *   experimental_telemetry: {
- *     isEnabled: true,
- *     tracer,
- *   },
  * });
  *
  * await shutdown();
  * ```
  *
- * @module @prefactor/ai
+ * @module @prefactor/ai-middleware
  * @packageDocumentation
  */
 
@@ -47,27 +48,21 @@
 export { init, getTracer, shutdown } from './init.js';
 
 // ============================================================================
-// Adapter Exports
+// Middleware Exports
 // ============================================================================
 
-export { AiSpanAdapter, AiTracerAdapter } from './adapter.js';
+export { createPrefactorMiddleware } from './middleware.js';
 
 // ============================================================================
 // Type Exports
 // ============================================================================
 
-export type {
-  // OTEL-compatible types
-  AiSpan,
-  AiTracer,
-  AiSpanContext,
-  AiSpanOptions,
-  AiSpanStatus,
-} from './types.js';
+export type { MiddlewareConfig, CallData } from './types.js';
 
-export { AiSpanStatusCode } from './types.js';
+// ============================================================================
+// Re-exported Core Types
+// ============================================================================
 
-// Re-export relevant core types for convenience
 export type {
   Config,
   HttpTransportConfig,

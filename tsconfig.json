@@ -3,7 +3,6 @@
   "references": [
     { "path": "./packages/core" },
     { "path": "./packages/ai" },
-    { "path": "./packages/ai-middleware" },
     { "path": "./packages/langchain" },
     { "path": "./packages/sdk" },
   ],

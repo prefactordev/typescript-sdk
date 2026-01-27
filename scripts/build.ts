@@ -27,12 +27,6 @@ const packages: PackageConfig[] = [
     external: ['@prefactor/core', '@prefactor/pfid'],
   },
   {
-    name: '@prefactor/ai-middleware',
-    path: 'packages/ai-middleware',
-    entrypoint: './packages/ai-middleware/src/index.ts',
-    external: ['@prefactor/core', '@prefactor/pfid', 'ai'],
-  },
-  {
     name: '@prefactor/langchain',
     path: 'packages/langchain',
     entrypoint: './packages/langchain/src/index.ts',

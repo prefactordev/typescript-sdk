@@ -1,9 +1,8 @@
 /**
- * @fileoverview Initialization module for AI SDK telemetry with Prefactor.
+ * @fileoverview Initialization module for AI SDK middleware with Prefactor.
  *
  * This module provides the main entry points for configuring and managing
- * the telemetry tracer for use with Vercel AI SDK's experimental_telemetry feature,
- * sending data to the Prefactor platform.
+ * the Prefactor middleware for use with Vercel AI SDK's wrapLanguageModel.
  *
  * @module init
  * @packageDocumentation
@@ -21,42 +20,45 @@ import {
   type Transport,
 } from '@prefactor/core';
 import { extractPartition, type Partition } from '@prefactor/pfid';
-import { AiTracerAdapter } from './adapter.js';
-import type { AiTracer } from './types.js';
+import { createPrefactorMiddleware } from './middleware.js';
+import type { MiddlewareConfig } from './types.js';
 
-const logger = getLogger('ai-init');
+const logger = getLogger('ai-middleware-init');
 
 /** Global Prefactor tracer instance. */
 let globalTracer: Tracer | null = null;
 
-/** Global OTEL adapter instance. */
-let globalAdapter: AiTracerAdapter | null = null;
+/** Global middleware instance. */
+let globalMiddleware: ReturnType<typeof createPrefactorMiddleware> | null = null;
 
 /**
- * Initialize the Prefactor AI SDK and return an OTEL-compatible tracer.
+ * Initialize the Prefactor AI middleware and return it for use with wrapLanguageModel.
  *
- * This is the main entry point for the SDK. Call this function to create a tracer
- * instance that you can pass to the Vercel AI SDK's experimental_telemetry option.
+ * This is the main entry point for the SDK. Call this function to create a middleware
+ * instance that you can pass to the Vercel AI SDK's wrapLanguageModel function.
  *
- * @param config - Optional configuration object (same as @prefactor/langchain)
- * @returns AiTracer instance to use with AI SDK's experimental_telemetry
+ * @param config - Optional configuration object for transport settings
+ * @param middlewareConfig - Optional middleware-specific configuration
+ * @returns Middleware object to use with wrapLanguageModel
  *
- * @example Basic usage with stdio
+ * @example Basic usage with stdio (development)
  * ```typescript
- * import { init, shutdown } from '@prefactor/ai';
- * import { generateText } from 'ai';
+ * import { init, shutdown } from '@prefactor/ai-middleware';
+ * import { generateText, wrapLanguageModel } from 'ai';
  * import { anthropic } from '@ai-sdk/anthropic';
  *
  * // Initialize with defaults (stdio transport)
- * const tracer = init();
+ * const middleware = init();
+ *
+ * // Wrap your model with the middleware
+ * const model = wrapLanguageModel({
+ *   model: anthropic('claude-3-haiku-20240307'),
+ *   middleware,
+ * });
  *
  * const result = await generateText({
- *   model: anthropic('claude-haiku-4-5'),
+ *   model,
  *   prompt: 'Hello!',
- *   experimental_telemetry: {
- *     isEnabled: true,
- *     tracer,
- *   },
  * });
  *
  * await shutdown();
@@ -64,17 +66,29 @@ let globalAdapter: AiTracerAdapter | null = null;
  *
  * @example With HTTP transport (production)
  * ```typescript
- * const tracer = init({
+ * const middleware = init({
  *   transportType: 'http',
  *   httpConfig: {
  *     apiUrl: 'https://api.prefactor.ai',
  *     apiToken: process.env.PREFACTOR_API_TOKEN!,
  *     agentId: process.env.PREFACTOR_AGENT_ID,
+ *     agentVersion: '1.0.0',
  *   },
  * });
  * ```
+ *
+ * @example With middleware configuration
+ * ```typescript
+ * const middleware = init(
+ *   { transportType: 'stdio' },
+ *   { captureContent: false } // Don't capture prompts/responses
+ * );
+ * ```
  */
-export function init(config?: Partial<Config>): AiTracer {
+export function init(
+  config?: Partial<Config>,
+  middlewareConfig?: MiddlewareConfig
+): ReturnType<typeof createPrefactorMiddleware> {
   configureLogging();
 
   // Build httpConfig from environment if not provided but HTTP transport is requested
@@ -100,17 +114,17 @@ export function init(config?: Partial<Config>): AiTracer {
         apiToken,
         agentId: process.env.PREFACTOR_AGENT_ID,
         agentName: process.env.PREFACTOR_AGENT_NAME,
-        agentVersion: process.env.PREFACTOR_AGENT_VERSION || '1.0.0', // using this as default version if none provided
+        agentVersion: process.env.PREFACTOR_AGENT_VERSION || '1.0.0',
       },
     };
   }
 
   const finalConfig = createConfig(configWithHttp);
-  logger.info('Initializing Prefactor AI SDK', { transport: finalConfig.transportType });
+  logger.info('Initializing Prefactor AI Middleware', { transport: finalConfig.transportType });
 
-  // Return existing adapter if already initialized
-  if (globalAdapter !== null) {
-    return globalAdapter;
+  // Return existing middleware if already initialized
+  if (globalMiddleware !== null) {
+    return globalMiddleware;
   }
 
   // Create transport based on configuration
@@ -146,10 +160,10 @@ export function init(config?: Partial<Config>): AiTracer {
   // Create the Prefactor tracer
   globalTracer = new Tracer(transport, partition);
 
-  // Wrap with OTEL adapter
-  globalAdapter = new AiTracerAdapter(globalTracer);
+  // Create the middleware
+  globalMiddleware = createPrefactorMiddleware(globalTracer, middlewareConfig);
 
-  return globalAdapter;
+  return globalMiddleware;
 }
 
 /**
@@ -157,28 +171,26 @@ export function init(config?: Partial<Config>): AiTracer {
  *
  * If no tracer has been created yet, this will call init() with default configuration.
  *
- * @returns AiTracer instance
+ * @returns Tracer instance
  *
  * @example
  * ```typescript
- * import { getTracer } from '@prefactor/ai';
+ * import { getTracer } from '@prefactor/ai-middleware';
  *
  * const tracer = getTracer();
- *
- * // Use with AI SDK
- * const result = await generateText({
- *   model: anthropic('claude-haiku-4-5'),
- *   prompt: 'Hello!',
- *   experimental_telemetry: { isEnabled: true, tracer },
+ * // Use for custom span creation
+ * const span = tracer.startSpan({
+ *   name: 'custom-operation',
+ *   spanType: SpanType.CHAIN,
  * });
  * ```
  */
-export function getTracer(): AiTracer {
-  if (!globalAdapter) {
+export function getTracer(): Tracer {
+  if (!globalTracer) {
     init();
   }
-  // Safe because init() always sets globalAdapter
-  return globalAdapter as AiTracer;
+  // Safe because init() always sets globalTracer
+  return globalTracer as Tracer;
 }
 
 /**
@@ -191,7 +203,7 @@ export function getTracer(): AiTracer {
  *
  * @example
  * ```typescript
- * import { shutdown } from '@prefactor/ai';
+ * import { shutdown } from '@prefactor/ai-middleware';
  *
  * // At the end of your script or before process exit
  * await shutdown();
@@ -207,16 +219,16 @@ export function getTracer(): AiTracer {
  */
 export async function shutdown(): Promise<void> {
   if (globalTracer) {
-    logger.info('Shutting down Prefactor AI SDK');
+    logger.info('Shutting down Prefactor AI Middleware');
     await globalTracer.close();
   }
   globalTracer = null;
-  globalAdapter = null;
+  globalMiddleware = null;
 }
 
 // Automatic shutdown on process exit
 process.on('beforeExit', () => {
   shutdown().catch((error) => {
-    console.error('Error during Prefactor AI SDK shutdown:', error);
+    console.error('Error during Prefactor AI Middleware shutdown:', error);
   });
 });
