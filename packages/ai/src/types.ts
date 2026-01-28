@@ -82,7 +82,7 @@ export type { LanguageModelMiddleware } from 'ai';
  */
 export interface WorkflowState {
   /** The root AGENT span for this workflow */
-  agentSpan?: import('@prefactor/core').Span;
+  agentSpan: import('@prefactor/core').Span;
 
   /** Timestamp when workflow was created */
   createdAt: number;
@@ -92,9 +92,6 @@ export interface WorkflowState {
 
   /** Number of LLM calls in this workflow */
   callCount: number;
-
-  /** Unique identifier for this workflow */
-  workflowId: string;
 }
 
 /**

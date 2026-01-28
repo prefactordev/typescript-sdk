@@ -85,18 +85,17 @@ class WorkflowManager {
       workflow.lastActivityAt = now;
       workflow.callCount++;
       logger.debug('Using existing workflow', {
-        workflowId: workflow.workflowId,
+        spanId: workflow.agentSpan.spanId,
         callCount: workflow.callCount,
       });
       return workflow;
     }
 
     // Create a new workflow with an AGENT span
-    const workflowId = crypto.randomUUID();
     const agentSpan = tracer.startSpan({
       name: 'agent',
       spanType: SpanType.AGENT,
-      inputs: { workflowId },
+      inputs: {},
     });
 
     const newWorkflow: WorkflowState = {
@@ -104,11 +103,10 @@ class WorkflowManager {
       createdAt: now,
       lastActivityAt: now,
       callCount: 1,
-      workflowId,
     };
 
-    this.workflows.set(workflowId, newWorkflow);
-    logger.info('Created new workflow with AGENT span', { workflowId });
+    this.workflows.set(agentSpan.spanId, newWorkflow);
+    logger.info('Created new workflow with AGENT span', { spanId: agentSpan.spanId });
 
     return newWorkflow;
   }
@@ -121,14 +119,10 @@ class WorkflowManager {
    * @param outputs - Optional outputs for the AGENT span
    */
   endWorkflow(workflow: WorkflowState, tracer: Tracer, outputs?: Record<string, unknown>): void {
-    if (!workflow.agentSpan) {
-      return;
-    }
-
     tracer.endSpan(workflow.agentSpan, { outputs });
-    this.workflows.delete(workflow.workflowId);
+    this.workflows.delete(workflow.agentSpan.spanId);
     logger.info('Ended workflow', {
-      workflowId: workflow.workflowId,
+      spanId: workflow.agentSpan.spanId,
       totalCalls: workflow.callCount,
     });
   }
@@ -138,23 +132,20 @@ class WorkflowManager {
    */
   cleanup(tracer: Tracer): void {
     const now = Date.now();
-    const toDelete: string[] = [];
+    const toDelete: WorkflowState[] = [];
 
-    for (const [id, state] of this.workflows.entries()) {
+    for (const state of this.workflows.values()) {
       const inactiveTime = now - state.lastActivityAt;
       if (inactiveTime >= this.WORKFLOW_TIMEOUT) {
-        toDelete.push(id);
+        toDelete.push(state);
       }
     }
 
-    for (const id of toDelete) {
-      const workflow = this.workflows.get(id);
-      if (workflow?.agentSpan) {
-        tracer.endSpan(workflow.agentSpan, {
-          outputs: { status: 'timed_out' },
-        });
-      }
-      this.workflows.delete(id);
+    for (const workflow of toDelete) {
+      tracer.endSpan(workflow.agentSpan, {
+        outputs: { status: 'timed_out' },
+      });
+      this.workflows.delete(workflow.agentSpan.spanId);
     }
 
     if (toDelete.length > 0) {
@@ -275,6 +266,21 @@ function createToolSpan(tracer: Tracer, toolCall: ToolCallInfo): Span {
   });
 }
 
+/** Model settings to capture from params */
+const MODEL_SETTINGS = [
+  'maxOutputTokens',
+  'maxTokens',
+  'temperature',
+  'topP',
+  'topK',
+  'frequencyPenalty',
+  'presencePenalty',
+  'stopSequences',
+  'seed',
+  'toolChoice',
+  'responseFormat',
+] as const;
+
 /**
  * Extracts input data from call parameters.
  *
@@ -290,39 +296,11 @@ function extractInputs(
 ): Record<string, unknown> {
   const inputs: Record<string, unknown> = {};
 
-  // Always capture model settings
-  if (params.maxOutputTokens !== undefined) {
-    inputs['ai.settings.maxOutputTokens'] = params.maxOutputTokens;
-  }
-  if (params.maxTokens !== undefined) {
-    inputs['ai.settings.maxTokens'] = params.maxTokens;
-  }
-  if (params.temperature !== undefined) {
-    inputs['ai.settings.temperature'] = params.temperature;
-  }
-  if (params.topP !== undefined) {
-    inputs['ai.settings.topP'] = params.topP;
-  }
-  if (params.topK !== undefined) {
-    inputs['ai.settings.topK'] = params.topK;
-  }
-  if (params.frequencyPenalty !== undefined) {
-    inputs['ai.settings.frequencyPenalty'] = params.frequencyPenalty;
-  }
-  if (params.presencePenalty !== undefined) {
-    inputs['ai.settings.presencePenalty'] = params.presencePenalty;
-  }
-  if (params.stopSequences !== undefined) {
-    inputs['ai.settings.stopSequences'] = params.stopSequences;
-  }
-  if (params.seed !== undefined) {
-    inputs['ai.settings.seed'] = params.seed;
-  }
-  if (params.toolChoice !== undefined) {
-    inputs['ai.settings.toolChoice'] = params.toolChoice;
-  }
-  if (params.responseFormat !== undefined) {
-    inputs['ai.settings.responseFormat'] = params.responseFormat;
+  // Capture model settings
+  for (const setting of MODEL_SETTINGS) {
+    if (params[setting] !== undefined) {
+      inputs[`ai.settings.${setting}`] = params[setting];
+    }
   }
 
   // Capture prompt content if enabled
@@ -440,6 +418,42 @@ function extractTokenUsage(
 }
 
 /**
+ * Creates an LLM span, optionally within a parent span context.
+ *
+ * @param tracer - The tracer instance
+ * @param model - Model information (provider, modelId)
+ * @param params - Call parameters
+ * @param config - Middleware configuration
+ * @param parentSpan - Optional parent span
+ * @returns The created span
+ * @internal
+ */
+function createLlmSpan(
+  tracer: Tracer,
+  // biome-ignore lint/suspicious/noExplicitAny: AI SDK model structure is dynamic
+  model: any,
+  // biome-ignore lint/suspicious/noExplicitAny: AI SDK params are dynamic
+  params: any,
+  config?: MiddlewareConfig,
+  parentSpan?: Span
+): Span {
+  const spanOptions = {
+    name: `${model.provider ?? 'unknown'}.${model.modelId ?? 'unknown'}`,
+    spanType: SpanType.LLM,
+    inputs: {
+      'ai.model.id': model.modelId,
+      'ai.model.provider': model.provider,
+      ...extractInputs(params, config),
+    },
+  };
+
+  if (parentSpan) {
+    return SpanContext.run(parentSpan, () => tracer.startSpan(spanOptions));
+  }
+  return tracer.startSpan(spanOptions);
+}
+
+/**
  * Creates a Prefactor middleware for the Vercel AI SDK.
  *
  * This middleware wraps model calls to capture telemetry data including:
@@ -479,13 +493,13 @@ export function createPrefactorMiddleware(
   const agentInfo = coreOptions?.agentInfo;
   const agentLifecycle = coreOptions?.agentLifecycle ?? { started: false };
 
-  const ensureAgentInstanceStarted = (): void => {
+  function ensureAgentInstanceStarted(): void {
     if (!agentManager || agentLifecycle.started) {
       return;
     }
     agentManager.startInstance(agentInfo);
     agentLifecycle.started = true;
-  };
+  }
 
   return {
     specificationVersion: 'v3',
@@ -507,37 +521,14 @@ export function createPrefactorMiddleware(
       );
 
       logger.info('Workflow state', {
-        workflowId: workflow?.workflowId,
-        hasAgentSpan: !!workflow?.agentSpan,
+        workflowSpanId: workflow?.agentSpan.spanId,
         callCount: workflow?.callCount,
-        parentSpanId: workflow?.agentSpan?.spanId ?? parentSpan?.spanId,
+        parentSpanId: workflow?.agentSpan.spanId ?? parentSpan?.spanId,
       });
 
-      // Determine parent span for LLM call
+      // Create LLM span with appropriate parent
       const llmParentSpan = workflow?.agentSpan ?? parentSpan;
-
-      // Create LLM span
-      const span = llmParentSpan
-        ? SpanContext.run(llmParentSpan, () =>
-            tracer.startSpan({
-              name: `${model.provider ?? 'unknown'}.${model.modelId ?? 'unknown'}`,
-              spanType: SpanType.LLM,
-              inputs: {
-                'ai.model.id': model.modelId,
-                'ai.model.provider': model.provider,
-                ...extractInputs(params, config),
-              },
-            })
-          )
-        : tracer.startSpan({
-            name: `${model.provider ?? 'unknown'}.${model.modelId ?? 'unknown'}`,
-            spanType: SpanType.LLM,
-            inputs: {
-              'ai.model.id': model.modelId,
-              'ai.model.provider': model.provider,
-              ...extractInputs(params, config),
-            },
-          });
+      const span = createLlmSpan(tracer, model, params, config, llmParentSpan);
 
       try {
         // Execute the generation within the LLM span context
@@ -571,7 +562,6 @@ export function createPrefactorMiddleware(
         // End the span with error
         tracer.endSpan(span, { error: error as Error });
         throw error;
-      } finally {
       }
     },
 
@@ -592,31 +582,9 @@ export function createPrefactorMiddleware(
         enableWorkflowTracking
       );
 
-      // Determine parent span for LLM call
+      // Create LLM span with appropriate parent
       const llmParentSpan = workflow?.agentSpan ?? parentSpan;
-
-      // Create LLM span
-      const span = llmParentSpan
-        ? SpanContext.run(llmParentSpan, () =>
-            tracer.startSpan({
-              name: `${model.provider ?? 'unknown'}.${model.modelId ?? 'unknown'}`,
-              spanType: SpanType.LLM,
-              inputs: {
-                'ai.model.id': model.modelId,
-                'ai.model.provider': model.provider,
-                ...extractInputs(params, config),
-              },
-            })
-          )
-        : tracer.startSpan({
-            name: `${model.provider ?? 'unknown'}.${model.modelId ?? 'unknown'}`,
-            spanType: SpanType.LLM,
-            inputs: {
-              'ai.model.id': model.modelId,
-              'ai.model.provider': model.provider,
-              ...extractInputs(params, config),
-            },
-          });
+      const span = createLlmSpan(tracer, model, params, config, llmParentSpan);
 
       try {
         // Execute the stream within the span context
