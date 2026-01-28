@@ -25,75 +25,7 @@ describe('ai init schema registration', () => {
   });
 
   afterEach(async () => {
-<<<<<<< HEAD
-    await shutdown();
-    globalThis.fetch = originalFetch;
-  });
 
-  test('skipSchema is only honored for HTTP transport', async () => {
-    init({
-      transportType: 'http',
-      httpConfig: {
-        apiUrl: 'https://api.prefactor.ai',
-        apiToken: 'test-token',
-        agentVersion: '1.0.0',
-        skipSchema: true,
-      },
-    });
-
-    const tracer = getTracer();
-    const span = tracer.startSpan({
-      name: 'agent-span',
-      spanType: SpanType.AGENT,
-      inputs: {},
-    });
-    tracer.endSpan(span);
-
-    await waitFor(() =>
-      fetchCalls.some((call) => call.url.endsWith('/api/v1/agent_instance/register'))
-    );
-
-    const registerCall = fetchCalls.find((call) =>
-      call.url.endsWith('/api/v1/agent_instance/register')
-    );
-
-    expect(registerCall?.body).toBeDefined();
-    expect((registerCall?.body as Record<string, unknown>).agent_schema_version).toBeUndefined();
-  });
-
-  test('agentSchemaVersion is applied for HTTP transport', async () => {
-    init({
-      transportType: 'http',
-      httpConfig: {
-        apiUrl: 'https://api.prefactor.ai',
-        apiToken: 'test-token',
-        agentVersion: '1.0.0',
-        agentSchemaVersion: 'v2.0.0',
-      },
-    });
-
-    const tracer = getTracer();
-    const span = tracer.startSpan({
-      name: 'agent-span',
-      spanType: SpanType.AGENT,
-      inputs: {},
-    });
-    tracer.endSpan(span);
-
-    await waitFor(() =>
-      fetchCalls.some((call) => call.url.endsWith('/api/v1/agent_instance/register'))
-    );
-
-    const registerCall = fetchCalls.find((call) =>
-      call.url.endsWith('/api/v1/agent_instance/register')
-    );
-
-    const schemaVersion = (registerCall?.body as Record<string, unknown>).agent_schema_version as {
-      external_identifier?: string;
-    };
-
-    expect(schemaVersion?.external_identifier).toBe('v2.0.0');
-=======
     AgentInstanceManager.prototype.registerSchema = originalRegisterSchema;
     await shutdown();
   });
@@ -123,6 +55,5 @@ describe('ai init schema registration', () => {
     init(baseConfig);
 
     expect(registeredSchemas.length).toBe(1);
->>>>>>> refactor/sdk-vnext
   });
 });
