@@ -14,6 +14,7 @@ import {
   configureLogging,
   createConfig,
   createCore,
+  DEFAULT_AGENT_SCHEMA,
   getLogger,
   type Tracer,
 } from '@prefactor/core';
@@ -29,32 +30,6 @@ let agentLifecycle: { started: boolean } | null = null;
 
 /** Global middleware instance. */
 let globalMiddleware: ReturnType<typeof createPrefactorMiddleware> | null = null;
-
-const defaultAgentSchema = {
-  external_identifier: '1.0.0',
-  span_schemas: {
-    agent: {
-      type: 'object',
-      properties: { type: { type: 'string', const: 'agent' } },
-    },
-    llm: {
-      type: 'object',
-      properties: { type: { type: 'string', const: 'llm' } },
-    },
-    tool: {
-      type: 'object',
-      properties: { type: { type: 'string', const: 'tool' } },
-    },
-    chain: {
-      type: 'object',
-      properties: { type: { type: 'string', const: 'chain' } },
-    },
-    retriever: {
-      type: 'object',
-      properties: { type: { type: 'string', const: 'retriever' } },
-    },
-  },
-};
 
 /**
  * Initialize the Prefactor AI middleware and return it for use with wrapLanguageModel.
@@ -144,7 +119,18 @@ export function init(
     };
   }
 
-  const finalConfig = createConfig(configWithHttp);
+  // Set default schema namespace for AI SDK adaptor
+  const configWithDefaults: Partial<Config> = {
+    ...configWithHttp,
+    httpConfig: configWithHttp?.httpConfig
+      ? {
+          schemaName: 'aisdk:agent',
+          ...configWithHttp.httpConfig,
+        }
+      : undefined,
+  };
+
+  const finalConfig = createConfig(configWithDefaults);
   logger.info('Initializing Prefactor AI Middleware', { transport: finalConfig.transportType });
 
   // Return existing middleware if already initialized
@@ -165,7 +151,7 @@ export function init(
   ) {
     logger.debug('Skipping default schema registration based on httpConfig');
   } else {
-    core.agentManager.registerSchema(defaultAgentSchema);
+    core.agentManager.registerSchema(DEFAULT_AGENT_SCHEMA);
   }
 
   const agentInfo = finalConfig.httpConfig

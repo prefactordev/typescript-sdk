@@ -160,20 +160,6 @@ export class Tracer {
   }
 
   /**
-   * Signal the start of an agent instance execution
-   */
-  startAgentInstance(): void {
-    return;
-  }
-
-  /**
-   * Signal the completion of an agent instance execution
-   */
-  finishAgentInstance(): void {
-    return;
-  }
-
-  /**
    * Close the tracer and flush any pending spans
    *
    * @returns Promise that resolves when the tracer is closed

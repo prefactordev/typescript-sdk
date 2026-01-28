@@ -4,6 +4,7 @@ import {
   configureLogging,
   createConfig,
   createCore,
+  DEFAULT_AGENT_SCHEMA,
   getLogger,
   type Tracer,
 } from '@prefactor/core';
@@ -15,32 +16,6 @@ const logger = getLogger('init');
 let globalCore: CoreRuntime | null = null;
 let globalTracer: Tracer | null = null;
 let globalMiddleware: AgentMiddleware | null = null;
-
-const defaultAgentSchema = {
-  external_identifier: '1.0.0',
-  span_schemas: {
-    agent: {
-      type: 'object',
-      properties: { type: { type: 'string', const: 'agent' } },
-    },
-    llm: {
-      type: 'object',
-      properties: { type: { type: 'string', const: 'llm' } },
-    },
-    tool: {
-      type: 'object',
-      properties: { type: { type: 'string', const: 'tool' } },
-    },
-    chain: {
-      type: 'object',
-      properties: { type: { type: 'string', const: 'chain' } },
-    },
-    retriever: {
-      type: 'object',
-      properties: { type: { type: 'string', const: 'retriever' } },
-    },
-  },
-};
 
 /**
  * Initialize the Prefactor SDK and return middleware for LangChain.js
@@ -78,7 +53,18 @@ const defaultAgentSchema = {
 export function init(config?: Partial<Config>): AgentMiddleware {
   configureLogging();
 
-  const finalConfig = createConfig(config);
+  // Set default schema namespace for LangChain adaptor
+  const configWithDefaults: Partial<Config> = {
+    ...config,
+    httpConfig: config?.httpConfig
+      ? {
+          schemaName: 'langchain:agent',
+          ...config.httpConfig,
+        }
+      : undefined,
+  };
+
+  const finalConfig = createConfig(configWithDefaults);
   logger.info('Initializing Prefactor SDK', { transport: finalConfig.transportType });
 
   if (globalMiddleware !== null) {
@@ -98,7 +84,7 @@ export function init(config?: Partial<Config>): AgentMiddleware {
   ) {
     logger.debug('Skipping default schema registration based on httpConfig');
   } else {
-    core.agentManager.registerSchema(defaultAgentSchema);
+    core.agentManager.registerSchema(DEFAULT_AGENT_SCHEMA);
   }
 
   const agentInfo = finalConfig.httpConfig
