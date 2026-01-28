@@ -20,6 +20,7 @@
     "@prefactor/ai": "workspace:*",
     "@prefactor/core": "workspace:*",
     "@prefactor/langchain": "workspace:*",
+    "@types/bun": "^1.3.7",
     "@types/node": "^20.0.0",
     "ai": "^6.0.44",
     "bun-types": "latest",
