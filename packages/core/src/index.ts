@@ -25,6 +25,7 @@ export type { Queue } from './queue/base.js';
 export { InMemoryQueue } from './queue/in-memory.js';
 export { SpanContext } from './tracing/context.js';
 export {
+  DEFAULT_AGENT_SCHEMA,
   type ErrorInfo,
   type Span,
   SpanStatus,

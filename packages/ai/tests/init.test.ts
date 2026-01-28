@@ -25,7 +25,6 @@ describe('ai init schema registration', () => {
   });
 
   afterEach(async () => {
-
     AgentInstanceManager.prototype.registerSchema = originalRegisterSchema;
     await shutdown();
   });
