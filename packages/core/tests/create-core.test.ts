@@ -15,11 +15,11 @@ describe('createCore', () => {
   const originalFetch = globalThis.fetch;
 
   beforeEach(() => {
-    globalThis.fetch = async () =>
+    globalThis.fetch = (async (..._args) =>
       new Response(JSON.stringify({ details: { id: 'test-span' } }), {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
-      });
+      })) as typeof fetch;
   });
 
   afterEach(() => {

@@ -19,12 +19,11 @@ describe('HttpTransport processBatch', () => {
   const originalFetch = globalThis.fetch;
 
   beforeEach(() => {
-    globalThis.fetch = async () => {
-      return new Response(JSON.stringify({ details: { id: 'agent-instance-1' } }), {
+    globalThis.fetch = (async (..._args) =>
+      new Response(JSON.stringify({ details: { id: 'agent-instance-1' } }), {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
-      });
-    };
+      })) as unknown as typeof fetch;
   });
 
   afterEach(() => {
@@ -33,13 +32,13 @@ describe('HttpTransport processBatch', () => {
 
   test('applies schema updates before starting agent instance', async () => {
     const fetchCalls: Array<{ url: string; options?: RequestInit }> = [];
-    globalThis.fetch = async (url, options) => {
+    globalThis.fetch = (async (url, options) => {
       fetchCalls.push({ url: String(url), options });
       return new Response(JSON.stringify({ details: { id: 'agent-instance-1' } }), {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
       });
-    };
+    }) as unknown as typeof fetch;
 
     const transport = new HttpTransport(createConfig());
     const actions: QueueAction[] = [
@@ -66,6 +65,7 @@ describe('HttpTransport processBatch', () => {
 
     await transport.processBatch(actions);
 
+    // biome-ignore lint/suspicious/noExplicitAny: <Accessing private property for test, assigning any to bypass type error.>
     const config = (transport as any).config as ReturnType<typeof createConfig> & {
       agentId?: string;
       agentVersion?: string;
@@ -102,7 +102,7 @@ describe('HttpTransport processBatch', () => {
 
   test('buffers span finish until after span end', async () => {
     const fetchCalls: Array<{ url: string; options?: RequestInit }> = [];
-    globalThis.fetch = async (url, options) => {
+    globalThis.fetch = (async (url, options) => {
       const urlString = String(url);
       fetchCalls.push({ url: urlString, options });
 
@@ -124,7 +124,7 @@ describe('HttpTransport processBatch', () => {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
       });
-    };
+    }) as unknown as typeof fetch;
 
     const transport = new HttpTransport(createConfig());
     const endTime = 1700000000000;
@@ -169,7 +169,7 @@ describe('HttpTransport processBatch', () => {
 
   test('buffers agent finish until after span finishes in same batch', async () => {
     const fetchCalls: Array<{ url: string; options?: RequestInit }> = [];
-    globalThis.fetch = async (url, options) => {
+    globalThis.fetch = (async (url, options) => {
       const urlString = String(url);
       fetchCalls.push({ url: urlString, options });
 
@@ -191,7 +191,7 @@ describe('HttpTransport processBatch', () => {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
       });
-    };
+    }) as unknown as typeof fetch;
 
     const transport = new HttpTransport(createConfig());
     const endTime = 1700000001000;

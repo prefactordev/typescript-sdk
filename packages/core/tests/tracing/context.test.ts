@@ -1,13 +1,32 @@
 import { describe, expect, test } from 'bun:test';
 import { SpanContext } from '../../src/tracing/context';
+import type { Span } from '../../src/tracing/span.js';
+import { SpanStatus, SpanType } from '../../src/tracing/span.js';
+
+const createSpan = (spanId: string): Span => ({
+  spanId,
+  parentSpanId: null,
+  traceId: 'trace',
+  name: spanId,
+  spanType: SpanType.CHAIN,
+  startTime: 0,
+  endTime: null,
+  status: SpanStatus.RUNNING,
+  inputs: {},
+  outputs: null,
+  tokenUsage: null,
+  error: null,
+  metadata: {},
+  tags: [],
+});
 
 describe('SpanContext', () => {
   test('push/pop manages stack', () => {
     SpanContext.clear();
     expect(SpanContext.getCurrent()).toBeUndefined();
 
-    SpanContext.enter({ spanId: '1' } as any);
-    SpanContext.enter({ spanId: '2' } as any);
+    SpanContext.enter(createSpan('1'));
+    SpanContext.enter(createSpan('2'));
 
     expect(SpanContext.getCurrent()?.spanId).toBe('2');
     SpanContext.exit();
@@ -16,10 +35,10 @@ describe('SpanContext', () => {
 
   test('getStack returns a shallow copy', () => {
     SpanContext.clear();
-    SpanContext.enter({ spanId: '1' } as any);
+    SpanContext.enter(createSpan('1'));
 
     const stack = SpanContext.getStack();
-    stack.push({ spanId: '2' } as any);
+    stack.push(createSpan('2'));
 
     expect(SpanContext.getCurrent()?.spanId).toBe('1');
     expect(SpanContext.getStack()).toHaveLength(1);
@@ -29,8 +48,8 @@ describe('SpanContext', () => {
     SpanContext.clear();
 
     const seen: Array<string | undefined> = [];
-    const span1 = { spanId: '1' } as any;
-    const span2 = { spanId: '2' } as any;
+    const span1 = createSpan('1');
+    const span2 = createSpan('2');
 
     SpanContext.run(span1, () => {
       seen.push(SpanContext.getCurrent()?.spanId);
@@ -50,8 +69,8 @@ describe('SpanContext', () => {
     SpanContext.clear();
 
     const seen: Array<string | undefined> = [];
-    const span1 = { spanId: '1' } as any;
-    const span2 = { spanId: '2' } as any;
+    const span1 = createSpan('1');
+    const span2 = createSpan('2');
 
     await SpanContext.runAsync(span1, async () => {
       seen.push(SpanContext.getCurrent()?.spanId);
@@ -73,9 +92,9 @@ describe('SpanContext', () => {
   test('runAsync isolates sibling branch stacks', async () => {
     SpanContext.clear();
 
-    const root = { spanId: 'root' } as any;
-    const spanA = { spanId: 'A' } as any;
-    const spanB = { spanId: 'B' } as any;
+    const root = createSpan('root');
+    const spanA = createSpan('A');
+    const spanB = createSpan('B');
 
     const defer = () => {
       let resolve!: () => void;
