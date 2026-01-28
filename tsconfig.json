@@ -4,6 +4,5 @@
     { "path": "./packages/core" },
     { "path": "./packages/ai" },
     { "path": "./packages/langchain" },
-    { "path": "./packages/sdk" },
   ],
 }

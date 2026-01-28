@@ -1,4 +1,5 @@
 import type { HttpTransportConfig } from '../config.js';
+import type { QueueAction } from '../queue/actions.js';
 import type { Span } from '../tracing/span.js';
 import { getLogger } from '../utils/logging.js';
 import type { Transport } from './base.js';
@@ -6,22 +7,12 @@ import type { Transport } from './base.js';
 const logger = getLogger('http-transport');
 
 /**
- * Queue item types for background processing
- */
-interface QueueItem {
-  type: 'span' | 'finish_span' | 'start_agent' | 'finish_agent';
-  data: unknown;
-}
-
-/**
  * HTTP transport sends spans to a remote API endpoint.
  *
  * Features:
- * - Queue-based async processing
  * - Exponential backoff retry logic
  * - Span ID mapping (SDK ID → backend ID)
  * - Agent instance lifecycle management
- * - Graceful shutdown with timeout
  *
  * @example
  * ```typescript
@@ -32,103 +23,80 @@ interface QueueItem {
  * ```
  */
 export class HttpTransport implements Transport {
-  private queue: QueueItem[] = [];
-  private processing = false;
   private closed = false;
   private agentInstanceId: string | null = null;
   private spanIdMap = new Map<string, string>();
 
-  constructor(private config: HttpTransportConfig) {
-    this.startProcessing();
-  }
+  constructor(private config: HttpTransportConfig) {}
 
-  /**
-   * Emit a span (adds to queue for async processing)
-   *
-   * @param span - The span to emit
-   */
-  emit(span: Span): void {
-    if (this.closed) {
+  async processBatch(items: QueueAction[]): Promise<void> {
+    if (this.closed || items.length === 0) {
       return;
     }
-    this.queue.push({ type: 'span', data: span });
-  }
 
-  /**
-   * Finish a previously emitted span (for AGENT spans)
-   *
-   * @param spanId - ID of the span to finish
-   * @param endTime - End time in milliseconds since Unix epoch
-   */
-  finishSpan(spanId: string, endTime: number): void {
-    if (this.closed) {
-      return;
-    }
-    const timestamp = new Date(endTime).toISOString();
-    this.queue.push({ type: 'finish_span', data: { spanId, timestamp } });
-  }
-
-  /**
-   * Signal the start of an agent instance execution
-   */
-  startAgentInstance(): void {
-    if (this.closed) {
-      return;
-    }
-    this.queue.push({ type: 'start_agent', data: null });
-  }
-
-  /**
-   * Signal the completion of an agent instance execution
-   */
-  finishAgentInstance(): void {
-    if (this.closed) {
-      return;
-    }
-    this.queue.push({ type: 'finish_agent', data: null });
-  }
-
-  /**
-   * Start background queue processing
-   */
-  private async startProcessing(): Promise<void> {
-    this.processing = true;
-
-    while (!this.closed || this.queue.length > 0) {
-      if (this.queue.length === 0) {
-        await new Promise((resolve) => setTimeout(resolve, 100));
+    for (const item of items) {
+      if (item.type !== 'schema_register') {
         continue;
       }
 
-      const item = this.queue.shift();
-      if (!item) continue;
+      this.config.agentSchema = item.data.schema;
+      this.config.agentSchemaVersion = item.data.schemaVersion;
+      this.config.schemaName = item.data.schemaName;
+      this.config.schemaVersion = item.data.schemaVersion;
+    }
 
+    const spanFinishes: Array<{ spanId: string; endTime: number }> = [];
+    const agentFinishes: QueueAction[] = [];
+
+    for (const item of items) {
       try {
-        // Ensure agent is registered before processing spans
-        if (!this.agentInstanceId && item.type !== 'start_agent') {
-          await this.ensureAgentRegistered();
-        }
-
         switch (item.type) {
-          case 'span':
-            await this.sendSpan(item.data as Span);
+          case 'schema_register':
             break;
-          case 'finish_span':
-            await this.finishSpanHttp(item.data as { spanId: string; timestamp: string });
-            break;
-          case 'start_agent':
+          case 'agent_start':
+            this.config.agentId = item.data.agentId;
+            this.config.agentVersion = item.data.agentVersion;
+            this.config.agentName = item.data.agentName;
+            this.config.agentDescription = item.data.agentDescription;
             await this.startAgentInstanceHttp();
             break;
-          case 'finish_agent':
-            await this.finishAgentInstanceHttp();
+          case 'agent_finish':
+            agentFinishes.push(item);
+            break;
+          case 'span_end':
+            if (!this.agentInstanceId) {
+              await this.ensureAgentRegistered();
+            }
+            await this.sendSpan(item.data);
+            break;
+          case 'span_finish':
+            spanFinishes.push({ spanId: item.data.spanId, endTime: item.data.endTime });
             break;
         }
       } catch (error) {
-        logger.error('Error processing queue item:', error);
+        logger.error('Error processing batch item:', error);
       }
     }
 
-    this.processing = false;
+    for (const finish of spanFinishes) {
+      try {
+        if (!this.agentInstanceId) {
+          await this.ensureAgentRegistered();
+        }
+        const timestamp = new Date(finish.endTime).toISOString();
+        await this.finishSpanHttp({ spanId: finish.spanId, timestamp });
+      } catch (error) {
+        logger.error('Error processing batch item:', error);
+      }
+    }
+
+    for (const _finish of agentFinishes) {
+      try {
+        await this.finishAgentInstanceHttp();
+      } catch (error) {
+        logger.error('Error processing batch item:', error);
+      }
+    }
   }
 
   /**
@@ -434,16 +402,5 @@ export class HttpTransport implements Transport {
    */
   async close(): Promise<void> {
     this.closed = true;
-
-    // Wait for queue to drain (with timeout)
-    const timeout = 10000;
-    const start = Date.now();
-    while (this.processing && Date.now() - start < timeout) {
-      await new Promise((resolve) => setTimeout(resolve, 100));
-    }
-
-    if (this.processing) {
-      logger.warn('Transport closed with pending queue items');
-    }
   }
 }

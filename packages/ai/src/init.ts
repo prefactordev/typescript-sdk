@@ -10,16 +10,13 @@
 
 import {
   type Config,
+  type CoreRuntime,
   configureLogging,
   createConfig,
+  createCore,
   getLogger,
-  HttpTransport,
-  HttpTransportConfigSchema,
-  StdioTransport,
-  Tracer,
-  type Transport,
+  type Tracer,
 } from '@prefactor/core';
-import { extractPartition, type Partition } from '@prefactor/pfid';
 import { createPrefactorMiddleware } from './middleware.js';
 import type { MiddlewareConfig } from './types.js';
 
@@ -27,9 +24,37 @@ const logger = getLogger('ai-middleware-init');
 
 /** Global Prefactor tracer instance. */
 let globalTracer: Tracer | null = null;
+let globalCore: CoreRuntime | null = null;
+let agentLifecycle: { started: boolean } | null = null;
 
 /** Global middleware instance. */
 let globalMiddleware: ReturnType<typeof createPrefactorMiddleware> | null = null;
+
+const defaultAgentSchema = {
+  external_identifier: '1.0.0',
+  span_schemas: {
+    agent: {
+      type: 'object',
+      properties: { type: { type: 'string', const: 'agent' } },
+    },
+    llm: {
+      type: 'object',
+      properties: { type: { type: 'string', const: 'llm' } },
+    },
+    tool: {
+      type: 'object',
+      properties: { type: { type: 'string', const: 'tool' } },
+    },
+    chain: {
+      type: 'object',
+      properties: { type: { type: 'string', const: 'chain' } },
+    },
+    retriever: {
+      type: 'object',
+      properties: { type: { type: 'string', const: 'retriever' } },
+    },
+  },
+};
 
 /**
  * Initialize the Prefactor AI middleware and return it for use with wrapLanguageModel.
@@ -127,41 +152,38 @@ export function init(
     return globalMiddleware;
   }
 
-  // Create transport based on configuration
-  let transport: Transport;
-  if (finalConfig.transportType === 'stdio') {
-    transport = new StdioTransport();
+  const core = createCore(finalConfig);
+  globalCore = core;
+  globalTracer = core.tracer;
+
+  const httpConfig = finalConfig.httpConfig;
+  if (httpConfig?.agentSchema) {
+    core.agentManager.registerSchema(httpConfig.agentSchema);
+  } else if (
+    finalConfig.transportType === 'http' &&
+    (httpConfig?.agentSchemaVersion || httpConfig?.skipSchema)
+  ) {
+    logger.debug('Skipping default schema registration based on httpConfig');
   } else {
-    if (!finalConfig.httpConfig) {
-      throw new Error('HTTP transport requires httpConfig to be provided in configuration');
-    }
-    if (!finalConfig.httpConfig.agentVersion) {
-      throw new Error(
-        'HTTP transport requires agentVersion to be provided in httpConfig. ' +
-          'Set httpConfig.agentVersion or the PREFACTOR_AGENT_VERSION environment variable.'
-      );
-    }
-    // Parse httpConfig to apply defaults from schema
-    const httpConfig = HttpTransportConfigSchema.parse(finalConfig.httpConfig);
-    transport = new HttpTransport(httpConfig);
+    core.agentManager.registerSchema(defaultAgentSchema);
   }
 
-  // Extract partition from agent_id if provided (for HTTP transport)
-  let partition: Partition | undefined;
-  if (finalConfig.httpConfig?.agentId) {
-    try {
-      partition = extractPartition(finalConfig.httpConfig.agentId);
-      logger.debug('Extracted partition from agent_id', { partition });
-    } catch (error) {
-      logger.warn('Failed to extract partition from agent_id, using random partition', { error });
-    }
-  }
-
-  // Create the Prefactor tracer
-  globalTracer = new Tracer(transport, partition);
+  const agentInfo = finalConfig.httpConfig
+    ? {
+        agentId: finalConfig.httpConfig.agentId,
+        agentVersion: finalConfig.httpConfig.agentVersion,
+        agentName: finalConfig.httpConfig.agentName,
+        agentDescription: finalConfig.httpConfig.agentDescription,
+      }
+    : undefined;
+  agentLifecycle = { started: false };
 
   // Create the middleware
-  globalMiddleware = createPrefactorMiddleware(globalTracer, middlewareConfig);
+  globalMiddleware = createPrefactorMiddleware(core.tracer, middlewareConfig, {
+    agentInfo,
+    agentManager: core.agentManager,
+    agentLifecycle,
+  });
 
   return globalMiddleware;
 }
@@ -218,12 +240,18 @@ export function getTracer(): Tracer {
  * ```
  */
 export async function shutdown(): Promise<void> {
-  if (globalTracer) {
+  if (globalCore) {
     logger.info('Shutting down Prefactor AI Middleware');
-    await globalTracer.close();
+    if (agentLifecycle?.started) {
+      globalCore.agentManager.finishInstance();
+      agentLifecycle.started = false;
+    }
+    await globalCore.shutdown();
   }
+  globalCore = null;
   globalTracer = null;
   globalMiddleware = null;
+  agentLifecycle = null;
 }
 
 // Automatic shutdown on process exit

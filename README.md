@@ -21,16 +21,26 @@ This repository is a Bun monorepo containing three packages:
 |---------|-------------|
 | [`@prefactor/core`](./packages/core/) | Framework-agnostic observability primitives |
 | [`@prefactor/langchain`](./packages/langchain/) | LangChain.js integration |
-| [`@prefactor/sdk`](./packages/sdk/) | Unified SDK re-exporting both packages |
+| [`@prefactor/ai`](./packages/ai/) | Vercel AI SDK integration |
 
-Most users should install `@prefactor/sdk` for the complete experience.
+Install `@prefactor/core` along with the adapter package for your framework.
 
 ## Installation
 
+### For LangChain.js users:
+
 ```bash
-npm install @prefactor/sdk
+npm install @prefactor/core @prefactor/langchain
 # or
-bun add @prefactor/sdk
+bun add @prefactor/core @prefactor/langchain
+```
+
+### For Vercel AI SDK users:
+
+```bash
+npm install @prefactor/core @prefactor/ai
+# or
+bun add @prefactor/core @prefactor/ai
 ```
 
 ## Quick Start
@@ -38,7 +48,7 @@ bun add @prefactor/sdk
 ```typescript
 import { createAgent, tool } from 'langchain';
 import { z } from 'zod';
-import { init, shutdown } from '@prefactor/sdk';
+import { init, shutdown } from '@prefactor/langchain';
 
 // Initialize Prefactor (defaults to stdio transport)
 const middleware = init();
@@ -81,7 +91,7 @@ The SDK can be configured using environment variables:
 ### Programmatic Configuration
 
 ```typescript
-import { init } from '@prefactor/sdk';
+import { init } from '@prefactor/langchain';
 
 // HTTP Transport
 const middleware = init({
@@ -109,7 +119,7 @@ const middleware = init({
 The STDIO transport writes spans as newline-delimited JSON to stdout. This is useful for local development and piping to other tools.
 
 ```typescript
-import { init } from '@prefactor/sdk';
+import { init } from '@prefactor/langchain';
 
 const middleware = init(); // Uses stdio by default
 ```
@@ -119,7 +129,7 @@ const middleware = init(); // Uses stdio by default
 The HTTP transport sends spans to a remote API endpoint with retry logic and queue-based processing.
 
 ```typescript
-import { init } from '@prefactor/sdk';
+import { init } from '@prefactor/langchain';
 
 const middleware = init({
   transportType: 'http',
@@ -160,7 +170,7 @@ Flush pending spans and close connections. Call before application exit.
 
 **Example:**
 ```typescript
-import { shutdown } from '@prefactor/sdk';
+import { shutdown } from '@prefactor/langchain';
 
 process.on('SIGTERM', async () => {
   await shutdown();
@@ -177,7 +187,7 @@ Get the global tracer instance for manual instrumentation.
 
 **Example:**
 ```typescript
-import { getTracer, SpanType } from '@prefactor/sdk';
+import { getTracer, SpanType } from '@prefactor/langchain';
 
 const tracer = getTracer();
 const span = tracer.startSpan({
@@ -201,7 +211,7 @@ try {
 For operations not automatically traced by the middleware:
 
 ```typescript
-import { getTracer, SpanType } from '@prefactor/sdk';
+import { getTracer, SpanType } from '@prefactor/langchain';
 
 const tracer = getTracer();
 
@@ -226,7 +236,7 @@ try {
 The SDK automatically propagates span context through async operations using Node.js AsyncLocalStorage. Child spans automatically inherit the trace ID and parent span ID from the current context.
 
 ```typescript
-import { SpanContext } from '@prefactor/sdk';
+import { SpanContext } from '@prefactor/langchain';
 
 // Get the current span (if any)
 const currentSpan = SpanContext.getCurrent();
@@ -254,7 +264,7 @@ import type {
   SpanStatus,
   TokenUsage,
   ErrorInfo
-} from '@prefactor/sdk';
+} from '@prefactor/langchain';
 
 const config: Config = {
   transportType: 'stdio',

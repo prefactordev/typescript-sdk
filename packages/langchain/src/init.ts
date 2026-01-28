@@ -1,22 +1,46 @@
 import {
   type Config,
+  type CoreRuntime,
   configureLogging,
   createConfig,
+  createCore,
   getLogger,
-  HttpTransport,
-  HttpTransportConfigSchema,
-  StdioTransport,
-  Tracer,
-  type Transport,
+  type Tracer,
 } from '@prefactor/core';
-import { extractPartition, type Partition } from '@prefactor/pfid';
 import { type AgentMiddleware, createMiddleware } from 'langchain';
 import { PrefactorMiddleware } from './middleware.js';
 
 const logger = getLogger('init');
 
+let globalCore: CoreRuntime | null = null;
 let globalTracer: Tracer | null = null;
 let globalMiddleware: AgentMiddleware | null = null;
+
+const defaultAgentSchema = {
+  external_identifier: '1.0.0',
+  span_schemas: {
+    agent: {
+      type: 'object',
+      properties: { type: { type: 'string', const: 'agent' } },
+    },
+    llm: {
+      type: 'object',
+      properties: { type: { type: 'string', const: 'llm' } },
+    },
+    tool: {
+      type: 'object',
+      properties: { type: { type: 'string', const: 'tool' } },
+    },
+    chain: {
+      type: 'object',
+      properties: { type: { type: 'string', const: 'chain' } },
+    },
+    retriever: {
+      type: 'object',
+      properties: { type: { type: 'string', const: 'retriever' } },
+    },
+  },
+};
 
 /**
  * Initialize the Prefactor SDK and return middleware for LangChain.js
@@ -61,31 +85,32 @@ export function init(config?: Partial<Config>): AgentMiddleware {
     return globalMiddleware;
   }
 
-  let transport: Transport;
-  if (finalConfig.transportType === 'stdio') {
-    transport = new StdioTransport();
+  const core = createCore(finalConfig);
+  globalCore = core;
+  globalTracer = core.tracer;
+
+  const httpConfig = finalConfig.httpConfig;
+  if (httpConfig?.agentSchema) {
+    core.agentManager.registerSchema(httpConfig.agentSchema);
+  } else if (
+    finalConfig.transportType === 'http' &&
+    (httpConfig?.agentSchemaVersion || httpConfig?.skipSchema)
+  ) {
+    logger.debug('Skipping default schema registration based on httpConfig');
   } else {
-    if (!finalConfig.httpConfig) {
-      throw new Error('HTTP transport requires httpConfig to be provided in configuration');
-    }
-    // Parse httpConfig to apply defaults from schema
-    const httpConfig = HttpTransportConfigSchema.parse(finalConfig.httpConfig);
-    transport = new HttpTransport(httpConfig);
+    core.agentManager.registerSchema(defaultAgentSchema);
   }
 
-  // Extract partition from agent_id if provided (for HTTP transport)
-  let partition: Partition | undefined;
-  if (finalConfig.httpConfig?.agentId) {
-    try {
-      partition = extractPartition(finalConfig.httpConfig.agentId);
-      logger.debug('Extracted partition from agent_id', { partition });
-    } catch (error) {
-      logger.warn('Failed to extract partition from agent_id, using random partition', { error });
-    }
-  }
+  const agentInfo = finalConfig.httpConfig
+    ? {
+        agentId: finalConfig.httpConfig.agentId,
+        agentVersion: finalConfig.httpConfig.agentVersion,
+        agentName: finalConfig.httpConfig.agentName,
+        agentDescription: finalConfig.httpConfig.agentDescription,
+      }
+    : undefined;
 
-  globalTracer = new Tracer(transport, partition);
-  const prefactorMiddleware = new PrefactorMiddleware(globalTracer);
+  const prefactorMiddleware = new PrefactorMiddleware(core.tracer, core.agentManager, agentInfo);
 
   const middleware = createMiddleware({
     name: 'prefactor',
@@ -157,10 +182,11 @@ export function getTracer(): Tracer {
  * ```
  */
 export async function shutdown(): Promise<void> {
-  if (globalTracer) {
+  if (globalCore) {
     logger.info('Shutting down Prefactor SDK');
-    await globalTracer.close();
+    await globalCore.shutdown();
   }
+  globalCore = null;
   globalTracer = null;
   globalMiddleware = null;
 }

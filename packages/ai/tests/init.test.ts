@@ -1,41 +1,31 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { SpanType } from '@prefactor/core';
-import { getTracer, init, shutdown } from '../src/init';
+import { AgentInstanceManager } from '@prefactor/core';
+import { init, shutdown } from '../src/init.js';
 
-type FetchCall = {
-  url: string;
-  body?: unknown;
+const baseConfig = {
+  transportType: 'stdio' as const,
+  httpConfig: {
+    apiUrl: 'https://example.com',
+    apiToken: 'test-token',
+    agentVersion: '1.0.0',
+  },
 };
 
-const waitFor = async (predicate: () => boolean, timeoutMs = 2000): Promise<void> => {
-  const start = Date.now();
-  while (!predicate()) {
-    if (Date.now() - start > timeoutMs) {
-      throw new Error('Timed out waiting for condition');
-    }
-    await new Promise((resolve) => setTimeout(resolve, 10));
-  }
-};
-
-describe('init (HTTP schema gating)', () => {
-  let originalFetch: typeof fetch;
-  let fetchCalls: FetchCall[];
+describe('ai init schema registration', () => {
+  const originalRegisterSchema = AgentInstanceManager.prototype.registerSchema;
+  let registeredSchemas: Record<string, unknown>[] = [];
 
   beforeEach(() => {
-    originalFetch = globalThis.fetch;
-    fetchCalls = [];
-    globalThis.fetch = async (input, init) => {
-      const url = typeof input === 'string' ? input : input.url;
-      const body = init?.body ? JSON.parse(init.body.toString()) : undefined;
-      fetchCalls.push({ url, body });
-      return new Response(JSON.stringify({ details: { id: 'mock-id' } }), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-      });
+    registeredSchemas = [];
+    AgentInstanceManager.prototype.registerSchema = function registerSchemaStub(
+      schema: Record<string, unknown>
+    ) {
+      registeredSchemas.push(schema);
     };
   });
 
   afterEach(async () => {
+<<<<<<< HEAD
     await shutdown();
     globalThis.fetch = originalFetch;
   });
@@ -103,5 +93,36 @@ describe('init (HTTP schema gating)', () => {
     };
 
     expect(schemaVersion?.external_identifier).toBe('v2.0.0');
+=======
+    AgentInstanceManager.prototype.registerSchema = originalRegisterSchema;
+    await shutdown();
+  });
+
+  test('registers provided agent schema when configured', () => {
+    const customSchema = { type: 'object', title: 'Custom' };
+
+    init({
+      ...baseConfig,
+      httpConfig: { ...baseConfig.httpConfig, agentSchema: customSchema },
+    });
+
+    expect(registeredSchemas).toEqual([customSchema]);
+  });
+
+  test('skips default schema when agentSchemaVersion is set', () => {
+    init({
+      ...baseConfig,
+      transportType: 'http',
+      httpConfig: { ...baseConfig.httpConfig, agentSchemaVersion: '2.0.0' },
+    });
+
+    expect(registeredSchemas).toEqual([]);
+  });
+
+  test('registers default schema when no schema config is provided', () => {
+    init(baseConfig);
+
+    expect(registeredSchemas.length).toBe(1);
+>>>>>>> refactor/sdk-vnext
   });
 });

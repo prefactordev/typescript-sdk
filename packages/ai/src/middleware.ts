@@ -9,6 +9,7 @@
  */
 
 import {
+  type AgentInstanceManager,
   getLogger,
   type Span,
   SpanContext,
@@ -72,7 +73,7 @@ class WorkflowManager {
     // Look for an active workflow
     let workflow: WorkflowState | undefined;
 
-    for (const [id, state] of this.workflows.entries()) {
+    for (const [_id, state] of this.workflows.entries()) {
       const inactiveTime = now - state.lastActivityAt;
       if (inactiveTime < this.WORKFLOW_TIMEOUT && state.callCount >= this.MIN_WORKFLOW_CALLS) {
         workflow = state;
@@ -96,8 +97,6 @@ class WorkflowManager {
       name: 'agent',
       spanType: SpanType.AGENT,
       inputs: { workflowId },
-      parentSpanId,
-      traceId,
     });
 
     const newWorkflow: WorkflowState = {
@@ -150,7 +149,7 @@ class WorkflowManager {
 
     for (const id of toDelete) {
       const workflow = this.workflows.get(id);
-      if (workflow && workflow.agentSpan) {
+      if (workflow?.agentSpan) {
         tracer.endSpan(workflow.agentSpan, {
           outputs: { status: 'timed_out' },
         });
@@ -264,11 +263,7 @@ function extractToolResults(
  * @returns The created span
  * @internal
  */
-function createToolSpan(
-  tracer: Tracer,
-  toolCall: ToolCallInfo,
-  parentSpan: Span | undefined
-): Span {
+function createToolSpan(tracer: Tracer, toolCall: ToolCallInfo): Span {
   return tracer.startSpan({
     name: toolCall.toolName,
     spanType: SpanType.TOOL,
@@ -277,8 +272,6 @@ function createToolSpan(
       toolCallId: toolCall.toolCallId,
       input: toolCall.input,
     },
-    parentSpanId: parentSpan?.spanId,
-    traceId: parentSpan?.traceId,
   });
 }
 
@@ -474,9 +467,25 @@ function extractTokenUsage(
  */
 export function createPrefactorMiddleware(
   tracer: Tracer,
-  config?: MiddlewareConfig
+  config?: MiddlewareConfig,
+  coreOptions?: {
+    agentManager: AgentInstanceManager;
+    agentInfo?: Parameters<AgentInstanceManager['startInstance']>[0];
+    agentLifecycle?: { started: boolean };
+  }
 ): LanguageModelMiddleware {
   const enableWorkflowTracking = config?.enableWorkflowTracking !== false;
+  const agentManager = coreOptions?.agentManager;
+  const agentInfo = coreOptions?.agentInfo;
+  const agentLifecycle = coreOptions?.agentLifecycle ?? { started: false };
+
+  const ensureAgentInstanceStarted = (): void => {
+    if (!agentManager || agentLifecycle.started) {
+      return;
+    }
+    agentManager.startInstance(agentInfo);
+    agentLifecycle.started = true;
+  };
 
   return {
     specificationVersion: 'v3',
@@ -485,6 +494,8 @@ export function createPrefactorMiddleware(
      */
     wrapGenerate: async ({ doGenerate, params, model }) => {
       const parentSpan = SpanContext.getCurrent();
+
+      ensureAgentInstanceStarted();
 
       // Get or create workflow for this call
       const workflowManager = getWorkflowManager(tracer);
@@ -506,17 +517,27 @@ export function createPrefactorMiddleware(
       const llmParentSpan = workflow?.agentSpan ?? parentSpan;
 
       // Create LLM span
-      const span = tracer.startSpan({
-        name: `${model.provider ?? 'unknown'}.${model.modelId ?? 'unknown'}`,
-        spanType: SpanType.LLM,
-        inputs: {
-          'ai.model.id': model.modelId,
-          'ai.model.provider': model.provider,
-          ...extractInputs(params, config),
-        },
-        parentSpanId: llmParentSpan?.spanId,
-        traceId: llmParentSpan?.traceId,
-      });
+      const span = llmParentSpan
+        ? SpanContext.run(llmParentSpan, () =>
+            tracer.startSpan({
+              name: `${model.provider ?? 'unknown'}.${model.modelId ?? 'unknown'}`,
+              spanType: SpanType.LLM,
+              inputs: {
+                'ai.model.id': model.modelId,
+                'ai.model.provider': model.provider,
+                ...extractInputs(params, config),
+              },
+            })
+          )
+        : tracer.startSpan({
+            name: `${model.provider ?? 'unknown'}.${model.modelId ?? 'unknown'}`,
+            spanType: SpanType.LLM,
+            inputs: {
+              'ai.model.id': model.modelId,
+              'ai.model.provider': model.provider,
+              ...extractInputs(params, config),
+            },
+          });
 
       try {
         // Execute the generation within the LLM span context
@@ -527,14 +548,16 @@ export function createPrefactorMiddleware(
           const toolCalls = extractToolCalls(result);
           const toolResults = extractToolResults(result);
 
-          for (const toolCall of toolCalls) {
-            const toolSpan = createToolSpan(tracer, toolCall, span);
+          SpanContext.run(span, () => {
+            for (const toolCall of toolCalls) {
+              const toolSpan = createToolSpan(tracer, toolCall);
 
-            const output = toolResults.get(toolCall.toolCallId);
-            tracer.endSpan(toolSpan, {
-              outputs: output !== undefined ? { output } : undefined,
-            });
-          }
+              const output = toolResults.get(toolCall.toolCallId);
+              tracer.endSpan(toolSpan, {
+                outputs: output !== undefined ? { output } : undefined,
+              });
+            }
+          });
         }
 
         // End the span with outputs
@@ -548,6 +571,7 @@ export function createPrefactorMiddleware(
         // End the span with error
         tracer.endSpan(span, { error: error as Error });
         throw error;
+      } finally {
       }
     },
 
@@ -556,6 +580,8 @@ export function createPrefactorMiddleware(
      */
     wrapStream: async ({ doStream, params, model }) => {
       const parentSpan = SpanContext.getCurrent();
+
+      ensureAgentInstanceStarted();
 
       // Get or create workflow for this call
       const workflowManager = getWorkflowManager(tracer);
@@ -570,17 +596,27 @@ export function createPrefactorMiddleware(
       const llmParentSpan = workflow?.agentSpan ?? parentSpan;
 
       // Create LLM span
-      const span = tracer.startSpan({
-        name: `${model.provider ?? 'unknown'}.${model.modelId ?? 'unknown'}`,
-        spanType: SpanType.LLM,
-        inputs: {
-          'ai.model.id': model.modelId,
-          'ai.model.provider': model.provider,
-          ...extractInputs(params, config),
-        },
-        parentSpanId: llmParentSpan?.spanId,
-        traceId: llmParentSpan?.traceId,
-      });
+      const span = llmParentSpan
+        ? SpanContext.run(llmParentSpan, () =>
+            tracer.startSpan({
+              name: `${model.provider ?? 'unknown'}.${model.modelId ?? 'unknown'}`,
+              spanType: SpanType.LLM,
+              inputs: {
+                'ai.model.id': model.modelId,
+                'ai.model.provider': model.provider,
+                ...extractInputs(params, config),
+              },
+            })
+          )
+        : tracer.startSpan({
+            name: `${model.provider ?? 'unknown'}.${model.modelId ?? 'unknown'}`,
+            spanType: SpanType.LLM,
+            inputs: {
+              'ai.model.id': model.modelId,
+              'ai.model.provider': model.provider,
+              ...extractInputs(params, config),
+            },
+          });
 
       try {
         // Execute the stream within the span context
@@ -620,11 +656,13 @@ export function createPrefactorMiddleware(
  * @internal
  */
 function wrapStreamForCompletion(
+  // biome-ignore lint/suspicious/noExplicitAny: Stream part types vary
   stream: ReadableStream<any>,
   span: Span,
   tracer: Tracer,
   config?: MiddlewareConfig,
-  workflow?: WorkflowState
+  _workflow?: WorkflowState
+  // biome-ignore lint/suspicious/noExplicitAny: Stream part types vary
 ): ReadableStream<any> {
   const reader = stream.getReader();
   let finishReason: unknown | undefined;
@@ -652,11 +690,13 @@ function wrapStreamForCompletion(
 
           // Instrument tool calls
           if (config?.captureTools !== false && toolCalls.length > 0) {
-            for (const toolCall of toolCalls) {
-              const toolSpan = createToolSpan(tracer, toolCall, span);
-              // Tool output is not available in streaming mode
-              tracer.endSpan(toolSpan, {});
-            }
+            SpanContext.run(span, () => {
+              for (const toolCall of toolCalls) {
+                const toolSpan = createToolSpan(tracer, toolCall);
+                // Tool output is not available in streaming mode
+                tracer.endSpan(toolSpan, {});
+              }
+            });
           }
 
           tracer.endSpan(span, {
@@ -669,7 +709,6 @@ function wrapStreamForCompletion(
         }
 
         // Capture stream parts for telemetry
-        // biome-ignore lint/suspicious/noExplicitAny: Stream part types vary
         const part = value;
         if (part) {
           // Capture text chunks

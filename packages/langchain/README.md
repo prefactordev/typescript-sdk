@@ -10,7 +10,7 @@ npm install @prefactor/langchain
 bun add @prefactor/langchain
 ```
 
-Most users should install `@prefactor/sdk` instead, which bundles both `@prefactor/core` and `@prefactor/langchain`.
+Note: This package requires `@prefactor/core` as a peer dependency, which will be installed automatically.
 
 ## Peer Dependencies
 
