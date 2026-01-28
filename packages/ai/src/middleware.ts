@@ -471,11 +471,21 @@ export function createPrefactorMiddleware(
   coreOptions?: {
     agentManager: AgentInstanceManager;
     agentInfo?: Parameters<AgentInstanceManager['startInstance']>[0];
+    agentLifecycle?: { started: boolean };
   }
 ): LanguageModelMiddleware {
   const enableWorkflowTracking = config?.enableWorkflowTracking !== false;
   const agentManager = coreOptions?.agentManager;
   const agentInfo = coreOptions?.agentInfo;
+  const agentLifecycle = coreOptions?.agentLifecycle ?? { started: false };
+
+  const ensureAgentInstanceStarted = (): void => {
+    if (!agentManager || agentLifecycle.started) {
+      return;
+    }
+    agentManager.startInstance(agentInfo);
+    agentLifecycle.started = true;
+  };
 
   return {
     specificationVersion: 'v3',
@@ -485,7 +495,7 @@ export function createPrefactorMiddleware(
     wrapGenerate: async ({ doGenerate, params, model }) => {
       const parentSpan = SpanContext.getCurrent();
 
-      agentManager?.startInstance(agentInfo);
+      ensureAgentInstanceStarted();
 
       // Get or create workflow for this call
       const workflowManager = getWorkflowManager(tracer);
@@ -562,7 +572,6 @@ export function createPrefactorMiddleware(
         tracer.endSpan(span, { error: error as Error });
         throw error;
       } finally {
-        agentManager?.finishInstance();
       }
     },
 
@@ -572,7 +581,7 @@ export function createPrefactorMiddleware(
     wrapStream: async ({ doStream, params, model }) => {
       const parentSpan = SpanContext.getCurrent();
 
-      agentManager?.startInstance(agentInfo);
+      ensureAgentInstanceStarted();
 
       // Get or create workflow for this call
       const workflowManager = getWorkflowManager(tracer);
@@ -619,8 +628,7 @@ export function createPrefactorMiddleware(
           span,
           tracer,
           config,
-          workflow,
-          agentManager
+          workflow
         );
 
         return {
@@ -630,7 +638,6 @@ export function createPrefactorMiddleware(
       } catch (error) {
         // End the span with error
         tracer.endSpan(span, { error: error as Error });
-        agentManager?.finishInstance();
         throw error;
       }
     },
@@ -654,8 +661,7 @@ function wrapStreamForCompletion(
   span: Span,
   tracer: Tracer,
   config?: MiddlewareConfig,
-  _workflow?: WorkflowState,
-  agentManager?: AgentInstanceManager
+  _workflow?: WorkflowState
   // biome-ignore lint/suspicious/noExplicitAny: Stream part types vary
 ): ReadableStream<any> {
   const reader = stream.getReader();
@@ -698,14 +704,11 @@ function wrapStreamForCompletion(
             tokenUsage: usage,
           });
 
-          agentManager?.finishInstance();
-
           controller.close();
           return;
         }
 
         // Capture stream parts for telemetry
-        // biome-ignore lint/suspicious/noExplicitAny: Stream part types vary
         const part = value;
         if (part) {
           // Capture text chunks
@@ -749,7 +752,6 @@ function wrapStreamForCompletion(
       tracer.endSpan(span, {
         outputs: { 'ai.finishReason': 'cancelled' },
       });
-      agentManager?.finishInstance();
       reader.cancel();
     },
   });

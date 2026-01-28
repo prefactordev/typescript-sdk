@@ -25,6 +25,7 @@ const logger = getLogger('ai-middleware-init');
 /** Global Prefactor tracer instance. */
 let globalTracer: Tracer | null = null;
 let globalCore: CoreRuntime | null = null;
+let agentLifecycle: { started: boolean } | null = null;
 
 /** Global middleware instance. */
 let globalMiddleware: ReturnType<typeof createPrefactorMiddleware> | null = null;
@@ -175,11 +176,13 @@ export function init(
         agentDescription: finalConfig.httpConfig.agentDescription,
       }
     : undefined;
+  agentLifecycle = { started: false };
 
   // Create the middleware
   globalMiddleware = createPrefactorMiddleware(core.tracer, middlewareConfig, {
     agentInfo,
     agentManager: core.agentManager,
+    agentLifecycle,
   });
 
   return globalMiddleware;
@@ -239,11 +242,16 @@ export function getTracer(): Tracer {
 export async function shutdown(): Promise<void> {
   if (globalCore) {
     logger.info('Shutting down Prefactor AI Middleware');
+    if (agentLifecycle?.started) {
+      globalCore.agentManager.finishInstance();
+      agentLifecycle.started = false;
+    }
     await globalCore.shutdown();
   }
   globalCore = null;
   globalTracer = null;
   globalMiddleware = null;
+  agentLifecycle = null;
 }
 
 // Automatic shutdown on process exit
