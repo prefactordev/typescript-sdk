@@ -1,6 +1,6 @@
 import type { HttpTransportConfig } from '../config.js';
 import type { QueueAction } from '../queue/actions.js';
-import type { Span } from '../tracing/span.js';
+import { DEFAULT_AGENT_SCHEMA, type Span } from '../tracing/span.js';
 import { getLogger } from '../utils/logging.js';
 import type { Transport } from './base.js';
 
@@ -211,31 +211,7 @@ export class HttpTransport implements Transport {
    * Get default schema (v1.0.0) with span schemas for all supported types
    */
   private getDefaultSchema(): Record<string, unknown> {
-    return {
-      external_identifier: '1.0.0',
-      span_schemas: {
-        agent: {
-          type: 'object',
-          properties: { type: { type: 'string', const: 'agent' } },
-        },
-        llm: {
-          type: 'object',
-          properties: { type: { type: 'string', const: 'llm' } },
-        },
-        tool: {
-          type: 'object',
-          properties: { type: { type: 'string', const: 'tool' } },
-        },
-        chain: {
-          type: 'object',
-          properties: { type: { type: 'string', const: 'chain' } },
-        },
-        retriever: {
-          type: 'object',
-          properties: { type: { type: 'string', const: 'retriever' } },
-        },
-      },
-    };
+    return DEFAULT_AGENT_SCHEMA;
   }
 
   /**
