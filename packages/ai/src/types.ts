@@ -26,14 +26,6 @@ export interface MiddlewareConfig {
    * @default true
    */
   captureTools?: boolean;
-
-  /**
-   * Whether to create AGENT spans for multi-step workflows.
-   * When enabled, the middleware will automatically detect multi-step conversations
-   * and create a root AGENT span to establish proper hierarchy.
-   * @default true
-   */
-  enableWorkflowTracking?: boolean;
 }
 
 /**
@@ -76,23 +68,6 @@ export interface CallData {
  * LanguageModelV3Middleware type
  */
 export type { LanguageModelMiddleware } from 'ai';
-
-/**
- * Workflow state for tracking multi-step conversations.
- */
-export interface WorkflowState {
-  /** The root AGENT span for this workflow */
-  agentSpan: import('@prefactor/core').Span;
-
-  /** Timestamp when workflow was created */
-  createdAt: number;
-
-  /** Timestamp of last activity in this workflow */
-  lastActivityAt: number;
-
-  /** Number of LLM calls in this workflow */
-  callCount: number;
-}
 
 /**
  * Tool call extracted from AI SDK response.

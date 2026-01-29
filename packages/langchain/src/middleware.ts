@@ -47,7 +47,7 @@ export class PrefactorMiddleware {
     this.agentManager.startInstance(this.agentInfo);
 
     const span = this.tracer.startSpan({
-      name: 'agent',
+      name: 'langchain:agent',
       spanType: SpanType.AGENT,
       inputs: { messages: messages.slice(-3).map((m: unknown) => String(m)) },
     });

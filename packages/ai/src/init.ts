@@ -18,7 +18,7 @@ import {
   getLogger,
   type Tracer,
 } from '@prefactor/core';
-import { createPrefactorMiddleware } from './middleware.js';
+import { createPrefactorMiddleware, endRootAgentSpan } from './middleware.js';
 import type { MiddlewareConfig } from './types.js';
 
 const logger = getLogger('ai-middleware-init');
@@ -228,6 +228,9 @@ export function getTracer(): Tracer {
 export async function shutdown(): Promise<void> {
   if (globalCore) {
     logger.info('Shutting down Prefactor AI Middleware');
+    if (globalTracer) {
+      endRootAgentSpan(globalTracer);
+    }
     if (agentLifecycle?.started) {
       globalCore.agentManager.finishInstance();
       agentLifecycle.started = false;

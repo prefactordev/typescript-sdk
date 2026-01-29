@@ -10,173 +10,41 @@
 
 import {
   type AgentInstanceManager,
-  getLogger,
   type Span,
   SpanContext,
   SpanType,
   type TokenUsage,
   type Tracer,
 } from '@prefactor/core';
-import type {
-  LanguageModelMiddleware,
-  MiddlewareConfig,
-  ToolCallInfo,
-  WorkflowState,
-} from './types.js';
+import type { LanguageModelMiddleware, MiddlewareConfig, ToolCallInfo } from './types.js';
 
-const logger = getLogger('middleware');
+/** Root AGENT span for the middleware session. Created on first call, ended on shutdown. */
+let rootAgentSpan: Span | undefined;
 
 /**
- * Workflow manager for tracking multi-step conversations.
- *
- * This manager tracks workflow state across multiple model calls to establish
- * proper parent-child span relationships. It uses timing heuristics and call
- * patterns to detect workflow boundaries.
- *
+ * Gets or creates the root AGENT span.
  * @internal
  */
-class WorkflowManager {
-  private workflows: Map<string, WorkflowState> = new Map();
-
-  /** Time in milliseconds after which a workflow is considered inactive */
-  private readonly WORKFLOW_TIMEOUT = 60000;
-
-  /** Maximum number of calls before considering a conversation a workflow */
-  private readonly MIN_WORKFLOW_CALLS = 1;
-
-  /**
-   * Get or create a workflow for the current context.
-   *
-   * @param tracer - The tracer instance
-   * @param parentSpanId - Optional parent span ID from existing context
-   * @param traceId - Optional trace ID from existing context
-   * @param enableWorkflowTracking - Whether workflow tracking is enabled
-   * @returns The workflow state, or undefined if workflow tracking is disabled
-   */
-  getOrCreateWorkflow(
-    tracer: Tracer,
-    parentSpanId?: string,
-    traceId?: string,
-    enableWorkflowTracking: boolean = true
-  ): WorkflowState | undefined {
-    if (!enableWorkflowTracking) {
-      return undefined;
-    }
-
-    const now = Date.now();
-
-    // If we have a parent span from external context, don't create a workflow
-    if (parentSpanId && traceId) {
-      return undefined;
-    }
-
-    // Look for an active workflow
-    let workflow: WorkflowState | undefined;
-
-    for (const [_id, state] of this.workflows.entries()) {
-      const inactiveTime = now - state.lastActivityAt;
-      if (inactiveTime < this.WORKFLOW_TIMEOUT && state.callCount >= this.MIN_WORKFLOW_CALLS) {
-        workflow = state;
-        break;
-      }
-    }
-
-    if (workflow) {
-      workflow.lastActivityAt = now;
-      workflow.callCount++;
-      logger.debug('Using existing workflow', {
-        spanId: workflow.agentSpan.spanId,
-        callCount: workflow.callCount,
-      });
-      return workflow;
-    }
-
-    // Create a new workflow with an AGENT span
-    const agentSpan = tracer.startSpan({
-      name: 'agent',
+function getOrCreateRootAgentSpan(tracer: Tracer): Span {
+  if (!rootAgentSpan) {
+    rootAgentSpan = tracer.startSpan({
+      name: 'aisdk:agent',
       spanType: SpanType.AGENT,
       inputs: {},
     });
-
-    const newWorkflow: WorkflowState = {
-      agentSpan,
-      createdAt: now,
-      lastActivityAt: now,
-      callCount: 1,
-    };
-
-    this.workflows.set(agentSpan.spanId, newWorkflow);
-    logger.info('Created new workflow with AGENT span', { spanId: agentSpan.spanId });
-
-    return newWorkflow;
   }
-
-  /**
-   * End a workflow and complete its AGENT span.
-   *
-   * @param workflow - The workflow to end
-   * @param tracer - The tracer instance
-   * @param outputs - Optional outputs for the AGENT span
-   */
-  endWorkflow(workflow: WorkflowState, tracer: Tracer, outputs?: Record<string, unknown>): void {
-    tracer.endSpan(workflow.agentSpan, { outputs });
-    this.workflows.delete(workflow.agentSpan.spanId);
-    logger.info('Ended workflow', {
-      spanId: workflow.agentSpan.spanId,
-      totalCalls: workflow.callCount,
-    });
-  }
-
-  /**
-   * Clean up inactive workflows.
-   */
-  cleanup(tracer: Tracer): void {
-    const now = Date.now();
-    const toDelete: WorkflowState[] = [];
-
-    for (const state of this.workflows.values()) {
-      const inactiveTime = now - state.lastActivityAt;
-      if (inactiveTime >= this.WORKFLOW_TIMEOUT) {
-        toDelete.push(state);
-      }
-    }
-
-    for (const workflow of toDelete) {
-      tracer.endSpan(workflow.agentSpan, {
-        outputs: { status: 'timed_out' },
-      });
-      this.workflows.delete(workflow.agentSpan.spanId);
-    }
-
-    if (toDelete.length > 0) {
-      logger.debug('Cleaned up inactive workflows', { count: toDelete.length });
-    }
-  }
-
-  /**
-   * Get all active workflows.
-   */
-  getActiveWorkflows(): WorkflowState[] {
-    return Array.from(this.workflows.values());
-  }
+  return rootAgentSpan;
 }
 
-/** Global workflow manager instance */
-let workflowManager: WorkflowManager | undefined;
-
 /**
- * Get or create the global workflow manager.
+ * Ends the root AGENT span. Called during shutdown.
+ * @internal
  */
-function getWorkflowManager(tracer: Tracer): WorkflowManager {
-  if (!workflowManager) {
-    workflowManager = new WorkflowManager();
-
-    // Periodic cleanup of inactive workflows
-    setInterval(() => {
-      workflowManager?.cleanup(tracer);
-    }, 30000);
+export function endRootAgentSpan(tracer: Tracer): void {
+  if (rootAgentSpan) {
+    tracer.endSpan(rootAgentSpan, {});
+    rootAgentSpan = undefined;
   }
-  return workflowManager;
 }
 
 /**
@@ -488,7 +356,6 @@ export function createPrefactorMiddleware(
     agentLifecycle?: { started: boolean };
   }
 ): LanguageModelMiddleware {
-  const enableWorkflowTracking = config?.enableWorkflowTracking !== false;
   const agentManager = coreOptions?.agentManager;
   const agentInfo = coreOptions?.agentInfo;
   const agentLifecycle = coreOptions?.agentLifecycle ?? { started: false };
@@ -507,28 +374,11 @@ export function createPrefactorMiddleware(
      * Wraps non-streaming generation calls.
      */
     wrapGenerate: async ({ doGenerate, params, model }) => {
-      const parentSpan = SpanContext.getCurrent();
-
       ensureAgentInstanceStarted();
 
-      // Get or create workflow for this call
-      const workflowManager = getWorkflowManager(tracer);
-      const workflow = workflowManager.getOrCreateWorkflow(
-        tracer,
-        parentSpan?.spanId,
-        parentSpan?.traceId,
-        enableWorkflowTracking
-      );
-
-      logger.info('Workflow state', {
-        workflowSpanId: workflow?.agentSpan.spanId,
-        callCount: workflow?.callCount,
-        parentSpanId: workflow?.agentSpan.spanId ?? parentSpan?.spanId,
-      });
-
-      // Create LLM span with appropriate parent
-      const llmParentSpan = workflow?.agentSpan ?? parentSpan;
-      const span = createLlmSpan(tracer, model, params, config, llmParentSpan);
+      // Use existing context or fall back to root AGENT span
+      const parentSpan = SpanContext.getCurrent() ?? getOrCreateRootAgentSpan(tracer);
+      const span = createLlmSpan(tracer, model, params, config, parentSpan);
 
       try {
         // Execute the generation within the LLM span context
@@ -569,35 +419,18 @@ export function createPrefactorMiddleware(
      * Wraps streaming generation calls.
      */
     wrapStream: async ({ doStream, params, model }) => {
-      const parentSpan = SpanContext.getCurrent();
-
       ensureAgentInstanceStarted();
 
-      // Get or create workflow for this call
-      const workflowManager = getWorkflowManager(tracer);
-      const workflow = workflowManager.getOrCreateWorkflow(
-        tracer,
-        parentSpan?.spanId,
-        parentSpan?.traceId,
-        enableWorkflowTracking
-      );
-
-      // Create LLM span with appropriate parent
-      const llmParentSpan = workflow?.agentSpan ?? parentSpan;
-      const span = createLlmSpan(tracer, model, params, config, llmParentSpan);
+      // Use existing context or fall back to root AGENT span
+      const parentSpan = SpanContext.getCurrent() ?? getOrCreateRootAgentSpan(tracer);
+      const span = createLlmSpan(tracer, model, params, config, parentSpan);
 
       try {
         // Execute the stream within the span context
         const result = await SpanContext.runAsync(span, async () => doStream());
 
         // Wrap the stream to capture completion
-        const wrappedStream = wrapStreamForCompletion(
-          result.stream,
-          span,
-          tracer,
-          config,
-          workflow
-        );
+        const wrappedStream = wrapStreamForCompletion(result.stream, span, tracer, config);
 
         return {
           ...result,
@@ -619,7 +452,6 @@ export function createPrefactorMiddleware(
  * @param span - The span to end when stream completes
  * @param tracer - The tracer instance
  * @param config - Middleware configuration
- * @param workflow - Optional workflow state for tracking
  * @returns A wrapped stream that ends the span on completion
  * @internal
  */
@@ -628,8 +460,7 @@ function wrapStreamForCompletion(
   stream: ReadableStream<any>,
   span: Span,
   tracer: Tracer,
-  config?: MiddlewareConfig,
-  _workflow?: WorkflowState
+  config?: MiddlewareConfig
   // biome-ignore lint/suspicious/noExplicitAny: Stream part types vary
 ): ReadableStream<any> {
   const reader = stream.getReader();
