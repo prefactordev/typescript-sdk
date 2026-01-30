@@ -34,20 +34,21 @@ export class HttpTransport implements Transport {
       return;
     }
 
+    // First pass: apply schema updates
     for (const item of items) {
-      if (item.type !== 'schema_register') {
-        continue;
+      if (item.type === 'schema_register') {
+        this.config.agentSchema = item.data.schema;
+        this.config.agentSchemaVersion = item.data.schemaVersion;
+        this.config.schemaName = item.data.schemaName;
+        this.config.schemaVersion = item.data.schemaVersion;
       }
-
-      this.config.agentSchema = item.data.schema;
-      this.config.agentSchemaVersion = item.data.schemaVersion;
-      this.config.schemaName = item.data.schemaName;
-      this.config.schemaVersion = item.data.schemaVersion;
     }
 
+    // Span finishes are deferred because they need the backend span ID
+    // which is only available after span_end has been processed.
     const spanFinishes: Array<{ spanId: string; endTime: number }> = [];
-    const agentFinishes: QueueAction[] = [];
 
+    // Second pass: process actions in order, deferring only span_finish
     for (const item of items) {
       try {
         switch (item.type) {
@@ -61,7 +62,9 @@ export class HttpTransport implements Transport {
             await this.startAgentInstanceHttp();
             break;
           case 'agent_finish':
-            agentFinishes.push(item);
+            // Process deferred span finishes before closing the agent
+            await this.processSpanFinishes(spanFinishes);
+            await this.finishAgentInstanceHttp();
             break;
           case 'span_end':
             if (!this.agentInstanceId) {
@@ -78,25 +81,25 @@ export class HttpTransport implements Transport {
       }
     }
 
+    // Process any remaining span finishes (e.g. spans without an agent_finish in this batch)
+    await this.processSpanFinishes(spanFinishes);
+  }
+
+  /**
+   * Process deferred span finishes and clear the array.
+   */
+  private async processSpanFinishes(
+    spanFinishes: Array<{ spanId: string; endTime: number }>
+  ): Promise<void> {
     for (const finish of spanFinishes) {
       try {
-        if (!this.agentInstanceId) {
-          await this.ensureAgentRegistered();
-        }
         const timestamp = new Date(finish.endTime).toISOString();
         await this.finishSpanHttp({ spanId: finish.spanId, timestamp });
       } catch (error) {
-        logger.error('Error processing batch item:', error);
+        logger.error('Error processing span finish:', error);
       }
     }
-
-    for (const _finish of agentFinishes) {
-      try {
-        await this.finishAgentInstanceHttp();
-      } catch (error) {
-        logger.error('Error processing batch item:', error);
-      }
-    }
+    spanFinishes.length = 0;
   }
 
   /**
@@ -338,6 +341,9 @@ export class HttpTransport implements Transport {
     } catch (error) {
       logger.error('Error finishing agent instance:', error);
     }
+
+    // Reset so the next agent_start registers a fresh instance
+    this.agentInstanceId = null;
   }
 
   /**

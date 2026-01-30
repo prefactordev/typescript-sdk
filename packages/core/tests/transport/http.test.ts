@@ -167,7 +167,7 @@ describe('HttpTransport processBatch', () => {
     await transport.close();
   });
 
-  test('buffers agent finish until after span finishes in same batch', async () => {
+  test('flushes pending span finishes before agent finish', async () => {
     const fetchCalls: Array<{ url: string; options?: RequestInit }> = [];
     globalThis.fetch = (async (url, options) => {
       const urlString = String(url);
@@ -212,14 +212,16 @@ describe('HttpTransport processBatch', () => {
       tags: [],
     };
 
+    // Real queue order: span_end, span_finish, then agent_finish
     const actions: QueueAction[] = [
       { type: 'span_end', data: span },
-      { type: 'agent_finish', data: {} },
       { type: 'span_finish', data: { spanId: 'span-2', endTime } },
+      { type: 'agent_finish', data: {} },
     ];
 
     await transport.processBatch(actions);
 
+    // span_finish is flushed before agent_finish
     expect(fetchCalls.map((call) => call.url)).toEqual([
       'https://example.com/api/v1/agent_instance/register',
       'https://example.com/api/v1/agent_spans',
