@@ -10,10 +10,10 @@ export const HttpTransportConfigSchema = z.object({
   /** Authentication token */
   apiToken: z.string().min(1),
 
-  /** Optional agent identifier */
+  /** Optional agent instance identifier (internal ID) */
   agentId: z.string().optional(),
 
-  /** Optional agent version */
+  /** Optional agent identifier (external identifier; formerly agentVersion) */
   agentVersion: z.string().optional(),
 
   /** Optional agent name */
@@ -22,16 +22,16 @@ export const HttpTransportConfigSchema = z.object({
   /** Optional agent description */
   agentDescription: z.string().optional(),
 
-  /** Optional schema name identifier */
+  /** Optional schema identifier name (used for registration/agent instance) */
   schemaName: z.string().optional(),
 
-  /** Optional schema version identifier */
+  /** Optional schema identifier version (used for registration/agent instance) */
   schemaVersion: z.string().optional(),
 
   /** Optional agent schema for validation (full schema object) */
   agentSchema: z.record(z.unknown()).optional(),
 
-  /** Optional agent schema version identifier (string) */
+  /** Optional pre-registered schema identifier (external identifier string) */
   agentSchemaVersion: z.string().optional(),
 
   /** Skip schema validation */
