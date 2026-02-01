@@ -1,0 +1,4 @@
+[tools]
+node = "24"
+bun = "latest"
+just = "latest"

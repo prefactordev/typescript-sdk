@@ -60,10 +60,10 @@ bun run build
 node dist/examples/anthropic-agent/simple-agent.js
 ```
 
-If using devenv:
+Toolchain setup:
 
 ```bash
-eval "$(devenv print-dev-env)" && bun examples/anthropic-agent/simple-agent.ts
+mise install
 ```
 
 ## Expected Output

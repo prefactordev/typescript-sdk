@@ -300,12 +300,17 @@ The SDK consists of five main layers:
 
 ## Development
 
-This project uses Bun with mise for toolchain management. It also uses devenv for development.
+This project uses Bun with mise for toolchain management.
 
 ```bash
+# Install toolchain
+mise install
+
 # Install dependencies (monorepo-wide)
 just install
+```
 
+```bash
 # Build all packages
 just build
 

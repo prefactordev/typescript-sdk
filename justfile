@@ -22,15 +22,15 @@ test-watch:
 
 # Type check with project references
 typecheck:
-    tsc --build
+	bun run tsc --build
 
 # Lint code
 lint:
-    biome check .
+	bun run biome check .
 
 # Format code
 format:
-    biome format --write .
+	bun run biome format --write .
 
 # Run all checks
 check: typecheck lint test
