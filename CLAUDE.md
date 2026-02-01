@@ -8,7 +8,7 @@ TypeScript SDK for Prefactor that provides automatic observability for LangChain
 
 ## Development Environment
 
-This project uses **Bun** as the runtime, package manager, and test runner, with **devenv** (Nix-based) and **direnv** for reproducible development environments.
+This project uses Bun with mise for toolchain management. It also uses **devenv** (Nix-based) and **direnv** for reproducible development environments.
 
 ### Setup
 ```bash

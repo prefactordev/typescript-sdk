@@ -300,7 +300,7 @@ The SDK consists of five main layers:
 
 ## Development
 
-This project uses Bun and devenv for development.
+This project uses Bun with mise for toolchain management. It also uses devenv for development.
 
 ```bash
 # Install dependencies (monorepo-wide)
