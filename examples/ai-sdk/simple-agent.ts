@@ -120,11 +120,6 @@ async function main() {
     );
   }
 
-  console.log('='.repeat(80));
-  console.log('@prefactor/ai-middleware - Vercel AI SDK Middleware Example');
-  console.log('='.repeat(80));
-  console.log();
-
   // Initialize @prefactor/ai-middleware
   // Config is picked up from environment variables:
   // - PREFACTOR_TRANSPORT: 'stdio' or 'http' (default: 'stdio')

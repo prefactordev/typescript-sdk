@@ -65,7 +65,6 @@ export function init(config?: Partial<Config>): AgentMiddleware {
   };
 
   const finalConfig = createConfig(configWithDefaults);
-  logger.info('Initializing Prefactor SDK', { transport: finalConfig.transportType });
 
   if (globalMiddleware !== null) {
     return globalMiddleware;

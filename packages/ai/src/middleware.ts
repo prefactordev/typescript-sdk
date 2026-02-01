@@ -178,10 +178,22 @@ function extractInputs(
 
   // Capture tools if enabled
   if (config?.captureTools !== false && params.tools) {
-    inputs['ai.tools'] = params.tools.map((tool: { name?: string; description?: string }) => ({
-      name: tool.name,
-      description: tool.description,
-    }));
+    // AI SDK v4 uses an object map; normalize to names to avoid serializing tool functions.
+    if (Array.isArray(params.tools)) {
+      inputs['ai.tools'] = params.tools.map((tool: { name?: string; description?: string }) => ({
+        name: tool.name,
+        description: tool.description,
+      }));
+    } else if (typeof params.tools === 'object') {
+      inputs['ai.tools'] = Object.entries(
+        params.tools as Record<string, { description?: string } | undefined>
+      ).map(([name, tool]) => ({
+        name,
+        description: typeof tool?.description === 'string' ? tool.description : undefined,
+      }));
+    } else {
+      inputs['ai.tools'] = params.tools;
+    }
   }
 
   return inputs;
