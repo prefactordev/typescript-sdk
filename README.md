@@ -21,24 +21,36 @@ This repository is a Bun monorepo containing three packages:
 |---------|-------------|
 | [`@prefactor/core`](./packages/core/) | Framework-agnostic observability primitives |
 | [`@prefactor/langchain`](./packages/langchain/) | LangChain.js integration |
-| [`@prefactor/sdk`](./packages/sdk/) | Unified SDK re-exporting both packages |
+| [`@prefactor/ai`](./packages/ai/) | Vercel AI SDK integration |
 
-Most users should install `@prefactor/sdk` for the complete experience.
+Install `@prefactor/core` along with the adapter package for your framework.
 
 ## Installation
 
+### For LangChain.js users:
+
 ```bash
-npm install @prefactor/sdk
+npm install @prefactor/core @prefactor/langchain
 # or
-bun add @prefactor/sdk
+bun add @prefactor/core @prefactor/langchain
+```
+
+### For Vercel AI SDK users:
+
+```bash
+npm install @prefactor/core @prefactor/ai
+# or
+bun add @prefactor/core @prefactor/ai
 ```
 
 ## Quick Start
 
+### For LangChain.js users:
+
 ```typescript
 import { createAgent, tool } from 'langchain';
 import { z } from 'zod';
-import { init, shutdown } from '@prefactor/sdk';
+import { init, shutdown } from '@prefactor/langchain';
 
 // Initialize Prefactor (defaults to stdio transport)
 const middleware = init();
@@ -50,7 +62,6 @@ const agent = createAgent({
   systemPrompt: 'You are a helpful assistant.',
   middleware: [middleware],
 });
-
 // All operations are automatically traced!
 const result = await agent.invoke({
   messages: [{ role: 'user', content: 'What is 2+2?' }],
@@ -61,6 +72,38 @@ console.log(result.messages[result.messages.length - 1].content);
 // Graceful shutdown
 await shutdown();
 ```
+
+Refer to the [Langchain specific documentation](./packages/langchain/README.md) for more details.
+
+### For Vercel AI SDK users:
+
+```typescript
+import { init, shutdown } from '@prefactor/ai';
+import { generateText, wrapLanguageModel } from 'ai';
+import { anthropic } from '@ai-sdk/anthropic';
+
+// Initialize Prefactor
+const middleware = init();
+
+// Wrap your model with the middleware
+const model = wrapLanguageModel({
+  model: anthropic('claude-3-haiku-20240307'),
+  middleware,
+});
+
+// All operations are automatically traced!
+const result = await generateText({
+  model,
+  prompt: 'What is 2+2?',
+});
+
+console.log(result.text);
+
+// Graceful shutdown
+await shutdown();
+```
+
+Refer to the [Vercel AI SDK specific documentation](./packages/ai/README.md) for more details.
 
 ## Configuration
 
@@ -81,7 +124,7 @@ The SDK can be configured using environment variables:
 ### Programmatic Configuration
 
 ```typescript
-import { init } from '@prefactor/sdk';
+import { init } from '@prefactor/langchain';
 
 // HTTP Transport
 const middleware = init({
@@ -90,7 +133,7 @@ const middleware = init({
     apiUrl: 'https://api.prefactor.ai',
     apiToken: process.env.PREFACTOR_API_TOKEN!,
     agentId: 'my-agent',
-    agentVersion: '1.0.0',
+    agentIdentifier: '1.0.0',
   },
 });
 
@@ -109,7 +152,7 @@ const middleware = init({
 The STDIO transport writes spans as newline-delimited JSON to stdout. This is useful for local development and piping to other tools.
 
 ```typescript
-import { init } from '@prefactor/sdk';
+import { init } from '@prefactor/langchain';
 
 const middleware = init(); // Uses stdio by default
 ```
@@ -119,7 +162,7 @@ const middleware = init(); // Uses stdio by default
 The HTTP transport sends spans to a remote API endpoint with retry logic and queue-based processing.
 
 ```typescript
-import { init } from '@prefactor/sdk';
+import { init } from '@prefactor/langchain';
 
 const middleware = init({
   transportType: 'http',
@@ -127,7 +170,7 @@ const middleware = init({
     apiUrl: 'https://api.prefactor.ai',
     apiToken: process.env.PREFACTOR_API_TOKEN!,
     agentId: 'my-agent',
-    agentVersion: '1.0.0',
+    agentIdentifier: '1.0.0',
     maxRetries: 3,
     requestTimeout: 30000,
   },
@@ -136,22 +179,49 @@ const middleware = init({
 
 ## API Reference
 
-### `init(config?: Partial<Config>): PrefactorMiddleware`
+### `@prefactor/langchain`
 
-Initialize the SDK and return middleware instance.
+#### `init(config?: Partial<Config>): AgentMiddleware`
+
+Initialize the SDK and return middleware instance for LangChain.js.
 
 **Parameters:**
 - `config` - Optional configuration object
 
 **Returns:**
-- `PrefactorMiddleware` - Middleware instance to use with LangChain.js agents
+- `AgentMiddleware` - Middleware instance for use with LangChain.js agents
 
 **Example:**
 ```typescript
+import { init } from '@prefactor/langchain';
+
 const middleware = init({
   transportType: 'stdio',
   sampleRate: 1.0,
 });
+```
+
+### `@prefactor/ai`
+
+#### `init(config?: Partial<Config>, middlewareConfig?: MiddlewareConfig): LanguageModelMiddleware`
+
+Initialize the SDK and return middleware instance for Vercel AI SDK.
+
+**Parameters:**
+- `config` - Optional configuration object for transport settings
+- `middlewareConfig` - Optional middleware-specific configuration (e.g., `captureContent`)
+
+**Returns:**
+- `LanguageModelMiddleware` - Middleware instance for use with `wrapLanguageModel`
+
+**Example:**
+```typescript
+import { init } from '@prefactor/ai';
+
+const middleware = init(
+  { transportType: 'stdio' },
+  { captureContent: false }
+);
 ```
 
 ### `shutdown(): Promise<void>`
@@ -160,7 +230,7 @@ Flush pending spans and close connections. Call before application exit.
 
 **Example:**
 ```typescript
-import { shutdown } from '@prefactor/sdk';
+import { shutdown } from '@prefactor/langchain';
 
 process.on('SIGTERM', async () => {
   await shutdown();
@@ -177,7 +247,7 @@ Get the global tracer instance for manual instrumentation.
 
 **Example:**
 ```typescript
-import { getTracer, SpanType } from '@prefactor/sdk';
+import { getTracer, SpanType } from '@prefactor/langchain';
 
 const tracer = getTracer();
 const span = tracer.startSpan({
@@ -201,7 +271,7 @@ try {
 For operations not automatically traced by the middleware:
 
 ```typescript
-import { getTracer, SpanType } from '@prefactor/sdk';
+import { getTracer, SpanType } from '@prefactor/langchain';
 
 const tracer = getTracer();
 
@@ -226,7 +296,7 @@ try {
 The SDK automatically propagates span context through async operations using Node.js AsyncLocalStorage. Child spans automatically inherit the trace ID and parent span ID from the current context.
 
 ```typescript
-import { SpanContext } from '@prefactor/sdk';
+import { SpanContext } from '@prefactor/langchain';
 
 // Get the current span (if any)
 const currentSpan = SpanContext.getCurrent();
@@ -254,7 +324,7 @@ import type {
   SpanStatus,
   TokenUsage,
   ErrorInfo
-} from '@prefactor/sdk';
+} from '@prefactor/langchain';
 
 const config: Config = {
   transportType: 'stdio',
@@ -270,6 +340,7 @@ See the `examples/` directory for complete examples:
 
 - [`examples/basic.ts`](./examples/basic.ts) - Simple LangChain.js agent with stdio transport
 - [`examples/anthropic-agent/simple-agent.ts`](./examples/anthropic-agent/simple-agent.ts) - Full working example with Anthropic Claude
+- [`examples/ai-sdk/simple-agent.ts`](./examples/ai-sdk/simple-agent.ts) - Vercel AI SDK example with tools
 
 ## Architecture
 
@@ -277,7 +348,7 @@ The SDK consists of five main layers:
 
 1. **Tracing Layer**: Span data models, Tracer for lifecycle management, Context propagation
 2. **Transport Layer**: Pluggable backends (stdio, HTTP) for span emission
-3. **Instrumentation Layer**: LangChain.js middleware integration
+3. **Instrumentation Layer**: LangChain.js and Vercel AI SDK middleware integrations
 4. **Configuration**: Environment variable support, validation with Zod
 5. **Utilities**: Logging, serialization helpers
 
@@ -286,16 +357,22 @@ The SDK consists of five main layers:
 - Node.js >= 24.0.0
 - TypeScript >= 5.0.0 (for TypeScript projects)
 - Bun >= 1.0.0 (optional, for development)
-- LangChain.js >= 1.0.0 (peer dependency)
+- LangChain.js >= 1.0.0 (peer dependency for `@prefactor/langchain`)
+- AI SDK ^4.0.0 || ^5.0.0 (peer dependency for `@prefactor/ai`)
 
 ## Development
 
-This project uses Bun and devenv for development.
+This project uses Bun with mise for toolchain management.
 
 ```bash
+# Install toolchain
+mise install
+
 # Install dependencies (monorepo-wide)
 just install
+```
 
+```bash
 # Build all packages
 just build
 

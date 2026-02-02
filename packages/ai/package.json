@@ -1,7 +1,7 @@
 {
-  "name": "@prefactor/sdk",
-  "version": "0.1.5",
-  "description": "Automatic observability for LangChain.js agents",
+  "name": "@prefactor/ai",
+  "version": "0.2.0",
+  "description": "Vercel AI SDK middleware integration for Prefactor observability",
   "type": "module",
   "main": "dist/index.cjs",
   "module": "dist/index.js",
@@ -18,21 +18,26 @@
   ],
   "keywords": [
     "prefactor",
-    "observability",
+    "ai",
+    "middleware",
+    "telemetry",
     "tracing",
-    "langchain",
+    "vercel",
+    "ai-sdk",
     "llm",
-    "agent",
-    "monitoring"
+    "observability"
   ],
   "author": "Prefactor",
   "license": "MIT",
   "dependencies": {
     "@prefactor/core": "workspace:*",
-    "@prefactor/langchain": "workspace:*"
+    "@prefactor/pfid": "^0.1.0"
   },
   "peerDependencies": {
-    "langchain": "^1.0.0"
+    "ai": "^4.0.0 || ^5.0.0"
+  },
+  "devDependencies": {
+    "@types/bun": "latest"
   },
   "engines": {
     "node": ">=24.0.0"

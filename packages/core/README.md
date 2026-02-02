@@ -10,7 +10,7 @@ npm install @prefactor/core
 bun add @prefactor/core
 ```
 
-Most users should install `@prefactor/sdk` instead, which bundles both `@prefactor/core` and `@prefactor/langchain`.
+This package is used as a foundation for framework-specific integrations like `@prefactor/langchain` and `@prefactor/ai`.
 
 ## When to Use This Package
 
@@ -20,7 +20,7 @@ Use `@prefactor/core` directly when:
 - You need manual instrumentation without LangChain.js
 - You're implementing your own middleware or transport
 
-For LangChain.js applications, use `@prefactor/sdk` or `@prefactor/langchain` instead.
+For LangChain.js applications, use `@prefactor/langchain` for automatic instrumentation.
 
 ## Exports
 
@@ -55,6 +55,8 @@ import {
   type Span,
   type TokenUsage,
   type ErrorInfo,
+  type StartSpanOptions,
+  type EndSpanOptions,
 } from '@prefactor/core';
 ```
 
@@ -76,6 +78,37 @@ import {
   configureLogging,
   serializeValue,
   truncateString,
+} from '@prefactor/core';
+```
+
+### Core Runtime
+
+```typescript
+import {
+  type CoreRuntime,
+  createCore,
+} from '@prefactor/core';
+```
+
+### Agent Management
+
+```typescript
+import {
+  AgentInstanceManager,
+  SchemaRegistry,
+} from '@prefactor/core';
+```
+
+### Queue
+
+```typescript
+import {
+  type Queue,
+  InMemoryQueue,
+  type QueueAction,
+  type AgentInstanceStart,
+  type AgentInstanceFinish,
+  type SchemaRegistration,
 } from '@prefactor/core';
 ```
 

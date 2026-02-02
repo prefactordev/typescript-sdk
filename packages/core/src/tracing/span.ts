@@ -10,6 +10,36 @@ export enum SpanType {
 }
 
 /**
+ * Default agent schema (v1.0.0) with span schemas for all supported types.
+ * Used when no custom schema is provided during registration.
+ */
+export const DEFAULT_AGENT_SCHEMA: Record<string, unknown> = {
+  external_identifier: '1.0.0',
+  span_schemas: {
+    agent: {
+      type: 'object',
+      properties: { type: { type: 'string', const: 'agent' } },
+    },
+    llm: {
+      type: 'object',
+      properties: { type: { type: 'string', const: 'llm' } },
+    },
+    tool: {
+      type: 'object',
+      properties: { type: { type: 'string', const: 'tool' } },
+    },
+    chain: {
+      type: 'object',
+      properties: { type: { type: 'string', const: 'chain' } },
+    },
+    retriever: {
+      type: 'object',
+      properties: { type: { type: 'string', const: 'retriever' } },
+    },
+  },
+};
+
+/**
  * Status of a span
  */
 export enum SpanStatus {

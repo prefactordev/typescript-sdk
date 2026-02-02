@@ -12,7 +12,7 @@
 
 import { createAgent, tool } from 'langchain';
 import { z } from 'zod';
-import { init, shutdown } from '@prefactor/sdk';
+import { init, shutdown } from '@prefactor/langchain';
 
 // Define simple tools for the agent
 const calculatorTool = tool(
@@ -69,6 +69,7 @@ async function main() {
       apiUrl: process.env.PREFACTOR_API_URL || 'http://localhost:8000',
       apiToken: process.env.PREFACTOR_API_TOKEN || 'dev-token',
       agentId: process.env.PREFACTOR_AGENT_ID,
+      agentIdentifier: '1.0.0',
     },
   });
   console.log('Prefactor middleware initialized');

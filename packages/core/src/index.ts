@@ -1,5 +1,8 @@
 // Tracing
 
+// Agent
+export { AgentInstanceManager } from './agent/instance-manager.js';
+export { SchemaRegistry } from './agent/schema-registry.js';
 // Config
 export {
   type Config,
@@ -10,8 +13,19 @@ export {
   type PartialHttpConfig,
   PartialHttpConfigSchema,
 } from './config.js';
+export { type CoreRuntime, createCore } from './create-core.js';
+// Queue
+export type {
+  AgentInstanceFinish,
+  AgentInstanceStart,
+  QueueAction,
+  SchemaRegistration,
+} from './queue/actions.js';
+export type { Queue } from './queue/base.js';
+export { InMemoryQueue } from './queue/in-memory.js';
 export { SpanContext } from './tracing/context.js';
 export {
+  DEFAULT_AGENT_SCHEMA,
   type ErrorInfo,
   type Span,
   SpanStatus,

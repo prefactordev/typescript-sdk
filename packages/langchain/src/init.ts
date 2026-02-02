@@ -1,20 +1,19 @@
 import {
   type Config,
+  type CoreRuntime,
   configureLogging,
   createConfig,
+  createCore,
+  DEFAULT_AGENT_SCHEMA,
   getLogger,
-  HttpTransport,
-  HttpTransportConfigSchema,
-  StdioTransport,
-  Tracer,
-  type Transport,
+  type Tracer,
 } from '@prefactor/core';
-import { extractPartition, type Partition } from '@prefactor/pfid';
 import { type AgentMiddleware, createMiddleware } from 'langchain';
 import { PrefactorMiddleware } from './middleware.js';
 
 const logger = getLogger('init');
 
+let globalCore: CoreRuntime | null = null;
 let globalTracer: Tracer | null = null;
 let globalMiddleware: AgentMiddleware | null = null;
 
@@ -41,6 +40,8 @@ let globalMiddleware: AgentMiddleware | null = null;
  *   httpConfig: {
  *     apiUrl: 'https://api.prefactor.ai',
  *     apiToken: process.env.PREFACTOR_API_TOKEN!,
+ *     agentIdentifier: 'my-langchain-agent', // Required
+ *     agentId: 'legacy-agent-id', // Optional legacy identifier
  *   }
  * });
  *
@@ -54,38 +55,49 @@ let globalMiddleware: AgentMiddleware | null = null;
 export function init(config?: Partial<Config>): AgentMiddleware {
   configureLogging();
 
-  const finalConfig = createConfig(config);
-  logger.info('Initializing Prefactor SDK', { transport: finalConfig.transportType });
+  // Set default schema namespace for LangChain adaptor
+  const configWithDefaults: Partial<Config> = {
+    ...config,
+    httpConfig: config?.httpConfig
+      ? {
+          schemaName: 'langchain:agent',
+          ...config.httpConfig,
+        }
+      : undefined,
+  };
+
+  const finalConfig = createConfig(configWithDefaults);
 
   if (globalMiddleware !== null) {
     return globalMiddleware;
   }
 
-  let transport: Transport;
-  if (finalConfig.transportType === 'stdio') {
-    transport = new StdioTransport();
+  const core = createCore(finalConfig);
+  globalCore = core;
+  globalTracer = core.tracer;
+
+  const httpConfig = finalConfig.httpConfig;
+  if (httpConfig?.agentSchema) {
+    core.agentManager.registerSchema(httpConfig.agentSchema);
+  } else if (
+    finalConfig.transportType === 'http' &&
+    (httpConfig?.agentSchemaIdentifier || httpConfig?.skipSchema)
+  ) {
+    logger.debug('Skipping default schema registration based on httpConfig');
   } else {
-    if (!finalConfig.httpConfig) {
-      throw new Error('HTTP transport requires httpConfig to be provided in configuration');
-    }
-    // Parse httpConfig to apply defaults from schema
-    const httpConfig = HttpTransportConfigSchema.parse(finalConfig.httpConfig);
-    transport = new HttpTransport(httpConfig);
+    core.agentManager.registerSchema(DEFAULT_AGENT_SCHEMA);
   }
 
-  // Extract partition from agent_id if provided (for HTTP transport)
-  let partition: Partition | undefined;
-  if (finalConfig.httpConfig?.agentId) {
-    try {
-      partition = extractPartition(finalConfig.httpConfig.agentId);
-      logger.debug('Extracted partition from agent_id', { partition });
-    } catch (error) {
-      logger.warn('Failed to extract partition from agent_id, using random partition', { error });
-    }
-  }
+  const agentInfo = finalConfig.httpConfig
+    ? {
+        agentId: finalConfig.httpConfig.agentId,
+        agentIdentifier: finalConfig.httpConfig.agentIdentifier,
+        agentName: finalConfig.httpConfig.agentName,
+        agentDescription: finalConfig.httpConfig.agentDescription,
+      }
+    : undefined;
 
-  globalTracer = new Tracer(transport, partition);
-  const prefactorMiddleware = new PrefactorMiddleware(globalTracer);
+  const prefactorMiddleware = new PrefactorMiddleware(core.tracer, core.agentManager, agentInfo);
 
   const middleware = createMiddleware({
     name: 'prefactor',
@@ -157,10 +169,11 @@ export function getTracer(): Tracer {
  * ```
  */
 export async function shutdown(): Promise<void> {
-  if (globalTracer) {
+  if (globalCore) {
     logger.info('Shutting down Prefactor SDK');
-    await globalTracer.close();
+    await globalCore.shutdown();
   }
+  globalCore = null;
   globalTracer = null;
   globalMiddleware = null;
 }

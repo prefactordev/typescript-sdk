@@ -10,7 +10,7 @@ npm install @prefactor/langchain
 bun add @prefactor/langchain
 ```
 
-Most users should install `@prefactor/sdk` instead, which bundles both `@prefactor/core` and `@prefactor/langchain`.
+Note: This package requires `@prefactor/core` as a peer dependency, which will be installed automatically.
 
 ## Peer Dependencies
 
@@ -78,6 +78,7 @@ For convenience, common types are re-exported:
 ```typescript
 import {
   type Config,
+  type CoreRuntime,
   type HttpTransportConfig,
   type Span,
   SpanStatus,
@@ -93,6 +94,11 @@ import {
 - `PREFACTOR_API_URL`: API endpoint for HTTP transport
 - `PREFACTOR_API_TOKEN`: Authentication token
 - `PREFACTOR_SAMPLE_RATE`: Sampling rate 0.0-1.0 (default: `1.0`)
+- `PREFACTOR_CAPTURE_INPUTS`: Capture span inputs (default: `true`)
+- `PREFACTOR_CAPTURE_OUTPUTS`: Capture span outputs (default: `true`)
+- `PREFACTOR_MAX_INPUT_LENGTH`: Max input string length (default: `10000`)
+- `PREFACTOR_MAX_OUTPUT_LENGTH`: Max output string length (default: `10000`)
+- `PREFACTOR_LOG_LEVEL`: `"debug"` | `"info"` | `"warn"` | `"error"` (default: `"info")`
 
 ### Programmatic Configuration
 
@@ -109,7 +115,9 @@ const middleware = init({
     apiUrl: 'https://api.prefactor.ai',
     apiToken: process.env.PREFACTOR_API_TOKEN!,
     agentId: 'my-agent',
-    agentVersion: '1.0.0',
+    agentIdentifier: '1.0.0',
+    agentName: 'My Agent',
+    agentDescription: 'An agent description',
   },
 });
 ```

@@ -5,10 +5,9 @@
     "outDir": "./dist",
     "composite": true,
     "paths": {
-      "@prefactor/core": ["../core/src/index.ts"],
-      "@prefactor/langchain": ["../langchain/src/index.ts"]
+      "@prefactor/core": ["../core/src/index.ts"]
     }
   },
   "include": ["src/**/*"],
-  "references": [{ "path": "../core" }, { "path": "../langchain" }]
+  "references": [{ "path": "../core" }]
 }
