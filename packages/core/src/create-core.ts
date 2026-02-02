@@ -25,9 +25,6 @@ export function createCore(config: Config): CoreRuntime {
     if (!config.httpConfig) {
       throw new Error('HTTP transport requires httpConfig to be provided in configuration');
     }
-    if (!config.httpConfig.agentIdentifier) {
-      throw new Error('HTTP transport requires agentIdentifier to be provided in httpConfig.');
-    }
     const httpConfig = HttpTransportConfigSchema.parse(config.httpConfig);
     transport = new HttpTransport(httpConfig);
   }

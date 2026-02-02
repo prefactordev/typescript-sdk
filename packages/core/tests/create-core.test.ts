@@ -26,7 +26,7 @@ describe('createCore', () => {
     globalThis.fetch = originalFetch;
   });
 
-  test('requires agentIdentifier when using HTTP transport', () => {
+  test('defaults agentIdentifier to v1.0.0 when omitted for HTTP transport', async () => {
     const config = createConfig({
       transportType: 'http',
       httpConfig: {
@@ -35,7 +35,10 @@ describe('createCore', () => {
       },
     });
 
-    expect(() => createCore(config)).toThrowError(/agentIdentifier/);
+    const core = createCore(config);
+    expect(core.tracer).toBeDefined();
+    expect(core.agentManager).toBeDefined();
+    await core.shutdown();
   });
 
   test('does not warn when skipSchema is enabled for HTTP transport', async () => {

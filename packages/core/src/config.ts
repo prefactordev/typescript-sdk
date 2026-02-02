@@ -13,8 +13,8 @@ export const HttpTransportConfigSchema = z.object({
   /** Optional agent instance identifier (internal ID) */
   agentId: z.string().optional(),
 
-  /** Optional agent identifier (external identifier) */
-  agentIdentifier: z.string().optional(),
+  /** Agent identifier (external identifier); defaults to v1.0.0 when omitted */
+  agentIdentifier: z.string().default('v1.0.0'),
 
   /** Optional agent name */
   agentName: z.string().optional(),
