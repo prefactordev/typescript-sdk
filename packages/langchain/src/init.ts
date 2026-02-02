@@ -81,7 +81,7 @@ export function init(config?: Partial<Config>): AgentMiddleware {
     core.agentManager.registerSchema(httpConfig.agentSchema);
   } else if (
     finalConfig.transportType === 'http' &&
-    (httpConfig?.agentSchemaVersion || httpConfig?.skipSchema)
+    (httpConfig?.agentSchemaIdentifier || httpConfig?.skipSchema)
   ) {
     logger.debug('Skipping default schema registration based on httpConfig');
   } else {
@@ -91,7 +91,7 @@ export function init(config?: Partial<Config>): AgentMiddleware {
   const agentInfo = finalConfig.httpConfig
     ? {
         agentId: finalConfig.httpConfig.agentId,
-        agentVersion: finalConfig.httpConfig.agentVersion,
+        agentIdentifier: finalConfig.httpConfig.agentIdentifier,
         agentName: finalConfig.httpConfig.agentName,
         agentDescription: finalConfig.httpConfig.agentDescription,
       }

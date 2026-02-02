@@ -72,11 +72,11 @@ async function main() {
       apiUrl: PREFACTOR_API_URL,
       apiToken: PREFACTOR_API_TOKEN,
       agentId: PREFACTOR_AGENT_ID,
-      agentVersion: '1.0.0',
+      agentIdentifier: '1.0.0',
       agentName: 'AI SDK Custom Schema Demo',
       agentSchema: customSchema,
       schemaName: 'prefactor:ai-sdk-example',
-      schemaVersion: '2026-01-28',
+      schemaIdentifier: '2026-01-28',
     },
   });
 

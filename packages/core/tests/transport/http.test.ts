@@ -46,18 +46,18 @@ describe('HttpTransport processBatch', () => {
         type: 'agent_start',
         data: {
           agentId: 'agent-123',
-          agentVersion: '2.0.0',
+          agentIdentifier: '2.0.0',
           agentName: 'Test Agent',
           agentDescription: 'Test description',
           schemaName: 'prefactor:agent',
-          schemaVersion: '2.0.0',
+          schemaIdentifier: '2.0.0',
         },
       },
       {
         type: 'schema_register',
         data: {
           schemaName: 'prefactor:agent',
-          schemaVersion: '2.0.0',
+          schemaIdentifier: '2.0.0',
           schema: { type: 'object' },
         },
       },
@@ -68,23 +68,23 @@ describe('HttpTransport processBatch', () => {
     // biome-ignore lint/suspicious/noExplicitAny: <Accessing private property for test, assigning any to bypass type error.>
     const config = (transport as any).config as ReturnType<typeof createConfig> & {
       agentId?: string;
-      agentVersion?: string;
+      agentIdentifier?: string;
       agentName?: string;
       agentDescription?: string;
       agentSchema?: Record<string, unknown>;
-      agentSchemaVersion?: string;
+      agentSchemaIdentifier?: string;
       schemaName?: string;
-      schemaVersion?: string;
+      schemaIdentifier?: string;
     };
 
     expect(config.agentId).toBe('agent-123');
-    expect(config.agentVersion).toBe('2.0.0');
+    expect(config.agentIdentifier).toBe('2.0.0');
     expect(config.agentName).toBe('Test Agent');
     expect(config.agentDescription).toBe('Test description');
     expect(config.agentSchema).toEqual({ type: 'object' });
-    expect(config.agentSchemaVersion).toBe('2.0.0');
+    expect(config.agentSchemaIdentifier).toBe('2.0.0');
     expect(config.schemaName).toBe('prefactor:agent');
-    expect(config.schemaVersion).toBe('2.0.0');
+    expect(config.schemaIdentifier).toBe('2.0.0');
     expect(fetchCalls.map((call) => call.url)).toEqual([
       'https://example.com/api/v1/agent_instance/register',
       'https://example.com/api/v1/agent_instance/agent-instance-1/start',

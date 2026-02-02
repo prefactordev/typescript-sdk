@@ -35,7 +35,7 @@ describe('PrefactorMiddleware', () => {
     const tracer = new Tracer(queue);
     const agentManager = new AgentInstanceManager(queue, {
       schemaName: 'langchain:agent',
-      schemaVersion: '1.0.0',
+      schemaIdentifier: '1.0.0',
     });
     agentManager.registerSchema({ type: 'object' });
     const middleware = new PrefactorMiddleware(tracer, agentManager);

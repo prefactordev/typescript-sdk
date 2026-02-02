@@ -21,7 +21,7 @@ import {
 import { createPrefactorMiddleware, endRootAgentSpan } from './middleware.js';
 import type { MiddlewareConfig } from './types.js';
 
-const logger = getLogger('ai-middleware-init');
+const logger = getLogger('ai-init');
 
 /** Global Prefactor tracer instance. */
 let globalTracer: Tracer | null = null;
@@ -43,7 +43,7 @@ let globalMiddleware: ReturnType<typeof createPrefactorMiddleware> | null = null
  *
  * @example Basic usage with stdio (development)
  * ```typescript
- * import { init, shutdown } from '@prefactor/ai-middleware';
+ * import { init, shutdown } from '@prefactor/ai';
  * import { generateText, wrapLanguageModel } from 'ai';
  * import { anthropic } from '@ai-sdk/anthropic';
  *
@@ -72,7 +72,7 @@ let globalMiddleware: ReturnType<typeof createPrefactorMiddleware> | null = null
  *     apiUrl: 'https://api.prefactor.ai',
  *     apiToken: process.env.PREFACTOR_API_TOKEN!,
  *     agentId: process.env.PREFACTOR_AGENT_ID,
- *     agentVersion: '1.0.0',
+ *     agentIdentifier: '1.0.0',
  *   },
  * });
  * ```
@@ -114,7 +114,7 @@ export function init(
         apiToken,
         agentId: process.env.PREFACTOR_AGENT_ID,
         agentName: process.env.PREFACTOR_AGENT_NAME,
-        agentVersion: process.env.PREFACTOR_AGENT_VERSION || '1.0.0',
+        agentIdentifier: process.env.PREFACTOR_AGENT_IDENTIFIER || '1.0.0',
       },
     };
   }
@@ -147,7 +147,7 @@ export function init(
     core.agentManager.registerSchema(httpConfig.agentSchema);
   } else if (
     finalConfig.transportType === 'http' &&
-    (httpConfig?.agentSchemaVersion || httpConfig?.skipSchema)
+    (httpConfig?.agentSchemaIdentifier || httpConfig?.skipSchema)
   ) {
     logger.debug('Skipping default schema registration based on httpConfig');
   } else {
@@ -157,7 +157,7 @@ export function init(
   const agentInfo = finalConfig.httpConfig
     ? {
         agentId: finalConfig.httpConfig.agentId,
-        agentVersion: finalConfig.httpConfig.agentVersion,
+        agentIdentifier: finalConfig.httpConfig.agentIdentifier,
         agentName: finalConfig.httpConfig.agentName,
         agentDescription: finalConfig.httpConfig.agentDescription,
       }
@@ -183,7 +183,7 @@ export function init(
  *
  * @example
  * ```typescript
- * import { getTracer } from '@prefactor/ai-middleware';
+ * import { getTracer } from '@prefactor/ai';
  *
  * const tracer = getTracer();
  * // Use for custom span creation
@@ -211,7 +211,7 @@ export function getTracer(): Tracer {
  *
  * @example
  * ```typescript
- * import { shutdown } from '@prefactor/ai-middleware';
+ * import { shutdown } from '@prefactor/ai';
  *
  * // At the end of your script or before process exit
  * await shutdown();

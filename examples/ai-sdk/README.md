@@ -27,7 +27,7 @@ export ANTHROPIC_API_KEY=your-anthropic-key
 export PREFACTOR_API_URL=https://api.prefactor.ai
 export PREFACTOR_API_TOKEN=your-prefactor-token
 export PREFACTOR_AGENT_ID=your-agent-id  # optional
-export PREFACTOR_AGENT_VERSION=1.0.0     # optional
+export PREFACTOR_AGENT_IDENTIFIER=1.0.0     # optional
 
 bun run example:ai-sdk
 ```
@@ -72,7 +72,7 @@ When PREFACTOR_API_URL and PREFACTOR_API_TOKEN are set, spans are sent to the Pr
 | `PREFACTOR_API_URL` | Prefactor API endpoint | For HTTP |
 | `PREFACTOR_API_TOKEN` | Prefactor API token | For HTTP |
 | `PREFACTOR_AGENT_ID` | Agent identifier (pfid) | Optional |
-| `PREFACTOR_AGENT_VERSION` | Agent version | Optional |
+| `PREFACTOR_AGENT_IDENTIFIER` | Agent version | Optional |
 
 ### Programmatic Configuration
 
@@ -89,7 +89,7 @@ const tracer = init({
     apiUrl: 'https://api.prefactor.ai',
     apiToken: 'your-token',
     agentId: 'your-agent-id',
-    agentVersion: '1.0.0',
+    agentIdentifier: '1.0.0',
   },
 });
 ```

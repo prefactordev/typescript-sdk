@@ -350,7 +350,7 @@ function createLlmSpan(
  * @example
  * ```typescript
  * import { wrapLanguageModel } from 'ai';
- * import { createPrefactorMiddleware } from '@prefactor/ai-middleware';
+ * import { createPrefactorMiddleware } from '@prefactor/ai';
  *
  * const middleware = createPrefactorMiddleware(tracer);
  * const model = wrapLanguageModel({

@@ -13,8 +13,8 @@ export const HttpTransportConfigSchema = z.object({
   /** Optional agent instance identifier (internal ID) */
   agentId: z.string().optional(),
 
-  /** Optional agent identifier (external identifier; formerly agentVersion) */
-  agentVersion: z.string().optional(),
+  /** Optional agent identifier (external identifier) */
+  agentIdentifier: z.string().optional(),
 
   /** Optional agent name */
   agentName: z.string().optional(),
@@ -25,14 +25,14 @@ export const HttpTransportConfigSchema = z.object({
   /** Optional schema identifier name (used for registration/agent instance) */
   schemaName: z.string().optional(),
 
-  /** Optional schema identifier version (used for registration/agent instance) */
-  schemaVersion: z.string().optional(),
+  /** Optional schema identifier (used for registration/agent instance) */
+  schemaIdentifier: z.string().optional(),
 
   /** Optional agent schema for validation (full schema object) */
   agentSchema: z.record(z.unknown()).optional(),
 
   /** Optional pre-registered schema identifier (external identifier string) */
-  agentSchemaVersion: z.string().optional(),
+  agentSchemaIdentifier: z.string().optional(),
 
   /** Skip schema validation */
   skipSchema: z.boolean().default(false),
@@ -65,13 +65,13 @@ export const PartialHttpConfigSchema = z.object({
   apiUrl: z.string().url(),
   apiToken: z.string().min(1),
   agentId: z.string().optional(),
-  agentVersion: z.string().optional(),
+  agentIdentifier: z.string().optional(),
   agentName: z.string().optional(),
   agentDescription: z.string().optional(),
   schemaName: z.string().optional(),
-  schemaVersion: z.string().optional(),
+  schemaIdentifier: z.string().optional(),
   agentSchema: z.record(z.unknown()).optional(),
-  agentSchemaVersion: z.string().optional(),
+  agentSchemaIdentifier: z.string().optional(),
   skipSchema: z.boolean().optional(),
   requestTimeout: z.number().positive().optional(),
   connectTimeout: z.number().positive().optional(),

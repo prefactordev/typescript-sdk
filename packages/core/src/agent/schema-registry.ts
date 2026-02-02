@@ -4,18 +4,18 @@ export class SchemaRegistry {
   private schemas = new Map<string, SchemaRegistration>();
 
   register(schema: SchemaRegistration): void {
-    this.schemas.set(this.getKey(schema.schemaName, schema.schemaVersion), schema);
+    this.schemas.set(this.getKey(schema.schemaName, schema.schemaIdentifier), schema);
   }
 
-  has(schemaName: string, schemaVersion: string): boolean {
-    return this.schemas.has(this.getKey(schemaName, schemaVersion));
+  has(schemaName: string, schemaIdentifier: string): boolean {
+    return this.schemas.has(this.getKey(schemaName, schemaIdentifier));
   }
 
-  get(schemaName: string, schemaVersion: string): SchemaRegistration | undefined {
-    return this.schemas.get(this.getKey(schemaName, schemaVersion));
+  get(schemaName: string, schemaIdentifier: string): SchemaRegistration | undefined {
+    return this.schemas.get(this.getKey(schemaName, schemaIdentifier));
   }
 
-  private getKey(schemaName: string, schemaVersion: string): string {
-    return `${schemaName}@${schemaVersion}`;
+  private getKey(schemaName: string, schemaIdentifier: string): string {
+    return `${schemaName}@${schemaIdentifier}`;
   }
 }

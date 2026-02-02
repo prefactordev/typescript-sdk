@@ -7,7 +7,7 @@ const baseConfig = {
   httpConfig: {
     apiUrl: 'https://example.com',
     apiToken: 'test-token',
-    agentVersion: '1.0.0',
+    agentIdentifier: '1.0.0',
   },
 };
 
@@ -40,11 +40,11 @@ describe('ai init schema registration', () => {
     expect(registeredSchemas).toEqual([customSchema]);
   });
 
-  test('skips default schema when agentSchemaVersion is set', () => {
+  test('skips default schema when agentSchemaIdentifier is set', () => {
     init({
       ...baseConfig,
       transportType: 'http',
-      httpConfig: { ...baseConfig.httpConfig, agentSchemaVersion: '2.0.0' },
+      httpConfig: { ...baseConfig.httpConfig, agentSchemaIdentifier: '2.0.0' },
     });
 
     expect(registeredSchemas).toEqual([]);

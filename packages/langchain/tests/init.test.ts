@@ -7,7 +7,7 @@ const baseConfig = {
   httpConfig: {
     apiUrl: 'https://example.com',
     apiToken: 'test-token',
-    agentVersion: '1.0.0',
+    agentIdentifier: '1.0.0',
   },
 };
 

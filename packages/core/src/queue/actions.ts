@@ -2,17 +2,17 @@ import type { Span } from '../tracing/span.js';
 
 export type SchemaRegistration = {
   schemaName: string;
-  schemaVersion: string;
+  schemaIdentifier: string;
   schema: Record<string, unknown>;
 };
 
 export type AgentInstanceStart = {
   agentId?: string;
-  agentVersion?: string;
+  agentIdentifier?: string;
   agentName?: string;
   agentDescription?: string;
   schemaName: string;
-  schemaVersion: string;
+  schemaIdentifier: string;
 };
 
 export type AgentInstanceFinish = Record<string, never>;

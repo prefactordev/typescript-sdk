@@ -109,7 +109,7 @@ const middleware = init({
     apiUrl: 'https://api.prefactor.ai',
     apiToken: process.env.PREFACTOR_API_TOKEN!,
     agentId: 'my-agent',
-    agentVersion: '1.0.0',
+    agentIdentifier: '1.0.0',
   },
 });
 ```

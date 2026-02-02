@@ -38,11 +38,11 @@ const normalizeSchema = (value: unknown, arrayKey?: string): unknown => {
 
 export type AgentInstanceManagerOptions = {
   schemaName: string;
-  schemaVersion: string;
+  schemaIdentifier: string;
   allowUnregisteredSchema?: boolean;
 };
 
-type AgentInstanceStartOptions = Omit<AgentInstanceStart, 'schemaName' | 'schemaVersion'>;
+type AgentInstanceStartOptions = Omit<AgentInstanceStart, 'schemaName' | 'schemaIdentifier'>;
 
 export class AgentInstanceManager {
   private schemaRegistry = new SchemaRegistry();
@@ -53,14 +53,17 @@ export class AgentInstanceManager {
   ) {}
 
   registerSchema(schema: Record<string, unknown>): void {
-    if (this.schemaRegistry.has(this.options.schemaName, this.options.schemaVersion)) {
-      const existing = this.schemaRegistry.get(this.options.schemaName, this.options.schemaVersion);
+    if (this.schemaRegistry.has(this.options.schemaName, this.options.schemaIdentifier)) {
+      const existing = this.schemaRegistry.get(
+        this.options.schemaName,
+        this.options.schemaIdentifier
+      );
       if (
         existing &&
         !isDeepStrictEqual(normalizeSchema(existing.schema), normalizeSchema(schema))
       ) {
         console.warn(
-          `Schema ${this.options.schemaName}@${this.options.schemaVersion} is already registered with a different payload. Ignoring registration.`
+          `Schema ${this.options.schemaName}@${this.options.schemaIdentifier} is already registered with a different payload. Ignoring registration.`
         );
       }
       return;
@@ -68,7 +71,7 @@ export class AgentInstanceManager {
 
     const registration: SchemaRegistration = {
       schemaName: this.options.schemaName,
-      schemaVersion: this.options.schemaVersion,
+      schemaIdentifier: this.options.schemaIdentifier,
       schema,
     };
 
@@ -79,10 +82,10 @@ export class AgentInstanceManager {
   startInstance(options: AgentInstanceStartOptions = {}): void {
     if (
       !this.options.allowUnregisteredSchema &&
-      !this.schemaRegistry.has(this.options.schemaName, this.options.schemaVersion)
+      !this.schemaRegistry.has(this.options.schemaName, this.options.schemaIdentifier)
     ) {
       console.warn(
-        `Schema ${this.options.schemaName}@${this.options.schemaVersion} must be registered before starting an agent instance.`
+        `Schema ${this.options.schemaName}@${this.options.schemaIdentifier} must be registered before starting an agent instance.`
       );
       return;
     }
@@ -90,7 +93,7 @@ export class AgentInstanceManager {
     const startData: AgentInstanceStart = {
       ...options,
       schemaName: this.options.schemaName,
-      schemaVersion: this.options.schemaVersion,
+      schemaIdentifier: this.options.schemaIdentifier,
     };
 
     this.queue.enqueue({ type: 'agent_start', data: startData });

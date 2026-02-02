@@ -69,7 +69,7 @@ async function main() {
       apiUrl: process.env.PREFACTOR_API_URL || 'http://localhost:8000',
       apiToken: process.env.PREFACTOR_API_TOKEN || 'dev-token',
       agentId: process.env.PREFACTOR_AGENT_ID,
-      agentVersion: '1.0.0',
+      agentIdentifier: '1.0.0',
     },
   });
   console.log('Prefactor middleware initialized');

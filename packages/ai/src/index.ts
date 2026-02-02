@@ -7,7 +7,7 @@
  * ## Quick Start
  *
  * ```ts
- * import { init, shutdown } from "@prefactor/ai-middleware";
+ * import { init, shutdown } from "@prefactor/ai";
  * import { generateText, wrapLanguageModel } from "ai";
  * import { anthropic } from "@ai-sdk/anthropic";
  *
@@ -37,7 +37,7 @@
  * await shutdown();
  * ```
  *
- * @module @prefactor/ai-middleware
+ * @module @prefactor/ai
  * @packageDocumentation
  */
 

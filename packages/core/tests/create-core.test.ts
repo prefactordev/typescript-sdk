@@ -26,7 +26,7 @@ describe('createCore', () => {
     globalThis.fetch = originalFetch;
   });
 
-  test('requires agentVersion when using HTTP transport', () => {
+  test('requires agentIdentifier when using HTTP transport', () => {
     const config = createConfig({
       transportType: 'http',
       httpConfig: {
@@ -35,7 +35,7 @@ describe('createCore', () => {
       },
     });
 
-    expect(() => createCore(config)).toThrowError(/agentVersion/);
+    expect(() => createCore(config)).toThrowError(/agentIdentifier/);
   });
 
   test('does not warn when skipSchema is enabled for HTTP transport', async () => {
@@ -45,7 +45,7 @@ describe('createCore', () => {
       httpConfig: {
         apiUrl: 'https://example.com',
         apiToken: 'test-token',
-        agentVersion: '1.0.0',
+        agentIdentifier: '1.0.0',
         skipSchema: true,
       },
     });
@@ -68,7 +68,7 @@ describe('createCore', () => {
       httpConfig: {
         apiUrl: 'https://example.com',
         apiToken: 'test-token',
-        agentVersion: '1.0.0',
+        agentIdentifier: '1.0.0',
         agentSchema: { type: 'object' },
       },
     });

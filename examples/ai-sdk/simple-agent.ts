@@ -133,7 +133,7 @@ async function main() {
       apiToken: process.env.PREFACTOR_API_TOKEN!,
       apiUrl: process.env.PREFACTOR_API_URL!,
       agentId: process.env.PREFACTOR_AGENT_ID,
-      agentVersion: '1.0.0',
+      agentIdentifier: '1.0.0',
       agentName: 'Middleware Agent',
       agentDescription: 'An agent demonstrating the middleware approach.',
     },

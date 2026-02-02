@@ -25,8 +25,8 @@ export function createCore(config: Config): CoreRuntime {
     if (!config.httpConfig) {
       throw new Error('HTTP transport requires httpConfig to be provided in configuration');
     }
-    if (!config.httpConfig.agentVersion) {
-      throw new Error('HTTP transport requires agentVersion to be provided in httpConfig.');
+    if (!config.httpConfig.agentIdentifier) {
+      throw new Error('HTTP transport requires agentIdentifier to be provided in httpConfig.');
     }
     const httpConfig = HttpTransportConfigSchema.parse(config.httpConfig);
     transport = new HttpTransport(httpConfig);
@@ -46,17 +46,17 @@ export function createCore(config: Config): CoreRuntime {
   const tracer = new Tracer(queue, partition);
 
   const schemaName = config.httpConfig?.schemaName ?? 'prefactor:agent';
-  const schemaVersion = config.httpConfig?.schemaVersion ?? '1.0.0';
+  const schemaIdentifier = config.httpConfig?.schemaIdentifier ?? '1.0.0';
   const allowUnregisteredSchema =
     config.transportType === 'http' &&
     Boolean(
       config.httpConfig?.skipSchema ||
         config.httpConfig?.agentSchema ||
-        config.httpConfig?.agentSchemaVersion
+        config.httpConfig?.agentSchemaIdentifier
     );
   const agentManager = new AgentInstanceManager(queue, {
     schemaName,
-    schemaVersion,
+    schemaIdentifier,
     allowUnregisteredSchema,
   });
 
