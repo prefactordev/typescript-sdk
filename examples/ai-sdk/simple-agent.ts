@@ -1,8 +1,8 @@
 /**
- * Middleware AI SDK Example for @prefactor/ai-middleware
+ * Middleware AI SDK Example for @prefactor/ai
  *
  * This example demonstrates end-to-end tracing of Vercel AI SDK operations
- * using @prefactor/ai-middleware's wrapLanguageModel approach. This is an
+ * using @prefactor/ai's wrapLanguageModel approach. This is an
  * alternative to the experimental_telemetry tracer approach.
  *
  * Prerequisites:
@@ -120,13 +120,13 @@ async function main() {
     );
   }
 
-  // Initialize @prefactor/ai-middleware
+  // Initialize @prefactor/ai
   // Config is picked up from environment variables:
   // - PREFACTOR_TRANSPORT: 'stdio' or 'http' (default: 'stdio')
   // - PREFACTOR_API_URL: API endpoint for HTTP transport
   // - PREFACTOR_API_TOKEN: API token for HTTP transport
   // - PREFACTOR_AGENT_ID: Optional agent identifier
-  console.log('Initializing @prefactor/ai-middleware...');
+  console.log('Initializing @prefactor/ai...');
 
   const middleware = init({
     httpConfig: {
