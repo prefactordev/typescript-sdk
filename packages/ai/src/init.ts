@@ -124,8 +124,8 @@ export function init(
     ...configWithHttp,
     httpConfig: configWithHttp?.httpConfig
       ? {
-          schemaName: 'aisdk:agent',
-          ...configWithHttp.httpConfig,
+        ...configWithHttp.httpConfig,
+        schemaName: 'aisdk:agent',
         }
       : undefined,
   };
