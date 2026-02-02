@@ -53,11 +53,12 @@ export class HttpTransport implements Transport {
           case 'schema_register':
             break;
           case 'agent_start':
-            this.config.agentId = item.data.agentId;
+            if (item.data.agentId !== undefined) this.config.agentId = item.data.agentId;
             if (item.data.agentIdentifier !== undefined)
               this.config.agentIdentifier = item.data.agentIdentifier;
-            this.config.agentName = item.data.agentName;
-            this.config.agentDescription = item.data.agentDescription;
+            if (item.data.agentName !== undefined) this.config.agentName = item.data.agentName;
+            if (item.data.agentDescription !== undefined)
+              this.config.agentDescription = item.data.agentDescription;
             await this.startAgentInstanceHttp();
             break;
           case 'agent_finish':
