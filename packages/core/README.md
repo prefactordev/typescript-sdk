@@ -55,6 +55,8 @@ import {
   type Span,
   type TokenUsage,
   type ErrorInfo,
+  type StartSpanOptions,
+  type EndSpanOptions,
 } from '@prefactor/core';
 ```
 
@@ -76,6 +78,37 @@ import {
   configureLogging,
   serializeValue,
   truncateString,
+} from '@prefactor/core';
+```
+
+### Core Runtime
+
+```typescript
+import {
+  type CoreRuntime,
+  createCore,
+} from '@prefactor/core';
+```
+
+### Agent Management
+
+```typescript
+import {
+  AgentInstanceManager,
+  SchemaRegistry,
+} from '@prefactor/core';
+```
+
+### Queue
+
+```typescript
+import {
+  type Queue,
+  InMemoryQueue,
+  type QueueAction,
+  type AgentInstanceStart,
+  type AgentInstanceFinish,
+  type SchemaRegistration,
 } from '@prefactor/core';
 ```
 

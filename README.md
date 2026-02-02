@@ -45,6 +45,8 @@ bun add @prefactor/core @prefactor/ai
 
 ## Quick Start
 
+### For LangChain.js users:
+
 ```typescript
 import { createAgent, tool } from 'langchain';
 import { z } from 'zod';
@@ -60,7 +62,6 @@ const agent = createAgent({
   systemPrompt: 'You are a helpful assistant.',
   middleware: [middleware],
 });
-
 // All operations are automatically traced!
 const result = await agent.invoke({
   messages: [{ role: 'user', content: 'What is 2+2?' }],
@@ -71,6 +72,38 @@ console.log(result.messages[result.messages.length - 1].content);
 // Graceful shutdown
 await shutdown();
 ```
+
+Refer to the [Langchain specific documentation](./packages/langchain/README.md) for more details.
+
+### For Vercel AI SDK users:
+
+```typescript
+import { init, shutdown } from '@prefactor/ai';
+import { generateText, wrapLanguageModel } from 'ai';
+import { anthropic } from '@ai-sdk/anthropic';
+
+// Initialize Prefactor
+const middleware = init();
+
+// Wrap your model with the middleware
+const model = wrapLanguageModel({
+  model: anthropic('claude-3-haiku-20240307'),
+  middleware,
+});
+
+// All operations are automatically traced!
+const result = await generateText({
+  model,
+  prompt: 'What is 2+2?',
+});
+
+console.log(result.text);
+
+// Graceful shutdown
+await shutdown();
+```
+
+Refer to the [Vercel AI SDK specific documentation](./packages/ai/README.md) for more details.
 
 ## Configuration
 
@@ -146,22 +179,49 @@ const middleware = init({
 
 ## API Reference
 
-### `init(config?: Partial<Config>): PrefactorMiddleware`
+### `@prefactor/langchain`
 
-Initialize the SDK and return middleware instance.
+#### `init(config?: Partial<Config>): AgentMiddleware`
+
+Initialize the SDK and return middleware instance for LangChain.js.
 
 **Parameters:**
 - `config` - Optional configuration object
 
 **Returns:**
-- `PrefactorMiddleware` - Middleware instance to use with LangChain.js agents
+- `AgentMiddleware` - Middleware instance for use with LangChain.js agents
 
 **Example:**
 ```typescript
+import { init } from '@prefactor/langchain';
+
 const middleware = init({
   transportType: 'stdio',
   sampleRate: 1.0,
 });
+```
+
+### `@prefactor/ai`
+
+#### `init(config?: Partial<Config>, middlewareConfig?: MiddlewareConfig): LanguageModelMiddleware`
+
+Initialize the SDK and return middleware instance for Vercel AI SDK.
+
+**Parameters:**
+- `config` - Optional configuration object for transport settings
+- `middlewareConfig` - Optional middleware-specific configuration (e.g., `captureContent`)
+
+**Returns:**
+- `LanguageModelMiddleware` - Middleware instance for use with `wrapLanguageModel`
+
+**Example:**
+```typescript
+import { init } from '@prefactor/ai';
+
+const middleware = init(
+  { transportType: 'stdio' },
+  { captureContent: false }
+);
 ```
 
 ### `shutdown(): Promise<void>`
@@ -280,6 +340,7 @@ See the `examples/` directory for complete examples:
 
 - [`examples/basic.ts`](./examples/basic.ts) - Simple LangChain.js agent with stdio transport
 - [`examples/anthropic-agent/simple-agent.ts`](./examples/anthropic-agent/simple-agent.ts) - Full working example with Anthropic Claude
+- [`examples/ai-sdk/simple-agent.ts`](./examples/ai-sdk/simple-agent.ts) - Vercel AI SDK example with tools
 
 ## Architecture
 
@@ -287,7 +348,7 @@ The SDK consists of five main layers:
 
 1. **Tracing Layer**: Span data models, Tracer for lifecycle management, Context propagation
 2. **Transport Layer**: Pluggable backends (stdio, HTTP) for span emission
-3. **Instrumentation Layer**: LangChain.js middleware integration
+3. **Instrumentation Layer**: LangChain.js and Vercel AI SDK middleware integrations
 4. **Configuration**: Environment variable support, validation with Zod
 5. **Utilities**: Logging, serialization helpers
 
@@ -296,7 +357,8 @@ The SDK consists of five main layers:
 - Node.js >= 24.0.0
 - TypeScript >= 5.0.0 (for TypeScript projects)
 - Bun >= 1.0.0 (optional, for development)
-- LangChain.js >= 1.0.0 (peer dependency)
+- LangChain.js >= 1.0.0 (peer dependency for `@prefactor/langchain`)
+- AI SDK ^4.0.0 || ^5.0.0 (peer dependency for `@prefactor/ai`)
 
 ## Development
 
