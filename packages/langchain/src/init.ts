@@ -40,6 +40,7 @@ let globalMiddleware: AgentMiddleware | null = null;
  *   httpConfig: {
  *     apiUrl: 'https://api.prefactor.ai',
  *     apiToken: process.env.PREFACTOR_API_TOKEN!,
+ *     agentIdentifier: 'my-langchain-agent',
  *   }
  * });
  *
