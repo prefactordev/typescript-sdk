@@ -26,6 +26,8 @@ export class HttpTransport implements Transport {
   private closed = false;
   private agentInstanceId: string | null = null;
   private spanIdMap = new Map<string, string>();
+  // Pending finishes for spans that arrived before their span_end
+  private pendingFinishes = new Map<string, number>();
 
   constructor(private config: HttpTransportConfig) {}
 
@@ -44,11 +46,7 @@ export class HttpTransport implements Transport {
       }
     }
 
-    // Span finishes are deferred because they need the backend span ID
-    // which is only available after span_end has been processed.
-    const spanFinishes: Array<{ spanId: string; endTime: number }> = [];
-
-    // Second pass: process actions in order, deferring only span_finish
+    // Second pass: process actions
     for (const item of items) {
       try {
         switch (item.type) {
@@ -56,14 +54,13 @@ export class HttpTransport implements Transport {
             break;
           case 'agent_start':
             this.config.agentId = item.data.agentId;
-            this.config.agentIdentifier = item.data.agentIdentifier;
+            if (item.data.agentIdentifier !== undefined)
+              this.config.agentIdentifier = item.data.agentIdentifier;
             this.config.agentName = item.data.agentName;
             this.config.agentDescription = item.data.agentDescription;
             await this.startAgentInstanceHttp();
             break;
           case 'agent_finish':
-            // Process deferred span finishes before closing the agent
-            await this.processSpanFinishes(spanFinishes);
             await this.finishAgentInstanceHttp();
             break;
           case 'span_end':
@@ -72,34 +69,42 @@ export class HttpTransport implements Transport {
             }
             await this.sendSpan(item.data);
             break;
-          case 'span_finish':
-            spanFinishes.push({ spanId: item.data.spanId, endTime: item.data.endTime });
+          case 'span_finish': {
+            const spanId = item.data.spanId;
+            const backendSpanId = this.spanIdMap.get(spanId);
+            if (backendSpanId) {
+              // Span mapping exists, finish immediately
+              const timestamp = new Date(item.data.endTime).toISOString();
+              await this.finishSpanHttp({ spanId, timestamp });
+            } else {
+              // Defer finish until span_end creates the mapping
+              this.pendingFinishes.set(spanId, item.data.endTime);
+            }
             break;
+          }
         }
       } catch (error) {
         logger.error('Error processing batch item:', error);
       }
     }
-
-    // Process any remaining span finishes (e.g. spans without an agent_finish in this batch)
-    await this.processSpanFinishes(spanFinishes);
   }
 
   /**
-   * Process deferred span finishes and clear the array.
+   * Process any pending finishes for a span that was just registered.
    */
-  private async processSpanFinishes(
-    spanFinishes: Array<{ spanId: string; endTime: number }>
-  ): Promise<void> {
-    for (const finish of spanFinishes) {
-      try {
-        const timestamp = new Date(finish.endTime).toISOString();
-        await this.finishSpanHttp({ spanId: finish.spanId, timestamp });
-      } catch (error) {
-        logger.error('Error processing span finish:', error);
-      }
+  private async processPendingFinishes(spanId: string): Promise<void> {
+    const pendingEndTime = this.pendingFinishes.get(spanId);
+    if (!pendingEndTime) {
+      return;
     }
-    spanFinishes.length = 0;
+
+    try {
+      const timestamp = new Date(pendingEndTime).toISOString();
+      await this.finishSpanHttp({ spanId, timestamp });
+      this.pendingFinishes.delete(spanId);
+    } catch (error) {
+      logger.error('Error processing pending span finish:', error);
+    }
   }
 
   /**
@@ -125,6 +130,8 @@ export class HttpTransport implements Transport {
         const backendSpanId = data?.details?.id;
         if (backendSpanId) {
           this.spanIdMap.set(span.spanId, backendSpanId);
+          // Process any pending finishes that arrived before this span_end
+          await this.processPendingFinishes(span.spanId);
         }
         return;
       }
@@ -383,5 +390,13 @@ export class HttpTransport implements Transport {
    */
   async close(): Promise<void> {
     this.closed = true;
+
+    // Log warning for any pending finishes that will never be processed
+    if (this.pendingFinishes.size > 0) {
+      logger.warn(
+        `Transport closed with ${this.pendingFinishes.size} pending span finish(es) that could not be processed`
+      );
+      this.pendingFinishes.clear();
+    }
   }
 }

@@ -231,4 +231,167 @@ describe('HttpTransport processBatch', () => {
 
     await transport.close();
   });
+
+  test('handles span_finish in separate batch from span_end', async () => {
+    const fetchCalls: Array<{ url: string; options?: RequestInit }> = [];
+    globalThis.fetch = (async (url, options) => {
+      const urlString = String(url);
+      fetchCalls.push({ url: urlString, options });
+
+      if (urlString.endsWith('/agent_instance/register')) {
+        return new Response(JSON.stringify({ details: { id: 'agent-instance-1' } }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+
+      if (urlString.endsWith('/agent_spans')) {
+        return new Response(JSON.stringify({ details: { id: 'backend-span-1' } }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+
+      return new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }) as unknown as typeof fetch;
+
+    const transport = new HttpTransport(createConfig());
+    const endTime = 1700000000000;
+    const span: Span = {
+      spanId: 'span-1',
+      parentSpanId: null,
+      traceId: 'trace-1',
+      name: 'Test Span',
+      spanType: SpanType.AGENT,
+      startTime: endTime - 1000,
+      endTime,
+      status: SpanStatus.SUCCESS,
+      inputs: { prompt: 'hi' },
+      outputs: { result: 'ok' },
+      tokenUsage: null,
+      error: null,
+      metadata: {},
+      tags: [],
+    };
+
+    // First batch: only span_end (simulating AGENT span start)
+    const batch1: QueueAction[] = [{ type: 'span_end', data: span }];
+    await transport.processBatch(batch1);
+
+    // spanIdMap should now have the mapping
+    // biome-ignore lint/suspicious/noExplicitAny: <Accessing private property for test.>
+    expect((transport as any).spanIdMap.get('span-1')).toBe('backend-span-1');
+
+    // Second batch: span_finish arrives later
+    const batch2: QueueAction[] = [{ type: 'span_finish', data: { spanId: 'span-1', endTime } }];
+    await transport.processBatch(batch2);
+
+    // Should have made the finish call
+    expect(fetchCalls.map((call) => call.url)).toEqual([
+      'https://example.com/api/v1/agent_instance/register',
+      'https://example.com/api/v1/agent_spans',
+      'https://example.com/api/v1/agent_spans/backend-span-1/finish',
+    ]);
+
+    await transport.close();
+  });
+
+  test('defers span_finish when span_end arrives later', async () => {
+    const fetchCalls: Array<{ url: string; options?: RequestInit }> = [];
+    globalThis.fetch = (async (url, options) => {
+      const urlString = String(url);
+      fetchCalls.push({ url: urlString, options });
+
+      if (urlString.endsWith('/agent_instance/register')) {
+        return new Response(JSON.stringify({ details: { id: 'agent-instance-1' } }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+
+      if (urlString.endsWith('/agent_spans')) {
+        return new Response(JSON.stringify({ details: { id: 'backend-span-1' } }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+
+      return new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }) as unknown as typeof fetch;
+
+    const transport = new HttpTransport(createConfig());
+    const endTime = 1700000000000;
+    const span: Span = {
+      spanId: 'span-1',
+      parentSpanId: null,
+      traceId: 'trace-1',
+      name: 'Test Span',
+      spanType: SpanType.LLM,
+      startTime: endTime - 1000,
+      endTime,
+      status: SpanStatus.SUCCESS,
+      inputs: { prompt: 'hi' },
+      outputs: { result: 'ok' },
+      tokenUsage: null,
+      error: null,
+      metadata: {},
+      tags: [],
+    };
+
+    // First batch: span_finish arrives BEFORE span_end (out of order)
+    const batch1: QueueAction[] = [{ type: 'span_finish', data: { spanId: 'span-1', endTime } }];
+    await transport.processBatch(batch1);
+
+    // Should be in pending finishes
+    // biome-ignore lint/suspicious/noExplicitAny: <Accessing private property for test.>
+    expect((transport as any).pendingFinishes.get('span-1')).toBe(endTime);
+    // No finish API call yet
+    expect(fetchCalls.length).toBe(0);
+
+    // Second batch: span_end arrives
+    const batch2: QueueAction[] = [{ type: 'span_end', data: span }];
+    await transport.processBatch(batch2);
+
+    // Should have processed the pending finish
+    // biome-ignore lint/suspicious/noExplicitAny: <Accessing private property for test.>
+    expect((transport as any).pendingFinishes.has('span-1')).toBe(false);
+
+    expect(fetchCalls.map((call) => call.url)).toEqual([
+      'https://example.com/api/v1/agent_instance/register',
+      'https://example.com/api/v1/agent_spans',
+      'https://example.com/api/v1/agent_spans/backend-span-1/finish',
+    ]);
+
+    await transport.close();
+  });
+
+  test('logs warning for pending finishes on close', async () => {
+    const transport = new HttpTransport(createConfig());
+    const endTime = 1700000000000;
+
+    // Add a pending finish manually (simulating span_finish before span_end)
+    // biome-ignore lint/suspicious/noExplicitAny: <Accessing private property for test.>
+    (transport as any).pendingFinishes.set('orphan-span', endTime);
+
+    // Capture console.warn calls
+    const warnCalls: string[] = [];
+    const originalWarn = console.warn;
+    console.warn = (...args: unknown[]) => {
+      warnCalls.push(args.join(' '));
+    };
+
+    await transport.close();
+
+    console.warn = originalWarn;
+
+    expect(warnCalls.some((msg) => msg.includes('1 pending span finish'))).toBe(true);
+    // biome-ignore lint/suspicious/noExplicitAny: <Accessing private property for test.>
+    expect((transport as any).pendingFinishes.size).toBe(0);
+  });
 });
