@@ -22,19 +22,18 @@ This file guides coding agents working in this repo.
 ## Toolchain
 - Runtime: Node >= 24 (see `package.json`), dev uses Bun.
 - Install toolchain: `mise install`.
-- Install deps: `just install` or `bun install`.
-- Prefer `just` commands; they wrap the canonical Bun commands.
-- If `just` is unavailable, use the equivalent `bun run` commands.
+- Install deps: `mise run install` or `bun install`.
+- Prefer `mise run` commands; they wrap the canonical Bun commands.
 
 ## Build / lint / test / typecheck
-- Build all: `just build` or `bun run build`.
-- Build one package: `just build-core` / `just build-langchain` / `just build-ai`.
+- Build all: `mise run build` or `bun run build`.
+- Build one package: `mise run build-core` / `mise run build-langchain` / `mise run build-ai`.
 - Build with filter: `bun run scripts/build.ts --filter @prefactor/core`.
-- Lint: `just lint` or `bun run lint` (Biome).
-- Format: `just format` or `bun run format`.
-- Typecheck: `just typecheck` or `bun run typecheck` (project refs).
-- Tests (all): `just test` or `bun test`.
-- Tests (watch): `just test-watch` or `bun test --watch`.
+- Lint: `mise run lint` or `bun run lint` (Biome).
+- Format: `mise run format` or `bun run format`.
+- Typecheck: `mise run typecheck` or `bun run typecheck` (project refs).
+- Tests (all): `mise run test` or `bun test`.
+- Tests (watch): `mise run test-watch` or `bun test --watch`.
 - Single test file: `bun test packages/core/tests/tracing/tracer.test.ts`.
 - Single test by name: `bun test --test-name-pattern "should create span"`.
 - Package test folder: `bun test packages/langchain/tests/`.
@@ -150,7 +149,7 @@ This file guides coding agents working in this repo.
 - Remove the worktree after a successful merge and delete the feature branch.
 
 ## Publishing (do not run unless asked)
-- Publish uses `just publish` or `just publish-dry`.
+- Publish uses `mise run publish` or `mise run publish-dry`.
 - Publishing runs per-package `bun publish` in dependency order.
 
 ## Cursor/Copilot rules

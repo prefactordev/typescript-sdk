@@ -1,4 +1,63 @@
 [tools]
 node = "24"
 bun = "latest"
-just = "latest"
+
+[tasks.build]
+run = "bun run scripts/build.ts"
+description = "Build all packages"
+
+[tasks.build-core]
+run = "bun run scripts/build.ts --filter @prefactor/core"
+description = "Build @prefactor/core package"
+
+[tasks.build-langchain]
+run = "bun run scripts/build.ts --filter @prefactor/langchain"
+description = "Build @prefactor/langchain package"
+
+[tasks.build-ai]
+run = "bun run scripts/build.ts --filter @prefactor/ai"
+description = "Build @prefactor/ai package"
+
+[tasks.test]
+run = "bun test"
+description = "Run all tests"
+
+[tasks.test-watch]
+run = "bun test --watch"
+description = "Watch tests for changes"
+
+[tasks.typecheck]
+run = "bun run tsc --build"
+description = "Type check with project references"
+
+[tasks.lint]
+run = "bun run biome check ."
+description = "Lint code"
+
+[tasks.format]
+run = "bun run biome format --write ."
+description = "Format code"
+
+[tasks.check]
+depends = ["typecheck", "lint", "test"]
+description = "Run all checks"
+
+[tasks.clean]
+run = "rm -rf packages/*/dist node_modules"
+description = "Clean build artifacts"
+
+[tasks.install]
+run = "bun install"
+description = "Install dependencies"
+
+[tasks.publish]
+description = "Publish all packages (in dependency order)"
+run = """cd packages/core && bun publish --access public &&
+cd packages/langchain && bun publish --access public &&
+cd packages/ai && bun publish --access public"""
+
+[tasks.publish-dry]
+description = "Dry run publish"
+run = """cd packages/core && bun publish --access public --dry-run &&
+cd packages/langchain && bun publish --access public --dry-run &&
+cd packages/ai && bun publish --access public --dry-run"""
