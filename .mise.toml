@@ -53,11 +53,14 @@ description = "Install dependencies"
 [tasks.publish]
 description = "Publish all packages (in dependency order)"
 run = """cd packages/core && bun publish --access public &&
-cd packages/langchain && bun publish --access public &&
-cd packages/ai && bun publish --access public"""
+cd ../langchain && bun publish --access public &&
+cd ../ai && bun publish --access public
+
+"""
 
 [tasks.publish-dry]
 description = "Dry run publish"
 run = """cd packages/core && bun publish --access public --dry-run &&
-cd packages/langchain && bun publish --access public --dry-run &&
-cd packages/ai && bun publish --access public --dry-run"""
+cd ../langchain && bun publish --access public --dry-run &&
+cd ../ai && bun publish --access public --dry-run
+"""
