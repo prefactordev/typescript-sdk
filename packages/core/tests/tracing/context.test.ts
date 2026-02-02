@@ -89,6 +89,56 @@ describe('SpanContext', () => {
     expect(SpanContext.getCurrent()).toBeUndefined();
   });
 
+  test('enter/exit preserves context across await (would fail if ALS lost across async)', async () => {
+    SpanContext.clear();
+
+    const root = createSpan('root');
+    SpanContext.enter(root);
+
+    expect(SpanContext.getCurrent()?.spanId).toBe('root');
+    await Promise.resolve();
+    expect(SpanContext.getCurrent()?.spanId).toBe('root');
+    await Promise.resolve();
+    expect(SpanContext.getCurrent()?.spanId).toBe('root');
+
+    SpanContext.exit();
+    expect(SpanContext.getCurrent()).toBeUndefined();
+  });
+
+  test('enter in "before", exit in "after" with async work and nested runAsync in between (middleware-style)', async () => {
+    SpanContext.clear();
+
+    const root = createSpan('agent');
+    const child = createSpan('llm');
+    const seen: Array<string[] | undefined> = [];
+
+    // Simulate beforeAgent
+    SpanContext.enter(root);
+    expect(SpanContext.getCurrent()?.spanId).toBe('agent');
+    seen.push(SpanContext.getStack().map((s) => s.spanId));
+
+    // Simulate agent run: nested runAsync (e.g. wrapModelCall) then await
+    await SpanContext.runAsync(child, async () => {
+      seen.push(SpanContext.getStack().map((s) => s.spanId));
+      await Promise.resolve();
+      seen.push(SpanContext.getStack().map((s) => s.spanId));
+    });
+
+    // After nested runAsync, stack should be back to [agent]
+    expect(SpanContext.getCurrent()?.spanId).toBe('agent');
+    seen.push(SpanContext.getStack().map((s) => s.spanId));
+
+    // Simulate afterAgent
+    SpanContext.exit();
+    expect(SpanContext.getCurrent()).toBeUndefined();
+    expect(SpanContext.getStack()).toHaveLength(0);
+
+    expect(seen[0]).toEqual(['agent']);
+    expect(seen[1]).toEqual(['agent', 'llm']);
+    expect(seen[2]).toEqual(['agent', 'llm']);
+    expect(seen[3]).toEqual(['agent']);
+  });
+
   test('runAsync isolates sibling branch stacks', async () => {
     SpanContext.clear();
 
