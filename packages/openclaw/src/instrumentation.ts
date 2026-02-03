@@ -1,5 +1,5 @@
-import { SpanContext, SpanType, serializeValue } from '@prefactor/core';
 import type { Config, Span, Tracer } from '@prefactor/core';
+import { SpanContext, SpanType, serializeValue } from '@prefactor/core';
 
 type HookContext = { sessionKey?: string; runId?: string; agentId?: string; toolName?: string };
 
@@ -73,7 +73,7 @@ export function createInstrumentation(tracer: Tracer, config: Config) {
     tracer.endSpan(fallback, { outputs });
   };
 
-  const messageReceived = (event: Record<string, unknown>, ctx: HookContext) => {
+  const messageReceived = (event: Record<string, unknown>, _ctx: HookContext) => {
     const inputs = config.captureInputs
       ? (sanitize({ direction: 'inbound', ...event }, config.maxInputLength) as Record<
           string,
@@ -84,7 +84,7 @@ export function createInstrumentation(tracer: Tracer, config: Config) {
     tracer.endSpan(span, { outputs: config.captureOutputs ? inputs : undefined });
   };
 
-  const messageSent = (event: Record<string, unknown>, ctx: HookContext) => {
+  const messageSent = (event: Record<string, unknown>, _ctx: HookContext) => {
     const inputs = config.captureInputs
       ? (sanitize({ direction: 'outbound', ...event }, config.maxInputLength) as Record<
           string,

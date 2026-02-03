@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 
-import { existsSync, mkdirSync, rmSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { $ } from 'bun';
 
@@ -11,6 +11,7 @@ interface PackageConfig {
   path: string;
   entrypoint: string;
   external: string[];
+  packageFiles?: string[];
 }
 
 const packages: PackageConfig[] = [
@@ -24,13 +25,20 @@ const packages: PackageConfig[] = [
     name: '@prefactor/ai',
     path: 'packages/ai',
     entrypoint: './packages/ai/src/index.ts',
-    external: ['@prefactor/core', '@prefactor/pfid'],
+    external: ['@prefactor/core', '@prefactor/pfid', 'zod'],
   },
   {
     name: '@prefactor/langchain',
     path: 'packages/langchain',
     entrypoint: './packages/langchain/src/index.ts',
     external: ['@prefactor/core', '@prefactor/pfid', '@langchain/core', 'langchain', 'zod'],
+  },
+  {
+    name: '@prefactor/prefactor',
+    path: 'packages/openclaw',
+    entrypoint: './packages/openclaw/src/index.ts',
+    external: [],
+    packageFiles: ['package.json', 'openclaw.plugin.json'],
   },
 ];
 
@@ -78,6 +86,12 @@ async function buildPackage(pkg: PackageConfig): Promise<void> {
   if (!cjsResult.success) {
     console.error(`  ❌ CJS build failed:`, cjsResult.logs);
     process.exit(1);
+  }
+
+  if (pkg.packageFiles) {
+    for (const file of pkg.packageFiles) {
+      copyFileSync(join(ROOT, pkg.path, file), join(distDir, file));
+    }
   }
 
   console.log(`  ✅ ${pkg.name} built successfully`);

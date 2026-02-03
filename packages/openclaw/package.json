@@ -1,5 +1,5 @@
 {
-  "name": "@prefactor/openclaw",
+  "name": "@prefactor/prefactor-openclaw",
   "version": "0.2.0",
   "description": "OpenClaw plugin for Prefactor observability",
   "type": "module",
@@ -31,33 +31,9 @@
     "@types/bun": "latest"
   },
   "openclaw": {
-    "extensions": ["./dist/index.js"],
-    "configSchema": {
-      "type": "object",
-      "properties": {
-        "transportType": { "type": "string", "enum": ["stdio", "http"] },
-        "sampleRate": { "type": "number", "minimum": 0, "maximum": 1 },
-        "captureInputs": { "type": "boolean" },
-        "captureOutputs": { "type": "boolean" },
-        "maxInputLength": { "type": "number", "minimum": 1 },
-        "maxOutputLength": { "type": "number", "minimum": 1 },
-        "httpConfig": {
-          "type": "object",
-          "properties": {
-            "apiUrl": { "type": "string" },
-            "apiToken": { "type": "string" },
-            "agentId": { "type": "string" },
-            "agentIdentifier": { "type": "string" },
-            "agentName": { "type": "string" },
-            "agentDescription": { "type": "string" },
-            "schemaName": { "type": "string" },
-            "schemaIdentifier": { "type": "string" },
-            "agentSchemaIdentifier": { "type": "string" },
-            "skipSchema": { "type": "boolean" }
-          }
-        }
-      }
-    }
+    "extensions": ["index.js"],
+    "id": "prefactor",
+    "name": "Prefactor"
   },
   "engines": { "node": ">=24.0.0" }
 }

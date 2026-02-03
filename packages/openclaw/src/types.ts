@@ -1,9 +1,10 @@
-import type { Config, Tracer } from '@prefactor/core';
+import type { Config } from '@prefactor/core';
 
 export type PluginConfig = Partial<Config>;
 
 export type OpenClawPluginApi = {
-  on: (name: string, handler: (event: any, ctx: any) => void) => void;
+  //
+  on: (name: string, handler: (event: Record<string, unknown>, ctx: any) => void) => void;
   config?: Record<string, any>;
   logger?: {
     info: (msg: string, meta?: unknown) => void;

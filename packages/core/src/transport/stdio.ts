@@ -39,7 +39,7 @@ export class StdioTransport implements Transport {
         try {
           const serialized = serializeValue(item);
           const json = JSON.stringify(serialized);
-          await Bun.write(Bun.stdout, `${json}\n`);
+          process.stdout.write(`${json}\n`);
         } catch (error) {
           console.error('Failed to emit queue action to stdout:', error);
         }

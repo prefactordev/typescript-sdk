@@ -1,12 +1,12 @@
 import {
   type Config,
   type CoreRuntime,
-  type Tracer,
-  DEFAULT_AGENT_SCHEMA,
   createCore,
+  DEFAULT_AGENT_SCHEMA,
   getLogger,
+  type Tracer,
 } from '@prefactor/core';
-import { resolveConfig, type PluginConfig } from './config.js';
+import { type PluginConfig, resolveConfig } from './config.js';
 import { createInstrumentation } from './instrumentation.js';
 import type { OpenClawPluginApi } from './types.js';
 
@@ -76,7 +76,7 @@ export async function shutdown(): Promise<void> {
 export function register(api: OpenClawPluginApi): void {
   // Extract config from the plugin entry config
   const pluginConfig =
-    (api.config?.plugins?.entries?.['prefactor-observability']?.config as PluginConfig) || {};
+    (api.config?.plugins?.entries?.prefactor?.config as PluginConfig) || {};
 
   const runtime = init(pluginConfig);
   if (!runtime) {
