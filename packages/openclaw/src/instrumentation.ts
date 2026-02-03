@@ -75,5 +75,21 @@ export function createInstrumentation(tracer: Tracer, config: Config) {
     tracer.endSpan(fallback, { outputs });
   };
 
-  return { beforeAgentStart, agentEnd, beforeToolCall, afterToolCall, agentSpans };
+  const messageReceived = (event: Record<string, unknown>, ctx: HookContext) => {
+    const inputs = config.captureInputs
+      ? (sanitize({ direction: 'inbound', ...event }, config.maxInputLength) as Record<string, unknown>)
+      : {};
+    const span = tracer.startSpan({ name: 'openclaw:message', spanType: SpanType.CHAIN, inputs });
+    tracer.endSpan(span, { outputs: config.captureOutputs ? inputs : undefined });
+  };
+
+  const messageSent = (event: Record<string, unknown>, ctx: HookContext) => {
+    const inputs = config.captureInputs
+      ? (sanitize({ direction: 'outbound', ...event }, config.maxInputLength) as Record<string, unknown>)
+      : {};
+    const span = tracer.startSpan({ name: 'openclaw:message', spanType: SpanType.CHAIN, inputs });
+    tracer.endSpan(span, { outputs: config.captureOutputs ? inputs : undefined });
+  };
+
+  return { beforeAgentStart, agentEnd, beforeToolCall, afterToolCall, messageReceived, messageSent, agentSpans };
 }
