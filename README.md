@@ -22,6 +22,7 @@ This repository is a Bun monorepo containing three packages:
 | [`@prefactor/core`](./packages/core/) | Framework-agnostic observability primitives |
 | [`@prefactor/langchain`](./packages/langchain/) | LangChain.js integration |
 | [`@prefactor/ai`](./packages/ai/) | Vercel AI SDK integration |
+| [`@prefactor/openclaw`](./packages/openclaw/) | OpenClaw plugin |
 
 Install `@prefactor/core` along with the adapter package for your framework.
 
@@ -33,6 +34,12 @@ Install `@prefactor/core` along with the adapter package for your framework.
 npm install @prefactor/core @prefactor/langchain
 # or
 bun add @prefactor/core @prefactor/langchain
+```
+
+### For OpenClaw users:
+
+```bash
+npm install @prefactor/openclaw
 ```
 
 ### For Vercel AI SDK users:
