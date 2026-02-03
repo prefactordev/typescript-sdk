@@ -60,5 +60,5 @@ test('message_sent creates CHAIN span', () => {
 
   instrumentation.messageSent({ content: 'hello', to: 'user' }, { sessionKey: 'agent:main:main' });
 
-  expect(tracer.spans.find(s => s.inputs?.direction === 'outbound')).toBeDefined();
+  expect(tracer.spans.find((s) => s.inputs?.direction === 'outbound')).toBeDefined();
 });

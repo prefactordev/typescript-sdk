@@ -3,11 +3,9 @@ import type { Config, Span, Tracer } from '@prefactor/core';
 
 type HookContext = { sessionKey?: string; runId?: string; agentId?: string; toolName?: string };
 
-const toKey = (ctx: HookContext): string =>
-  ctx.sessionKey ?? ctx.runId ?? ctx.agentId ?? 'unknown';
+const toKey = (ctx: HookContext): string => ctx.sessionKey ?? ctx.runId ?? ctx.agentId ?? 'unknown';
 
-const sanitize = (value: unknown, maxLength: number): unknown =>
-  serializeValue(value, maxLength);
+const sanitize = (value: unknown, maxLength: number): unknown => serializeValue(value, maxLength);
 
 export function createInstrumentation(tracer: Tracer, config: Config) {
   const agentSpans = new Map<string, Span>();
@@ -77,7 +75,10 @@ export function createInstrumentation(tracer: Tracer, config: Config) {
 
   const messageReceived = (event: Record<string, unknown>, ctx: HookContext) => {
     const inputs = config.captureInputs
-      ? (sanitize({ direction: 'inbound', ...event }, config.maxInputLength) as Record<string, unknown>)
+      ? (sanitize({ direction: 'inbound', ...event }, config.maxInputLength) as Record<
+          string,
+          unknown
+        >)
       : {};
     const span = tracer.startSpan({ name: 'openclaw:message', spanType: SpanType.CHAIN, inputs });
     tracer.endSpan(span, { outputs: config.captureOutputs ? inputs : undefined });
@@ -85,11 +86,22 @@ export function createInstrumentation(tracer: Tracer, config: Config) {
 
   const messageSent = (event: Record<string, unknown>, ctx: HookContext) => {
     const inputs = config.captureInputs
-      ? (sanitize({ direction: 'outbound', ...event }, config.maxInputLength) as Record<string, unknown>)
+      ? (sanitize({ direction: 'outbound', ...event }, config.maxInputLength) as Record<
+          string,
+          unknown
+        >)
       : {};
     const span = tracer.startSpan({ name: 'openclaw:message', spanType: SpanType.CHAIN, inputs });
     tracer.endSpan(span, { outputs: config.captureOutputs ? inputs : undefined });
   };
 
-  return { beforeAgentStart, agentEnd, beforeToolCall, afterToolCall, messageReceived, messageSent, agentSpans };
+  return {
+    beforeAgentStart,
+    agentEnd,
+    beforeToolCall,
+    afterToolCall,
+    messageReceived,
+    messageSent,
+    agentSpans,
+  };
 }

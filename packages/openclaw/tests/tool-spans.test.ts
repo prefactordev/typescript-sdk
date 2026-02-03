@@ -43,8 +43,14 @@ test('tool spans are parented to agent span and paired FIFO', () => {
   });
 
   instrumentation.beforeAgentStart({ agentId: 'main' }, { sessionKey: 'agent:main:main' });
-  instrumentation.beforeToolCall({ toolName: 'search', params: { q: 'hi' } }, { sessionKey: 'agent:main:main' });
-  instrumentation.afterToolCall({ toolName: 'search', params: { q: 'hi' }, result: { ok: true } }, { sessionKey: 'agent:main:main' });
+  instrumentation.beforeToolCall(
+    { toolName: 'search', params: { q: 'hi' } },
+    { sessionKey: 'agent:main:main' }
+  );
+  instrumentation.afterToolCall(
+    { toolName: 'search', params: { q: 'hi' }, result: { ok: true } },
+    { sessionKey: 'agent:main:main' }
+  );
 
   expect(tracer.spans.find((s) => s.spanType === SpanType.TOOL)).toBeDefined();
   const toolSpan = tracer.spans.find((s) => s.spanType === SpanType.TOOL);
