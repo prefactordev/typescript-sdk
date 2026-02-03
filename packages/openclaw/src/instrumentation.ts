@@ -1,7 +1,7 @@
-import { SpanType, serializeValue } from '@prefactor/core';
+import { SpanContext, SpanType, serializeValue } from '@prefactor/core';
 import type { Config, Span, Tracer } from '@prefactor/core';
 
-type HookContext = { sessionKey?: string; runId?: string; agentId?: string };
+type HookContext = { sessionKey?: string; runId?: string; agentId?: string; toolName?: string };
 
 const toKey = (ctx: HookContext): string =>
   ctx.sessionKey ?? ctx.runId ?? ctx.agentId ?? 'unknown';
@@ -37,5 +37,43 @@ export function createInstrumentation(tracer: Tracer, config: Config) {
     agentSpans.delete(key);
   };
 
-  return { beforeAgentStart, agentEnd, agentSpans };
+  const toolQueues = new Map<string, Span[]>();
+
+  const beforeToolCall = (event: Record<string, unknown>, ctx: HookContext) => {
+    const toolName = String(event.toolName ?? ctx.toolName ?? 'unknown');
+    const key = `${toKey(ctx)}:${toolName}`;
+    const inputs = config.captureInputs
+      ? (sanitize(event, config.maxInputLength) as Record<string, unknown>)
+      : {};
+    const parent = agentSpans.get(toKey(ctx));
+    const span = parent
+      ? SpanContext.run(parent, () =>
+          tracer.startSpan({ name: toolName, spanType: SpanType.TOOL, inputs })
+        )
+      : tracer.startSpan({ name: toolName, spanType: SpanType.TOOL, inputs });
+
+    const queue = toolQueues.get(key) ?? [];
+    queue.push(span);
+    toolQueues.set(key, queue);
+  };
+
+  const afterToolCall = (event: Record<string, unknown>, ctx: HookContext) => {
+    const toolName = String(event.toolName ?? ctx.toolName ?? 'unknown');
+    const key = `${toKey(ctx)}:${toolName}`;
+    const queue = toolQueues.get(key);
+    const span = queue?.shift();
+    const outputs = config.captureOutputs
+      ? (sanitize(event, config.maxOutputLength) as Record<string, unknown>)
+      : undefined;
+
+    if (span) {
+      tracer.endSpan(span, { outputs });
+      return;
+    }
+
+    const fallback = tracer.startSpan({ name: toolName, spanType: SpanType.TOOL, inputs: {} });
+    tracer.endSpan(fallback, { outputs });
+  };
+
+  return { beforeAgentStart, agentEnd, beforeToolCall, afterToolCall, agentSpans };
 }
