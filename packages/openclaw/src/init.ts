@@ -76,7 +76,7 @@ export async function shutdown(): Promise<void> {
 export function register(api: OpenClawPluginApi): void {
   // Extract config from the plugin entry config
   const pluginConfig =
-    (api.config?.plugins?.entries?.prefactor?.config as PluginConfig) || {};
+    (api.config?.plugins?.entries?.['prefactor-openclaw']?.config as PluginConfig) || {};
 
   const runtime = init(pluginConfig);
   if (!runtime) {
