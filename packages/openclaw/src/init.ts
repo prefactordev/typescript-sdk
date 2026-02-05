@@ -1,13 +1,7 @@
-import {
-  type Config,
-  type CoreRuntime,
-  createCore,
-  DEFAULT_AGENT_SCHEMA,
-  getLogger,
-  type Tracer,
-} from '@prefactor/core';
+import { type Config, type CoreRuntime, createCore, getLogger, type Tracer } from '@prefactor/core';
 import { type PluginConfig, resolveConfig } from './config.js';
 import { createInstrumentation } from './instrumentation.js';
+import { OPENCLAW_DEFAULT_SCHEMA } from './schema.js';
 import type { OpenClawPluginApi } from './types.js';
 
 const logger = getLogger('openclaw');
@@ -45,7 +39,7 @@ export function init(config?: PluginConfig): InitResult {
   ) {
     logger.debug('Skipping default schema registration based on httpConfig');
   } else {
-    runtime.agentManager.registerSchema(DEFAULT_AGENT_SCHEMA);
+    runtime.agentManager.registerSchema(OPENCLAW_DEFAULT_SCHEMA);
   }
 
   return runtime;

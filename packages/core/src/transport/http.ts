@@ -149,6 +149,7 @@ export class HttpTransport implements Transport {
       }
 
       logger.error(`Failed to send span: ${response.status} ${response.statusText}`);
+      logger.error(`Failed span: ${await response.text()}`);
     } catch (error) {
       logger.error('Error sending span:', error);
 
@@ -170,13 +171,14 @@ export class HttpTransport implements Transport {
   private transformSpanToApiFormat(span: Span): Record<string, unknown> {
     const startedAt = new Date(span.startTime).toISOString();
     const finishedAt = span.endTime ? new Date(span.endTime).toISOString() : null;
+    const apiStatus = this.mapStatusForApi(span.status);
 
     // Build payload with span data
     const payload: Record<string, unknown> = {
       span_id: span.spanId,
       trace_id: span.traceId,
       name: span.name,
-      status: span.status,
+      status: apiStatus,
       inputs: span.inputs,
       outputs: span.outputs,
       metadata: span.metadata,
@@ -210,12 +212,26 @@ export class HttpTransport implements Transport {
       details: {
         agent_instance_id: this.agentInstanceId,
         schema_name: span.spanType,
+        status: apiStatus,
         payload,
         parent_span_id: parentSpanId,
         started_at: startedAt,
         finished_at: finishedAt,
       },
     };
+  }
+
+  private mapStatusForApi(status: Span['status']): string {
+    switch (status) {
+      case 'running':
+        return 'active';
+      case 'success':
+        return 'complete';
+      case 'error':
+        return 'failed';
+      default:
+        return 'active';
+    }
   }
 
   /**
