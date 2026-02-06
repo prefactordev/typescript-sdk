@@ -1,7 +1,37 @@
 import { describe, expect, spyOn, test } from 'bun:test';
 import { AgentInstanceManager } from '../../src/agent/instance-manager';
-import type { QueueAction } from '../../src/queue/actions';
-import { InMemoryQueue } from '../../src/queue/in-memory';
+import type { Span } from '../../src/tracing/span';
+import type { AgentInstanceOptions, Transport } from '../../src/transport/base';
+
+class MockTransport implements Transport {
+  emitted: Span[] = [];
+  finished: Array<{ spanId: string; endTime: number }> = [];
+  startedInstances: AgentInstanceOptions[] = [];
+  finishedInstances = 0;
+  registeredSchemas: Record<string, unknown>[] = [];
+
+  emit(span: Span): void {
+    this.emitted.push(span);
+  }
+
+  finishSpan(spanId: string, endTime: number): void {
+    this.finished.push({ spanId, endTime });
+  }
+
+  startAgentInstance(options?: AgentInstanceOptions): void {
+    this.startedInstances.push(options ?? {});
+  }
+
+  finishAgentInstance(): void {
+    this.finishedInstances += 1;
+  }
+
+  registerSchema(schema: Record<string, unknown>): void {
+    this.registeredSchemas.push(schema);
+  }
+
+  async close(): Promise<void> {}
+}
 
 const createWarnSpy = () => {
   const warnMessages: string[] = [];
@@ -14,32 +44,24 @@ const createWarnSpy = () => {
 
 describe('AgentInstanceManager', () => {
   test('enqueues schema registration before agent start with schema payloads', () => {
-    const queue = new InMemoryQueue<QueueAction>();
-    const manager = new AgentInstanceManager(queue, {});
+    const transport = new MockTransport();
+    const manager = new AgentInstanceManager(transport, {});
 
     manager.registerSchema({ type: 'object' });
     manager.startInstance({ agentId: 'agent-1' });
-    const items = queue.dequeueBatch(10);
-    expect(items[0].type).toBe('schema_register');
-    if (items[0].type === 'schema_register') {
-      expect(items[0].data.schema).toEqual({ type: 'object' });
-    }
-    expect(items[1].type).toBe('agent_start');
-    if (items[1].type === 'agent_start') {
-      expect(items[1].data.agentId).toBe('agent-1');
-    }
+    expect(transport.registeredSchemas).toEqual([{ type: 'object' }]);
+    expect(transport.startedInstances).toEqual([{ agentId: 'agent-1' }]);
   });
 
   test('warns and does not enqueue agent start before schema registration', () => {
     const { warnMessages, warnSpy } = createWarnSpy();
-    const queue = new InMemoryQueue<QueueAction>();
-    const manager = new AgentInstanceManager(queue, {});
+    const transport = new MockTransport();
+    const manager = new AgentInstanceManager(transport, {});
 
     try {
       manager.startInstance({ agentId: 'agent-1' });
 
-      const items = queue.dequeueBatch(10);
-      expect(items).toHaveLength(0);
+      expect(transport.startedInstances).toHaveLength(0);
       expect(
         warnMessages.some((message) =>
           message.includes('must be registered before starting an agent instance')
@@ -52,20 +74,16 @@ describe('AgentInstanceManager', () => {
 
   test('allows agent start before schema registration when permitted', () => {
     const { warnMessages, warnSpy } = createWarnSpy();
-    const queue = new InMemoryQueue<QueueAction>();
-    const manager = new AgentInstanceManager(queue, {
+    const transport = new MockTransport();
+    const manager = new AgentInstanceManager(transport, {
       allowUnregisteredSchema: true,
     });
 
     try {
       manager.startInstance({ agentId: 'agent-1' });
 
-      const items = queue.dequeueBatch(10);
-      expect(items).toHaveLength(1);
-      expect(items[0].type).toBe('agent_start');
-      if (items[0].type === 'agent_start') {
-        expect(items[0].data.agentId).toBe('agent-1');
-      }
+      expect(transport.startedInstances).toHaveLength(1);
+      expect(transport.startedInstances[0]).toEqual({ agentId: 'agent-1' });
       expect(warnMessages).toHaveLength(0);
     } finally {
       warnSpy.mockRestore();
@@ -73,25 +91,21 @@ describe('AgentInstanceManager', () => {
   });
 
   test('only registers schema once (dedupes)', () => {
-    const queue = new InMemoryQueue<QueueAction>();
-    const manager = new AgentInstanceManager(queue, {});
+    const transport = new MockTransport();
+    const manager = new AgentInstanceManager(transport, {});
 
     manager.registerSchema({ type: 'object' });
     manager.registerSchema({ type: 'object' });
 
-    const items = queue.dequeueBatch(10);
-    expect(items).toHaveLength(1);
-    expect(items[0].type).toBe('schema_register');
+    expect(transport.registeredSchemas).toHaveLength(1);
   });
 
   test('enqueues agent finish', () => {
-    const queue = new InMemoryQueue<QueueAction>();
-    const manager = new AgentInstanceManager(queue, {});
+    const transport = new MockTransport();
+    const manager = new AgentInstanceManager(transport, {});
 
     manager.finishInstance();
 
-    const items = queue.dequeueBatch(10);
-    expect(items).toHaveLength(1);
-    expect(items[0].type).toBe('agent_finish');
+    expect(transport.finishedInstances).toBe(1);
   });
 });

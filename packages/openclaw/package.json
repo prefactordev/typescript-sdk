@@ -1,6 +1,6 @@
 {
   "name": "@prefactor/prefactor-openclaw",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "OpenClaw plugin for Prefactor observability",
   "type": "module",
   "main": "dist/index.cjs",

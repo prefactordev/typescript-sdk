@@ -1,42 +1,40 @@
 import { describe, expect, test } from 'bun:test';
 import {
   AgentInstanceManager,
-  type Queue,
-  type QueueAction,
   type Span,
   SpanContext,
   SpanStatus,
   SpanType,
   Tracer,
+  type Transport,
 } from '@prefactor/core';
 import { PrefactorMiddleware } from '../src/middleware.js';
 
-class CaptureQueue implements Queue<QueueAction> {
-  items: QueueAction[] = [];
+class CaptureTransport implements Transport {
+  spans: Span[] = [];
 
-  enqueue(item: QueueAction): void {
-    this.items.push(item);
+  emit(span: Span): void {
+    this.spans.push(span);
   }
 
-  dequeueBatch(maxItems: number): QueueAction[] {
-    return this.items.splice(0, maxItems);
-  }
+  finishSpan(_spanId: string, _endTime: number): void {}
 
-  size(): number {
-    return this.items.length;
-  }
+  startAgentInstance(): void {}
+
+  finishAgentInstance(): void {}
+
+  registerSchema(_schema: Record<string, unknown>): void {}
 
   async flush(): Promise<void> {}
+
+  async close(): Promise<void> {}
 }
 
 describe('PrefactorMiddleware', () => {
   test('uses context parent for root span and nests child spans', async () => {
-    const queue = new CaptureQueue();
-    const tracer = new Tracer(queue);
-    const agentManager = new AgentInstanceManager(queue, {
-      schemaName: 'langchain:agent',
-      schemaIdentifier: '1.0.0',
-    });
+    const transport = new CaptureTransport();
+    const tracer = new Tracer(transport);
+    const agentManager = new AgentInstanceManager(transport, {});
     agentManager.registerSchema({ type: 'object' });
     const middleware = new PrefactorMiddleware(tracer, agentManager);
 
@@ -52,14 +50,8 @@ describe('PrefactorMiddleware', () => {
       await middleware.afterAgent({ messages: ['bye'] });
     });
 
-    const agentSpan = queue.items.find(
-      (item): item is { type: 'span_end'; data: Span } =>
-        item.type === 'span_end' && item.data.spanType === SpanType.AGENT
-    )?.data;
-    const llmSpan = queue.items.find(
-      (item): item is { type: 'span_end'; data: Span } =>
-        item.type === 'span_end' && item.data.spanType === SpanType.LLM
-    )?.data;
+    const agentSpan = transport.spans.find((span) => span.spanType === SpanType.AGENT);
+    const llmSpan = transport.spans.find((span) => span.spanType === SpanType.LLM);
 
     expect(agentSpan?.parentSpanId).toBe(parentSpan.spanId);
     expect(agentSpan?.traceId).toBe(parentSpan.traceId);

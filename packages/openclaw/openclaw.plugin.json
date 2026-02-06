@@ -2,7 +2,7 @@
   "id": "prefactor-openclaw",
   "name": "Prefactor OpenClaw Plugin",
   "description": "Automatic observability for OpenClaw agents — captures distributed traces of LLM calls, tool executions, and agent workflows.",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "configSchema": {
     "type": "object",
     "properties": {

@@ -1,36 +1,42 @@
 import { beforeEach, describe, expect, test } from 'bun:test';
 import { extractPartition, isPfid, type Partition } from '@prefactor/pfid';
-import type { QueueAction } from '../../src/queue/actions';
-import type { Queue } from '../../src/queue/base';
 import { SpanContext } from '../../src/tracing/context';
 import { type Span, SpanStatus, SpanType } from '../../src/tracing/span';
 import { Tracer } from '../../src/tracing/tracer';
+import type { Transport } from '../../src/transport/base';
 
-class MockQueue implements Queue<QueueAction> {
-  items: QueueAction[] = [];
+class MockTransport implements Transport {
+  emitted: Span[] = [];
+  finished: Array<{ spanId: string; endTime: number }> = [];
+  startedInstances = 0;
+  finishedInstances = 0;
 
-  enqueue(item: QueueAction): void {
-    this.items.push(item);
+  emit(span: Span): void {
+    this.emitted.push(span);
   }
 
-  dequeueBatch(maxItems: number): QueueAction[] {
-    return this.items.splice(0, maxItems);
+  finishSpan(spanId: string, endTime: number): void {
+    this.finished.push({ spanId, endTime });
   }
 
-  size(): number {
-    return this.items.length;
+  startAgentInstance(): void {
+    this.startedInstances += 1;
   }
 
-  async flush(): Promise<void> {}
+  finishAgentInstance(): void {
+    this.finishedInstances += 1;
+  }
+
+  async close(): Promise<void> {}
 }
 
 describe('Tracer', () => {
-  let queue: MockQueue;
+  let transport: MockTransport;
   let tracer: Tracer;
 
   beforeEach(() => {
-    queue = new MockQueue();
-    tracer = new Tracer(queue);
+    transport = new MockTransport();
+    tracer = new Tracer(transport);
   });
 
   test('should create span with required fields', () => {
@@ -56,9 +62,8 @@ describe('Tracer', () => {
       inputs: {},
     });
 
-    expect(queue.items).toHaveLength(1);
-    expect(queue.items[0]?.type).toBe('span_end');
-    expect(queue.items[0]?.data).toEqual(span);
+    expect(transport.emitted).toHaveLength(1);
+    expect(transport.emitted[0]).toEqual(span);
   });
 
   test('should not emit non-agent spans immediately', () => {
@@ -68,7 +73,7 @@ describe('Tracer', () => {
       inputs: {},
     });
 
-    expect(queue.items).toHaveLength(0);
+    expect(transport.emitted).toHaveLength(0);
   });
 
   test('derives parent span from SpanContext', async () => {
@@ -95,9 +100,8 @@ describe('Tracer', () => {
     expect(span.status).toBe(SpanStatus.SUCCESS);
     expect(span.outputs).toEqual({ response: 'Hello!' });
     expect(span.endTime).toBeDefined();
-    expect(queue.items).toHaveLength(1);
-    expect(queue.items[0]?.type).toBe('span_end');
-    expect(queue.items[0]?.data).toEqual(span);
+    expect(transport.emitted).toHaveLength(1);
+    expect(transport.emitted[0]).toEqual(span);
   });
 
   test('should handle errors', () => {
@@ -126,9 +130,10 @@ describe('Tracer', () => {
 
     tracer.endSpan(span);
 
-    expect(queue.items).toHaveLength(2);
-    expect(queue.items[1]?.type).toBe('span_finish');
-    expect(queue.items[1]?.data).toEqual({ spanId: span.spanId, endTime: span.endTime });
+    expect(transport.emitted).toHaveLength(1);
+    expect(transport.finished).toHaveLength(1);
+    expect(transport.finished[0]?.spanId).toBe(span.spanId);
+    expect(typeof transport.finished[0]?.endTime).toBe('number');
   });
 
   test('should handle token usage', () => {
@@ -179,7 +184,7 @@ describe('Tracer', () => {
 
     test('should use provided partition for ID generation', () => {
       const partition: Partition = 12345;
-      const tracerWithPartition = new Tracer(queue, partition);
+      const tracerWithPartition = new Tracer(transport, partition);
 
       const span = tracerWithPartition.startSpan({
         name: 'test_span',
@@ -193,7 +198,7 @@ describe('Tracer', () => {
     });
 
     test('should generate partition when none provided', () => {
-      const tracerWithoutPartition = new Tracer(queue);
+      const tracerWithoutPartition = new Tracer(transport);
 
       const span = tracerWithoutPartition.startSpan({
         name: 'test_span',
@@ -212,7 +217,7 @@ describe('Tracer', () => {
 
     test('should use same partition for all spans from same tracer', () => {
       const partition: Partition = 99999;
-      const tracerWithPartition = new Tracer(queue, partition);
+      const tracerWithPartition = new Tracer(transport, partition);
 
       const spans: Span[] = [];
       for (let i = 0; i < 5; i++) {
