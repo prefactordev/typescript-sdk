@@ -1,0 +1,39 @@
+{
+  "name": "@prefactor/prefactor-openclaw",
+  "version": "0.3.0",
+  "description": "OpenClaw plugin for Prefactor observability",
+  "type": "module",
+  "main": "dist/index.cjs",
+  "module": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "files": ["dist"],
+  "keywords": [
+    "prefactor",
+    "observability",
+    "openclaw",
+    "tracing",
+    "plugin"
+  ],
+  "author": "Prefactor",
+  "license": "MIT",
+  "dependencies": {
+    "@prefactor/core": "workspace:*",
+    "@prefactor/pfid": "^0.1.0"
+  },
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "openclaw": {
+    "extensions": ["index.js"],
+    "id": "prefactor",
+    "name": "Prefactor"
+  },
+  "engines": { "node": ">=24.0.0" }
+}

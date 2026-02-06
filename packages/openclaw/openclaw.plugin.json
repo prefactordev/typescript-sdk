@@ -1,0 +1,32 @@
+{
+  "id": "prefactor-openclaw",
+  "name": "Prefactor OpenClaw Plugin",
+  "description": "Automatic observability for OpenClaw agents — captures distributed traces of LLM calls, tool executions, and agent workflows.",
+  "version": "0.3.0",
+  "configSchema": {
+    "type": "object",
+    "properties": {
+      "transportType": { "type": "string", "enum": ["stdio", "http"] },
+      "sampleRate": { "type": "number", "minimum": 0, "maximum": 1 },
+      "captureInputs": { "type": "boolean" },
+      "captureOutputs": { "type": "boolean" },
+      "maxInputLength": { "type": "number", "minimum": 1 },
+      "maxOutputLength": { "type": "number", "minimum": 1 },
+      "httpConfig": {
+        "type": "object",
+        "properties": {
+          "apiUrl": { "type": "string" },
+          "apiToken": { "type": "string" },
+          "agentId": { "type": "string" },
+          "agentIdentifier": { "type": "string" },
+          "agentName": { "type": "string" },
+          "agentDescription": { "type": "string" },
+          "schemaName": { "type": "string" },
+          "schemaIdentifier": { "type": "string" },
+          "agentSchemaIdentifier": { "type": "string" },
+          "skipSchema": { "type": "boolean" }
+        }
+      }
+    }
+  }
+}
