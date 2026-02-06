@@ -34,7 +34,7 @@ const packages: PackageConfig[] = [
     external: ['@prefactor/core', '@prefactor/pfid', '@langchain/core', 'langchain', 'zod'],
   },
   {
-    name: '@prefactor/prefactor',
+    name: '@prefactor/prefactor-openclaw',
     path: 'packages/openclaw',
     entrypoint: './packages/openclaw/src/index.ts',
     external: [],
