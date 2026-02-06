@@ -10,7 +10,7 @@ const sanitize = (value: unknown, maxLength: number): unknown => serializeValue(
 export function createInstrumentation(tracer: Tracer, config: Config) {
   const logger = getLogger('openclaw');
   const agentSpans = new Map<string, Span>();
-  
+
   const endToolSpan = (span: Span, reason: string, hook: string, toolName?: string) => {
     const outputs = config.captureOutputs
       ? {
