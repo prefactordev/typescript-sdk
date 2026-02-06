@@ -1,51 +1,14 @@
-import { isDeepStrictEqual } from 'node:util';
 import type { AgentInstanceStart, QueueAction, SchemaRegistration } from '../queue/actions.js';
 import type { Queue } from '../queue/base.js';
-import { SchemaRegistry } from './schema-registry.js';
-
-const orderInsensitiveArrayKeys = new Set(['required', 'enum', 'oneOf', 'allOf', 'anyOf', 'type']);
-
-const stableStringify = (value: unknown): string => JSON.stringify(value) ?? 'undefined';
-
-const normalizeSchema = (value: unknown, arrayKey?: string): unknown => {
-  if (Array.isArray(value)) {
-    const normalizedItems = value.map((item) => normalizeSchema(item));
-    if (arrayKey && orderInsensitiveArrayKeys.has(arrayKey)) {
-      return normalizedItems
-        .map((item) => ({ item, key: stableStringify(item) }))
-        .sort((left, right) => left.key.localeCompare(right.key))
-        .map(({ item }) => item);
-    }
-    return normalizedItems;
-  }
-
-  if (value && typeof value === 'object') {
-    const proto = Object.getPrototypeOf(value);
-    if (proto === Object.prototype || proto === null) {
-      const entries = Object.entries(value as Record<string, unknown>).sort(([left], [right]) =>
-        left.localeCompare(right)
-      );
-      const normalized: Record<string, unknown> = {};
-      for (const [key, entryValue] of entries) {
-        normalized[key] = normalizeSchema(entryValue, key);
-      }
-      return normalized;
-    }
-  }
-
-  return value;
-};
 
 export type AgentInstanceManagerOptions = {
-  schemaName: string;
-  schemaIdentifier: string;
   allowUnregisteredSchema?: boolean;
 };
 
-type AgentInstanceStartOptions = Omit<AgentInstanceStart, 'schemaName' | 'schemaIdentifier'>;
+type AgentInstanceStartOptions = AgentInstanceStart;
 
 export class AgentInstanceManager {
-  private schemaRegistry = new SchemaRegistry();
+  private registeredSchema: Record<string, unknown> | null = null;
 
   constructor(
     private queue: Queue<QueueAction>,
@@ -53,50 +16,21 @@ export class AgentInstanceManager {
   ) {}
 
   registerSchema(schema: Record<string, unknown>): void {
-    if (this.schemaRegistry.has(this.options.schemaName, this.options.schemaIdentifier)) {
-      const existing = this.schemaRegistry.get(
-        this.options.schemaName,
-        this.options.schemaIdentifier
-      );
-      if (
-        existing &&
-        !isDeepStrictEqual(normalizeSchema(existing.schema), normalizeSchema(schema))
-      ) {
-        console.warn(
-          `Schema ${this.options.schemaName}@${this.options.schemaIdentifier} is already registered with a different payload. Ignoring registration.`
-        );
-      }
-      return;
+    // Only register if we haven't already
+    if (this.registeredSchema === null) {
+      const registration: SchemaRegistration = { schema };
+      this.registeredSchema = schema;
+      this.queue.enqueue({ type: 'schema_register', data: registration });
     }
-
-    const registration: SchemaRegistration = {
-      schemaName: this.options.schemaName,
-      schemaIdentifier: this.options.schemaIdentifier,
-      schema,
-    };
-
-    this.schemaRegistry.register(registration);
-    this.queue.enqueue({ type: 'schema_register', data: registration });
   }
 
   startInstance(options: AgentInstanceStartOptions = {}): void {
-    if (
-      !this.options.allowUnregisteredSchema &&
-      !this.schemaRegistry.has(this.options.schemaName, this.options.schemaIdentifier)
-    ) {
-      console.warn(
-        `Schema ${this.options.schemaName}@${this.options.schemaIdentifier} must be registered before starting an agent instance.`
-      );
+    if (!this.options.allowUnregisteredSchema && this.registeredSchema === null) {
+      console.warn('Schema must be registered before starting an agent instance.');
       return;
     }
 
-    const startData: AgentInstanceStart = {
-      ...options,
-      schemaName: this.options.schemaName,
-      schemaIdentifier: this.options.schemaIdentifier,
-    };
-
-    this.queue.enqueue({ type: 'agent_start', data: startData });
+    this.queue.enqueue({ type: 'agent_start', data: options });
   }
 
   finishInstance(): void {

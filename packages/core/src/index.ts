@@ -2,7 +2,6 @@
 
 // Agent
 export { AgentInstanceManager } from './agent/instance-manager.js';
-export { SchemaRegistry } from './agent/schema-registry.js';
 // Config
 export {
   type Config,

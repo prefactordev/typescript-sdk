@@ -22,26 +22,11 @@ export const HttpTransportConfigSchema = z.object({
   /** Optional agent description */
   agentDescription: z.string().optional(),
 
-  /** Optional schema identifier name (used for registration/agent instance) */
-  schemaName: z.string().optional(),
-
-  /** Optional schema identifier (used for registration/agent instance) */
-  schemaIdentifier: z.string().optional(),
-
   /** Optional agent schema for validation (full schema object) */
   agentSchema: z.record(z.unknown()).optional(),
 
-  /** Optional pre-registered schema identifier (external identifier string) */
-  agentSchemaIdentifier: z.string().optional(),
-
-  /** Skip schema validation */
-  skipSchema: z.boolean().default(false),
-
   /** Request timeout in milliseconds */
   requestTimeout: z.number().positive().default(30000),
-
-  /** Connection timeout in milliseconds */
-  connectTimeout: z.number().positive().default(10000),
 
   /** Maximum number of retry attempts */
   maxRetries: z.number().int().nonnegative().default(3),
@@ -68,13 +53,8 @@ export const PartialHttpConfigSchema = z.object({
   agentIdentifier: z.string().optional(),
   agentName: z.string().optional(),
   agentDescription: z.string().optional(),
-  schemaName: z.string().optional(),
-  schemaIdentifier: z.string().optional(),
   agentSchema: z.record(z.unknown()).optional(),
-  agentSchemaIdentifier: z.string().optional(),
-  skipSchema: z.boolean().optional(),
   requestTimeout: z.number().positive().optional(),
-  connectTimeout: z.number().positive().optional(),
   maxRetries: z.number().int().nonnegative().optional(),
   initialRetryDelay: z.number().positive().optional(),
   maxRetryDelay: z.number().positive().optional(),

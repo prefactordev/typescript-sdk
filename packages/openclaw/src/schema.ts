@@ -199,9 +199,5 @@ export const OPENCLAW_DEFAULT_SCHEMA = {
       required: ['type'],
       additionalProperties: true,
     },
-    retriever: {
-      type: 'object',
-      properties: { type: { type: 'string', const: 'retriever' } },
-    },
   },
 } as const;

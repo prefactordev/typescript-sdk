@@ -40,9 +40,6 @@ export class HttpTransport implements Transport {
     for (const item of items) {
       if (item.type === 'schema_register') {
         this.config.agentSchema = item.data.schema;
-        this.config.agentSchemaIdentifier = item.data.schemaIdentifier;
-        this.config.schemaName = item.data.schemaName;
-        this.config.schemaIdentifier = item.data.schemaIdentifier;
       }
     }
 
@@ -182,7 +179,6 @@ export class HttpTransport implements Transport {
       inputs: span.inputs,
       outputs: span.outputs,
       metadata: span.metadata,
-      tags: span.tags,
       token_usage: null,
       error: null,
     };
@@ -261,21 +257,12 @@ export class HttpTransport implements Transport {
       };
     }
 
-    // Schema handling - four modes:
-    // 1. skipSchema=true: No schema in payload (pre-registered on backend)
-    // 2. agentSchema provided: Use full custom schema object
-    // 3. agentSchemaIdentifier provided: Use version identifier only
-    if (this.config.skipSchema) {
-      logger.debug('Skipping schema in registration (skipSchema=true)');
-      // Do not add agent_schema_version key
-    } else if (this.config.agentSchema) {
+    // Schema handling:
+    // 1. agentSchema provided: Use full custom schema object
+    // 2. No schema: Use default hardcoded schema
+    if (this.config.agentSchema) {
       logger.debug('Using custom agent schema');
       payload.agent_schema_version = this.config.agentSchema;
-    } else if (this.config.agentSchemaIdentifier) {
-      logger.debug(`Using schema version: ${this.config.agentSchemaIdentifier}`);
-      payload.agent_schema_version = {
-        external_identifier: this.config.agentSchemaIdentifier,
-      };
     } else {
       logger.debug('Using default hardcoded schema (v1.0.0)');
       payload.agent_schema_version = this.getDefaultSchema();

@@ -33,11 +33,6 @@ export function init(config?: PluginConfig): InitResult {
   const httpConfig = resolved.httpConfig;
   if (httpConfig?.agentSchema) {
     runtime.agentManager.registerSchema(httpConfig.agentSchema);
-  } else if (
-    resolved.transportType === 'http' &&
-    (httpConfig?.agentSchemaIdentifier || httpConfig?.skipSchema)
-  ) {
-    logger.debug('Skipping default schema registration based on httpConfig');
   } else {
     runtime.agentManager.registerSchema(OPENCLAW_DEFAULT_SCHEMA);
   }

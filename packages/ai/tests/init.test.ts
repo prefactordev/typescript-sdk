@@ -40,14 +40,14 @@ describe('ai init schema registration', () => {
     expect(registeredSchemas).toEqual([customSchema]);
   });
 
-  test('skips default schema when agentSchemaIdentifier is set', () => {
+  test('registers default schema when only agentIdentifier is set', () => {
     init({
       ...baseConfig,
       transportType: 'http',
-      httpConfig: { ...baseConfig.httpConfig, agentSchemaIdentifier: '2.0.0' },
+      httpConfig: { ...baseConfig.httpConfig, agentIdentifier: '2.0.0' },
     });
 
-    expect(registeredSchemas).toEqual([]);
+    expect(registeredSchemas.length).toBe(1);
   });
 
   test('registers default schema when no schema config is provided', () => {

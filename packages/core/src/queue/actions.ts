@@ -1,8 +1,6 @@
 import type { Span } from '../tracing/span.js';
 
 export type SchemaRegistration = {
-  schemaName: string;
-  schemaIdentifier: string;
   schema: Record<string, unknown>;
 };
 
@@ -11,8 +9,6 @@ export type AgentInstanceStart = {
   agentIdentifier?: string;
   agentName?: string;
   agentDescription?: string;
-  schemaName: string;
-  schemaIdentifier: string;
 };
 
 export type AgentInstanceFinish = Record<string, never>;

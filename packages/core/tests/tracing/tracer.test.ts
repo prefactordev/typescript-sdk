@@ -153,17 +153,15 @@ describe('Tracer', () => {
     });
   });
 
-  test('should include metadata and tags', () => {
+  test('should include metadata', () => {
     const span = tracer.startSpan({
       name: 'test',
       spanType: SpanType.LLM,
       inputs: {},
       metadata: { foo: 'bar' },
-      tags: ['test', 'example'],
     });
 
     expect(span.metadata).toEqual({ foo: 'bar' });
-    expect(span.tags).toEqual(['test', 'example']);
   });
 
   describe('PFID integration', () => {

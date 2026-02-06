@@ -119,18 +119,7 @@ export function init(
     };
   }
 
-  // Set default schema namespace for AI SDK adaptor
-  const configWithDefaults: Partial<Config> = {
-    ...configWithHttp,
-    httpConfig: configWithHttp?.httpConfig
-      ? {
-          ...configWithHttp.httpConfig,
-          schemaName: 'aisdk:agent',
-        }
-      : undefined,
-  };
-
-  const finalConfig = createConfig(configWithDefaults);
+  const finalConfig = createConfig(configWithHttp);
   logger.info('Initializing Prefactor AI Middleware', { transport: finalConfig.transportType });
 
   // Return existing middleware if already initialized
@@ -145,11 +134,6 @@ export function init(
   const httpConfig = finalConfig.httpConfig;
   if (httpConfig?.agentSchema) {
     core.agentManager.registerSchema(httpConfig.agentSchema);
-  } else if (
-    finalConfig.transportType === 'http' &&
-    (httpConfig?.agentSchemaIdentifier || httpConfig?.skipSchema)
-  ) {
-    logger.debug('Skipping default schema registration based on httpConfig');
   } else {
     core.agentManager.registerSchema(DEFAULT_AGENT_SCHEMA);
   }

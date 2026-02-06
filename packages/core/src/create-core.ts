@@ -42,18 +42,9 @@ export function createCore(config: Config): CoreRuntime {
   const worker = new TransportWorker(queue, transport, { batchSize: 25, intervalMs: 50 });
   const tracer = new Tracer(queue, partition);
 
-  const schemaName = config.httpConfig?.schemaName ?? 'prefactor:agent';
-  const schemaIdentifier = config.httpConfig?.schemaIdentifier ?? '1.0.0';
   const allowUnregisteredSchema =
-    config.transportType === 'http' &&
-    Boolean(
-      config.httpConfig?.skipSchema ||
-        config.httpConfig?.agentSchema ||
-        config.httpConfig?.agentSchemaIdentifier
-    );
+    config.transportType === 'http' && Boolean(config.httpConfig?.agentSchema);
   const agentManager = new AgentInstanceManager(queue, {
-    schemaName,
-    schemaIdentifier,
     allowUnregisteredSchema,
   });
 

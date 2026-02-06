@@ -6,13 +6,12 @@ import { HttpTransport } from '../../src/transport/http.js';
 const createConfig = () => ({
   apiUrl: 'https://example.com',
   apiToken: 'test-token',
+  agentIdentifier: '1.0.0',
   requestTimeout: 1000,
-  connectTimeout: 1000,
   maxRetries: 0,
   initialRetryDelay: 1,
   maxRetryDelay: 1,
   retryMultiplier: 1,
-  skipSchema: false,
 });
 
 describe('HttpTransport processBatch', () => {
@@ -49,15 +48,11 @@ describe('HttpTransport processBatch', () => {
           agentIdentifier: '2.0.0',
           agentName: 'Test Agent',
           agentDescription: 'Test description',
-          schemaName: 'prefactor:agent',
-          schemaIdentifier: '2.0.0',
         },
       },
       {
         type: 'schema_register',
         data: {
-          schemaName: 'prefactor:agent',
-          schemaIdentifier: '2.0.0',
           schema: { type: 'object' },
         },
       },
@@ -72,9 +67,6 @@ describe('HttpTransport processBatch', () => {
       agentName?: string;
       agentDescription?: string;
       agentSchema?: Record<string, unknown>;
-      agentSchemaIdentifier?: string;
-      schemaName?: string;
-      schemaIdentifier?: string;
     };
 
     expect(config.agentId).toBe('agent-123');
@@ -82,9 +74,6 @@ describe('HttpTransport processBatch', () => {
     expect(config.agentName).toBe('Test Agent');
     expect(config.agentDescription).toBe('Test description');
     expect(config.agentSchema).toEqual({ type: 'object' });
-    expect(config.agentSchemaIdentifier).toBe('2.0.0');
-    expect(config.schemaName).toBe('prefactor:agent');
-    expect(config.schemaIdentifier).toBe('2.0.0');
     expect(fetchCalls.map((call) => call.url)).toEqual([
       'https://example.com/api/v1/agent_instance/register',
       'https://example.com/api/v1/agent_instance/agent-instance-1/start',
@@ -142,7 +131,6 @@ describe('HttpTransport processBatch', () => {
       tokenUsage: null,
       error: null,
       metadata: {},
-      tags: [],
     };
 
     const actions: QueueAction[] = [
@@ -209,7 +197,6 @@ describe('HttpTransport processBatch', () => {
       tokenUsage: null,
       error: null,
       metadata: {},
-      tags: [],
     };
 
     // Real queue order: span_end, span_finish, then agent_finish
@@ -274,7 +261,6 @@ describe('HttpTransport processBatch', () => {
       tokenUsage: null,
       error: null,
       metadata: {},
-      tags: [],
     };
 
     // First batch: only span_end (simulating AGENT span start)
@@ -341,7 +327,6 @@ describe('HttpTransport processBatch', () => {
       tokenUsage: null,
       error: null,
       metadata: {},
-      tags: [],
     };
 
     // First batch: span_finish arrives BEFORE span_end (out of order)

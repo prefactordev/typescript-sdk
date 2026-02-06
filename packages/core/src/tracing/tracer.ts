@@ -20,9 +20,6 @@ export interface StartSpanOptions {
 
   /** Additional metadata (optional) */
   metadata?: Record<string, unknown>;
-
-  /** Tags for categorizing the span (optional) */
-  tags?: string[];
 }
 
 /**
@@ -107,7 +104,6 @@ export class Tracer {
       tokenUsage: null,
       error: null,
       metadata: options.metadata ?? {},
-      tags: options.tags ?? [],
     };
 
     // AGENT spans are emitted immediately for real-time tracking
