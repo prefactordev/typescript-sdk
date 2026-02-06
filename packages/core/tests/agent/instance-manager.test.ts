@@ -43,7 +43,7 @@ const createWarnSpy = () => {
 };
 
 describe('AgentInstanceManager', () => {
-  test('enqueues schema registration before agent start with schema payloads', () => {
+  test('registers schema via transport before agent start with schema payloads', () => {
     const transport = new MockTransport();
     const manager = new AgentInstanceManager(transport, {});
 
@@ -53,7 +53,7 @@ describe('AgentInstanceManager', () => {
     expect(transport.startedInstances).toEqual([{ agentId: 'agent-1' }]);
   });
 
-  test('warns and does not enqueue agent start before schema registration', () => {
+  test('warns and does not start agent before schema registration', () => {
     const { warnMessages, warnSpy } = createWarnSpy();
     const transport = new MockTransport();
     const manager = new AgentInstanceManager(transport, {});
@@ -100,7 +100,7 @@ describe('AgentInstanceManager', () => {
     expect(transport.registeredSchemas).toHaveLength(1);
   });
 
-  test('enqueues agent finish', () => {
+  test('finishes agent instance via transport', () => {
     const transport = new MockTransport();
     const manager = new AgentInstanceManager(transport, {});
 

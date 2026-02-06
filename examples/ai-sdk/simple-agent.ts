@@ -13,7 +13,7 @@
 import { generateText, wrapLanguageModel, tool, stepCountIs } from 'ai';
 import { anthropic } from '@ai-sdk/anthropic';
 import { z } from 'zod';
-import { init, shutdown } from '@prefactor/ai';
+import { init, shutdown, withSpan } from '@prefactor/ai';
 
 const calculateTool = tool({
   description: 'Perform basic arithmetic operations (+, -, *, /).',
@@ -22,25 +22,33 @@ const calculateTool = tool({
     left: z.number().describe('Left operand'),
     right: z.number().describe('Right operand'),
   }),
-  execute: async ({ operation, left, right }) => {
-    let result: number;
-    switch (operation) {
-      case '+':
-        result = left + right;
-        break;
-      case '-':
-        result = left - right;
-        break;
-      case '*':
-        result = left * right;
-        break;
-      case '/':
-        if (right === 0) return 'Error: Division by zero';
-        result = left / right;
-        break;
-    }
-    return `Result: ${Math.round(result * 1000) / 1000}`;
-  },
+  execute: async ({ operation, left, right }) =>
+    withSpan(
+      {
+        name: 'tool:calculate_expression',
+        spanType: 'custom:calculation',
+        inputs: { operation, left, right },
+      },
+      async () => {
+        let result: number;
+        switch (operation) {
+          case '+':
+            result = left + right;
+            break;
+          case '-':
+            result = left - right;
+            break;
+          case '*':
+            result = left * right;
+            break;
+          case '/':
+            if (right === 0) return 'Error: Division by zero';
+            result = left / right;
+            break;
+        }
+        return `Result: ${Math.round(result * 1000) / 1000}`;
+      }
+    ),
 });
 
 const getCurrentTimeTool = tool({
@@ -68,19 +76,27 @@ const getTimeDifferenceTool = tool({
     seconds1: z.number().describe('First time in seconds since midnight'),
     seconds2: z.number().describe('Second time in seconds since midnight'),
   }),
-  execute: async ({ seconds1, seconds2 }) => {
-    const diff = Math.abs(seconds2 - seconds1);
-    const hours = Math.floor(diff / 3600);
-    const minutes = Math.floor((diff % 3600) / 60);
-    const seconds = diff % 60;
-    return JSON.stringify({
-      totalSeconds: diff,
-      hours,
-      minutes,
-      seconds,
-      formatted: `${hours}h ${minutes}m ${seconds}s`,
-    });
-  },
+  execute: async ({ seconds1, seconds2 }) =>
+    withSpan(
+      {
+        name: 'tool:calculate_time_difference',
+        spanType: 'custom:time-difference',
+        inputs: { seconds1, seconds2 },
+      },
+      async () => {
+        const diff = Math.abs(seconds2 - seconds1);
+        const hours = Math.floor(diff / 3600);
+        const minutes = Math.floor((diff % 3600) / 60);
+        const seconds = diff % 60;
+        return JSON.stringify({
+          totalSeconds: diff,
+          hours,
+          minutes,
+          seconds,
+          formatted: `${hours}h ${minutes}m ${seconds}s`,
+        });
+      }
+    ),
 });
 
 const addTimeTool = tool({
@@ -122,7 +138,7 @@ async function main() {
 
   // Initialize @prefactor/ai
   // Config is picked up from environment variables:
-  // - PREFACTOR_TRANSPORT: 'stdio' or 'http' (default: 'stdio')
+  // - PREFACTOR_TRANSPORT: 'http'
   // - PREFACTOR_API_URL: API endpoint for HTTP transport
   // - PREFACTOR_API_TOKEN: API token for HTTP transport
   // - PREFACTOR_AGENT_ID: Optional agent identifier

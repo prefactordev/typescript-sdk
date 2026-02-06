@@ -14,8 +14,8 @@ import {
   configureLogging,
   createConfig,
   createCore,
-  DEFAULT_AGENT_SCHEMA,
   getLogger,
+  SpanContext,
   type Tracer,
 } from '@prefactor/core';
 import { createPrefactorMiddleware, endRootAgentSpan } from './middleware.js';
@@ -31,6 +31,13 @@ let agentLifecycle: { started: boolean } | null = null;
 /** Global middleware instance. */
 let globalMiddleware: ReturnType<typeof createPrefactorMiddleware> | null = null;
 
+export type ManualSpanOptions = {
+  name: string;
+  spanType: string;
+  inputs: Record<string, unknown>;
+  metadata?: Record<string, unknown>;
+};
+
 /**
  * Initialize the Prefactor AI middleware and return it for use with wrapLanguageModel.
  *
@@ -41,14 +48,21 @@ let globalMiddleware: ReturnType<typeof createPrefactorMiddleware> | null = null
  * @param middlewareConfig - Optional middleware-specific configuration
  * @returns Middleware object to use with wrapLanguageModel
  *
- * @example Basic usage with stdio (development)
+ * @example Basic usage with HTTP transport
  * ```typescript
  * import { init, shutdown } from '@prefactor/ai';
  * import { generateText, wrapLanguageModel } from 'ai';
  * import { anthropic } from '@ai-sdk/anthropic';
  *
- * // Initialize with defaults (stdio transport)
- * const middleware = init();
+ * // Initialize with HTTP transport config
+ * const middleware = init({
+ *   transportType: 'http',
+ *   httpConfig: {
+ *     apiUrl: 'https://api.prefactor.ai',
+ *     apiToken: process.env.PREFACTOR_API_TOKEN!,
+ *     agentIdentifier: '1.0.0',
+ *   },
+ * });
  *
  * // Wrap your model with the middleware
  * const model = wrapLanguageModel({
@@ -80,7 +94,14 @@ let globalMiddleware: ReturnType<typeof createPrefactorMiddleware> | null = null
  * @example With middleware configuration
  * ```typescript
  * const middleware = init(
- *   { transportType: 'stdio' },
+ *   {
+ *     transportType: 'http',
+ *     httpConfig: {
+ *       apiUrl: 'https://api.prefactor.ai',
+ *       apiToken: process.env.PREFACTOR_API_TOKEN!,
+ *       agentIdentifier: '1.0.0',
+ *     },
+ *   },
  *   { captureContent: false } // Don't capture prompts/responses
  * );
  * ```
@@ -93,7 +114,7 @@ export function init(
 
   // Build httpConfig from environment if not provided but HTTP transport is requested
   let configWithHttp = config;
-  const transportType = config?.transportType ?? process.env.PREFACTOR_TRANSPORT ?? 'stdio';
+  const transportType = config?.transportType ?? process.env.PREFACTOR_TRANSPORT ?? 'http';
 
   if (transportType === 'http' && !config?.httpConfig) {
     const apiUrl = process.env.PREFACTOR_API_URL;
@@ -134,8 +155,6 @@ export function init(
   const httpConfig = finalConfig.httpConfig;
   if (httpConfig?.agentSchema) {
     core.agentManager.registerSchema(httpConfig.agentSchema);
-  } else {
-    core.agentManager.registerSchema(DEFAULT_AGENT_SCHEMA);
   }
 
   const agentInfo = finalConfig.httpConfig
@@ -183,6 +202,24 @@ export function getTracer(): Tracer {
   }
   // Safe because init() always sets globalTracer
   return globalTracer as Tracer;
+}
+
+export async function withSpan<T>(
+  options: ManualSpanOptions,
+  fn: () => Promise<T> | T
+): Promise<T> {
+  const tracer = getTracer();
+  const span = tracer.startSpan(options);
+
+  try {
+    const result = await SpanContext.runAsync(span, async () => await fn());
+    tracer.endSpan(span);
+    return result;
+  } catch (error) {
+    const normalizedError = error instanceof Error ? error : new Error(String(error));
+    tracer.endSpan(span, { error: normalizedError });
+    throw error;
+  }
 }
 
 /**

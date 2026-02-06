@@ -10,7 +10,7 @@
 
 import { anthropic } from '@ai-sdk/anthropic';
 import { generateText, wrapLanguageModel } from 'ai';
-import { init, shutdown } from '@prefactor/ai';
+import { init, shutdown, withSpan } from '@prefactor/ai';
 
 const customSchema = {
   external_identifier: 'ai-sdk-example-2026-01-28',
@@ -75,8 +75,6 @@ async function main() {
       agentIdentifier: '1.0.0',
       agentName: 'AI SDK Custom Schema Demo',
       agentSchema: customSchema,
-      schemaName: 'prefactor:ai-sdk-example',
-      schemaIdentifier: '2026-01-28',
     },
   });
 
@@ -90,8 +88,19 @@ async function main() {
     prompt: 'Say hello and include today\'s date.',
   });
 
+  const formattedResponse = await withSpan(
+    {
+      name: 'custom:format_response',
+      spanType: 'custom:response-processing',
+      inputs: {
+        responseLength: result.text.length,
+      },
+    },
+    async () => result.text.trim()
+  );
+
   console.log('Agent Response:');
-  console.log(result.text);
+  console.log(formattedResponse);
   console.log();
 
   await shutdown();

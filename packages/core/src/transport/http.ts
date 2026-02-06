@@ -1,5 +1,5 @@
 import type { HttpTransportConfig } from '../config.js';
-import { DEFAULT_AGENT_SCHEMA, type Span } from '../tracing/span.js';
+import type { Span } from '../tracing/span.js';
 import { getLogger } from '../utils/logging.js';
 import type { AgentInstanceOptions, Transport } from './base.js';
 
@@ -15,6 +15,9 @@ type Action =
 export class HttpTransport implements Transport {
   private closed = false;
   private actionChain = Promise.resolve();
+  private previousAgentSchema: string | null = null;
+  private requiresNewAgentIdentifier = false;
+  private previousAgentIdentifier: string | null = null;
   private agentInstanceId: string | null = null;
   private spanIdMap = new Map<string, string>();
   private pendingFinishes = new Map<string, number>();
@@ -68,10 +71,32 @@ export class HttpTransport implements Transport {
 
   private async processAction(action: Action): Promise<void> {
     switch (action.type) {
-      case 'schema_register':
+      case 'schema_register': {
+        const incomingSchema = JSON.stringify(action.schema);
+        if (this.previousAgentSchema !== null && this.previousAgentSchema !== incomingSchema) {
+          this.requiresNewAgentIdentifier = true;
+          this.previousAgentIdentifier = this.config.agentIdentifier;
+          this.agentInstanceId = null;
+        }
+        this.previousAgentSchema = incomingSchema;
         this.config.agentSchema = action.schema;
         return;
-      case 'agent_start':
+      }
+      case 'agent_start': {
+        if (this.requiresNewAgentIdentifier) {
+          const nextAgentIdentifier = action.options?.agentIdentifier;
+          if (
+            nextAgentIdentifier === undefined ||
+            nextAgentIdentifier === this.previousAgentIdentifier
+          ) {
+            logger.error('Schema changed; starting an agent requires a new agentIdentifier value.');
+            return;
+          }
+
+          this.requiresNewAgentIdentifier = false;
+          this.previousAgentIdentifier = null;
+        }
+
         if (action.options?.agentId !== undefined) this.config.agentId = action.options.agentId;
         if (action.options?.agentIdentifier !== undefined) {
           this.config.agentIdentifier = action.options.agentIdentifier;
@@ -83,6 +108,7 @@ export class HttpTransport implements Transport {
         }
         await this.startAgentInstanceHttp();
         return;
+      }
       case 'agent_finish':
         await this.finishAgentInstanceHttp();
         return;
@@ -156,7 +182,7 @@ export class HttpTransport implements Transport {
       }
 
       logger.error(`Failed to send span: ${response.status} ${response.statusText}`);
-      logger.error(`Failed span: ${await response.text()}`);
+      logger.debug(`Failed span response: ${await response.text()}`);
     } catch (error) {
       logger.error('Error sending span:', error);
 
@@ -232,10 +258,6 @@ export class HttpTransport implements Transport {
     }
   }
 
-  private getDefaultSchema(): Record<string, unknown> {
-    return DEFAULT_AGENT_SCHEMA;
-  }
-
   private async ensureAgentRegistered(): Promise<void> {
     if (this.agentInstanceId) {
       return;
@@ -255,8 +277,6 @@ export class HttpTransport implements Transport {
 
     if (this.config.agentSchema) {
       payload.agent_schema_version = this.config.agentSchema;
-    } else {
-      payload.agent_schema_version = this.getDefaultSchema();
     }
 
     try {

@@ -15,10 +15,18 @@ export class AgentInstanceManager {
   ) {}
 
   registerSchema(schema: Record<string, unknown>): void {
-    // Only register if we haven't already
     if (this.registeredSchema === null) {
       this.registeredSchema = schema;
       this.transport.registerSchema(schema);
+      return;
+    }
+
+    const existingSchema = JSON.stringify(this.registeredSchema);
+    const incomingSchema = JSON.stringify(schema);
+    if (existingSchema !== incomingSchema) {
+      console.warn(
+        'A different schema was provided after registration; ignoring subsequent schema.'
+      );
     }
   }
 

@@ -64,10 +64,14 @@ describe('createCore', () => {
     }
   });
 
-  test('warns when schema is not registered for stdio transport', async () => {
+  test('warns when schema is not registered for HTTP transport without agent schema', async () => {
     const { warnMessages, warnSpy } = createWarnSpy();
     const config = createConfig({
-      transportType: 'stdio',
+      transportType: 'http',
+      httpConfig: {
+        apiUrl: 'https://example.com',
+        apiToken: 'test-token',
+      },
     });
     const core = createCore(config);
 
@@ -80,5 +84,13 @@ describe('createCore', () => {
       warnSpy.mockRestore();
       await core.shutdown();
     }
+  });
+
+  test('rejects stdio transport type', () => {
+    expect(() =>
+      createConfig({
+        transportType: 'stdio' as unknown as 'http',
+      })
+    ).toThrow();
   });
 });

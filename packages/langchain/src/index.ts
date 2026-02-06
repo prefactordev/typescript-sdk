@@ -9,7 +9,7 @@ export {
   SpanStatus,
   SpanType,
 } from '@prefactor/core';
-export { getTracer, init, shutdown } from './init.js';
+export { getTracer, init, shutdown, withSpan } from './init.js';
 export { extractTokenUsage } from './metadata-extractor.js';
 // Middleware
 export { PrefactorMiddleware } from './middleware.js';

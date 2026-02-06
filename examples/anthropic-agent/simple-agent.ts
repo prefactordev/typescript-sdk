@@ -12,20 +12,28 @@
 
 import { createAgent, tool } from 'langchain';
 import { z } from 'zod';
-import { init, shutdown } from '@prefactor/langchain';
+import { init, shutdown, withSpan } from '@prefactor/langchain';
 
 // Define simple tools for the agent
 const calculatorTool = tool(
-  async ({ expression }: { expression: string }) => {
-    try {
-      // Simple evaluation for demo purposes
-      // In production, use a proper math parser
-      const result = eval(expression);
-      return `Result: ${result}`;
-    } catch (error) {
-      return `Error: ${error instanceof Error ? error.message : String(error)}`;
-    }
-  },
+  async ({ expression }: { expression: string }) =>
+    withSpan(
+      {
+        name: 'tool:calculator_execution',
+        spanType: 'custom:calculator',
+        inputs: { expression },
+      },
+      async () => {
+        try {
+          // Simple evaluation for demo purposes
+          // In production, use a proper math parser
+          const result = eval(expression);
+          return `Result: ${result}`;
+        } catch (error) {
+          return `Error: ${error instanceof Error ? error.message : String(error)}`;
+        }
+      }
+    ),
   {
     name: 'calculator',
     description: 'Evaluate a mathematical expression.',
@@ -36,10 +44,18 @@ const calculatorTool = tool(
 );
 
 const getCurrentTimeTool = tool(
-  async () => {
-    const now = new Date();
-    return now.toISOString().replace('T', ' ').substring(0, 19);
-  },
+  async () =>
+    withSpan(
+      {
+        name: 'tool:get_current_time_execution',
+        spanType: 'custom:time-fetch',
+        inputs: {},
+      },
+      async () => {
+        const now = new Date();
+        return now.toISOString().replace('T', ' ').substring(0, 19);
+      }
+    ),
   {
     name: 'get_current_time',
     description: 'Get the current date and time.',

@@ -27,6 +27,8 @@ class MockTransport implements Transport {
     this.finishedInstances += 1;
   }
 
+  registerSchema(_schema: Record<string, unknown>): void {}
+
   async close(): Promise<void> {}
 }
 

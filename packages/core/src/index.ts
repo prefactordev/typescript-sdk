@@ -15,7 +15,6 @@ export {
 export { type CoreRuntime, createCore } from './create-core.js';
 export { SpanContext } from './tracing/context.js';
 export {
-  DEFAULT_AGENT_SCHEMA,
   type ErrorInfo,
   type Span,
   SpanStatus,
@@ -26,7 +25,6 @@ export { type EndSpanOptions, type StartSpanOptions, Tracer } from './tracing/tr
 // Transport
 export type { AgentInstanceOptions, Transport } from './transport/base.js';
 export { HttpTransport } from './transport/http.js';
-export { StdioTransport } from './transport/stdio.js';
 
 // Utilities
 export { configureLogging, getLogger } from './utils/logging.js';

@@ -68,7 +68,7 @@ export type PartialHttpConfig = z.infer<typeof PartialHttpConfigSchema>;
  */
 export const ConfigSchema = z.object({
   /** Transport type to use for span emission */
-  transportType: z.enum(['stdio', 'http']).default('stdio'),
+  transportType: z.enum(['http']).default('http'),
 
   /** Sampling rate (0.0 to 1.0) */
   sampleRate: z.number().min(0).max(1).default(1.0),
@@ -113,9 +113,7 @@ export type Config = z.infer<typeof ConfigSchema>;
 export function createConfig(options?: Partial<Config>): Config {
   const config = {
     transportType:
-      options?.transportType ??
-      (process.env.PREFACTOR_TRANSPORT as 'stdio' | 'http' | undefined) ??
-      'stdio',
+      options?.transportType ?? (process.env.PREFACTOR_TRANSPORT as 'http' | undefined) ?? 'http',
     sampleRate: options?.sampleRate ?? parseFloat(process.env.PREFACTOR_SAMPLE_RATE ?? '1.0'),
     captureInputs: options?.captureInputs ?? process.env.PREFACTOR_CAPTURE_INPUTS !== 'false',
     captureOutputs: options?.captureOutputs ?? process.env.PREFACTOR_CAPTURE_OUTPUTS !== 'false',

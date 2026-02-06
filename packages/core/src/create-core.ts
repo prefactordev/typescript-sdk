@@ -5,7 +5,6 @@ import { HttpTransportConfigSchema } from './config.js';
 import { Tracer } from './tracing/tracer.js';
 import type { Transport } from './transport/base.js';
 import { HttpTransport } from './transport/http.js';
-import { StdioTransport } from './transport/stdio.js';
 
 export type CoreRuntime = {
   tracer: Tracer;
@@ -15,15 +14,11 @@ export type CoreRuntime = {
 
 export function createCore(config: Config): CoreRuntime {
   let transport: Transport;
-  if (config.transportType === 'stdio') {
-    transport = new StdioTransport();
-  } else {
-    if (!config.httpConfig) {
-      throw new Error('HTTP transport requires httpConfig to be provided in configuration');
-    }
-    const httpConfig = HttpTransportConfigSchema.parse(config.httpConfig);
-    transport = new HttpTransport(httpConfig);
+  if (!config.httpConfig) {
+    throw new Error('HTTP transport requires httpConfig to be provided in configuration');
   }
+  const httpConfig = HttpTransportConfigSchema.parse(config.httpConfig);
+  transport = new HttpTransport(httpConfig);
 
   let partition: Partition | undefined;
   if (config.httpConfig?.agentId) {
@@ -36,8 +31,7 @@ export function createCore(config: Config): CoreRuntime {
 
   const tracer = new Tracer(transport, partition);
 
-  const allowUnregisteredSchema =
-    config.transportType === 'http' && Boolean(config.httpConfig?.agentSchema);
+  const allowUnregisteredSchema = Boolean(config.httpConfig?.agentSchema);
   const agentManager = new AgentInstanceManager(transport, {
     allowUnregisteredSchema,
   });

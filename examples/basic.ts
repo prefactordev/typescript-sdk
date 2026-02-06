@@ -2,8 +2,9 @@
  * Basic example of using Prefactor SDK with LangChain.js
  *
  * This example demonstrates:
- * - Initializing the SDK with stdio transport (default)
+ * - Initializing the SDK with HTTP transport
  * - How to integrate middleware with LangChain.js agents
+ * - How to add manual instrumentation for non-framework workflow steps
  * - Graceful shutdown
  *
  * For a complete working example with real API calls, see:
@@ -16,55 +17,28 @@ console.log('Prefactor SDK - Basic Example');
 console.log('='.repeat(40));
 console.log();
 
-// Initialize Prefactor SDK (uses stdio transport by default)
+// Initialize Prefactor SDK (HTTP transport)
 console.log('Initializing Prefactor SDK...');
-const middleware = init();
-console.log('SDK initialized with stdio transport');
-console.log('  Spans will be output as newline-delimited JSON to stdout');
+const middleware = init({
+  transportType: 'http',
+  httpConfig: {
+    apiUrl: process.env.PREFACTOR_API_URL || 'http://localhost:8000',
+    apiToken: process.env.PREFACTOR_API_TOKEN || 'dev-token',
+    agentIdentifier: '1.0.0',
+  },
+});
+console.log('SDK initialized with HTTP transport');
 console.log();
 
 // Example: How to use the middleware with LangChain.js
 console.log('Usage with LangChain.js:');
 console.log('-'.repeat(40));
-console.log(`
-import { createAgent, tool } from 'langchain';
-import { z } from 'zod';
-import { init, shutdown } from '@prefactor/langchain';
-
-// Initialize SDK
-const middleware = init();
-
-// Define a tool
-const myTool = tool(
-  async ({ input }) => \`Processed: \${input}\`,
-  {
-    name: 'my_tool',
-    description: 'A sample tool',
-    schema: z.object({ input: z.string() }),
-  }
-);
-
-// Create agent with Prefactor middleware
-const agent = createAgent({
-  model: 'claude-sonnet-4-5-20250929',
-  tools: [myTool],
-  systemPrompt: 'You are a helpful assistant.',
-  middleware: [middleware],
-});
-
-// Run your agent - all calls are automatically traced!
-const result = await agent.invoke({
-  messages: [{ role: 'user', content: 'Hello!' }],
-});
-
-// Graceful shutdown
-await shutdown();
-`);
 
 console.log('Features:');
 console.log('  - Automatic tracing of LLM calls');
 console.log('  - Tool execution tracking');
 console.log('  - Agent workflow monitoring');
+console.log('  - Manual spans for external workflow steps');
 console.log('  - Token usage capture');
 console.log('  - Parent-child span relationships');
 console.log();
@@ -72,7 +46,7 @@ console.log();
 console.log('Next steps:');
 console.log('  - See examples/anthropic-agent/ for a complete working example');
 console.log('  - Configure HTTP transport for production use');
-console.log('  - Add custom metadata and tags to spans');
+console.log('  - Add custom metadata to spans');
 console.log();
 
 // Cleanup

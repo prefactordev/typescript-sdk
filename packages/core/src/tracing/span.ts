@@ -1,38 +1,14 @@
 /**
  * Types of spans that can be traced
  */
-export enum SpanType {
-  AGENT = 'agent',
-  LLM = 'llm',
-  TOOL = 'tool',
-  CHAIN = 'chain',
-}
+export const SpanType = {
+  AGENT: 'agent',
+  LLM: 'llm',
+  TOOL: 'tool',
+  CHAIN: 'chain',
+} as const;
 
-/**
- * Default agent schema (v1.0.0) with span schemas for all supported types.
- * Used when no custom schema is provided during registration.
- */
-export const DEFAULT_AGENT_SCHEMA: Record<string, unknown> = {
-  external_identifier: '1.0.0',
-  span_schemas: {
-    agent: {
-      type: 'object',
-      properties: { type: { type: 'string', const: 'agent' } },
-    },
-    llm: {
-      type: 'object',
-      properties: { type: { type: 'string', const: 'llm' } },
-    },
-    tool: {
-      type: 'object',
-      properties: { type: { type: 'string', const: 'tool' } },
-    },
-    chain: {
-      type: 'object',
-      properties: { type: { type: 'string', const: 'chain' } },
-    },
-  },
-};
+export type SpanType = (typeof SpanType)[keyof typeof SpanType] | string;
 
 /**
  * Status of a span

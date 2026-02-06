@@ -134,4 +134,56 @@ describe('HttpTransport', () => {
       'https://example.com/api/v1/agent_instance/agent-instance-1/finish',
     ]);
   });
+
+  test('requires new agent identifier after schema changes', async () => {
+    const fetchCalls: Array<{ url: string; options?: RequestInit }> = [];
+    globalThis.fetch = (async (url, options) => {
+      fetchCalls.push({ url: String(url), options });
+      if (String(url).endsWith('/agent_instance/register')) {
+        return new Response(JSON.stringify({ details: { id: 'agent-instance-1' } }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+
+      return new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }) as unknown as typeof fetch;
+
+    const transport = new HttpTransport(createConfig());
+    transport.registerSchema({ type: 'object' });
+    transport.startAgentInstance({ agentIdentifier: 'v1.0.0' });
+    transport.registerSchema({ type: 'object', properties: { name: { type: 'string' } } });
+    transport.startAgentInstance({ agentIdentifier: 'v1.0.0' });
+    transport.startAgentInstance({ agentIdentifier: 'v1.1.0' });
+    await transport.close();
+
+    const startCalls = fetchCalls.filter((call) =>
+      call.url.includes('/agent_instance/agent-instance-1/start')
+    );
+    expect(startCalls).toHaveLength(2);
+  });
+
+  test('does not send default schema when no schema is configured', async () => {
+    const fetchCalls: Array<{ url: string; options?: RequestInit }> = [];
+    globalThis.fetch = (async (url, options) => {
+      fetchCalls.push({ url: String(url), options });
+      return new Response(JSON.stringify({ details: { id: 'agent-instance-1' } }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }) as unknown as typeof fetch;
+
+    const transport = new HttpTransport(createConfig());
+    transport.startAgentInstance();
+    await transport.close();
+
+    const registerPayload = JSON.parse(fetchCalls[0]?.options?.body as string) as Record<
+      string,
+      unknown
+    >;
+    expect(registerPayload.agent_schema_version).toBeUndefined();
+  });
 });

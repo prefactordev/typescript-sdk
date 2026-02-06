@@ -4,8 +4,8 @@ import {
   configureLogging,
   createConfig,
   createCore,
-  DEFAULT_AGENT_SCHEMA,
   getLogger,
+  SpanContext,
   type Tracer,
 } from '@prefactor/core';
 import { type AgentMiddleware, createMiddleware } from 'langchain';
@@ -16,6 +16,13 @@ const logger = getLogger('init');
 let globalCore: CoreRuntime | null = null;
 let globalTracer: Tracer | null = null;
 let globalMiddleware: AgentMiddleware | null = null;
+
+export type ManualSpanOptions = {
+  name: string;
+  spanType: string;
+  inputs: Record<string, unknown>;
+  metadata?: Record<string, unknown>;
+};
 
 /**
  * Initialize the Prefactor SDK and return middleware for LangChain.js
@@ -31,8 +38,15 @@ let globalMiddleware: AgentMiddleware | null = null;
  * import { init } from '@prefactor/langchain';
  * import { createAgent } from 'langchain';
  *
- * // Initialize with defaults (stdio transport)
- * const middleware = init();
+ * // Initialize with HTTP transport
+ * const middleware = init({
+ *   transportType: 'http',
+ *   httpConfig: {
+ *     apiUrl: 'https://api.prefactor.ai',
+ *     apiToken: process.env.PREFACTOR_API_TOKEN!,
+ *     agentIdentifier: 'my-langchain-agent',
+ *   },
+ * });
  *
  * // Or configure HTTP transport
  * const middleware = init({
@@ -55,7 +69,34 @@ let globalMiddleware: AgentMiddleware | null = null;
 export function init(config?: Partial<Config>): AgentMiddleware {
   configureLogging();
 
-  const finalConfig = createConfig(config);
+  let configWithHttp = config;
+  const transportType = config?.transportType ?? process.env.PREFACTOR_TRANSPORT ?? 'http';
+
+  if (transportType === 'http' && !config?.httpConfig) {
+    const apiUrl = process.env.PREFACTOR_API_URL;
+    const apiToken = process.env.PREFACTOR_API_TOKEN;
+
+    if (!apiUrl || !apiToken) {
+      throw new Error(
+        'HTTP transport requires PREFACTOR_API_URL and PREFACTOR_API_TOKEN environment variables, ' +
+          'or httpConfig to be provided in configuration'
+      );
+    }
+
+    configWithHttp = {
+      ...config,
+      transportType: 'http',
+      httpConfig: {
+        apiUrl,
+        apiToken,
+        agentId: process.env.PREFACTOR_AGENT_ID,
+        agentName: process.env.PREFACTOR_AGENT_NAME,
+        agentIdentifier: process.env.PREFACTOR_AGENT_IDENTIFIER || '1.0.0',
+      },
+    };
+  }
+
+  const finalConfig = createConfig(configWithHttp);
 
   if (globalMiddleware !== null) {
     return globalMiddleware;
@@ -68,8 +109,6 @@ export function init(config?: Partial<Config>): AgentMiddleware {
   const httpConfig = finalConfig.httpConfig;
   if (httpConfig?.agentSchema) {
     core.agentManager.registerSchema(httpConfig.agentSchema);
-  } else {
-    core.agentManager.registerSchema(DEFAULT_AGENT_SCHEMA);
   }
 
   const agentInfo = finalConfig.httpConfig
@@ -132,6 +171,24 @@ export function getTracer(): Tracer {
   }
   // Safe because init() always sets globalTracer
   return globalTracer as Tracer;
+}
+
+export async function withSpan<T>(
+  options: ManualSpanOptions,
+  fn: () => Promise<T> | T
+): Promise<T> {
+  const tracer = getTracer();
+  const span = tracer.startSpan(options);
+
+  try {
+    const result = await SpanContext.runAsync(span, async () => await fn());
+    tracer.endSpan(span);
+    return result;
+  } catch (error) {
+    const normalizedError = error instanceof Error ? error : new Error(String(error));
+    tracer.endSpan(span, { error: normalizedError });
+    throw error;
+  }
 }
 
 /**
