@@ -10,20 +10,7 @@ const sanitize = (value: unknown, maxLength: number): unknown => serializeValue(
 export function createInstrumentation(tracer: Tracer, config: Config) {
   const logger = getLogger('openclaw');
   const agentSpans = new Map<string, Span>();
-
-  const logHook = (
-    hook: string,
-    spanType: SpanType,
-    event: Record<string, unknown>,
-    ctx: HookContext
-  ) => {
-    console.log(`OpenClaw hook: ${hook}`, {
-      spanType,
-      ctx,
-      event: sanitize(event, config.maxInputLength),
-    });
-  };
-
+  
   const endToolSpan = (span: Span, reason: string, hook: string, toolName?: string) => {
     const outputs = config.captureOutputs
       ? {
@@ -57,7 +44,7 @@ export function createInstrumentation(tracer: Tracer, config: Config) {
   };
 
   const beforeAgentStart = (event: Record<string, unknown>, ctx: HookContext) => {
-    logHook('before_agent_start', SpanType.AGENT, event, ctx);
+    logger.debug('before_agent_start', SpanType.AGENT, event, ctx);
     flushToolQueuesForSession(ctx, 'implicit_tool_close:next_agent', 'before_agent_start');
     const key = toKey(ctx);
     const inputs = config.captureInputs
@@ -73,7 +60,7 @@ export function createInstrumentation(tracer: Tracer, config: Config) {
   };
 
   const agentEnd = (event: Record<string, unknown>, ctx: HookContext) => {
-    logHook('agent_end', SpanType.AGENT, event, ctx);
+    logger.debug('agent_end', SpanType.AGENT, event, ctx);
     const key = toKey(ctx);
     const span = agentSpans.get(key);
     if (!span) return;
@@ -88,7 +75,7 @@ export function createInstrumentation(tracer: Tracer, config: Config) {
   const toolQueues = new Map<string, Span[]>();
 
   const beforeToolCall = (event: Record<string, unknown>, ctx: HookContext) => {
-    logHook('before_tool_call', SpanType.TOOL, event, ctx);
+    logger.debug('before_tool_call', SpanType.TOOL, event, ctx);
     const toolName = String(event.toolName ?? ctx.toolName ?? 'unknown');
     const key = `${toKey(ctx)}:${toolName}`;
     flushToolQueue(key, 'implicit_tool_close:next_tool_call', 'before_tool_call');
@@ -108,7 +95,7 @@ export function createInstrumentation(tracer: Tracer, config: Config) {
   };
 
   const afterToolCall = (event: Record<string, unknown>, ctx: HookContext) => {
-    logHook('after_tool_call', SpanType.TOOL, event, ctx);
+    logger.debug('after_tool_call', SpanType.TOOL, event, ctx);
     const toolName = String(event.toolName ?? ctx.toolName ?? 'unknown');
     const key = `${toKey(ctx)}:${toolName}`;
     const queue = toolQueues.get(key);
@@ -127,7 +114,7 @@ export function createInstrumentation(tracer: Tracer, config: Config) {
   };
 
   const messageReceived = (event: Record<string, unknown>, _ctx: HookContext) => {
-    logHook('message_received', SpanType.CHAIN, event, _ctx);
+    logger.debug('message_received', SpanType.CHAIN, event, _ctx);
     const inputs = config.captureInputs
       ? (sanitize({ direction: 'inbound', ...event }, config.maxInputLength) as Record<
           string,
@@ -139,7 +126,7 @@ export function createInstrumentation(tracer: Tracer, config: Config) {
   };
 
   const messageSent = (event: Record<string, unknown>, _ctx: HookContext) => {
-    logHook('message_sent', SpanType.CHAIN, event, _ctx);
+    logger.debug('message_sent', SpanType.CHAIN, event, _ctx);
     const inputs = config.captureInputs
       ? (sanitize({ direction: 'outbound', ...event }, config.maxInputLength) as Record<
           string,

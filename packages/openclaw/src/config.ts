@@ -21,7 +21,6 @@ export function resolveConfig(config?: PluginConfig): Config | null {
     }
 
     httpConfig = {
-      schemaName: 'openclaw:agent',
       ...httpConfig,
       apiUrl,
       apiToken,
