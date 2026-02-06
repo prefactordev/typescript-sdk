@@ -2,18 +2,14 @@ import { extractPartition, type Partition } from '@prefactor/pfid';
 import { AgentInstanceManager } from './agent/instance-manager.js';
 import type { Config } from './config.js';
 import { HttpTransportConfigSchema } from './config.js';
-import type { QueueAction } from './queue/actions.js';
-import { InMemoryQueue } from './queue/in-memory.js';
 import { Tracer } from './tracing/tracer.js';
 import type { Transport } from './transport/base.js';
 import { HttpTransport } from './transport/http.js';
 import { StdioTransport } from './transport/stdio.js';
-import { TransportWorker } from './transport/worker.js';
 
 export type CoreRuntime = {
   tracer: Tracer;
   agentManager: AgentInstanceManager;
-  worker: TransportWorker;
   shutdown: () => Promise<void>;
 };
 
@@ -38,28 +34,17 @@ export function createCore(config: Config): CoreRuntime {
     }
   }
 
-  const queue = new InMemoryQueue<QueueAction>();
-  const worker = new TransportWorker(queue, transport, { batchSize: 25, intervalMs: 50 });
-  const tracer = new Tracer(queue, partition);
+  const tracer = new Tracer(transport, partition);
 
-  const schemaName = config.httpConfig?.schemaName ?? 'prefactor:agent';
-  const schemaIdentifier = config.httpConfig?.schemaIdentifier ?? '1.0.0';
   const allowUnregisteredSchema =
-    config.transportType === 'http' &&
-    Boolean(
-      config.httpConfig?.skipSchema ||
-        config.httpConfig?.agentSchema ||
-        config.httpConfig?.agentSchemaIdentifier
-    );
-  const agentManager = new AgentInstanceManager(queue, {
-    schemaName,
-    schemaIdentifier,
+    config.transportType === 'http' && Boolean(config.httpConfig?.agentSchema);
+  const agentManager = new AgentInstanceManager(transport, {
     allowUnregisteredSchema,
   });
 
   const shutdown = async (): Promise<void> => {
-    await worker.close();
+    await tracer.close();
   };
 
-  return { tracer, agentManager, worker, shutdown };
+  return { tracer, agentManager, shutdown };
 }

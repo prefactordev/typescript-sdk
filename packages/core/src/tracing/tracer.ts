@@ -1,6 +1,5 @@
 import { generate, generatePartition, type Partition } from '@prefactor/pfid';
-import type { QueueAction } from '../queue/actions.js';
-import type { Queue } from '../queue/base.js';
+import type { Transport } from '../transport/base.js';
 import { SpanContext } from './context.js';
 import type { Span, TokenUsage } from './span.js';
 import { SpanStatus, SpanType } from './span.js';
@@ -20,9 +19,6 @@ export interface StartSpanOptions {
 
   /** Additional metadata (optional) */
   metadata?: Record<string, unknown>;
-
-  /** Tags for categorizing the span (optional) */
-  tags?: string[];
 }
 
 /**
@@ -72,11 +68,11 @@ export class Tracer {
   /**
    * Initialize the tracer.
    *
-   * @param queue - The queue to use for emitting spans
+   * @param transport - The transport to use for emitting spans
    * @param partition - The partition for ID generation. If not provided, a random partition will be generated.
    */
   constructor(
-    private queue: Queue<QueueAction>,
+    private transport: Transport,
     partition?: Partition
   ) {
     this.partition = partition ?? generatePartition();
@@ -107,16 +103,15 @@ export class Tracer {
       tokenUsage: null,
       error: null,
       metadata: options.metadata ?? {},
-      tags: options.tags ?? [],
     };
 
     // AGENT spans are emitted immediately for real-time tracking
     // They will be finished later with finishSpan()
     if (options.spanType === SpanType.AGENT) {
       try {
-        this.queue.enqueue({ type: 'span_end', data: span });
+        this.transport.emit(span);
       } catch (error) {
-        console.error('Failed to enqueue agent span:', error);
+        console.error('Failed to emit agent span:', error);
       }
     }
 
@@ -150,12 +145,12 @@ export class Tracer {
       // AGENT spans use finishSpan API (they were already emitted on start)
       // Other span types are emitted here
       if (span.spanType === SpanType.AGENT) {
-        this.queue.enqueue({ type: 'span_finish', data: { spanId: span.spanId, endTime } });
+        this.transport.finishSpan(span.spanId, endTime);
       } else {
-        this.queue.enqueue({ type: 'span_end', data: span });
+        this.transport.emit(span);
       }
     } catch (error) {
-      console.error('Failed to enqueue span action:', error);
+      console.error('Failed to emit span action:', error);
     }
   }
 
@@ -166,9 +161,25 @@ export class Tracer {
    */
   async close(): Promise<void> {
     try {
-      await this.queue.flush();
+      await this.transport.close();
     } catch (error) {
-      console.error('Failed to flush queue:', error);
+      console.error('Failed to close transport:', error);
+    }
+  }
+
+  startAgentInstance(): void {
+    try {
+      this.transport.startAgentInstance();
+    } catch (error) {
+      console.error('Failed to start agent instance:', error);
+    }
+  }
+
+  finishAgentInstance(): void {
+    try {
+      this.transport.finishAgentInstance();
+    } catch (error) {
+      console.error('Failed to finish agent instance:', error);
     }
   }
 }

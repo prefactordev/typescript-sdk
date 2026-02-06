@@ -1,4 +1,11 @@
-import type { QueueAction } from '../queue/actions.js';
+import type { Span } from '../tracing/span.js';
+
+export type AgentInstanceOptions = {
+  agentId?: string;
+  agentIdentifier?: string;
+  agentName?: string;
+  agentDescription?: string;
+};
 
 /**
  * Transport interface for emitting spans to different backends
@@ -8,7 +15,15 @@ import type { QueueAction } from '../queue/actions.js';
  * pluggable backends.
  */
 export interface Transport {
-  processBatch(items: QueueAction[]): Promise<void>;
+  emit(span: Span): void;
+
+  finishSpan(spanId: string, endTime: number): void;
+
+  startAgentInstance(options?: AgentInstanceOptions): void;
+
+  finishAgentInstance(): void;
+
+  registerSchema(schema: Record<string, unknown>): void;
 
   /**
    * Close the transport and flush any pending data

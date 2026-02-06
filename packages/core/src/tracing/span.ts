@@ -6,7 +6,6 @@ export enum SpanType {
   LLM = 'llm',
   TOOL = 'tool',
   CHAIN = 'chain',
-  RETRIEVER = 'retriever',
 }
 
 /**
@@ -31,10 +30,6 @@ export const DEFAULT_AGENT_SCHEMA: Record<string, unknown> = {
     chain: {
       type: 'object',
       properties: { type: { type: 'string', const: 'chain' } },
-    },
-    retriever: {
-      type: 'object',
-      properties: { type: { type: 'string', const: 'retriever' } },
     },
   },
 };
@@ -108,7 +103,4 @@ export interface Span {
 
   /** Additional metadata about this span */
   metadata: Record<string, unknown>;
-
-  /** Tags for categorizing and filtering spans */
-  tags: string[];
 }

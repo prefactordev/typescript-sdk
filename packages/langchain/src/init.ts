@@ -55,18 +55,7 @@ let globalMiddleware: AgentMiddleware | null = null;
 export function init(config?: Partial<Config>): AgentMiddleware {
   configureLogging();
 
-  // Set default schema namespace for LangChain adaptor
-  const configWithDefaults: Partial<Config> = {
-    ...config,
-    httpConfig: config?.httpConfig
-      ? {
-          schemaName: 'langchain:agent',
-          ...config.httpConfig,
-        }
-      : undefined,
-  };
-
-  const finalConfig = createConfig(configWithDefaults);
+  const finalConfig = createConfig(config);
 
   if (globalMiddleware !== null) {
     return globalMiddleware;
@@ -79,11 +68,6 @@ export function init(config?: Partial<Config>): AgentMiddleware {
   const httpConfig = finalConfig.httpConfig;
   if (httpConfig?.agentSchema) {
     core.agentManager.registerSchema(httpConfig.agentSchema);
-  } else if (
-    finalConfig.transportType === 'http' &&
-    (httpConfig?.agentSchemaIdentifier || httpConfig?.skipSchema)
-  ) {
-    logger.debug('Skipping default schema registration based on httpConfig');
   } else {
     core.agentManager.registerSchema(DEFAULT_AGENT_SCHEMA);
   }
