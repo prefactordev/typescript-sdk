@@ -1,0 +1,66 @@
+{
+  "id": "prefactor-openclaw",
+  "name": "Prefactor Lifecycle Plugin",
+  "version": "1.0.0",
+  "description": "Comprehensive lifecycle event monitoring and instrumentation for OpenClaw",
+  "runtime": "node",
+  "entry": "./index.ts",
+  "configSchema": {
+    "type": "object",
+    "properties": {
+      "apiUrl": {
+        "type": "string",
+        "description": "Prefactor API URL (e.g., https://api.prefactor.dev)"
+      },
+      "apiKey": {
+        "type": "string",
+        "description": "Prefactor API key for authentication"
+      },
+      "agentId": {
+        "type": "string",
+        "description": "Agent ID registered in Prefactor"
+      },
+      "agentVersion": {
+        "type": "string",
+        "description": "Optional user-supplied version suffix for this agent deployment",
+        "default": "default"
+      },
+      "logLevel": {
+        "type": "string",
+        "enum": ["debug", "info", "warn", "error"],
+        "default": "info"
+      },
+      "enableMetrics": {
+        "type": "boolean",
+        "default": true
+      }
+    },
+    "required": []
+  },
+  "uiHints": {
+    "apiUrl": {
+      "label": "Prefactor API URL",
+      "placeholder": "https://api.prefactor.dev"
+    },
+    "apiKey": {
+      "label": "Prefactor API Key",
+      "placeholder": "sk_...",
+      "sensitive": true
+    },
+    "agentId": {
+      "label": "Agent ID",
+      "placeholder": "your-agent-id"
+    },
+    "agentVersion": {
+      "label": "Agent Version Suffix",
+      "placeholder": "default"
+    },
+    "logLevel": {
+      "label": "Log Level",
+      "placeholder": "info"
+    },
+    "enableMetrics": {
+      "label": "Enable Metrics Collection"
+    }
+  }
+}
