@@ -20,6 +20,7 @@ import type { LanguageModelMiddleware, MiddlewareConfig, ToolCallInfo } from './
 
 /** Root AGENT span for the middleware session. Created on first call, ended on shutdown. */
 let rootAgentSpan: Span | undefined;
+const AGENT_DEAD_TIMEOUT_MS = 5 * 60 * 1000;
 
 /**
  * Gets or creates the root AGENT span.
@@ -45,6 +46,51 @@ export function endRootAgentSpan(tracer: Tracer): void {
     tracer.endSpan(rootAgentSpan, {});
     rootAgentSpan = undefined;
   }
+}
+
+function toError(error: unknown): Error {
+  return error instanceof Error ? error : new Error(String(error));
+}
+
+function runWithTimeout<T>(
+  operation: () => Promise<T>,
+  timeoutMs: number,
+  timeoutMessage: string
+): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timeoutId = setTimeout(() => {
+      reject(new Error(timeoutMessage));
+    }, timeoutMs);
+
+    operation()
+      .then((value) => {
+        clearTimeout(timeoutId);
+        resolve(value);
+      })
+      .catch((error) => {
+        clearTimeout(timeoutId);
+        reject(error);
+      });
+  });
+}
+
+function markAgentDead(
+  tracer: Tracer,
+  agentManager: AgentInstanceManager | undefined,
+  agentLifecycle: { started: boolean },
+  error: Error
+): void {
+  if (rootAgentSpan) {
+    tracer.endSpan(rootAgentSpan, { error });
+    rootAgentSpan = undefined;
+  }
+
+  if (!agentManager || !agentLifecycle.started) {
+    return;
+  }
+
+  agentManager.finishInstance();
+  agentLifecycle.started = false;
 }
 
 /**
@@ -366,11 +412,13 @@ export function createPrefactorMiddleware(
     agentManager: AgentInstanceManager;
     agentInfo?: Parameters<AgentInstanceManager['startInstance']>[0];
     agentLifecycle?: { started: boolean };
+    deadTimeoutMs?: number;
   }
 ): LanguageModelMiddleware {
   const agentManager = coreOptions?.agentManager;
   const agentInfo = coreOptions?.agentInfo;
   const agentLifecycle = coreOptions?.agentLifecycle ?? { started: false };
+  const deadTimeoutMs = coreOptions?.deadTimeoutMs ?? AGENT_DEAD_TIMEOUT_MS;
 
   function ensureAgentInstanceStarted(): void {
     if (!agentManager || agentLifecycle.started) {
@@ -394,7 +442,11 @@ export function createPrefactorMiddleware(
 
       try {
         // Execute the generation within the LLM span context
-        const result = await SpanContext.runAsync(span, async () => doGenerate());
+        const result = await runWithTimeout(
+          () => SpanContext.runAsync(span, async () => doGenerate()),
+          deadTimeoutMs,
+          'Agent did not respond within timeout duration and was marked as failed.'
+        );
 
         // Extract and instrument tool calls
         if (config?.captureTools !== false) {
@@ -422,7 +474,9 @@ export function createPrefactorMiddleware(
         return result;
       } catch (error) {
         // End the span with error
-        tracer.endSpan(span, { error: error as Error });
+        const normalizedError = toError(error);
+        tracer.endSpan(span, { error: normalizedError });
+        markAgentDead(tracer, agentManager, agentLifecycle, normalizedError);
         throw error;
       }
     },
@@ -439,7 +493,11 @@ export function createPrefactorMiddleware(
 
       try {
         // Execute the stream within the span context
-        const result = await SpanContext.runAsync(span, async () => doStream());
+        const result = await runWithTimeout(
+          () => SpanContext.runAsync(span, async () => doStream()),
+          deadTimeoutMs,
+          'Agent did not respond within timeout duration and was marked as failed.'
+        );
 
         // Wrap the stream to capture completion
         const wrappedStream = wrapStreamForCompletion(result.stream, span, tracer, config);
@@ -450,7 +508,9 @@ export function createPrefactorMiddleware(
         };
       } catch (error) {
         // End the span with error
-        tracer.endSpan(span, { error: error as Error });
+        const normalizedError = toError(error);
+        tracer.endSpan(span, { error: normalizedError });
+        markAgentDead(tracer, agentManager, agentLifecycle, normalizedError);
         throw error;
       }
     },
