@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
-import type { HttpRequestOptions } from '../../src/transport/http/http-client.js';
 import { AgentInstanceClient } from '../../src/transport/http/agent-instance-client.js';
 import { AgentSpanClient } from '../../src/transport/http/agent-span-client.js';
+import type { HttpRequestOptions } from '../../src/transport/http/http-client.js';
 
 type RequestCall = {
   path: string;
