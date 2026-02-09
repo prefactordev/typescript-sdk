@@ -1,6 +1,9 @@
 import { z } from 'zod';
 
-const DEFAULT_RETRY_ON_STATUS_CODES = [429, ...Array.from({ length: 100 }, (_, index) => 500 + index)];
+const DEFAULT_RETRY_ON_STATUS_CODES = [
+  429,
+  ...Array.from({ length: 100 }, (_, index) => 500 + index),
+];
 const HttpStatusCodeSchema = z.number().int().min(100).max(599);
 
 /**
@@ -135,8 +138,7 @@ export function createConfig(options?: Partial<Config>): Config {
     httpConfig: options?.httpConfig
       ? {
           ...options.httpConfig,
-          retryOnStatusCodes:
-            options.httpConfig.retryOnStatusCodes ?? retryOnStatusCodesFromEnv,
+          retryOnStatusCodes: options.httpConfig.retryOnStatusCodes ?? retryOnStatusCodesFromEnv,
         }
       : undefined,
   };

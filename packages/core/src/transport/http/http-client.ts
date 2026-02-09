@@ -59,7 +59,8 @@ export class HttpClient {
     dependencies: HttpClientDependencies = {}
   ) {
     this.fetchFn = dependencies.fetchFn ?? fetch;
-    this.sleep = dependencies.sleep ?? ((delayMs) => new Promise((resolve) => setTimeout(resolve, delayMs)));
+    this.sleep =
+      dependencies.sleep ?? ((delayMs) => new Promise((resolve) => setTimeout(resolve, delayMs)));
     this.random = dependencies.random ?? Math.random;
   }
 

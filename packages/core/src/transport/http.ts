@@ -1,6 +1,6 @@
 import type { HttpTransportConfig } from '../config.js';
-import { InMemoryQueue } from '../queue/in-memory-queue.js';
 import type { TransportAction } from '../queue/actions.js';
+import { InMemoryQueue } from '../queue/in-memory-queue.js';
 import { TaskExecutor } from '../queue/task-executor.js';
 import type { Span } from '../tracing/span.js';
 import { getLogger } from '../utils/logging.js';

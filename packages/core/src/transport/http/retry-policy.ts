@@ -8,10 +8,7 @@ export function shouldRetryStatusCode(statusCode: number, retryOnStatusCodes: nu
 
 export function calculateRetryDelay(
   attempt: number,
-  config: Pick<
-    HttpTransportConfig,
-    'initialRetryDelay' | 'maxRetryDelay' | 'retryMultiplier'
-  >,
+  config: Pick<HttpTransportConfig, 'initialRetryDelay' | 'maxRetryDelay' | 'retryMultiplier'>,
   random: () => number = Math.random
 ): number {
   const baseDelay = Math.min(
