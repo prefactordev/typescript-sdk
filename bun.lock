@@ -37,7 +37,7 @@
     },
     "packages/core": {
       "name": "@prefactor/core",
-      "version": "0.2.3",
+      "version": "0.2.4",
       "dependencies": {
         "@prefactor/pfid": "^0.1.0",
         "zod": "^3.23.0",
@@ -45,7 +45,7 @@
     },
     "packages/langchain": {
       "name": "@prefactor/langchain",
-      "version": "0.2.3",
+      "version": "0.2.4",
       "dependencies": {
         "@prefactor/core": "workspace:*",
         "@prefactor/pfid": "^0.1.0",
