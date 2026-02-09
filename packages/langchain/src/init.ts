@@ -13,6 +13,16 @@ import { PrefactorMiddleware } from './middleware.js';
 
 const logger = getLogger('init');
 
+const DEFAULT_LANGCHAIN_AGENT_SCHEMA = {
+  external_identifier: 'prefactor',
+  span_schemas: {
+    agent: { type: 'object', additionalProperties: true },
+    llm: { type: 'object', additionalProperties: true },
+    tool: { type: 'object', additionalProperties: true },
+    chain: { type: 'object', additionalProperties: true },
+  },
+} as const;
+
 let globalCore: CoreRuntime | null = null;
 let globalTracer: Tracer | null = null;
 let globalMiddleware: AgentMiddleware | null = null;
@@ -92,6 +102,15 @@ export function init(config?: Partial<Config>): AgentMiddleware {
         agentId: process.env.PREFACTOR_AGENT_ID,
         agentName: process.env.PREFACTOR_AGENT_NAME,
         agentIdentifier: process.env.PREFACTOR_AGENT_IDENTIFIER || '1.0.0',
+        agentSchema: DEFAULT_LANGCHAIN_AGENT_SCHEMA,
+      },
+    };
+  } else if (transportType === 'http' && config?.httpConfig && !config.httpConfig.agentSchema) {
+    configWithHttp = {
+      ...config,
+      httpConfig: {
+        ...config.httpConfig,
+        agentSchema: DEFAULT_LANGCHAIN_AGENT_SCHEMA,
       },
     };
   }

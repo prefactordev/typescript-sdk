@@ -97,7 +97,7 @@ async function main() {
   // Create agent using the createAgent API with middleware
   console.log('Creating agent with createAgent API and Prefactor middleware...');
   const agent = createAgent({
-    model: 'claude-haiku-4-5-20251001',
+    model: 'claude-3-haiku-20240307',
     tools,
     systemPrompt: 'You are a helpful assistant. Use the available tools to answer questions.',
     middleware: [middleware],

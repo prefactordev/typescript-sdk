@@ -40,18 +40,22 @@ describe('langchain init schema registration', () => {
     expect(registeredSchemas).toEqual([customSchema]);
   });
 
-  test('does not register schema when schema is not configured', () => {
+  test('registers default schema when schema is not configured', () => {
     init({
       ...baseConfig,
     });
 
-    expect(registeredSchemas.length).toBe(0);
+    expect(registeredSchemas).toHaveLength(1);
+    expect(registeredSchemas[0]).toMatchObject({
+      external_identifier: 'prefactor',
+      span_schemas: expect.any(Object),
+    });
   });
 
-  test('does not register schema when no schema config is provided', () => {
+  test('registers default schema when no schema config is provided', () => {
     init(baseConfig);
 
-    expect(registeredSchemas.length).toBe(0);
+    expect(registeredSchemas).toHaveLength(1);
   });
 
   test('supports manual spans for custom workflow instrumentation', async () => {

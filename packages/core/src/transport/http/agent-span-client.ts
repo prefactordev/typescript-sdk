@@ -1,4 +1,4 @@
-import type { HttpRequester } from './http-client.js';
+import { HttpClientError, type HttpRequester } from './http-client.js';
 
 export type AgentSpanStatus = 'active' | 'complete' | 'failed';
 
@@ -31,9 +31,30 @@ export class AgentSpanClient {
   }
 
   async finish(spanId: string, timestamp: string): Promise<void> {
-    await this.httpClient.request(`/api/v1/agent_spans/${spanId}/finish`, {
-      method: 'POST',
-      body: { timestamp },
-    });
+    try {
+      await this.httpClient.request(`/api/v1/agent_spans/${spanId}/finish`, {
+        method: 'POST',
+        body: { timestamp },
+      });
+    } catch (error) {
+      if (
+        error instanceof HttpClientError &&
+        error.status === 409 &&
+        isAlreadyFinishedError(error.responseBody)
+      ) {
+        return;
+      }
+
+      throw error;
+    }
   }
+}
+
+function isAlreadyFinishedError(responseBody: unknown): boolean {
+  if (!responseBody || typeof responseBody !== 'object') {
+    return false;
+  }
+
+  const payload = responseBody as Record<string, unknown>;
+  return payload.code === 'invalid_action';
 }
