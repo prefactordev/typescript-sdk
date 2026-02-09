@@ -33,6 +33,20 @@
       "enableMetrics": {
         "type": "boolean",
         "default": true
+      },
+      "userInteractionTimeoutMinutes": {
+        "type": "number",
+        "description": "Timeout for user interaction spans in minutes (default: 5)",
+        "default": 5,
+        "minimum": 1,
+        "maximum": 60
+      },
+      "sessionTimeoutHours": {
+        "type": "number",
+        "description": "Timeout for synthetic session spans in hours (default: 24)",
+        "default": 24,
+        "minimum": 1,
+        "maximum": 168
       }
     },
     "required": []
@@ -61,6 +75,12 @@
     },
     "enableMetrics": {
       "label": "Enable Metrics Collection"
+    },
+    "userInteractionTimeoutMinutes": {
+      "label": "User Interaction Timeout (minutes)"
+    },
+    "sessionTimeoutHours": {
+      "label": "Session Span Timeout (hours)"
     }
   }
 }

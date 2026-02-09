@@ -138,7 +138,11 @@ export class PrefactorClient {
           }
 
           // Log the full error response for debugging
-          console.error(`[PrefactorClient] HTTP ${response.status} error:`, JSON.stringify(errorData));
+          console.error(`[PrefactorClient] HTTP ${response.status} error for ${method} ${endpoint}:`, JSON.stringify(errorData));
+          console.error(`[PrefactorClient] Request URL: ${url}`);
+          if (body) {
+            console.error(`[PrefactorClient] Request body preview:`, JSON.stringify(body).slice(0, 500));
+          }
           
           throw new PrefactorError(
             errorData?.message || response.statusText,
@@ -178,6 +182,19 @@ export class PrefactorClient {
   async registerAgentInstance(
     body: RegisterAgentInstanceRequest,
   ): Promise<AgentInstanceDetails> {
+    const url = `${this.apiUrl}/api/v1/agent_instance/register`;
+    const schemaVersion = body.agent_schema_version?.external_identifier;
+    const schemaNames = Object.keys(body.agent_schema_version?.span_schemas || {});
+
+    // Log detailed registration info for debugging
+    console.log(`[PrefactorClient] registerAgentInstance request:`, JSON.stringify({
+      url,
+      agentId: body.agent_id,
+      schemaVersion,
+      registeredSchemas: schemaNames,
+      schemaCount: schemaNames.length,
+    }));
+
     const response = await this.makeRequest<
       { status: 'success'; details: AgentInstanceDetails }
     >('POST', '/api/v1/agent_instance/register', body);
@@ -207,6 +224,20 @@ export class PrefactorClient {
   // AgentSpan endpoints
 
   async createAgentSpan(body: CreateAgentSpanRequest): Promise<AgentSpanDetails> {
+    const url = `${this.apiUrl}/api/v1/agent_spans`;
+    const schemaName = body.details.schema_name;
+    const instanceId = body.details.agent_instance_id;
+    const parentSpanId = body.details.parent_span_id;
+
+    // Log detailed request info for debugging
+    console.log(`[PrefactorClient] createAgentSpan request:`, JSON.stringify({
+      url,
+      schemaName,
+      instanceId,
+      parentSpanId,
+      agentId: this.agentId,
+    }));
+
     const response = await this.makeRequest<
       { status: 'success'; details: AgentSpanDetails }
     >('POST', '/api/v1/agent_spans', body);

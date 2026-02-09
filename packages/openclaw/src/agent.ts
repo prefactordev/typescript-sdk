@@ -134,7 +134,7 @@ export class Agent {
 
     // Build version identifiers
     const openclawVersion = config.openclawVersion || 'unknown';
-    const pluginVersion = config.pluginVersion || '1.0.0';
+    const pluginVersion = config.pluginVersion || '1.0.1';
     const userVersion = config.userAgentVersion || 'default';
 
     this.agentVersion = {
@@ -169,6 +169,12 @@ export class Agent {
           description: 'Outbound message to user',
           fields: {
             raw: { type: 'object', description: 'Raw OpenClaw message context' },
+          },
+        },
+        assistant_response: {
+          description: 'Assistant response generation span',
+          fields: {
+            raw: { type: 'object', description: 'Raw OpenClaw context with messages' },
           },
         },
       },
@@ -407,6 +413,18 @@ export class Agent {
 
     try {
       const idempotencyKey = `${clientSpanId}`;
+      
+      // Log instance details for debugging schema issues
+      this.logger.info('create_span_instance_debug', {
+        sessionKey,
+        schemaName,
+        instanceId: session.instanceId,
+        instanceRegistered: session.instanceRegistered,
+        instanceStarted: session.instanceStarted,
+        clientSpanId,
+        parentSpanId: parentSpanId || null,
+      });
+      
       const request: CreateAgentSpanRequest = {
         details: {
           agent_instance_id: session.instanceId!,

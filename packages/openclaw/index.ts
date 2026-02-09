@@ -5,6 +5,7 @@ import { randomUUID } from 'crypto';
 import { createLogger, LogLevel } from './src/logger.js';
 import { createMetrics } from './src/metrics.js';
 import { createAgent, Agent, AgentConfig } from './src/agent.js';
+import { createSessionStateManager, SessionStateManager } from './src/session-state.js';
 
 // Plugin API type definition (minimal for TypeScript)
 interface PluginAPI {
@@ -82,11 +83,15 @@ export default function register(api: PluginAPI) {
     agentVersion?: string;
     logLevel: LogLevel;
     enableMetrics: boolean;
+    userInteractionTimeoutMinutes: number;
+    sessionTimeoutHours: number;
   } = {
     ...(pluginConfig as Record<string, unknown>),
     // Keep other top-level values if they exist
     logLevel: (pluginConfig.logLevel as LogLevel) || (fullConfig.logLevel as LogLevel) || 'info',
     enableMetrics: pluginConfig.enableMetrics !== false && fullConfig.enableMetrics !== false,
+    userInteractionTimeoutMinutes: (pluginConfig.userInteractionTimeoutMinutes as number) || 5,
+    sessionTimeoutHours: (pluginConfig.sessionTimeoutHours as number) || 24,
   };
 
   const logLevel = config.logLevel || 'info';
@@ -117,7 +122,7 @@ export default function register(api: PluginAPI) {
         apiToken: config.apiKey,
         agentId: config.agentId,
         openclawVersion: api.version || 'unknown',
-        pluginVersion: '1.0.0',
+        pluginVersion: '1.0.1',
         userAgentVersion: config.agentVersion || 'default',
         maxRetries: 3,
         retryDelay: 1000,
@@ -154,6 +159,12 @@ export default function register(api: PluginAPI) {
     version: '1.0.0',
   });
 
+  // Initialize Session State Manager for hierarchical span tracking
+  const sessionManager = createSessionStateManager(agent, logger, {
+    userInteractionTimeoutMs: config.userInteractionTimeoutMinutes * 60 * 1000,
+    sessionTimeoutMs: config.sessionTimeoutHours * 60 * 60 * 1000,
+  });
+
   // ==================== GATEWAY LIFECYCLE ====================
 
   // Hook: gateway_start - Gateway is starting up
@@ -186,6 +197,27 @@ export default function register(api: PluginAPI) {
       metrics.recordEvent('gateway_stop');
       metrics.recordGatewayStop();
     }
+
+    // Emergency cleanup for Prefactor Agent
+    if (agent) {
+      logger.info('prefactor_emergency_cleanup_start', {});
+      agent.emergencyCleanup().then(() => {
+        logger.info('prefactor_emergency_cleanup_complete', {});
+      }).catch((err) => {
+        logger.error('prefactor_emergency_cleanup_failed', {
+          error: err instanceof Error ? err.message : String(err),
+        });
+      });
+    }
+
+    // Cleanup all sessions and spans
+    sessionManager.cleanupAllSessions().then(() => {
+      logger.info('prefactor_sessions_cleanup_complete', {});
+    }).catch((err) => {
+      logger.error('prefactor_sessions_cleanup_failed', {
+        error: err instanceof Error ? err.message : String(err),
+      });
+    });
 
     // Emergency cleanup for Prefactor Agent
     if (agent) {
@@ -297,17 +329,17 @@ export default function register(api: PluginAPI) {
       metrics.recordEvent('before_agent_start');
     }
 
-    // Create agent_run span in Prefactor
-    if (agent) {
-      agent.createAgentRunSpan(sessionKey, ctx).then((spanId) => {
+    // Create agent_run span using hierarchical session manager
+    if (sessionManager) {
+      sessionManager.createAgentRunSpan(sessionKey, ctx).then((spanId) => {
         if (spanId) {
-          logger.info('prefactor_agent_run_span_created', {
+          logger.info('prefactor_agent_run_span_created_hierarchical', {
             sessionKey,
             spanId,
           });
         }
       }).catch((err) => {
-        logger.error('prefactor_agent_run_span_failed', {
+        logger.error('prefactor_agent_run_span_failed_hierarchical', {
           sessionKey,
           error: err instanceof Error ? err.message : String(err),
         });
@@ -332,15 +364,23 @@ export default function register(api: PluginAPI) {
       metrics.recordEvent('agent_end');
     }
 
-    // Close agent_run span (it should be at the bottom of the stack)
-    if (agent) {
-      // Close all spans including agent_run
-      agent.closeAllSpans(sessionKey).then(() => {
-        logger.info('prefactor_agent_spans_closed', {
+    // Close agent_run span and create assistant_response span using session manager
+    if (sessionManager) {
+      sessionManager.closeAgentRunSpan(sessionKey, 'complete').then(() => {
+        logger.info('prefactor_agent_run_span_closed_hierarchical', {
           sessionKey,
         });
+        // Create assistant_response span as child of interaction
+        return sessionManager.createAssistantResponseSpan(sessionKey, ctx);
+      }).then((spanId) => {
+        if (spanId) {
+          logger.info('prefactor_assistant_response_span_created_hierarchical', {
+            sessionKey,
+            spanId,
+          });
+        }
       }).catch((err) => {
-        logger.error('prefactor_close_spans_failed', {
+        logger.error('prefactor_agent_end_span_failed_hierarchical', {
           sessionKey,
           error: err instanceof Error ? err.message : String(err),
         });
@@ -399,18 +439,18 @@ export default function register(api: PluginAPI) {
       metrics.recordEvent('before_tool_call');
     }
 
-    // Create tool_call span (closes any previous tool span as workaround)
-    if (agent) {
-      agent.createToolCallSpan(sessionKey, toolName, ctx).then((spanId) => {
+    // Create tool_call span using hierarchical session manager
+    if (sessionManager) {
+      sessionManager.createToolCallSpan(sessionKey, toolName, ctx).then((spanId) => {
         if (spanId) {
-          logger.info('prefactor_tool_call_span_created', {
+          logger.info('prefactor_tool_call_span_created_hierarchical', {
             sessionKey,
             spanId,
             tool: toolName,
           });
         }
       }).catch((err) => {
-        logger.error('prefactor_tool_call_span_failed', {
+        logger.error('prefactor_tool_call_span_failed_hierarchical', {
           sessionKey,
           tool: toolName,
           error: err instanceof Error ? err.message : String(err),
@@ -454,15 +494,15 @@ export default function register(api: PluginAPI) {
       metrics.recordEvent('tool_result_persist');
     }
 
-    // Close the tool_call span since after_tool_call never fires
-    if (agent) {
-      agent.closeToolCallSpan(sessionKey).then(() => {
-        logger.info('prefactor_tool_call_span_closed', {
+    // Close the tool_call span using hierarchical session manager
+    if (sessionManager) {
+      sessionManager.closeToolCallSpan(sessionKey, 'complete').then(() => {
+        logger.info('prefactor_tool_call_span_closed_hierarchical', {
           sessionKey,
           tool: toolName,
         });
       }).catch((err) => {
-        logger.error('prefactor_close_tool_span_failed', {
+        logger.error('prefactor_close_tool_span_failed_hierarchical', {
           sessionKey,
           tool: toolName,
           error: err instanceof Error ? err.message : String(err),
@@ -495,9 +535,16 @@ export default function register(api: PluginAPI) {
       metrics.recordEvent('message_received');
     }
 
-    // Create user_message span (auto-closes immediately)
-    if (agent) {
-      agent.createUserMessageSpan(sessionKey, ctx).then((spanId) => {
+    // Hierarchical span management:
+    // 1. Ensure session span exists (24hr timeout)
+    // 2. Create or get interaction span (5min timeout)
+    // 3. Create user_message span (immediate event)
+    if (sessionManager) {
+      sessionManager.createSessionSpan(sessionKey).then(() => {
+        return sessionManager.createOrGetInteractionSpan(sessionKey);
+      }).then(() => {
+        return sessionManager.createUserMessageSpan(sessionKey, ctx);
+      }).then((spanId) => {
         if (spanId) {
           logger.info('prefactor_user_message_span_created', {
             sessionKey,
@@ -505,7 +552,7 @@ export default function register(api: PluginAPI) {
           });
         }
       }).catch((err) => {
-        logger.error('prefactor_user_message_span_failed', {
+        logger.error('prefactor_message_received_span_failed', {
           sessionKey,
           error: err instanceof Error ? err.message : String(err),
         });
