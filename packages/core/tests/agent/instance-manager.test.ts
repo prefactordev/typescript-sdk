@@ -1,7 +1,7 @@
 import { describe, expect, spyOn, test } from 'bun:test';
-import { AgentInstanceManager } from '../../src/agent/instance-manager';
-import type { Span } from '../../src/tracing/span';
-import type { AgentInstanceOptions, Transport } from '../../src/transport/base';
+import { AgentInstanceManager } from '../../src/agent/instance-manager.js';
+import type { Span } from '../../src/tracing/span.js';
+import type { AgentInstanceOptions, Transport } from '../../src/transport/http.js';
 
 class MockTransport implements Transport {
   emitted: Span[] = [];

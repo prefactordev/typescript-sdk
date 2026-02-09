@@ -142,6 +142,13 @@ function isRetryableNetworkError(error: unknown): boolean {
     return true;
   }
 
+  if (
+    error instanceof DOMException &&
+    (error.name === 'AbortError' || error.name === 'TimeoutError')
+  ) {
+    return true;
+  }
+
   if (error instanceof Error && (error.name === 'AbortError' || error.name === 'TimeoutError')) {
     return true;
   }

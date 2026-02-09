@@ -13,7 +13,7 @@ enum LogLevel {
  */
 class Logger {
   private static level: LogLevel = (() => {
-    const level = process.env.PREFACTOR_LOG_LEVEL?.toLowerCase();
+    const level = process.env.PREFACTOR_LOG_LEVEL?.toUpperCase();
     if (level && level in LogLevel) {
       return LogLevel[level as keyof typeof LogLevel];
     }

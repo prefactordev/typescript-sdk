@@ -21,8 +21,8 @@ export class AgentInstanceManager {
       return;
     }
 
-    const existingSchema = JSON.stringify(this.registeredSchema);
-    const incomingSchema = JSON.stringify(schema);
+    const existingSchema = stableStringify(this.registeredSchema);
+    const incomingSchema = stableStringify(schema);
     if (existingSchema !== incomingSchema) {
       console.warn(
         'A different schema was provided after registration; ignoring subsequent schema.'
@@ -42,4 +42,26 @@ export class AgentInstanceManager {
   finishInstance(): void {
     this.transport.finishAgentInstance();
   }
+}
+
+function stableStringify(value: unknown): string {
+  return JSON.stringify(normalizeValue(value));
+}
+
+function normalizeValue(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map((entry) => normalizeValue(entry));
+  }
+
+  if (value && typeof value === 'object') {
+    const normalized: Record<string, unknown> = {};
+    const objectValue = value as Record<string, unknown>;
+    const keys = Object.keys(objectValue).sort((a, b) => a.localeCompare(b));
+    for (const key of keys) {
+      normalized[key] = normalizeValue(objectValue[key]);
+    }
+    return normalized;
+  }
+
+  return value;
 }
