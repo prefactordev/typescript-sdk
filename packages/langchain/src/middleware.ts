@@ -54,7 +54,7 @@ export class PrefactorMiddleware {
 
     const span = this.tracer.startSpan({
       name: 'langchain:agent',
-      spanType: SpanType.AGENT,
+      spanType: `langchain:${SpanType.AGENT}`,
       inputs: { messages: serializeValue(messages.slice(-3)) },
     });
 
@@ -95,7 +95,7 @@ export class PrefactorMiddleware {
     const modelName = this.extractModelName(request);
     const span = this.tracer.startSpan({
       name: 'langchain:llm-call',
-      spanType: SpanType.LLM,
+      spanType: `langchain:${SpanType.AGENT}`,
       inputs: {
         ...this.extractModelInputs(request),
         'langchain.model.name': modelName,
@@ -131,7 +131,7 @@ export class PrefactorMiddleware {
     const toolName = this.extractToolName(request);
     const span = this.tracer.startSpan({
       name: 'langchain:tool-call',
-      spanType: SpanType.TOOL,
+      spanType: `langchain:${SpanType.AGENT}`,
       inputs: {
         ...this.extractToolInputs(request),
         'langchain.tool.name': toolName,

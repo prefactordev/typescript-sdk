@@ -30,7 +30,7 @@ function getOrCreateRootAgentSpan(tracer: Tracer): Span {
   if (!rootAgentSpan) {
     rootAgentSpan = tracer.startSpan({
       name: 'ai:agent',
-      spanType: SpanType.AGENT,
+      spanType: `ai:${SpanType.AGENT}`,
       inputs: {},
     });
   }
@@ -171,7 +171,7 @@ function extractToolResults(
 function createToolSpan(tracer: Tracer, toolCall: ToolCallInfo): Span {
   return tracer.startSpan({
     name: 'ai:tool-call',
-    spanType: SpanType.TOOL,
+    spanType: `ai:${SpanType.TOOL}`,
     inputs: {
       'ai.tool.name': toolCall.toolName,
       toolName: toolCall.toolName,
@@ -367,7 +367,7 @@ function createLlmSpan(
   const modelName = `${model.provider ?? 'unknown'}.${model.modelId ?? 'unknown'}`;
   const spanOptions = {
     name: 'ai:llm-call',
-    spanType: SpanType.LLM,
+    spanType: `ai:${SpanType.LLM}`,
     inputs: {
       'ai.model.name': modelName,
       'ai.model.id': model.modelId,
