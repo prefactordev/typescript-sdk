@@ -1,9 +1,9 @@
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { AgentInstanceManager } from '@prefactor/core';
-import { init, shutdown } from '../src/init.js';
+import { afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test';
+import { AgentInstanceManager, Tracer } from '@prefactor/core';
+import { init, shutdown, withSpan } from '../src/init.js';
 
 const baseConfig = {
-  transportType: 'stdio' as const,
+  transportType: 'http' as const,
   httpConfig: {
     apiUrl: 'https://example.com',
     apiToken: 'test-token',
@@ -40,19 +40,53 @@ describe('ai init schema registration', () => {
     expect(registeredSchemas).toEqual([customSchema]);
   });
 
-  test('skips default schema when agentSchemaIdentifier is set', () => {
+  test('registers default schema when only agentIdentifier is set', () => {
     init({
       ...baseConfig,
       transportType: 'http',
-      httpConfig: { ...baseConfig.httpConfig, agentSchemaIdentifier: '2.0.0' },
+      httpConfig: { ...baseConfig.httpConfig, agentIdentifier: '2.0.0' },
     });
 
-    expect(registeredSchemas).toEqual([]);
+    expect(registeredSchemas).toHaveLength(1);
   });
 
   test('registers default schema when no schema config is provided', () => {
     init(baseConfig);
 
-    expect(registeredSchemas.length).toBe(1);
+    expect(registeredSchemas).toHaveLength(1);
+    expect(registeredSchemas[0]).toMatchObject({
+      external_identifier: 'prefactor',
+      span_schemas: expect.any(Object),
+    });
+  });
+
+  test('supports manual spans for custom workflow instrumentation', async () => {
+    const startSpanSpy = spyOn(Tracer.prototype, 'startSpan');
+    const endSpanSpy = spyOn(Tracer.prototype, 'endSpan').mockImplementation(() => {});
+
+    try {
+      init(baseConfig);
+
+      const result = await withSpan(
+        {
+          name: 'test:example_workflow',
+          spanType: 'test:example_workflow',
+          inputs: { channel: 'alerts' },
+        },
+        async () => 'ok'
+      );
+
+      expect(result).toBe('ok');
+      expect(startSpanSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          name: 'test:example_workflow',
+          spanType: 'test:example_workflow',
+        })
+      );
+      expect(endSpanSpy).toHaveBeenCalledTimes(1);
+    } finally {
+      startSpanSpy.mockRestore();
+      endSpanSpy.mockRestore();
+    }
   });
 });

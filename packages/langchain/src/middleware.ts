@@ -1,4 +1,10 @@
-import { type AgentInstanceManager, SpanContext, SpanType, type Tracer } from '@prefactor/core';
+import {
+  type AgentInstanceManager,
+  SpanContext,
+  SpanType,
+  serializeValue,
+  type Tracer,
+} from '@prefactor/core';
 import { extractTokenUsage } from './metadata-extractor.js';
 
 /**
@@ -49,7 +55,7 @@ export class PrefactorMiddleware {
     const span = this.tracer.startSpan({
       name: 'langchain:agent',
       spanType: SpanType.AGENT,
-      inputs: { messages: messages.slice(-3).map((m: unknown) => String(m)) },
+      inputs: { messages: serializeValue(messages.slice(-3)) },
     });
 
     this.rootSpan = span;
@@ -69,7 +75,7 @@ export class PrefactorMiddleware {
 
     const messages = state?.messages ?? [];
     this.tracer.endSpan(this.rootSpan, {
-      outputs: { messages: messages.slice(-3).map((m: unknown) => String(m)) },
+      outputs: { messages: serializeValue(messages.slice(-3)) },
     });
 
     this.agentManager.finishInstance();
@@ -86,10 +92,14 @@ export class PrefactorMiddleware {
    */
   // biome-ignore lint/suspicious/noExplicitAny: LangChain request/handler types are dynamic
   async wrapModelCall<T>(request: any, handler: (req: any) => Promise<T>): Promise<T> {
+    const modelName = this.extractModelName(request);
     const span = this.tracer.startSpan({
-      name: this.extractModelName(request),
+      name: 'langchain:llm-call',
       spanType: SpanType.LLM,
-      inputs: this.extractModelInputs(request),
+      inputs: {
+        ...this.extractModelInputs(request),
+        'langchain.model.name': modelName,
+      },
     });
 
     try {
@@ -118,10 +128,14 @@ export class PrefactorMiddleware {
    */
   // biome-ignore lint/suspicious/noExplicitAny: LangChain request/handler types are dynamic
   async wrapToolCall<T>(request: any, handler: (req: any) => Promise<T>): Promise<T> {
+    const toolName = this.extractToolName(request);
     const span = this.tracer.startSpan({
-      name: this.extractToolName(request),
+      name: 'langchain:tool-call',
       spanType: SpanType.TOOL,
-      inputs: this.extractToolInputs(request),
+      inputs: {
+        ...this.extractToolInputs(request),
+        'langchain.tool.name': toolName,
+      },
     });
 
     try {
@@ -145,7 +159,31 @@ export class PrefactorMiddleware {
    */
   // biome-ignore lint/suspicious/noExplicitAny: LangChain request structure is dynamic
   private extractModelName(request: any): string {
-    return request?.model ?? request?.modelName ?? 'unknown';
+    const candidate = request?.model ?? request?.modelName;
+
+    if (typeof candidate === 'string') {
+      return candidate;
+    }
+
+    if (candidate && typeof candidate === 'object') {
+      const modelObject = candidate as Record<string, unknown>;
+      if (
+        Array.isArray(modelObject.id) &&
+        modelObject.id.every((item) => typeof item === 'string')
+      ) {
+        return (modelObject.id as string[]).join('.');
+      }
+
+      if (typeof modelObject.modelName === 'string') {
+        return modelObject.modelName;
+      }
+
+      if (typeof modelObject.name === 'string') {
+        return modelObject.name;
+      }
+    }
+
+    return 'unknown';
   }
 
   /**
@@ -154,7 +192,7 @@ export class PrefactorMiddleware {
   // biome-ignore lint/suspicious/noExplicitAny: LangChain request structure is dynamic
   private extractModelInputs(request: any): Record<string, unknown> {
     const messages = request?.messages ?? [];
-    return { messages: messages.slice(-3).map((m: unknown) => String(m)) };
+    return { messages: serializeValue(messages.slice(-3)) };
   }
 
   /**
@@ -163,7 +201,7 @@ export class PrefactorMiddleware {
   // biome-ignore lint/suspicious/noExplicitAny: LangChain response structure is dynamic
   private extractModelOutputs(response: any): Record<string, unknown> {
     const content = response?.content ?? response?.text ?? '';
-    return { content: String(content) };
+    return { content: serializeValue(content) };
   }
 
   /**

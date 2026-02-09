@@ -41,29 +41,6 @@ describe('createCore', () => {
     await core.shutdown();
   });
 
-  test('does not warn when skipSchema is enabled for HTTP transport', async () => {
-    const { warnMessages, warnSpy } = createWarnSpy();
-    const config = createConfig({
-      transportType: 'http',
-      httpConfig: {
-        apiUrl: 'https://example.com',
-        apiToken: 'test-token',
-        agentIdentifier: '1.0.0',
-        skipSchema: true,
-      },
-    });
-    const core = createCore(config);
-
-    try {
-      core.agentManager.startInstance({ agentId: 'agent-1' });
-
-      expect(warnMessages).toHaveLength(0);
-    } finally {
-      warnSpy.mockRestore();
-      await core.shutdown();
-    }
-  });
-
   test('does not warn when agentSchema is provided for HTTP transport', async () => {
     const { warnMessages, warnSpy } = createWarnSpy();
     const config = createConfig({
@@ -87,14 +64,13 @@ describe('createCore', () => {
     }
   });
 
-  test('warns when skipSchema is set for stdio transport', async () => {
+  test('warns when schema is not registered for HTTP transport without agent schema', async () => {
     const { warnMessages, warnSpy } = createWarnSpy();
     const config = createConfig({
-      transportType: 'stdio',
+      transportType: 'http',
       httpConfig: {
         apiUrl: 'https://example.com',
         apiToken: 'test-token',
-        skipSchema: true,
       },
     });
     const core = createCore(config);
@@ -108,5 +84,13 @@ describe('createCore', () => {
       warnSpy.mockRestore();
       await core.shutdown();
     }
+  });
+
+  test('rejects stdio transport type', () => {
+    expect(() =>
+      createConfig({
+        transportType: 'stdio' as unknown as 'http',
+      })
+    ).toThrow();
   });
 });

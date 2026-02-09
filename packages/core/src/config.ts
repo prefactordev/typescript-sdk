@@ -1,5 +1,11 @@
 import { z } from 'zod';
 
+const DEFAULT_RETRY_ON_STATUS_CODES = [
+  429,
+  ...Array.from({ length: 100 }, (_, index) => 500 + index),
+];
+const HttpStatusCodeSchema = z.number().int().min(100).max(599);
+
 /**
  * Configuration schema for HTTP transport
  */
@@ -22,26 +28,11 @@ export const HttpTransportConfigSchema = z.object({
   /** Optional agent description */
   agentDescription: z.string().optional(),
 
-  /** Optional schema identifier name (used for registration/agent instance) */
-  schemaName: z.string().optional(),
-
-  /** Optional schema identifier (used for registration/agent instance) */
-  schemaIdentifier: z.string().optional(),
-
   /** Optional agent schema for validation (full schema object) */
   agentSchema: z.record(z.unknown()).optional(),
 
-  /** Optional pre-registered schema identifier (external identifier string) */
-  agentSchemaIdentifier: z.string().optional(),
-
-  /** Skip schema validation */
-  skipSchema: z.boolean().default(false),
-
   /** Request timeout in milliseconds */
   requestTimeout: z.number().positive().default(30000),
-
-  /** Connection timeout in milliseconds */
-  connectTimeout: z.number().positive().default(10000),
 
   /** Maximum number of retry attempts */
   maxRetries: z.number().int().nonnegative().default(3),
@@ -54,6 +45,9 @@ export const HttpTransportConfigSchema = z.object({
 
   /** Multiplier for exponential backoff */
   retryMultiplier: z.number().positive().default(2.0),
+
+  /** Status codes that should trigger retries */
+  retryOnStatusCodes: z.array(HttpStatusCodeSchema).default([...DEFAULT_RETRY_ON_STATUS_CODES]),
 });
 
 export type HttpTransportConfig = z.infer<typeof HttpTransportConfigSchema>;
@@ -68,17 +62,13 @@ export const PartialHttpConfigSchema = z.object({
   agentIdentifier: z.string().optional(),
   agentName: z.string().optional(),
   agentDescription: z.string().optional(),
-  schemaName: z.string().optional(),
-  schemaIdentifier: z.string().optional(),
   agentSchema: z.record(z.unknown()).optional(),
-  agentSchemaIdentifier: z.string().optional(),
-  skipSchema: z.boolean().optional(),
   requestTimeout: z.number().positive().optional(),
-  connectTimeout: z.number().positive().optional(),
   maxRetries: z.number().int().nonnegative().optional(),
   initialRetryDelay: z.number().positive().optional(),
   maxRetryDelay: z.number().positive().optional(),
   retryMultiplier: z.number().positive().optional(),
+  retryOnStatusCodes: z.array(HttpStatusCodeSchema).optional(),
 });
 
 export type PartialHttpConfig = z.infer<typeof PartialHttpConfigSchema>;
@@ -88,7 +78,7 @@ export type PartialHttpConfig = z.infer<typeof PartialHttpConfigSchema>;
  */
 export const ConfigSchema = z.object({
   /** Transport type to use for span emission */
-  transportType: z.enum(['stdio', 'http']).default('stdio'),
+  transportType: z.enum(['http']).default('http'),
 
   /** Sampling rate (0.0 to 1.0) */
   sampleRate: z.number().min(0).max(1).default(1.0),
@@ -131,11 +121,13 @@ export type Config = z.infer<typeof ConfigSchema>;
  * ```
  */
 export function createConfig(options?: Partial<Config>): Config {
+  const retryOnStatusCodesFromEnv = parseRetryOnStatusCodesEnv(
+    process.env.PREFACTOR_RETRY_ON_STATUS_CODES
+  );
+
   const config = {
     transportType:
-      options?.transportType ??
-      (process.env.PREFACTOR_TRANSPORT as 'stdio' | 'http' | undefined) ??
-      'stdio',
+      options?.transportType ?? (process.env.PREFACTOR_TRANSPORT as 'http' | undefined) ?? 'http',
     sampleRate: options?.sampleRate ?? parseFloat(process.env.PREFACTOR_SAMPLE_RATE ?? '1.0'),
     captureInputs: options?.captureInputs ?? process.env.PREFACTOR_CAPTURE_INPUTS !== 'false',
     captureOutputs: options?.captureOutputs ?? process.env.PREFACTOR_CAPTURE_OUTPUTS !== 'false',
@@ -143,9 +135,29 @@ export function createConfig(options?: Partial<Config>): Config {
       options?.maxInputLength ?? parseInt(process.env.PREFACTOR_MAX_INPUT_LENGTH ?? '10000', 10),
     maxOutputLength:
       options?.maxOutputLength ?? parseInt(process.env.PREFACTOR_MAX_OUTPUT_LENGTH ?? '10000', 10),
-    httpConfig: options?.httpConfig,
+    httpConfig: options?.httpConfig
+      ? {
+          ...options.httpConfig,
+          retryOnStatusCodes: options.httpConfig.retryOnStatusCodes ?? retryOnStatusCodesFromEnv,
+        }
+      : undefined,
   };
 
   // Validate and return
   return ConfigSchema.parse(config);
+}
+
+function parseRetryOnStatusCodesEnv(value: string | undefined): number[] | undefined {
+  if (!value) {
+    return undefined;
+  }
+
+  const parsedCodes = value
+    .split(',')
+    .map((status) => status.trim())
+    .filter((status) => /^\d{3}$/.test(status))
+    .map((status) => Number(status))
+    .filter((status) => status >= 100 && status <= 599);
+
+  return parsedCodes.length > 0 ? parsedCodes : undefined;
 }

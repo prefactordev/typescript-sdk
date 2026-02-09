@@ -12,7 +12,8 @@
 
 import { createAgent, tool } from 'langchain';
 import { z } from 'zod';
-import { init, shutdown } from '@prefactor/langchain';
+import { init, withSpan } from '@prefactor/langchain';
+import { shutdown } from '@prefactor/core';
 
 // Define simple tools for the agent
 const calculatorTool = tool(
@@ -69,75 +70,84 @@ async function main() {
       apiUrl: process.env.PREFACTOR_API_URL || 'http://localhost:8000',
       apiToken: process.env.PREFACTOR_API_TOKEN || 'dev-token',
       agentId: process.env.PREFACTOR_AGENT_ID,
-      agentIdentifier: '1.0.0',
+      agentIdentifier: 'langchain-v1',
     },
   });
   console.log('Prefactor middleware initialized');
   console.log();
 
-  // Create tools list
-  const tools = [calculatorTool, getCurrentTimeTool];
+  await withSpan(
+    {
+      name: 'langchain:example-root',
+      spanType: 'custom:example-root',
+      inputs: { example: 'anthropic-agent/simple-agent.ts' },
+    },
+    async () => {
+      // Create tools list
+      const tools = [calculatorTool, getCurrentTimeTool];
 
-  // Create agent using the createAgent API with middleware
-  console.log('Creating agent with createAgent API and Prefactor middleware...');
-  const agent = createAgent({
-    model: 'claude-haiku-4-5-20251001',
-    tools,
-    systemPrompt: 'You are a helpful assistant. Use the available tools to answer questions.',
-    middleware: [middleware],
-  });
-  console.log('Agent created with Prefactor tracing');
-  console.log();
+      // Create agent using the createAgent API with middleware
+      console.log('Creating agent with createAgent API and Prefactor middleware...');
+      const agent = createAgent({
+        model: 'claude-3-haiku-20240307',
+        tools,
+        systemPrompt: 'You are a helpful assistant. Use the available tools to answer questions.',
+        middleware: [middleware],
+      });
+      console.log('Agent created with Prefactor tracing');
+      console.log();
 
-  // Run test interactions
-  console.log('='.repeat(80));
-  console.log('Example 1: Getting Current Time');
-  console.log('='.repeat(80));
-  console.log();
+      // Run test interactions
+      console.log('='.repeat(80));
+      console.log('Example 1: Getting Current Time');
+      console.log('='.repeat(80));
+      console.log();
 
-  try {
-    const result1 = await agent.invoke({
-      messages: [{ role: 'user', content: 'What is the current date and time?' }],
-    });
-    console.log('\nAgent Response:');
-    console.log(result1.messages[result1.messages.length - 1].content);
-    console.log();
-  } catch (error) {
-    console.log(`Error in Example 1: ${error}`);
-    console.log();
-  }
+      try {
+        const result1 = await agent.invoke({
+          messages: [{ role: 'user', content: 'What is the current date and time?' }],
+        });
+        console.log('\nAgent Response:');
+        console.log(result1.messages[result1.messages.length - 1].content);
+        console.log();
+      } catch (error) {
+        console.log(`Error in Example 1: ${error}`);
+        console.log();
+      }
 
-  console.log('='.repeat(80));
-  console.log('Example 2: Simple Calculation');
-  console.log('='.repeat(80));
-  console.log();
+      console.log('='.repeat(80));
+      console.log('Example 2: Simple Calculation');
+      console.log('='.repeat(80));
+      console.log();
 
-  try {
-    const result2 = await agent.invoke({
-      messages: [{ role: 'user', content: 'What is 42 multiplied by 17?' }],
-    });
-    console.log('\nAgent Response:');
-    console.log(result2.messages[result2.messages.length - 1].content);
-    console.log();
-  } catch (error) {
-    console.log(`Error in Example 2: ${error}`);
-    console.log();
-  }
+      try {
+        const result2 = await agent.invoke({
+          messages: [{ role: 'user', content: 'What is 42 multiplied by 17?' }],
+        });
+        console.log('\nAgent Response:');
+        console.log(result2.messages[result2.messages.length - 1].content);
+        console.log();
+      } catch (error) {
+        console.log(`Error in Example 2: ${error}`);
+        console.log();
+      }
 
-  console.log('='.repeat(80));
-  console.log('Example Complete!');
-  console.log('='.repeat(80));
-  console.log();
-  console.log('The trace spans have been sent to the Prefactor API.');
-  console.log('You should see spans for:');
-  console.log('  - AGENT: Root agent execution span');
-  console.log('  - LLM: Claude API calls with token usage');
-  console.log('  - TOOL: calculator and get_current_time executions');
-  console.log();
-  console.log('Check parent_span_id fields to see the span hierarchy.');
-  console.log();
-  console.log('Note: This example uses the createAgent API from LangChain v1.');
-  console.log();
+      console.log('='.repeat(80));
+      console.log('Example Complete!');
+      console.log('='.repeat(80));
+      console.log();
+      console.log('The trace spans have been sent to the Prefactor API.');
+      console.log('You should see spans for:');
+      console.log('  - AGENT: Root agent execution span');
+      console.log('  - LLM: Claude API calls with token usage');
+      console.log('  - TOOL: calculator and get_current_time executions');
+      console.log();
+      console.log('Check parent_span_id fields to see the span hierarchy.');
+      console.log();
+      console.log('Note: This example uses the createAgent API from LangChain v1.');
+      console.log();
+    }
+  );
 
   // Explicitly flush pending spans (also happens automatically via beforeExit)
   console.log('Flushing pending spans...');

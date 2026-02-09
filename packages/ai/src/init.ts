@@ -14,14 +14,26 @@ import {
   configureLogging,
   createConfig,
   createCore,
-  DEFAULT_AGENT_SCHEMA,
   getLogger,
+  registerShutdownHandler,
+  shutdown as shutdownCore,
   type Tracer,
+  withSpan as withCoreSpan,
 } from '@prefactor/core';
 import { createPrefactorMiddleware, endRootAgentSpan } from './middleware.js';
 import type { MiddlewareConfig } from './types.js';
 
 const logger = getLogger('ai-init');
+
+const DEFAULT_AI_AGENT_SCHEMA = {
+  external_identifier: 'prefactor',
+  span_schemas: {
+    agent: { type: 'object', additionalProperties: true },
+    llm: { type: 'object', additionalProperties: true },
+    tool: { type: 'object', additionalProperties: true },
+    chain: { type: 'object', additionalProperties: true },
+  },
+} as const;
 
 /** Global Prefactor tracer instance. */
 let globalTracer: Tracer | null = null;
@@ -30,6 +42,31 @@ let agentLifecycle: { started: boolean } | null = null;
 
 /** Global middleware instance. */
 let globalMiddleware: ReturnType<typeof createPrefactorMiddleware> | null = null;
+
+registerShutdownHandler('prefactor-ai', async () => {
+  if (globalCore) {
+    logger.info('Shutting down Prefactor AI Middleware');
+    if (globalTracer) {
+      endRootAgentSpan(globalTracer);
+    }
+    if (agentLifecycle?.started) {
+      globalCore.agentManager.finishInstance();
+      agentLifecycle.started = false;
+    }
+  }
+
+  globalCore = null;
+  globalTracer = null;
+  globalMiddleware = null;
+  agentLifecycle = null;
+});
+
+export type ManualSpanOptions = {
+  name: string;
+  spanType: string;
+  inputs: Record<string, unknown>;
+  metadata?: Record<string, unknown>;
+};
 
 /**
  * Initialize the Prefactor AI middleware and return it for use with wrapLanguageModel.
@@ -41,14 +78,21 @@ let globalMiddleware: ReturnType<typeof createPrefactorMiddleware> | null = null
  * @param middlewareConfig - Optional middleware-specific configuration
  * @returns Middleware object to use with wrapLanguageModel
  *
- * @example Basic usage with stdio (development)
+ * @example Basic usage with HTTP transport
  * ```typescript
  * import { init, shutdown } from '@prefactor/ai';
  * import { generateText, wrapLanguageModel } from 'ai';
  * import { anthropic } from '@ai-sdk/anthropic';
  *
- * // Initialize with defaults (stdio transport)
- * const middleware = init();
+ * // Initialize with HTTP transport config
+ * const middleware = init({
+ *   transportType: 'http',
+ *   httpConfig: {
+ *     apiUrl: 'https://api.prefactor.ai',
+ *     apiToken: process.env.PREFACTOR_API_TOKEN!,
+ *     agentIdentifier: '1.0.0',
+ *   },
+ * });
  *
  * // Wrap your model with the middleware
  * const model = wrapLanguageModel({
@@ -80,7 +124,14 @@ let globalMiddleware: ReturnType<typeof createPrefactorMiddleware> | null = null
  * @example With middleware configuration
  * ```typescript
  * const middleware = init(
- *   { transportType: 'stdio' },
+ *   {
+ *     transportType: 'http',
+ *     httpConfig: {
+ *       apiUrl: 'https://api.prefactor.ai',
+ *       apiToken: process.env.PREFACTOR_API_TOKEN!,
+ *       agentIdentifier: '1.0.0',
+ *     },
+ *   },
  *   { captureContent: false } // Don't capture prompts/responses
  * );
  * ```
@@ -93,7 +144,7 @@ export function init(
 
   // Build httpConfig from environment if not provided but HTTP transport is requested
   let configWithHttp = config;
-  const transportType = config?.transportType ?? process.env.PREFACTOR_TRANSPORT ?? 'stdio';
+  const transportType = config?.transportType ?? process.env.PREFACTOR_TRANSPORT ?? 'http';
 
   if (transportType === 'http' && !config?.httpConfig) {
     const apiUrl = process.env.PREFACTOR_API_URL;
@@ -115,22 +166,20 @@ export function init(
         agentId: process.env.PREFACTOR_AGENT_ID,
         agentName: process.env.PREFACTOR_AGENT_NAME,
         agentIdentifier: process.env.PREFACTOR_AGENT_IDENTIFIER || '1.0.0',
+        agentSchema: DEFAULT_AI_AGENT_SCHEMA,
+      },
+    };
+  } else if (transportType === 'http' && config?.httpConfig && !config.httpConfig.agentSchema) {
+    configWithHttp = {
+      ...config,
+      httpConfig: {
+        ...config.httpConfig,
+        agentSchema: DEFAULT_AI_AGENT_SCHEMA,
       },
     };
   }
 
-  // Set default schema namespace for AI SDK adaptor
-  const configWithDefaults: Partial<Config> = {
-    ...configWithHttp,
-    httpConfig: configWithHttp?.httpConfig
-      ? {
-          ...configWithHttp.httpConfig,
-          schemaName: 'aisdk:agent',
-        }
-      : undefined,
-  };
-
-  const finalConfig = createConfig(configWithDefaults);
+  const finalConfig = createConfig(configWithHttp);
   logger.info('Initializing Prefactor AI Middleware', { transport: finalConfig.transportType });
 
   // Return existing middleware if already initialized
@@ -145,13 +194,6 @@ export function init(
   const httpConfig = finalConfig.httpConfig;
   if (httpConfig?.agentSchema) {
     core.agentManager.registerSchema(httpConfig.agentSchema);
-  } else if (
-    finalConfig.transportType === 'http' &&
-    (httpConfig?.agentSchemaIdentifier || httpConfig?.skipSchema)
-  ) {
-    logger.debug('Skipping default schema registration based on httpConfig');
-  } else {
-    core.agentManager.registerSchema(DEFAULT_AGENT_SCHEMA);
   }
 
   const agentInfo = finalConfig.httpConfig
@@ -201,51 +243,18 @@ export function getTracer(): Tracer {
   return globalTracer as Tracer;
 }
 
-/**
- * Shutdown the SDK and flush any pending spans.
- *
- * Call this before your application exits to ensure all spans are sent to the transport.
- * This is especially important for HTTP transport which has a queue of pending requests.
- *
- * @returns Promise that resolves when shutdown is complete
- *
- * @example
- * ```typescript
- * import { shutdown } from '@prefactor/ai';
- *
- * // At the end of your script or before process exit
- * await shutdown();
- * ```
- *
- * @example With signal handling
- * ```typescript
- * process.on('SIGTERM', async () => {
- *   await shutdown();
- *   process.exit(0);
- * });
- * ```
- */
-export async function shutdown(): Promise<void> {
-  if (globalCore) {
-    logger.info('Shutting down Prefactor AI Middleware');
-    if (globalTracer) {
-      endRootAgentSpan(globalTracer);
-    }
-    if (agentLifecycle?.started) {
-      globalCore.agentManager.finishInstance();
-      agentLifecycle.started = false;
-    }
-    await globalCore.shutdown();
-  }
-  globalCore = null;
-  globalTracer = null;
-  globalMiddleware = null;
-  agentLifecycle = null;
+export async function withSpan<T>(
+  options: ManualSpanOptions,
+  fn: () => Promise<T> | T
+): Promise<T> {
+  return withCoreSpan(options, fn);
 }
+
+export { shutdownCore as shutdown };
 
 // Automatic shutdown on process exit
 process.on('beforeExit', () => {
-  shutdown().catch((error) => {
+  shutdownCore().catch((error) => {
     console.error('Error during Prefactor AI Middleware shutdown:', error);
   });
 });

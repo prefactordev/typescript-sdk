@@ -11,8 +11,14 @@
  * import { generateText, wrapLanguageModel } from "ai";
  * import { anthropic } from "@ai-sdk/anthropic";
  *
- * // Initialize with defaults (stdio transport for development)
- * const middleware = init();
+ * // Initialize with HTTP transport
+ * const middleware = init({
+ *   transportType: 'http',
+ *   httpConfig: {
+ *     apiUrl: 'https://api.prefactor.ai',
+ *     apiToken: process.env.PREFACTOR_API_TOKEN!,
+ *   },
+ * });
  *
  * // Or with HTTP transport for production
  * const middleware = init({
@@ -45,7 +51,8 @@
 // Initialization Exports
 // ============================================================================
 
-export { getTracer, init, shutdown } from './init.js';
+export { shutdown } from '@prefactor/core';
+export { getTracer, init, withSpan } from './init.js';
 
 // ============================================================================
 // Middleware Exports

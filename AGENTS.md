@@ -19,6 +19,13 @@ This file guides coding agents working in this repo.
 - LangChain integration: `packages/langchain/src/*`.
 - AI SDK integration: `packages/ai/src/*`.
 
+## Core-first philosophy
+- Prefer putting shared behavior, data shaping, lifecycle helpers, and instrumentation logic in `packages/core`.
+- Keep provider packages (`langchain`, `ai`, etc) as thin adapters over provider-specific APIs.
+- Before adding logic to a provider package, check whether it can be a reusable core utility.
+- Avoid duplicate implementations across provider packages; extract to core first, then adapt.
+- Design decisions should default to "core-first" unless a provider-specific constraint requires local behavior.
+
 ## Toolchain
 - Runtime: Node >= 24 (see `package.json`), dev uses Bun.
 - Install toolchain: `mise install`.

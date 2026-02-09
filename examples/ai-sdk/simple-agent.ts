@@ -13,7 +13,8 @@
 import { generateText, wrapLanguageModel, tool, stepCountIs } from 'ai';
 import { anthropic } from '@ai-sdk/anthropic';
 import { z } from 'zod';
-import { init, shutdown } from '@prefactor/ai';
+import { init } from '@prefactor/ai';
+import { shutdown, withSpan } from '@prefactor/core';
 
 const calculateTool = tool({
   description: 'Perform basic arithmetic operations (+, -, *, /).',
@@ -122,7 +123,7 @@ async function main() {
 
   // Initialize @prefactor/ai
   // Config is picked up from environment variables:
-  // - PREFACTOR_TRANSPORT: 'stdio' or 'http' (default: 'stdio')
+  // - PREFACTOR_TRANSPORT: 'http'
   // - PREFACTOR_API_URL: API endpoint for HTTP transport
   // - PREFACTOR_API_TOKEN: API token for HTTP transport
   // - PREFACTOR_AGENT_ID: Optional agent identifier
@@ -149,37 +150,46 @@ async function main() {
   console.log('Model wrapped with Prefactor middleware');
   console.log();
 
-  // Example: Use the tools to generate everything
-  try {
-    const result = await generateText({
-      model,
-      prompt:
-        'Get the current time, generate a random number of minutes, add those minutes to the current time to get a future time, then calculate the difference in seconds between the two times.',
-      tools: {
-        calculate: calculateTool,
-        get_current_time: getCurrentTimeTool,
-        get_time_difference: getTimeDifferenceTool,
-        add_time: addTimeTool,
-        random_minutes: randomMinutesTool,
-      },
-      stopWhen: stepCountIs(8),
-    });
+  await withSpan(
+    {
+      name: 'root-span',
+      spanType: 'ai:example-root',
+      inputs: { example: 'ai-sdk/simple-agent.ts' },
+    },
+    async () => {
+      // Example: Use the tools to generate everything
+      try {
+        const result = await generateText({
+          model,
+          prompt:
+            'Get the current time, generate a random number of minutes, add those minutes to the current time to get a future time, then calculate the difference in seconds between the two times.',
+          tools: {
+            calculate: calculateTool,
+            get_current_time: getCurrentTimeTool,
+            get_time_difference: getTimeDifferenceTool,
+            add_time: addTimeTool,
+            random_minutes: randomMinutesTool,
+          },
+          stopWhen: stepCountIs(8),
+        });
 
-    console.log('Agent Response:');
-    console.log(result.text);
-    console.log();
+        console.log('Agent Response:');
+        console.log(result.text);
+        console.log();
 
-    if (result.toolCalls.length > 0) {
-      console.log('Tool calls made:');
-      for (const toolCall of result.toolCalls) {
-        console.log(`  - ${toolCall.toolName}: ${JSON.stringify(toolCall.input)}`);
+        if (result.toolCalls.length > 0) {
+          console.log('Tool calls made:');
+          for (const toolCall of result.toolCalls) {
+            console.log(`  - ${toolCall.toolName}: ${JSON.stringify(toolCall.input)}`);
+          }
+          console.log();
+        }
+      } catch (error) {
+        console.log(`Error in Example: ${error}`);
+        console.log();
       }
-      console.log();
     }
-  } catch (error) {
-    console.log(`Error in Example: ${error}`);
-    console.log();
-  }
+  );
 
   await shutdown();
   console.log('Shutdown complete');

@@ -1,25 +1,34 @@
 import type { Span } from '../tracing/span.js';
+import type { AgentInstanceOptions } from '../transport/http.js';
 
-export type SchemaRegistration = {
-  schemaName: string;
-  schemaIdentifier: string;
+export type SchemaRegisterAction = {
+  type: 'schema_register';
   schema: Record<string, unknown>;
 };
 
-export type AgentInstanceStart = {
-  agentId?: string;
-  agentIdentifier?: string;
-  agentName?: string;
-  agentDescription?: string;
-  schemaName: string;
-  schemaIdentifier: string;
+export type AgentStartAction = {
+  type: 'agent_start';
+  options?: AgentInstanceOptions;
 };
 
-export type AgentInstanceFinish = Record<string, never>;
+export type AgentFinishAction = {
+  type: 'agent_finish';
+};
 
-export type QueueAction =
-  | { type: 'schema_register'; data: SchemaRegistration }
-  | { type: 'agent_start'; data: AgentInstanceStart }
-  | { type: 'agent_finish'; data: AgentInstanceFinish }
-  | { type: 'span_end'; data: Span }
-  | { type: 'span_finish'; data: { spanId: string; endTime: number } };
+export type SpanEndAction = {
+  type: 'span_end';
+  span: Span;
+};
+
+export type SpanFinishAction = {
+  type: 'span_finish';
+  spanId: string;
+  endTime: number;
+};
+
+export type TransportAction =
+  | SchemaRegisterAction
+  | AgentStartAction
+  | AgentFinishAction
+  | SpanEndAction
+  | SpanFinishAction;

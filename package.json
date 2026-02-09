@@ -9,9 +9,8 @@
     "typecheck": "tsc --build",
     "lint": "biome check .",
     "format": "biome format --write .",
-    "example:basic": "bun examples/basic.ts",
-    "example:anthropic": "bun examples/anthropic-agent/simple-agent.ts",
-    "example:ai-sdk": "bun examples/ai-sdk/simple-agent.ts"
+    "example:langchain": "bun examples/anthropic-agent/simple-agent.ts",
+    "example:ai": "bun examples/ai-sdk/simple-agent.ts"
   },
   "devDependencies": {
     "@ai-sdk/anthropic": "^3.0.18",
