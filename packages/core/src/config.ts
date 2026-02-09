@@ -1,5 +1,8 @@
 import { z } from 'zod';
 
+const DEFAULT_RETRY_ON_STATUS_CODES = [429, ...Array.from({ length: 100 }, (_, index) => 500 + index)];
+const HttpStatusCodeSchema = z.number().int().min(100).max(599);
+
 /**
  * Configuration schema for HTTP transport
  */
@@ -39,6 +42,9 @@ export const HttpTransportConfigSchema = z.object({
 
   /** Multiplier for exponential backoff */
   retryMultiplier: z.number().positive().default(2.0),
+
+  /** Status codes that should trigger retries */
+  retryOnStatusCodes: z.array(HttpStatusCodeSchema).default([...DEFAULT_RETRY_ON_STATUS_CODES]),
 });
 
 export type HttpTransportConfig = z.infer<typeof HttpTransportConfigSchema>;
@@ -59,6 +65,7 @@ export const PartialHttpConfigSchema = z.object({
   initialRetryDelay: z.number().positive().optional(),
   maxRetryDelay: z.number().positive().optional(),
   retryMultiplier: z.number().positive().optional(),
+  retryOnStatusCodes: z.array(HttpStatusCodeSchema).optional(),
 });
 
 export type PartialHttpConfig = z.infer<typeof PartialHttpConfigSchema>;
@@ -111,6 +118,10 @@ export type Config = z.infer<typeof ConfigSchema>;
  * ```
  */
 export function createConfig(options?: Partial<Config>): Config {
+  const retryOnStatusCodesFromEnv = parseRetryOnStatusCodesEnv(
+    process.env.PREFACTOR_RETRY_ON_STATUS_CODES
+  );
+
   const config = {
     transportType:
       options?.transportType ?? (process.env.PREFACTOR_TRANSPORT as 'http' | undefined) ?? 'http',
@@ -121,9 +132,30 @@ export function createConfig(options?: Partial<Config>): Config {
       options?.maxInputLength ?? parseInt(process.env.PREFACTOR_MAX_INPUT_LENGTH ?? '10000', 10),
     maxOutputLength:
       options?.maxOutputLength ?? parseInt(process.env.PREFACTOR_MAX_OUTPUT_LENGTH ?? '10000', 10),
-    httpConfig: options?.httpConfig,
+    httpConfig: options?.httpConfig
+      ? {
+          ...options.httpConfig,
+          retryOnStatusCodes:
+            options.httpConfig.retryOnStatusCodes ?? retryOnStatusCodesFromEnv,
+        }
+      : undefined,
   };
 
   // Validate and return
   return ConfigSchema.parse(config);
+}
+
+function parseRetryOnStatusCodesEnv(value: string | undefined): number[] | undefined {
+  if (!value) {
+    return undefined;
+  }
+
+  const parsedCodes = value
+    .split(',')
+    .map((status) => status.trim())
+    .filter((status) => /^\d{3}$/.test(status))
+    .map((status) => Number(status))
+    .filter((status) => status >= 100 && status <= 599);
+
+  return parsedCodes.length > 0 ? parsedCodes : undefined;
 }

@@ -1,5 +1,5 @@
 import { generate, generatePartition, type Partition } from '@prefactor/pfid';
-import type { Transport } from '../transport/base.js';
+import type { Transport } from '../transport/http.js';
 import { SpanContext } from './context.js';
 import type { Span, TokenUsage } from './span.js';
 import { SpanStatus, SpanType } from './span.js';

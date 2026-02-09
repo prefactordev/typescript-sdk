@@ -23,7 +23,7 @@ export {
 } from './tracing/span.js';
 export { type EndSpanOptions, type StartSpanOptions, Tracer } from './tracing/tracer.js';
 // Transport
-export type { AgentInstanceOptions, Transport } from './transport/base.js';
+export type { AgentInstanceOptions, Transport } from './transport/http.js';
 export { HttpTransport } from './transport/http.js';
 
 // Utilities
