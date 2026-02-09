@@ -13,15 +13,15 @@ export type CoreRuntime = {
 };
 
 export function createCore(config: Config): CoreRuntime {
-  let transport: Transport;
   if (!config.httpConfig) {
     throw new Error('HTTP transport requires httpConfig to be provided in configuration');
   }
+
   const httpConfig = HttpTransportConfigSchema.parse(config.httpConfig);
-  transport = new HttpTransport(httpConfig);
+  const transport = new HttpTransport(httpConfig);
 
   let partition: Partition | undefined;
-  if (config.httpConfig?.agentId) {
+  if (config.httpConfig.agentId) {
     try {
       partition = extractPartition(config.httpConfig.agentId);
     } catch {
@@ -31,7 +31,7 @@ export function createCore(config: Config): CoreRuntime {
 
   const tracer = new Tracer(transport, partition);
 
-  const allowUnregisteredSchema = Boolean(config.httpConfig?.agentSchema);
+  const allowUnregisteredSchema = Boolean(config.httpConfig.agentSchema);
   const agentManager = new AgentInstanceManager(transport, {
     allowUnregisteredSchema,
   });
@@ -42,3 +42,4 @@ export function createCore(config: Config): CoreRuntime {
 
   return { tracer, agentManager, shutdown };
 }
+
