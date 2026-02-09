@@ -47,6 +47,7 @@ export class HttpTransport implements Transport {
   private agentInstanceId: string | null = null;
   private spanIdMap = new Map<string, string>();
   private pendingFinishes = new Map<string, number>();
+  private pendingChildren = new Map<string, Span[]>();
 
   constructor(private config: HttpTransportConfig) {
     const httpClient = new HttpClient(config);
@@ -89,6 +90,13 @@ export class HttpTransport implements Transport {
         `Transport closed with ${this.pendingFinishes.size} pending span finish(es) that could not be processed`
       );
       this.pendingFinishes.clear();
+    }
+
+    if (this.pendingChildren.size > 0) {
+      logger.warn(
+        `Transport closed with ${this.pendingChildren.size} unresolved parent span reference(s)`
+      );
+      this.pendingChildren.clear();
     }
   }
 
@@ -150,6 +158,12 @@ export class HttpTransport implements Transport {
         if (!this.agentInstanceId) {
           await this.ensureAgentRegistered();
         }
+
+        if (action.span.parentSpanId && !this.spanIdMap.has(action.span.parentSpanId)) {
+          this.queuePendingChild(action.span.parentSpanId, action.span);
+          return;
+        }
+
         await this.sendSpan(action.span);
         return;
       case 'span_finish': {
@@ -196,8 +210,27 @@ export class HttpTransport implements Transport {
 
       this.spanIdMap.set(span.spanId, backendSpanId);
       await this.processPendingFinishes(span.spanId);
+      await this.processPendingChildren(span.spanId);
     } catch (error) {
       logger.error('Error sending span:', error);
+    }
+  }
+
+  private queuePendingChild(parentSpanId: string, childSpan: Span): void {
+    const existingChildren = this.pendingChildren.get(parentSpanId) ?? [];
+    existingChildren.push(childSpan);
+    this.pendingChildren.set(parentSpanId, existingChildren);
+  }
+
+  private async processPendingChildren(parentSpanId: string): Promise<void> {
+    const waitingChildren = this.pendingChildren.get(parentSpanId);
+    if (!waitingChildren || waitingChildren.length === 0) {
+      return;
+    }
+
+    this.pendingChildren.delete(parentSpanId);
+    for (const childSpan of waitingChildren) {
+      await this.sendSpan(childSpan);
     }
   }
 

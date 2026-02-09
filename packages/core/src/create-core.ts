@@ -2,6 +2,8 @@ import { extractPartition, type Partition } from '@prefactor/pfid';
 import { AgentInstanceManager } from './agent/instance-manager.js';
 import type { Config } from './config.js';
 import { HttpTransportConfigSchema } from './config.js';
+import { setActiveCoreRuntime } from './lifecycle.js';
+import { clearActiveTracer, setActiveTracer } from './tracing/active-tracer.js';
 import { Tracer } from './tracing/tracer.js';
 import { HttpTransport } from './transport/http.js';
 
@@ -29,6 +31,7 @@ export function createCore(config: Config): CoreRuntime {
   }
 
   const tracer = new Tracer(transport, partition);
+  setActiveTracer(tracer);
 
   const allowUnregisteredSchema = Boolean(config.httpConfig.agentSchema);
   const agentManager = new AgentInstanceManager(transport, {
@@ -37,7 +40,10 @@ export function createCore(config: Config): CoreRuntime {
 
   const shutdown = async (): Promise<void> => {
     await tracer.close();
+    clearActiveTracer(tracer);
+    setActiveCoreRuntime(null);
   };
-
-  return { tracer, agentManager, shutdown };
+  const runtime: CoreRuntime = { tracer, agentManager, shutdown };
+  setActiveCoreRuntime(runtime);
+  return runtime;
 }

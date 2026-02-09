@@ -13,6 +13,7 @@ export {
   PartialHttpConfigSchema,
 } from './config.js';
 export { type CoreRuntime, createCore } from './create-core.js';
+export { registerShutdownHandler, shutdown } from './lifecycle.js';
 export { SpanContext } from './tracing/context.js';
 export {
   type ErrorInfo,
@@ -22,6 +23,7 @@ export {
   type TokenUsage,
 } from './tracing/span.js';
 export { type EndSpanOptions, type StartSpanOptions, Tracer } from './tracing/tracer.js';
+export { withSpan } from './tracing/with-span.js';
 // Transport
 export type { AgentInstanceOptions, Transport } from './transport/http.js';
 export { HttpTransport } from './transport/http.js';

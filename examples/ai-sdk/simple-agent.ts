@@ -13,7 +13,8 @@
 import { generateText, wrapLanguageModel, tool, stepCountIs } from 'ai';
 import { anthropic } from '@ai-sdk/anthropic';
 import { z } from 'zod';
-import { init, shutdown, withSpan } from '@prefactor/ai';
+import { init } from '@prefactor/ai';
+import { shutdown, withSpan } from '@prefactor/core';
 
 const calculateTool = tool({
   description: 'Perform basic arithmetic operations (+, -, *, /).',
@@ -22,33 +23,25 @@ const calculateTool = tool({
     left: z.number().describe('Left operand'),
     right: z.number().describe('Right operand'),
   }),
-  execute: async ({ operation, left, right }) =>
-    withSpan(
-      {
-        name: 'tool:calculate_expression',
-        spanType: 'custom:calculation',
-        inputs: { operation, left, right },
-      },
-      async () => {
-        let result: number;
-        switch (operation) {
-          case '+':
-            result = left + right;
-            break;
-          case '-':
-            result = left - right;
-            break;
-          case '*':
-            result = left * right;
-            break;
-          case '/':
-            if (right === 0) return 'Error: Division by zero';
-            result = left / right;
-            break;
-        }
-        return `Result: ${Math.round(result * 1000) / 1000}`;
-      }
-    ),
+  execute: async ({ operation, left, right }) => {
+    let result: number;
+    switch (operation) {
+      case '+':
+        result = left + right;
+        break;
+      case '-':
+        result = left - right;
+        break;
+      case '*':
+        result = left * right;
+        break;
+      case '/':
+        if (right === 0) return 'Error: Division by zero';
+        result = left / right;
+        break;
+    }
+    return `Result: ${Math.round(result * 1000) / 1000}`;
+  },
 });
 
 const getCurrentTimeTool = tool({
@@ -76,27 +69,19 @@ const getTimeDifferenceTool = tool({
     seconds1: z.number().describe('First time in seconds since midnight'),
     seconds2: z.number().describe('Second time in seconds since midnight'),
   }),
-  execute: async ({ seconds1, seconds2 }) =>
-    withSpan(
-      {
-        name: 'tool:calculate_time_difference',
-        spanType: 'custom:time-difference',
-        inputs: { seconds1, seconds2 },
-      },
-      async () => {
-        const diff = Math.abs(seconds2 - seconds1);
-        const hours = Math.floor(diff / 3600);
-        const minutes = Math.floor((diff % 3600) / 60);
-        const seconds = diff % 60;
-        return JSON.stringify({
-          totalSeconds: diff,
-          hours,
-          minutes,
-          seconds,
-          formatted: `${hours}h ${minutes}m ${seconds}s`,
-        });
-      }
-    ),
+  execute: async ({ seconds1, seconds2 }) => {
+    const diff = Math.abs(seconds2 - seconds1);
+    const hours = Math.floor(diff / 3600);
+    const minutes = Math.floor((diff % 3600) / 60);
+    const seconds = diff % 60;
+    return JSON.stringify({
+      totalSeconds: diff,
+      hours,
+      minutes,
+      seconds,
+      formatted: `${hours}h ${minutes}m ${seconds}s`,
+    });
+  },
 });
 
 const addTimeTool = tool({
@@ -165,37 +150,46 @@ async function main() {
   console.log('Model wrapped with Prefactor middleware');
   console.log();
 
-  // Example: Use the tools to generate everything
-  try {
-    const result = await generateText({
-      model,
-      prompt:
-        'Get the current time, generate a random number of minutes, add those minutes to the current time to get a future time, then calculate the difference in seconds between the two times.',
-      tools: {
-        calculate: calculateTool,
-        get_current_time: getCurrentTimeTool,
-        get_time_difference: getTimeDifferenceTool,
-        add_time: addTimeTool,
-        random_minutes: randomMinutesTool,
-      },
-      stopWhen: stepCountIs(8),
-    });
+  await withSpan(
+    {
+      name: 'root-span',
+      spanType: 'ai:example-root',
+      inputs: { example: 'ai-sdk/simple-agent.ts' },
+    },
+    async () => {
+      // Example: Use the tools to generate everything
+      try {
+        const result = await generateText({
+          model,
+          prompt:
+            'Get the current time, generate a random number of minutes, add those minutes to the current time to get a future time, then calculate the difference in seconds between the two times.',
+          tools: {
+            calculate: calculateTool,
+            get_current_time: getCurrentTimeTool,
+            get_time_difference: getTimeDifferenceTool,
+            add_time: addTimeTool,
+            random_minutes: randomMinutesTool,
+          },
+          stopWhen: stepCountIs(8),
+        });
 
-    console.log('Agent Response:');
-    console.log(result.text);
-    console.log();
+        console.log('Agent Response:');
+        console.log(result.text);
+        console.log();
 
-    if (result.toolCalls.length > 0) {
-      console.log('Tool calls made:');
-      for (const toolCall of result.toolCalls) {
-        console.log(`  - ${toolCall.toolName}: ${JSON.stringify(toolCall.input)}`);
+        if (result.toolCalls.length > 0) {
+          console.log('Tool calls made:');
+          for (const toolCall of result.toolCalls) {
+            console.log(`  - ${toolCall.toolName}: ${JSON.stringify(toolCall.input)}`);
+          }
+          console.log();
+        }
+      } catch (error) {
+        console.log(`Error in Example: ${error}`);
+        console.log();
       }
-      console.log();
     }
-  } catch (error) {
-    console.log(`Error in Example: ${error}`);
-    console.log();
-  }
+  );
 
   await shutdown();
   console.log('Shutdown complete');

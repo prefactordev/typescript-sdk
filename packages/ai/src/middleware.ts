@@ -29,7 +29,7 @@ const AGENT_DEAD_TIMEOUT_MS = 5 * 60 * 1000;
 function getOrCreateRootAgentSpan(tracer: Tracer): Span {
   if (!rootAgentSpan) {
     rootAgentSpan = tracer.startSpan({
-      name: 'aisdk:agent',
+      name: 'ai:agent',
       spanType: SpanType.AGENT,
       inputs: {},
     });
@@ -170,9 +170,10 @@ function extractToolResults(
  */
 function createToolSpan(tracer: Tracer, toolCall: ToolCallInfo): Span {
   return tracer.startSpan({
-    name: toolCall.toolName,
+    name: 'ai:tool-call',
     spanType: SpanType.TOOL,
     inputs: {
+      'ai.tool.name': toolCall.toolName,
       toolName: toolCall.toolName,
       toolCallId: toolCall.toolCallId,
       input: toolCall.input,
@@ -363,10 +364,12 @@ function createLlmSpan(
   config?: MiddlewareConfig,
   parentSpan?: Span
 ): Span {
+  const modelName = `${model.provider ?? 'unknown'}.${model.modelId ?? 'unknown'}`;
   const spanOptions = {
-    name: `${model.provider ?? 'unknown'}.${model.modelId ?? 'unknown'}`,
+    name: 'ai:llm-call',
     spanType: SpanType.LLM,
     inputs: {
+      'ai.model.name': modelName,
       'ai.model.id': model.modelId,
       'ai.model.provider': model.provider,
       ...extractInputs(params, config),

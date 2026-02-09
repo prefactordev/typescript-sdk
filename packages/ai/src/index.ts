@@ -51,7 +51,8 @@
 // Initialization Exports
 // ============================================================================
 
-export { getTracer, init, shutdown, withSpan } from './init.js';
+export { shutdown } from '@prefactor/core';
+export { getTracer, init, withSpan } from './init.js';
 
 // ============================================================================
 // Middleware Exports

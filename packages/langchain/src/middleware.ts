@@ -92,10 +92,14 @@ export class PrefactorMiddleware {
    */
   // biome-ignore lint/suspicious/noExplicitAny: LangChain request/handler types are dynamic
   async wrapModelCall<T>(request: any, handler: (req: any) => Promise<T>): Promise<T> {
+    const modelName = this.extractModelName(request);
     const span = this.tracer.startSpan({
-      name: this.extractModelName(request),
+      name: 'langchain:llm-call',
       spanType: SpanType.LLM,
-      inputs: this.extractModelInputs(request),
+      inputs: {
+        ...this.extractModelInputs(request),
+        'langchain.model.name': modelName,
+      },
     });
 
     try {
@@ -124,10 +128,14 @@ export class PrefactorMiddleware {
    */
   // biome-ignore lint/suspicious/noExplicitAny: LangChain request/handler types are dynamic
   async wrapToolCall<T>(request: any, handler: (req: any) => Promise<T>): Promise<T> {
+    const toolName = this.extractToolName(request);
     const span = this.tracer.startSpan({
-      name: this.extractToolName(request),
+      name: 'langchain:tool-call',
       spanType: SpanType.TOOL,
-      inputs: this.extractToolInputs(request),
+      inputs: {
+        ...this.extractToolInputs(request),
+        'langchain.tool.name': toolName,
+      },
     });
 
     try {

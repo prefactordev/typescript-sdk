@@ -5,8 +5,10 @@ import {
   createConfig,
   createCore,
   getLogger,
-  SpanContext,
+  registerShutdownHandler,
+  shutdown as shutdownCore,
   type Tracer,
+  withSpan as withCoreSpan,
 } from '@prefactor/core';
 import { type AgentMiddleware, createMiddleware } from 'langchain';
 import { PrefactorMiddleware } from './middleware.js';
@@ -26,6 +28,16 @@ const DEFAULT_LANGCHAIN_AGENT_SCHEMA = {
 let globalCore: CoreRuntime | null = null;
 let globalTracer: Tracer | null = null;
 let globalMiddleware: AgentMiddleware | null = null;
+
+registerShutdownHandler('prefactor-langchain', () => {
+  if (globalCore) {
+    logger.info('Shutting down Prefactor SDK');
+  }
+
+  globalCore = null;
+  globalTracer = null;
+  globalMiddleware = null;
+});
 
 export type ManualSpanOptions = {
   name: string;
@@ -196,51 +208,14 @@ export async function withSpan<T>(
   options: ManualSpanOptions,
   fn: () => Promise<T> | T
 ): Promise<T> {
-  const tracer = getTracer();
-  const span = tracer.startSpan(options);
-
-  try {
-    const result = await SpanContext.runAsync(span, async () => await fn());
-    tracer.endSpan(span);
-    return result;
-  } catch (error) {
-    const normalizedError = error instanceof Error ? error : new Error(String(error));
-    tracer.endSpan(span, { error: normalizedError });
-    throw error;
-  }
+  return withCoreSpan(options, fn);
 }
 
-/**
- * Shutdown the SDK and flush any pending spans.
- *
- * Call this before your application exits to ensure all spans are sent to the transport.
- * This is especially important for HTTP transport which has a queue of pending requests.
- *
- * @returns Promise that resolves when shutdown is complete
- *
- * @example
- * ```typescript
- * import { shutdown } from '@prefactor/langchain';
- *
- * process.on('SIGTERM', async () => {
- *   await shutdown();
- *   process.exit(0);
- * });
- * ```
- */
-export async function shutdown(): Promise<void> {
-  if (globalCore) {
-    logger.info('Shutting down Prefactor SDK');
-    await globalCore.shutdown();
-  }
-  globalCore = null;
-  globalTracer = null;
-  globalMiddleware = null;
-}
+export { shutdownCore as shutdown };
 
 // Automatic shutdown on process exit
 process.on('beforeExit', () => {
-  shutdown().catch((error) => {
+  shutdownCore().catch((error) => {
     console.error('Error during Prefactor SDK shutdown:', error);
   });
 });

@@ -15,8 +15,10 @@ import {
   createConfig,
   createCore,
   getLogger,
-  SpanContext,
+  registerShutdownHandler,
+  shutdown as shutdownCore,
   type Tracer,
+  withSpan as withCoreSpan,
 } from '@prefactor/core';
 import { createPrefactorMiddleware, endRootAgentSpan } from './middleware.js';
 import type { MiddlewareConfig } from './types.js';
@@ -40,6 +42,24 @@ let agentLifecycle: { started: boolean } | null = null;
 
 /** Global middleware instance. */
 let globalMiddleware: ReturnType<typeof createPrefactorMiddleware> | null = null;
+
+registerShutdownHandler('prefactor-ai', async () => {
+  if (globalCore) {
+    logger.info('Shutting down Prefactor AI Middleware');
+    if (globalTracer) {
+      endRootAgentSpan(globalTracer);
+    }
+    if (agentLifecycle?.started) {
+      globalCore.agentManager.finishInstance();
+      agentLifecycle.started = false;
+    }
+  }
+
+  globalCore = null;
+  globalTracer = null;
+  globalMiddleware = null;
+  agentLifecycle = null;
+});
 
 export type ManualSpanOptions = {
   name: string;
@@ -227,65 +247,14 @@ export async function withSpan<T>(
   options: ManualSpanOptions,
   fn: () => Promise<T> | T
 ): Promise<T> {
-  const tracer = getTracer();
-  const span = tracer.startSpan(options);
-
-  try {
-    const result = await SpanContext.runAsync(span, async () => await fn());
-    tracer.endSpan(span);
-    return result;
-  } catch (error) {
-    const normalizedError = error instanceof Error ? error : new Error(String(error));
-    tracer.endSpan(span, { error: normalizedError });
-    throw error;
-  }
+  return withCoreSpan(options, fn);
 }
 
-/**
- * Shutdown the SDK and flush any pending spans.
- *
- * Call this before your application exits to ensure all spans are sent to the transport.
- * This is especially important for HTTP transport which has a queue of pending requests.
- *
- * @returns Promise that resolves when shutdown is complete
- *
- * @example
- * ```typescript
- * import { shutdown } from '@prefactor/ai';
- *
- * // At the end of your script or before process exit
- * await shutdown();
- * ```
- *
- * @example With signal handling
- * ```typescript
- * process.on('SIGTERM', async () => {
- *   await shutdown();
- *   process.exit(0);
- * });
- * ```
- */
-export async function shutdown(): Promise<void> {
-  if (globalCore) {
-    logger.info('Shutting down Prefactor AI Middleware');
-    if (globalTracer) {
-      endRootAgentSpan(globalTracer);
-    }
-    if (agentLifecycle?.started) {
-      globalCore.agentManager.finishInstance();
-      agentLifecycle.started = false;
-    }
-    await globalCore.shutdown();
-  }
-  globalCore = null;
-  globalTracer = null;
-  globalMiddleware = null;
-  agentLifecycle = null;
-}
+export { shutdownCore as shutdown };
 
 // Automatic shutdown on process exit
 process.on('beforeExit', () => {
-  shutdown().catch((error) => {
+  shutdownCore().catch((error) => {
     console.error('Error during Prefactor AI Middleware shutdown:', error);
   });
 });

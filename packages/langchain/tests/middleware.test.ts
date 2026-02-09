@@ -59,4 +59,39 @@ describe('PrefactorMiddleware', () => {
     expect(llmSpan?.traceId).toBe(agentSpan?.traceId);
     expect(llmSpan?.status).toBe(SpanStatus.SUCCESS);
   });
+
+  test('uses langchain-prefixed operation names for emitted spans', async () => {
+    const transport = new CaptureTransport();
+    const tracer = new Tracer(transport);
+    const agentManager = new AgentInstanceManager(transport, {});
+    agentManager.registerSchema({ type: 'object' });
+    const middleware = new PrefactorMiddleware(tracer, agentManager);
+
+    await middleware.beforeAgent({ messages: [{ type: 'human', content: 'hello' }] });
+    await middleware.wrapModelCall(
+      {
+        model: {
+          id: ['langchain', 'chat_models', 'ConfigurableModel'],
+        },
+        messages: [{ type: 'human', content: 'question' }],
+      },
+      async () => ({ content: 'answer' })
+    );
+    await middleware.wrapToolCall(
+      {
+        name: 'calculator',
+        input: { expression: '42*17' },
+      },
+      async () => ({ output: '714' })
+    );
+    await middleware.afterAgent({ messages: [{ type: 'ai', content: 'done' }] });
+
+    const agentSpan = transport.spans.find((span) => span.spanType === SpanType.AGENT);
+    const llmSpan = transport.spans.find((span) => span.spanType === SpanType.LLM);
+    const toolSpan = transport.spans.find((span) => span.spanType === SpanType.TOOL);
+
+    expect(agentSpan?.name).toBe('langchain:agent');
+    expect(llmSpan?.name).toBe('langchain:llm-call');
+    expect(toolSpan?.name).toBe('langchain:tool-call');
+  });
 });
