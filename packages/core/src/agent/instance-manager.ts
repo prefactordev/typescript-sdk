@@ -1,4 +1,4 @@
-import type { AgentInstanceOptions, Transport } from '../transport/base.js';
+import type { AgentInstanceOptions, Transport } from '../transport/http.js';
 
 export type AgentInstanceManagerOptions = {
   allowUnregisteredSchema?: boolean;

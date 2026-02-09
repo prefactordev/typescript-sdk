@@ -40,20 +40,24 @@ describe('ai init schema registration', () => {
     expect(registeredSchemas).toEqual([customSchema]);
   });
 
-  test('does not register schema when only agentIdentifier is set', () => {
+  test('registers default schema when only agentIdentifier is set', () => {
     init({
       ...baseConfig,
       transportType: 'http',
       httpConfig: { ...baseConfig.httpConfig, agentIdentifier: '2.0.0' },
     });
 
-    expect(registeredSchemas.length).toBe(0);
+    expect(registeredSchemas).toHaveLength(1);
   });
 
-  test('does not register schema when no schema config is provided', () => {
+  test('registers default schema when no schema config is provided', () => {
     init(baseConfig);
 
-    expect(registeredSchemas.length).toBe(0);
+    expect(registeredSchemas).toHaveLength(1);
+    expect(registeredSchemas[0]).toMatchObject({
+      external_identifier: 'prefactor-ai-default',
+      span_schemas: expect.any(Object),
+    });
   });
 
   test('supports manual spans for custom workflow instrumentation', async () => {

@@ -1,20 +1,46 @@
 import type { HttpTransportConfig } from '../config.js';
+import { InMemoryQueue } from '../queue/in-memory-queue.js';
+import type { TransportAction } from '../queue/actions.js';
+import { TaskExecutor } from '../queue/task-executor.js';
 import type { Span } from '../tracing/span.js';
 import { getLogger } from '../utils/logging.js';
-import type { AgentInstanceOptions, Transport } from './base.js';
+import { AgentInstanceClient } from './http/agent-instance-client.js';
+import {
+  AgentSpanClient,
+  type AgentSpanCreatePayload,
+  type AgentSpanStatus,
+} from './http/agent-span-client.js';
+import { HttpClient } from './http/http-client.js';
+
+export type AgentInstanceOptions = {
+  agentId?: string;
+  agentIdentifier?: string;
+  agentName?: string;
+  agentDescription?: string;
+};
+
+export interface Transport {
+  emit(span: Span): void;
+
+  finishSpan(spanId: string, endTime: number): void;
+
+  startAgentInstance(options?: AgentInstanceOptions): void;
+
+  finishAgentInstance(): void;
+
+  registerSchema(schema: Record<string, unknown>): void;
+
+  close(): void | Promise<void>;
+}
 
 const logger = getLogger('http-transport');
 
-type Action =
-  | { type: 'schema_register'; schema: Record<string, unknown> }
-  | { type: 'agent_start'; options?: AgentInstanceOptions }
-  | { type: 'agent_finish' }
-  | { type: 'span_end'; span: Span }
-  | { type: 'span_finish'; spanId: string; endTime: number };
-
 export class HttpTransport implements Transport {
   private closed = false;
-  private actionChain = Promise.resolve();
+  private readonly actionQueue = new InMemoryQueue<TransportAction>();
+  private readonly taskExecutor: TaskExecutor<TransportAction>;
+  private readonly agentInstanceClient: AgentInstanceClient;
+  private readonly agentSpanClient: AgentSpanClient;
   private previousAgentSchema: string | null = null;
   private requiresNewAgentIdentifier = false;
   private previousAgentIdentifier: string | null = null;
@@ -22,7 +48,18 @@ export class HttpTransport implements Transport {
   private spanIdMap = new Map<string, string>();
   private pendingFinishes = new Map<string, number>();
 
-  constructor(private config: HttpTransportConfig) {}
+  constructor(private config: HttpTransportConfig) {
+    const httpClient = new HttpClient(config);
+    this.agentInstanceClient = new AgentInstanceClient(httpClient);
+    this.agentSpanClient = new AgentSpanClient(httpClient);
+    this.taskExecutor = new TaskExecutor(this.actionQueue, this.processAction, {
+      workerCount: 1,
+      onError: async (error) => {
+        logger.error('Error processing HTTP action:', error);
+      },
+    });
+    this.taskExecutor.start();
+  }
 
   registerSchema(schema: Record<string, unknown>): void {
     this.enqueue({ type: 'schema_register', schema });
@@ -46,7 +83,7 @@ export class HttpTransport implements Transport {
 
   async close(): Promise<void> {
     this.closed = true;
-    await this.actionChain;
+    await this.taskExecutor.stop();
     if (this.pendingFinishes.size > 0) {
       logger.warn(
         `Transport closed with ${this.pendingFinishes.size} pending span finish(es) that could not be processed`
@@ -55,21 +92,17 @@ export class HttpTransport implements Transport {
     }
   }
 
-  private enqueue(action: Action): void {
+  private enqueue(action: TransportAction): void {
     if (this.closed) {
       return;
     }
 
-    this.actionChain = this.actionChain.then(async () => {
-      try {
-        await this.processAction(action);
-      } catch (error) {
-        logger.error('Error processing HTTP action:', error);
-      }
+    this.actionQueue.put(action).catch((error: unknown) => {
+      logger.error('Failed to enqueue HTTP action:', error);
     });
   }
 
-  private async processAction(action: Action): Promise<void> {
+  private processAction = async (action: TransportAction): Promise<void> => {
     switch (action.type) {
       case 'schema_register': {
         const incomingSchema = JSON.stringify(action.schema);
@@ -106,6 +139,7 @@ export class HttpTransport implements Transport {
         if (action.options?.agentDescription !== undefined) {
           this.config.agentDescription = action.options.agentDescription;
         }
+
         await this.startAgentInstanceHttp();
         return;
       }
@@ -129,11 +163,15 @@ export class HttpTransport implements Transport {
         return;
       }
     }
-  }
+  };
 
   private async processPendingFinishes(spanId: string): Promise<void> {
+    if (!this.pendingFinishes.has(spanId)) {
+      return;
+    }
+
     const pendingEndTime = this.pendingFinishes.get(spanId);
-    if (!pendingEndTime) {
+    if (pendingEndTime === undefined) {
       return;
     }
 
@@ -146,58 +184,24 @@ export class HttpTransport implements Transport {
     }
   }
 
-  private async sendSpan(span: Span, retry = 0): Promise<void> {
-    const url = `${this.config.apiUrl}/api/v1/agent_spans`;
+  private async sendSpan(span: Span): Promise<void> {
     const payload = this.transformSpanToApiFormat(span);
 
     try {
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${this.config.apiToken}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(payload),
-        signal: AbortSignal.timeout(this.config.requestTimeout),
-      });
-
-      if (response.ok) {
-        const data = (await response.json()) as { details?: { id?: string } };
-        const backendSpanId = data?.details?.id;
-        if (backendSpanId) {
-          this.spanIdMap.set(span.spanId, backendSpanId);
-          await this.processPendingFinishes(span.spanId);
-        }
+      const response = await this.agentSpanClient.create(payload);
+      const backendSpanId = response.details?.id;
+      if (!backendSpanId) {
         return;
       }
 
-      if ((response.status >= 500 || response.status === 429) && retry < this.config.maxRetries) {
-        const delay = Math.min(
-          this.config.initialRetryDelay * this.config.retryMultiplier ** retry,
-          this.config.maxRetryDelay
-        );
-        await new Promise((resolve) => setTimeout(resolve, delay));
-        await this.sendSpan(span, retry + 1);
-        return;
-      }
-
-      logger.error(`Failed to send span: ${response.status} ${response.statusText}`);
-      logger.debug(`Failed span response: ${await response.text()}`);
+      this.spanIdMap.set(span.spanId, backendSpanId);
+      await this.processPendingFinishes(span.spanId);
     } catch (error) {
       logger.error('Error sending span:', error);
-
-      if (retry < this.config.maxRetries) {
-        const delay = Math.min(
-          this.config.initialRetryDelay * this.config.retryMultiplier ** retry,
-          this.config.maxRetryDelay
-        );
-        await new Promise((resolve) => setTimeout(resolve, delay));
-        await this.sendSpan(span, retry + 1);
-      }
     }
   }
 
-  private transformSpanToApiFormat(span: Span): Record<string, unknown> {
+  private transformSpanToApiFormat(span: Span): AgentSpanCreatePayload {
     const startedAt = new Date(span.startTime).toISOString();
     const finishedAt = span.endTime ? new Date(span.endTime).toISOString() : null;
     const apiStatus = this.mapStatusForApi(span.status);
@@ -245,7 +249,7 @@ export class HttpTransport implements Transport {
     };
   }
 
-  private mapStatusForApi(status: Span['status']): string {
+  private mapStatusForApi(status: Span['status']): AgentSpanStatus {
     switch (status) {
       case 'running':
         return 'active';
@@ -258,12 +262,11 @@ export class HttpTransport implements Transport {
     }
   }
 
-  private async ensureAgentRegistered(): Promise<void> {
+  private async ensureAgentRegistered(): Promise<boolean> {
     if (this.agentInstanceId) {
-      return;
+      return true;
     }
 
-    const url = `${this.config.apiUrl}/api/v1/agent_instance/register`;
     const payload: Record<string, unknown> = {};
 
     if (this.config.agentId) payload.agent_id = this.config.agentId;
@@ -280,51 +283,24 @@ export class HttpTransport implements Transport {
     }
 
     try {
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${this.config.apiToken}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(payload),
-        signal: AbortSignal.timeout(this.config.requestTimeout),
-      });
-
-      if (response.ok) {
-        const data = (await response.json()) as { details?: { id?: string } };
-        this.agentInstanceId = data?.details?.id ?? null;
-      } else {
-        logger.error(`Failed to register agent: ${response.status} ${response.statusText}`);
-      }
+      const data = await this.agentInstanceClient.register(payload);
+      this.agentInstanceId = data.details?.id ?? null;
     } catch (error) {
       logger.error('Error registering agent:', error);
     }
+
+    return this.agentInstanceId !== null;
   }
 
   private async startAgentInstanceHttp(): Promise<void> {
-    await this.ensureAgentRegistered();
-
-    if (!this.agentInstanceId) {
+    const isRegistered = await this.ensureAgentRegistered();
+    if (!isRegistered || !this.agentInstanceId) {
       logger.error('Cannot start agent instance: not registered');
       return;
     }
 
-    const url = `${this.config.apiUrl}/api/v1/agent_instance/${this.agentInstanceId}/start`;
-
     try {
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${this.config.apiToken}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({}),
-        signal: AbortSignal.timeout(this.config.requestTimeout),
-      });
-
-      if (!response.ok) {
-        logger.error(`Failed to start agent instance: ${response.status} ${response.statusText}`);
-      }
+      await this.agentInstanceClient.start(this.agentInstanceId);
     } catch (error) {
       logger.error('Error starting agent instance:', error);
     }
@@ -336,22 +312,8 @@ export class HttpTransport implements Transport {
       return;
     }
 
-    const url = `${this.config.apiUrl}/api/v1/agent_instance/${this.agentInstanceId}/finish`;
-
     try {
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${this.config.apiToken}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({}),
-        signal: AbortSignal.timeout(this.config.requestTimeout),
-      });
-
-      if (!response.ok) {
-        logger.error(`Failed to finish agent instance: ${response.status} ${response.statusText}`);
-      }
+      await this.agentInstanceClient.finish(this.agentInstanceId);
     } catch (error) {
       logger.error('Error finishing agent instance:', error);
     }
@@ -366,22 +328,8 @@ export class HttpTransport implements Transport {
       return;
     }
 
-    const url = `${this.config.apiUrl}/api/v1/agent_spans/${backendSpanId}/finish`;
-
     try {
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${this.config.apiToken}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ timestamp: data.timestamp }),
-        signal: AbortSignal.timeout(this.config.requestTimeout),
-      });
-
-      if (!response.ok) {
-        logger.error(`Failed to finish span: ${response.status} ${response.statusText}`);
-      }
+      await this.agentSpanClient.finish(backendSpanId, data.timestamp);
     } catch (error) {
       logger.error('Error finishing span:', error);
     }

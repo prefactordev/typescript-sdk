@@ -3,7 +3,7 @@ import { AgentInstanceManager } from './agent/instance-manager.js';
 import type { Config } from './config.js';
 import { HttpTransportConfigSchema } from './config.js';
 import { Tracer } from './tracing/tracer.js';
-import type { Transport } from './transport/base.js';
+import type { Transport } from './transport/http.js';
 import { HttpTransport } from './transport/http.js';
 
 export type CoreRuntime = {
