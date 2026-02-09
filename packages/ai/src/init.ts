@@ -26,12 +26,12 @@ import type { MiddlewareConfig } from './types.js';
 const logger = getLogger('ai-init');
 
 const DEFAULT_AI_AGENT_SCHEMA = {
-  external_identifier: 'prefactor',
+  external_identifier: 'ai-sdk-schema',
   span_schemas: {
-    agent: { type: 'object', additionalProperties: true },
-    llm: { type: 'object', additionalProperties: true },
-    tool: { type: 'object', additionalProperties: true },
-    chain: { type: 'object', additionalProperties: true },
+    'ai:agent': { type: 'object', additionalProperties: true },
+    'ai:llm': { type: 'object', additionalProperties: true },
+    'ai:tool': { type: 'object', additionalProperties: true },
+    'ai:chain': { type: 'object', additionalProperties: true },
   },
 } as const;
 

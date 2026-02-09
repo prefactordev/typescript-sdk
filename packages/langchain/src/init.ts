@@ -16,12 +16,12 @@ import { PrefactorMiddleware } from './middleware.js';
 const logger = getLogger('init');
 
 const DEFAULT_LANGCHAIN_AGENT_SCHEMA = {
-  external_identifier: 'prefactor',
+  external_identifier: 'langchain-schema',
   span_schemas: {
-    agent: { type: 'object', additionalProperties: true },
-    llm: { type: 'object', additionalProperties: true },
-    tool: { type: 'object', additionalProperties: true },
-    chain: { type: 'object', additionalProperties: true },
+    'langchain:agent': { type: 'object', additionalProperties: true },
+    'langchain:llm': { type: 'object', additionalProperties: true },
+    'langchain:tool': { type: 'object', additionalProperties: true },
+    'langchain:chain': { type: 'object', additionalProperties: true },
   },
 } as const;
 
