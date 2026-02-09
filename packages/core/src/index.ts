@@ -28,6 +28,23 @@ export { withSpan } from './tracing/with-span.js';
 export type { AgentInstanceOptions, Transport } from './transport/http.js';
 export { HttpTransport } from './transport/http.js';
 
+// HTTP Client & API Clients
+export { HttpClient, HttpClientError, type HttpRequester } from './transport/http/http-client.js';
+export {
+  AgentInstanceClient,
+  type AgentInstanceRegisterPayload,
+  type AgentInstanceResponse,
+  type AgentInstanceStartOptions,
+  type AgentInstanceFinishOptions,
+} from './transport/http/agent-instance-client.js';
+export {
+  AgentSpanClient,
+  type AgentSpanCreatePayload,
+  type AgentSpanResponse,
+  type AgentSpanStatus,
+  type AgentSpanFinishOptions,
+} from './transport/http/agent-span-client.js';
+
 // Utilities
 export { configureLogging, getLogger } from './utils/logging.js';
 export { serializeValue, truncateString } from './utils/serialization.js';

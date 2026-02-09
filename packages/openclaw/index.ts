@@ -125,8 +125,8 @@ export default function register(api: PluginAPI) {
         pluginVersion: '1.0.1',
         userAgentVersion: config.agentVersion || 'default',
         maxRetries: 3,
-        retryDelay: 1000,
-        timeout: 30000,
+        initialRetryDelay: 1000,
+        requestTimeout: 30000,
       };
 
       agent = createAgent(agentConfig, logger);

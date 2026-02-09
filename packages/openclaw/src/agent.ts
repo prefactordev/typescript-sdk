@@ -2,17 +2,14 @@
 // Manages AgentInstance lifecycle and span tracking with stack-based hierarchy
 // Multi-session support - tracks multiple independent AgentInstances simultaneously
 
-import { PrefactorClient, PrefactorConfig } from './http-client/client.js';
 import {
-  CreateAgentSpanRequest,
-  FinishAgentSpanRequest,
-  FinishAgentSpanRequestBody,
-  FinishAgentInstanceRequest,
-  RegisterAgentInstanceRequest,
-  StartAgentInstanceRequest,
-  AgentVersionForRegister,
-  AgentSchemaVersionForRegister,
-} from './http-client/types.js';
+  HttpClient,
+  HttpClientError,
+  AgentInstanceClient,
+  AgentSpanClient,
+  type AgentSpanCreatePayload,
+  type HttpTransportConfig,
+} from '@prefactor/core';
 import { Logger } from './logger.js';
 
 // Session state tracking
@@ -23,13 +20,26 @@ interface SessionState {
   instanceStarted: boolean;
 }
 
+// Agent version info for registration
+interface AgentVersionForRegister {
+  external_identifier: string;
+  name: string;
+  description?: string;
+}
+
+// Agent schema version info for registration
+interface AgentSchemaVersionForRegister {
+  external_identifier: string;
+  span_schemas: Record<string, unknown>;
+}
+
 // Operation types for replay queue
 type SpanOperation =
-  | { type: 'create_span'; sessionKey: string; spanId: string; request: CreateAgentSpanRequest }
-  | { type: 'finish_span'; sessionKey: string; spanId: string; request: FinishAgentSpanRequest }
-  | { type: 'register_instance'; sessionKey: string; instanceId: string; request: RegisterAgentInstanceRequest }
-  | { type: 'start_instance'; sessionKey: string; instanceId: string; request: StartAgentInstanceRequest }
-  | { type: 'finish_instance'; sessionKey: string; instanceId: string; request: FinishAgentInstanceRequest };
+  | { type: 'create_span'; sessionKey: string; spanId: string; request: AgentSpanCreatePayload }
+  | { type: 'finish_span'; sessionKey: string; spanId: string; timestamp: string; status: string; idempotency_key: string }
+  | { type: 'register_instance'; sessionKey: string; instanceId: string; request: { agent_id: string; agent_version: AgentVersionForRegister; agent_schema_version: AgentSchemaVersionForRegister; idempotency_key?: string } }
+  | { type: 'start_instance'; sessionKey: string; instanceId: string; timestamp: string; idempotency_key: string }
+  | { type: 'finish_instance'; sessionKey: string; instanceId: string; status: string; timestamp: string; idempotency_key: string };
 
 // Active span tracking
 interface ActiveSpan {
@@ -110,15 +120,22 @@ class ReplayQueue {
   }
 }
 
-// Agent configuration extending PrefactorConfig
-export interface AgentConfig extends PrefactorConfig {
+// Agent configuration
+export interface AgentConfig {
+  apiUrl: string;
+  apiToken: string;
+  agentId: string;
+  maxRetries?: number;
+  initialRetryDelay?: number;
+  requestTimeout?: number;
   openclawVersion?: string;
   pluginVersion?: string;
   userAgentVersion?: string;
 }
 
 export class Agent {
-  private client: PrefactorClient;
+  private agentInstanceClient: AgentInstanceClient;
+  private agentSpanClient: AgentSpanClient;
   private logger: Logger;
   private config: AgentConfig;
   private sessions: Map<string, SessionState> = new Map();
@@ -130,7 +147,23 @@ export class Agent {
   constructor(config: AgentConfig, logger: Logger) {
     this.config = config;
     this.logger = logger;
-    this.client = new PrefactorClient(config);
+
+    const httpConfig: HttpTransportConfig = {
+      apiUrl: config.apiUrl,
+      apiToken: config.apiToken,
+      agentId: config.agentId,
+      agentIdentifier: 'v1.0.0',
+      requestTimeout: config.requestTimeout ?? 30000,
+      maxRetries: config.maxRetries ?? 3,
+      initialRetryDelay: config.initialRetryDelay ?? 1000,
+      maxRetryDelay: 60000,
+      retryMultiplier: 2.0,
+      retryOnStatusCodes: [429, ...Array.from({ length: 100 }, (_, i) => 500 + i)],
+    };
+
+    const httpClient = new HttpClient(httpConfig);
+    this.agentInstanceClient = new AgentInstanceClient(httpClient);
+    this.agentSpanClient = new AgentSpanClient(httpClient);
 
     // Build version identifiers
     const openclawVersion = config.openclawVersion || 'unknown';
@@ -221,52 +254,53 @@ export class Agent {
 
   emergencyCleanup(): Promise<void> {
     this.logger.info('emergency_cleanup_start', { sessionCount: this.sessions.size });
-    
+
     // Stop the flush loop
     this.stop();
-    
+
     // Clear all sessions
     this.sessions.clear();
-    
+
     // Clear replay queue
     this.replayQueue.clear();
-    
+
     this.logger.info('emergency_cleanup_complete', {});
-    
+
     return Promise.resolve();
   }
 
   private async registerAgentInstance(sessionKey: string): Promise<string | null> {
     const session = this.getOrCreateSession(sessionKey);
-    
+
     if (session.instanceRegistered) {
       return session.instanceId;
     }
 
     try {
       const idempotencyKey = `instance-${sessionKey}-${Date.now()}`;
-      const request: RegisterAgentInstanceRequest = {
+
+      this.logger.debug('register_agent_instance', { sessionKey, idempotencyKey });
+
+      const response = await this.agentInstanceClient.register({
         agent_id: this.config.agentId,
         agent_version: this.agentVersion,
         agent_schema_version: this.agentSchemaVersion,
         idempotency_key: idempotencyKey,
-      };
+      });
 
-      this.logger.debug('register_agent_instance', { sessionKey, idempotencyKey });
-
-      const details = await this.client.registerAgentInstance(request);
-      session.instanceId = details.id;
+      const instanceId = response.details?.id ?? null;
+      session.instanceId = instanceId;
       session.instanceRegistered = true;
 
       this.logger.info('agent_instance_registered', {
         sessionKey,
-        instanceId: details.id,
+        instanceId,
       });
 
       // Now start the instance
       await this.startAgentInstance(sessionKey);
 
-      return details.id;
+      return instanceId;
     } catch (err) {
       this.logger.error('register_agent_instance_failed', {
         sessionKey,
@@ -293,21 +327,21 @@ export class Agent {
 
   private async startAgentInstance(sessionKey: string): Promise<void> {
     const session = this.getOrCreateSession(sessionKey);
-    
+
     if (!session.instanceId || session.instanceStarted) {
       return;
     }
 
     try {
       const idempotencyKey = `instance-start-${sessionKey}-${Date.now()}`;
-      const request: StartAgentInstanceRequest = {
-        timestamp: new Date().toISOString(),
-        idempotency_key: idempotencyKey,
-      };
+      const timestamp = new Date().toISOString();
 
       this.logger.debug('start_agent_instance', { sessionKey, instanceId: session.instanceId });
 
-      await this.client.startAgentInstance(session.instanceId, request);
+      await this.agentInstanceClient.start(session.instanceId, {
+        timestamp,
+        idempotency_key: idempotencyKey,
+      });
       session.instanceStarted = true;
 
       this.logger.info('agent_instance_started', {
@@ -327,10 +361,8 @@ export class Agent {
         type: 'start_instance',
         sessionKey,
         instanceId: session.instanceId,
-        request: {
-          timestamp: new Date().toISOString(),
-          idempotency_key: idempotencyKey,
-        },
+        timestamp: new Date().toISOString(),
+        idempotency_key: idempotencyKey,
       });
     }
   }
@@ -340,7 +372,7 @@ export class Agent {
     status: 'complete' | 'failed' | 'cancelled' = 'complete',
   ): Promise<void> {
     const session = this.getOrCreateSession(sessionKey);
-    
+
     if (!session.instanceId) {
       return;
     }
@@ -350,11 +382,7 @@ export class Agent {
 
     try {
       const idempotencyKey = `instance-finish-${sessionKey}-${Date.now()}`;
-      const request: FinishAgentInstanceRequest = {
-        status,
-        timestamp: new Date().toISOString(),
-        idempotency_key: idempotencyKey,
-      };
+      const timestamp = new Date().toISOString();
 
       this.logger.debug('finish_agent_instance', {
         sessionKey,
@@ -362,7 +390,11 @@ export class Agent {
         status,
       });
 
-      await this.client.finishAgentInstance(session.instanceId, request);
+      await this.agentInstanceClient.finish(session.instanceId, {
+        status,
+        timestamp,
+        idempotency_key: idempotencyKey,
+      });
 
       this.logger.info('agent_instance_finished', {
         sessionKey,
@@ -382,11 +414,9 @@ export class Agent {
         type: 'finish_instance',
         sessionKey,
         instanceId: session.instanceId,
-        request: {
-          status,
-          timestamp: new Date().toISOString(),
-          idempotency_key: idempotencyKey,
-        },
+        status,
+        timestamp: new Date().toISOString(),
+        idempotency_key: idempotencyKey,
       });
     }
   }
@@ -398,7 +428,7 @@ export class Agent {
     parentSpanId?: string | null,
   ): Promise<string | null> {
     const session = this.getOrCreateSession(sessionKey);
-    
+
     // Ensure we have an AgentInstance
     if (!session.instanceRegistered) {
       const instanceId = await this.registerAgentInstance(sessionKey);
@@ -413,7 +443,7 @@ export class Agent {
 
     try {
       const idempotencyKey = `${clientSpanId}`;
-      
+
       // Log instance details for debugging schema issues
       this.logger.info('create_span_instance_debug', {
         sessionKey,
@@ -424,8 +454,8 @@ export class Agent {
         clientSpanId,
         parentSpanId: parentSpanId || null,
       });
-      
-      const request: CreateAgentSpanRequest = {
+
+      const request: AgentSpanCreatePayload = {
         details: {
           agent_instance_id: session.instanceId!,
           schema_name: schemaName,
@@ -433,6 +463,7 @@ export class Agent {
           payload,
           parent_span_id: parentSpanId || null,
           started_at: new Date().toISOString(),
+          finished_at: null,
         },
         idempotency_key: idempotencyKey,
       };
@@ -444,28 +475,34 @@ export class Agent {
         parentSpanId: parentSpanId || null,
       });
 
-      const details = await this.client.createAgentSpan(request);
+      const response = await this.agentSpanClient.create(request);
+      const spanId = response.details?.id;
+
+      if (!spanId) {
+        this.logger.error('create_span_no_id', { sessionKey, schemaName });
+        return null;
+      }
 
       // Push to stack
       session.stack.push({
-        spanId: details.id,
+        spanId,
         schemaName,
-        startedAt: details.started_at || new Date().toISOString(),
+        startedAt: response.details?.started_at || new Date().toISOString(),
         sessionKey,
       });
 
       this.logger.info('span_created', {
         sessionKey,
-        spanId: details.id,
+        spanId,
         schemaName,
       });
 
-      return details.id;
+      return spanId;
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : String(err);
-      // Extract validation errors from PrefactorError response
-      const prefactorErr = err as { response?: { errors?: Record<string, unknown> } };
-      const errorDetails = prefactorErr?.response?.errors;
+      // Extract validation errors from HttpClientError response
+      const httpErr = err as HttpClientError;
+      const errorDetails = (httpErr?.responseBody as Record<string, unknown>)?.errors;
       this.logger.error('create_span_failed', {
         sessionKey,
         clientSpanId,
@@ -486,18 +523,14 @@ export class Agent {
   ): Promise<void> {
     try {
       const idempotencyKey = `${spanId}-finish-${Date.now()}`;
-      const body: FinishAgentSpanRequestBody = {
-        status,
-        timestamp: new Date().toISOString(),
-      };
-      const request: FinishAgentSpanRequest = {
-        body,
-        idempotency_key: idempotencyKey,
-      };
+      const timestamp = new Date().toISOString();
 
       this.logger.debug('finish_span', { sessionKey, spanId, status });
 
-      await this.client.finishAgentSpan(spanId, request);
+      await this.agentSpanClient.finish(spanId, timestamp, {
+        status,
+        idempotency_key: idempotencyKey,
+      });
 
       // Remove from stack
       const session = this.getOrCreateSession(sessionKey);
@@ -525,13 +558,9 @@ export class Agent {
         type: 'finish_span',
         sessionKey,
         spanId,
-        request: {
-          body: {
-            status,
-            timestamp: new Date().toISOString(),
-          },
-          idempotency_key: idempotencyKey,
-        },
+        timestamp: new Date().toISOString(),
+        status,
+        idempotency_key: idempotencyKey,
       });
     }
   }
@@ -579,7 +608,7 @@ export class Agent {
       try {
         switch (operation.type) {
           case 'create_span': {
-            await this.client.createAgentSpan(operation.request);
+            await this.agentSpanClient.create(operation.request);
             this.replayQueue.remove(operation);
             this.logger.debug('flush_queue_create_span_success', {
               sessionKey: operation.sessionKey,
@@ -588,7 +617,10 @@ export class Agent {
             break;
           }
           case 'finish_span': {
-            await this.client.finishAgentSpan(operation.spanId, operation.request);
+            await this.agentSpanClient.finish(operation.spanId, operation.timestamp, {
+              status: operation.status as 'complete' | 'failed' | 'cancelled',
+              idempotency_key: operation.idempotency_key,
+            });
             this.replayQueue.remove(operation);
             this.logger.debug('flush_queue_finish_span_success', {
               sessionKey: operation.sessionKey,
@@ -597,16 +629,19 @@ export class Agent {
             break;
           }
           case 'register_instance': {
-            const details = await this.client.registerAgentInstance(operation.request);
+            const response = await this.agentInstanceClient.register(operation.request);
             this.replayQueue.remove(operation);
             this.logger.debug('flush_queue_register_instance_success', {
               sessionKey: operation.sessionKey,
-              instanceId: details.id,
+              instanceId: response.details?.id,
             });
             break;
           }
           case 'start_instance': {
-            await this.client.startAgentInstance(operation.instanceId, operation.request);
+            await this.agentInstanceClient.start(operation.instanceId, {
+              timestamp: operation.timestamp,
+              idempotency_key: operation.idempotency_key,
+            });
             this.replayQueue.remove(operation);
             this.logger.debug('flush_queue_start_instance_success', {
               sessionKey: operation.sessionKey,
@@ -615,7 +650,11 @@ export class Agent {
             break;
           }
           case 'finish_instance': {
-            await this.client.finishAgentInstance(operation.instanceId, operation.request);
+            await this.agentInstanceClient.finish(operation.instanceId, {
+              status: operation.status as 'complete' | 'failed' | 'cancelled',
+              timestamp: operation.timestamp,
+              idempotency_key: operation.idempotency_key,
+            });
             this.replayQueue.remove(operation);
             this.logger.debug('flush_queue_finish_instance_success', {
               sessionKey: operation.sessionKey,

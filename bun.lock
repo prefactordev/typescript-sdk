@@ -23,7 +23,7 @@
     },
     "packages/ai": {
       "name": "@prefactor/ai",
-      "version": "0.1.0",
+      "version": "0.2.5",
       "dependencies": {
         "@prefactor/core": "workspace:*",
         "@prefactor/pfid": "^0.1.0",
@@ -52,6 +52,17 @@
       },
       "peerDependencies": {
         "langchain": "^1.0.0",
+      },
+    },
+    "packages/openclaw": {
+      "name": "prefactor-openclaw",
+      "version": "1.0.0",
+      "dependencies": {
+        "@prefactor/core": "workspace:*",
+      },
+      "devDependencies": {
+        "@types/node": "^20.0.0",
+        "typescript": "^5.0.0",
       },
     },
   },
@@ -165,6 +176,8 @@
     "p-retry": ["p-retry@7.1.1", "", { "dependencies": { "is-network-error": "^1.1.0" } }, "sha512-J5ApzjyRkkf601HpEeykoiCvzHQjWxPAHhyjFcEUP2SWq0+35NKh8TLhpLw+Dkq5TZBFvUM6UigdE9hIVYTl5w=="],
 
     "p-timeout": ["p-timeout@3.2.0", "", { "dependencies": { "p-finally": "^1.0.0" } }, "sha512-rhIwUycgwwKcP9yTOOFK/AKsAopjjCakVqLHePO3CC6Mir1Z99xT+R63jZxAT5lFZLa2inS5h+ZS2GvR99/FBg=="],
+
+    "prefactor-openclaw": ["prefactor-openclaw@workspace:packages/openclaw"],
 
     "semver": ["semver@7.7.3", "", { "bin": { "semver": "bin/semver.js" } }, "sha512-SdsKMrI9TdgjdweUSR9MweHA4EJ8YxHn8DFaDisvhVlUOe4BF1tLD7GAj0lIqWVl+dPb/rExr0Btby5loQm20Q=="],
 

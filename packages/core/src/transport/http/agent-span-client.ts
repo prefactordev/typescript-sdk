@@ -12,12 +12,19 @@ export type AgentSpanCreatePayload = {
     started_at: string;
     finished_at: string | null;
   };
+  idempotency_key?: string;
 };
 
 export type AgentSpanResponse = {
   details?: {
     id?: string;
+    started_at?: string;
   };
+};
+
+export type AgentSpanFinishOptions = {
+  status?: 'complete' | 'failed' | 'cancelled';
+  idempotency_key?: string;
 };
 
 export class AgentSpanClient {
@@ -30,11 +37,11 @@ export class AgentSpanClient {
     });
   }
 
-  async finish(spanId: string, timestamp: string): Promise<void> {
+  async finish(spanId: string, timestamp: string, options?: AgentSpanFinishOptions): Promise<AgentSpanResponse> {
     try {
-      await this.httpClient.request(`/api/v1/agent_spans/${spanId}/finish`, {
+      return await this.httpClient.request(`/api/v1/agent_spans/${spanId}/finish`, {
         method: 'POST',
-        body: { timestamp },
+        body: { timestamp, ...options },
       });
     } catch (error) {
       if (
@@ -42,7 +49,7 @@ export class AgentSpanClient {
         error.status === 409 &&
         isAlreadyFinishedError(error.responseBody)
       ) {
-        return;
+        return {};
       }
 
       throw error;
