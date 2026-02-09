@@ -12,7 +12,13 @@ enum LogLevel {
  * Logger class for the Prefactor SDK
  */
 class Logger {
-  private static level: LogLevel = LogLevel.INFO;
+  private static level: LogLevel = (() => {
+    const level = process.env.PREFACTOR_LOG_LEVEL?.toLowerCase();
+    if (level && level in LogLevel) {
+      return LogLevel[level as keyof typeof LogLevel];
+    }
+    return LogLevel.INFO;
+  })();
 
   constructor(private namespace: string) {}
 
