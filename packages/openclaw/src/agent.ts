@@ -3,14 +3,14 @@
 // Multi-session support - tracks multiple independent AgentInstances simultaneously
 
 import {
-  HttpClient,
-  HttpClientError,
   AgentInstanceClient,
   AgentSpanClient,
   type AgentSpanCreatePayload,
+  HttpClient,
+  type HttpClientError,
   type HttpTransportConfig,
 } from '@prefactor/core';
-import { Logger } from './logger.js';
+import type { Logger } from './logger.js';
 
 // Session state tracking
 interface SessionState {
@@ -24,11 +24,11 @@ interface SessionState {
 interface AgentVersionForRegister {
   external_identifier: string;
   name: string;
-  description?: string;
+  description: string;
 }
 
 // Agent schema version info for registration
-interface AgentSchemaVersionForRegister {
+interface AgentSchemaVersionForRegister extends Record<string, unknown> {
   external_identifier: string;
   span_schemas: Record<string, unknown>;
 }
@@ -36,10 +36,40 @@ interface AgentSchemaVersionForRegister {
 // Operation types for replay queue
 type SpanOperation =
   | { type: 'create_span'; sessionKey: string; spanId: string; request: AgentSpanCreatePayload }
-  | { type: 'finish_span'; sessionKey: string; spanId: string; timestamp: string; status: string; idempotency_key: string }
-  | { type: 'register_instance'; sessionKey: string; instanceId: string; request: { agent_id: string; agent_version: AgentVersionForRegister; agent_schema_version: AgentSchemaVersionForRegister; idempotency_key?: string } }
-  | { type: 'start_instance'; sessionKey: string; instanceId: string; timestamp: string; idempotency_key: string }
-  | { type: 'finish_instance'; sessionKey: string; instanceId: string; status: string; timestamp: string; idempotency_key: string };
+  | {
+      type: 'finish_span';
+      sessionKey: string;
+      spanId: string;
+      timestamp: string;
+      status: string;
+      idempotency_key: string;
+    }
+  | {
+      type: 'register_instance';
+      sessionKey: string;
+      instanceId: string;
+      request: {
+        agent_id: string;
+        agent_version: AgentVersionForRegister;
+        agent_schema_version: AgentSchemaVersionForRegister;
+        idempotency_key?: string;
+      };
+    }
+  | {
+      type: 'start_instance';
+      sessionKey: string;
+      instanceId: string;
+      timestamp: string;
+      idempotency_key: string;
+    }
+  | {
+      type: 'finish_instance';
+      sessionKey: string;
+      instanceId: string;
+      status: string;
+      timestamp: string;
+      idempotency_key: string;
+    };
 
 // Active span tracking
 interface ActiveSpan {
@@ -174,7 +204,7 @@ export class Agent {
       external_identifier: `openclaw-${openclawVersion}-plugin-${pluginVersion}-${userVersion}`,
       name: 'OpenClaw Agent',
       description: `OpenClaw ${openclawVersion} with Prefactor Plugin ${pluginVersion}`,
-    };
+    } satisfies AgentVersionForRegister;
 
     this.agentSchemaVersion = {
       external_identifier: `plugin-${pluginVersion}`,
@@ -233,7 +263,11 @@ export class Agent {
       });
       this.logger.debug('session_created', { sessionKey });
     }
-    return this.sessions.get(sessionKey)!;
+    const session = this.sessions.get(sessionKey);
+    if (!session) {
+      throw new Error(`Session ${sessionKey} not found after creation`);
+    }
+    return session;
   }
 
   private startFlushLoop(): void {
@@ -369,7 +403,7 @@ export class Agent {
 
   async finishAgentInstance(
     sessionKey: string,
-    status: 'complete' | 'failed' | 'cancelled' = 'complete',
+    status: 'complete' | 'failed' | 'cancelled' = 'complete'
   ): Promise<void> {
     const session = this.getOrCreateSession(sessionKey);
 
@@ -425,7 +459,7 @@ export class Agent {
     sessionKey: string,
     schemaName: string,
     payload: Record<string, unknown>,
-    parentSpanId?: string | null,
+    parentSpanId?: string | null
   ): Promise<string | null> {
     const session = this.getOrCreateSession(sessionKey);
 
@@ -455,9 +489,14 @@ export class Agent {
         parentSpanId: parentSpanId || null,
       });
 
+      if (!session.instanceId) {
+        this.logger.error('cannot_create_span_no_instance_id', { sessionKey });
+        return null;
+      }
+
       const request: AgentSpanCreatePayload = {
         details: {
-          agent_instance_id: session.instanceId!,
+          agent_instance_id: session.instanceId,
           schema_name: schemaName,
           status: 'active',
           payload,
@@ -519,7 +558,7 @@ export class Agent {
   async finishSpan(
     sessionKey: string,
     spanId: string,
-    status: 'complete' | 'failed' | 'cancelled' = 'complete',
+    status: 'complete' | 'failed' | 'cancelled' = 'complete'
   ): Promise<void> {
     try {
       const idempotencyKey = `${spanId}-finish-${Date.now()}`;
@@ -681,44 +720,33 @@ export class Agent {
   }
 
   // Utility for creating spans with proper parent relationships
-  async createAgentRunSpan(
-    sessionKey: string,
-    rawContext: unknown,
-  ): Promise<string | null> {
+  async createAgentRunSpan(sessionKey: string, rawContext: unknown): Promise<string | null> {
     return this.createSpan(sessionKey, 'agent_run', { raw: rawContext }, null);
   }
 
   async createToolCallSpan(
     sessionKey: string,
     toolName: string,
-    rawContext: unknown,
+    rawContext: unknown
   ): Promise<string | null> {
     // First, close any existing tool_call span (workaround for broken after_tool_call)
     await this.closeSpanBySchema(sessionKey, 'tool_call');
 
     const parentSpanId = this.getParentSpanId(sessionKey);
-    return this.createSpan(
-      sessionKey,
-      'tool_call',
-      { toolName, raw: rawContext },
-      parentSpanId,
-    );
+    return this.createSpan(sessionKey, 'tool_call', { toolName, raw: rawContext }, parentSpanId);
   }
 
   async closeToolCallSpan(sessionKey: string): Promise<void> {
     await this.closeSpanBySchema(sessionKey, 'tool_call');
   }
 
-  async createUserMessageSpan(
-    sessionKey: string,
-    rawContext: unknown,
-  ): Promise<string | null> {
+  async createUserMessageSpan(sessionKey: string, rawContext: unknown): Promise<string | null> {
     const parentSpanId = this.getParentSpanId(sessionKey);
     const spanId = await this.createSpan(
       sessionKey,
       'user_message',
       { raw: rawContext },
-      parentSpanId,
+      parentSpanId
     );
 
     // User message spans are instant - close immediately
@@ -731,15 +759,10 @@ export class Agent {
 
   async createAssistantMessageSpan(
     sessionKey: string,
-    rawContext: unknown,
+    rawContext: unknown
   ): Promise<string | null> {
     const parentSpanId = this.getParentSpanId(sessionKey);
-    return this.createSpan(
-      sessionKey,
-      'assistant_message',
-      { raw: rawContext },
-      parentSpanId,
-    );
+    return this.createSpan(sessionKey, 'assistant_message', { raw: rawContext }, parentSpanId);
   }
 
   async closeAssistantMessageSpan(sessionKey: string): Promise<void> {

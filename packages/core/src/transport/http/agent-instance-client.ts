@@ -38,14 +38,20 @@ export class AgentInstanceClient {
     });
   }
 
-  start(agentInstanceId: string, options?: AgentInstanceStartOptions): Promise<AgentInstanceResponse> {
+  start(
+    agentInstanceId: string,
+    options?: AgentInstanceStartOptions
+  ): Promise<AgentInstanceResponse> {
     return this.httpClient.request(`/api/v1/agent_instance/${agentInstanceId}/start`, {
       method: 'POST',
       body: options ?? {},
     });
   }
 
-  finish(agentInstanceId: string, options?: AgentInstanceFinishOptions): Promise<AgentInstanceResponse> {
+  finish(
+    agentInstanceId: string,
+    options?: AgentInstanceFinishOptions
+  ): Promise<AgentInstanceResponse> {
     return this.httpClient.request(`/api/v1/agent_instance/${agentInstanceId}/finish`, {
       method: 'POST',
       body: options ?? {},

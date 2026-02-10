@@ -31,12 +31,12 @@ export class Metrics {
       sessions: {
         active: new Set(),
         totalStarted: 0,
-        totalEnded: 0
+        totalEnded: 0,
       },
       gateway: {
         startTime: null,
-        stopTime: null
-      }
+        stopTime: null,
+      },
     };
   }
 
@@ -49,12 +49,12 @@ export class Metrics {
 
     const now = Date.now();
     let metrics = this.data.events.get(eventName);
-    
+
     if (!metrics) {
       metrics = {
         count: 0,
         totalDuration: 0,
-        lastTimestamp: null
+        lastTimestamp: null,
       };
     }
 
@@ -108,7 +108,7 @@ export class Metrics {
       events[name] = {
         count: metrics.count,
         avgDuration: metrics.count > 0 ? metrics.totalDuration / metrics.count : 0,
-        lastTimestamp: metrics.lastTimestamp
+        lastTimestamp: metrics.lastTimestamp,
       };
     }
 
@@ -118,17 +118,18 @@ export class Metrics {
       sessions: {
         active: this.data.sessions.active.size,
         totalStarted: this.data.sessions.totalStarted,
-        totalEnded: this.data.sessions.totalEnded
+        totalEnded: this.data.sessions.totalEnded,
       },
       gateway: {
         running: this.data.gateway.startTime !== null && this.data.gateway.stopTime === null,
         startTime: this.data.gateway.startTime,
-        uptime: this.data.gateway.startTime && this.data.gateway.stopTime
-          ? this.data.gateway.stopTime - this.data.gateway.startTime
-          : this.data.gateway.startTime
-            ? Date.now() - this.data.gateway.startTime
-            : null
-      }
+        uptime:
+          this.data.gateway.startTime && this.data.gateway.stopTime
+            ? this.data.gateway.stopTime - this.data.gateway.startTime
+            : this.data.gateway.startTime
+              ? Date.now() - this.data.gateway.startTime
+              : null,
+      },
     };
   }
 }

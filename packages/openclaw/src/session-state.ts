@@ -1,8 +1,8 @@
 // Session State Manager for Prefactor plugin
 // Manages span hierarchies and timeouts per OpenClaw session
 
-import { Agent, AgentConfig } from './agent.js';
-import { Logger } from './logger.js';
+import type { Agent } from './agent.js';
+import type { Logger } from './logger.js';
 
 // Session state structure tracking all active spans
 interface SessionSpanState {
@@ -33,11 +33,7 @@ export class SessionStateManager {
   // Track in-flight span creation operations to prevent duplicates
   private inFlightOperations: Map<string, Promise<string | null>> = new Map();
 
-  constructor(
-    agent: Agent | null,
-    logger: Logger,
-    config: Partial<SessionManagerConfig> = {},
-  ) {
+  constructor(agent: Agent | null, logger: Logger, config: Partial<SessionManagerConfig> = {}) {
     this.agent = agent;
     this.logger = logger;
     this.config = {
@@ -83,7 +79,11 @@ export class SessionStateManager {
       this.sessions.set(sessionKey, state);
       this.logger.debug('session_state_created', { sessionKey });
     }
-    return this.sessions.get(sessionKey)!;
+    const state = this.sessions.get(sessionKey);
+    if (!state) {
+      throw new Error(`Session state ${sessionKey} not found after creation`);
+    }
+    return state;
   }
 
   // Create synthetic session span (24hr lifetime)
@@ -123,7 +123,7 @@ export class SessionStateManager {
 
   private async executeCreateSessionSpan(
     sessionKey: string,
-    state: SessionSpanState,
+    state: SessionSpanState
   ): Promise<string | null> {
     if (!this.agent) return null;
 
@@ -136,7 +136,7 @@ export class SessionStateManager {
       sessionKey,
       'session',
       { createdAt: new Date().toISOString() },
-      null, // No parent - this is the root
+      null // No parent - this is the root
     );
 
     if (spanId) {
@@ -195,7 +195,7 @@ export class SessionStateManager {
 
   private async executeCreateInteractionSpan(
     sessionKey: string,
-    state: SessionSpanState,
+    state: SessionSpanState
   ): Promise<string | null> {
     if (!this.agent) return null;
 
@@ -228,7 +228,7 @@ export class SessionStateManager {
         sessionKey,
         'user_interaction',
         { startedAt: new Date().toISOString() },
-        state.sessionSpanId, // Child of session
+        state.sessionSpanId // Child of session
       );
 
       if (spanId) {
@@ -248,7 +248,7 @@ export class SessionStateManager {
   // Close interaction span and all its children
   async closeInteractionSpan(
     sessionKey: string,
-    status: 'complete' | 'cancelled' | 'failed' = 'complete',
+    status: 'complete' | 'cancelled' | 'failed' = 'complete'
   ): Promise<void> {
     if (!this.agent) return;
 
@@ -269,10 +269,7 @@ export class SessionStateManager {
   }
 
   // Create user_message span (immediate event)
-  async createUserMessageSpan(
-    sessionKey: string,
-    rawContext: unknown,
-  ): Promise<string | null> {
+  async createUserMessageSpan(sessionKey: string, rawContext: unknown): Promise<string | null> {
     if (!this.agent) return null;
 
     // Ensure interaction exists
@@ -283,7 +280,7 @@ export class SessionStateManager {
       sessionKey,
       'user_message',
       { raw: rawContext },
-      interactionSpanId,
+      interactionSpanId
     );
 
     if (spanId) {
@@ -296,10 +293,7 @@ export class SessionStateManager {
   }
 
   // Create agent_run span
-  async createAgentRunSpan(
-    sessionKey: string,
-    rawContext: unknown,
-  ): Promise<string | null> {
+  async createAgentRunSpan(sessionKey: string, rawContext: unknown): Promise<string | null> {
     if (!this.agent) return null;
 
     const state = this.getOrCreateSessionState(sessionKey);
@@ -317,7 +311,7 @@ export class SessionStateManager {
       sessionKey,
       'agent_run',
       { raw: rawContext },
-      interactionSpanId, // Child of interaction
+      interactionSpanId // Child of interaction
     );
 
     if (spanId) {
@@ -331,7 +325,7 @@ export class SessionStateManager {
   // Close agent_run span
   async closeAgentRunSpan(
     sessionKey: string,
-    status: 'complete' | 'cancelled' | 'failed' = 'complete',
+    status: 'complete' | 'cancelled' | 'failed' = 'complete'
   ): Promise<void> {
     if (!this.agent) return;
 
@@ -356,7 +350,7 @@ export class SessionStateManager {
   async createToolCallSpan(
     sessionKey: string,
     toolName: string,
-    rawContext: unknown,
+    rawContext: unknown
   ): Promise<string | null> {
     if (!this.agent) return null;
 
@@ -378,7 +372,7 @@ export class SessionStateManager {
       sessionKey,
       'tool_call',
       { toolName, raw: rawContext },
-      state.agentRunSpanId, // Child of agent_run
+      state.agentRunSpanId // Child of agent_run
     );
 
     if (spanId) {
@@ -392,7 +386,7 @@ export class SessionStateManager {
   // Close tool_call span
   async closeToolCallSpan(
     sessionKey: string,
-    status: 'complete' | 'cancelled' | 'failed' = 'complete',
+    status: 'complete' | 'cancelled' | 'failed' = 'complete'
   ): Promise<void> {
     if (!this.agent) return;
 
@@ -411,7 +405,7 @@ export class SessionStateManager {
   // Create assistant_response span (immediate event)
   async createAssistantResponseSpan(
     sessionKey: string,
-    rawContext: unknown,
+    rawContext: unknown
   ): Promise<string | null> {
     if (!this.agent) return null;
 
@@ -420,7 +414,8 @@ export class SessionStateManager {
     // Check if interaction span exists and is still active (not timed out)
     const now = Date.now();
     const idleTime = state.interactionSpanId ? now - state.interactionLastActivity : Infinity;
-    const isInteractionActive = state.interactionSpanId && idleTime <= this.config.userInteractionTimeoutMs;
+    const isInteractionActive =
+      state.interactionSpanId && idleTime <= this.config.userInteractionTimeoutMs;
 
     let interactionSpanId = state.interactionSpanId;
     if (!isInteractionActive) {
@@ -442,7 +437,7 @@ export class SessionStateManager {
       sessionKey,
       'assistant_response',
       { raw: rawContext },
-      interactionSpanId, // Child of interaction
+      interactionSpanId // Child of interaction
     );
 
     if (spanId) {
@@ -549,7 +544,7 @@ export class SessionStateManager {
 export function createSessionStateManager(
   agent: Agent | null,
   logger: Logger,
-  config?: Partial<SessionManagerConfig>,
+  config?: Partial<SessionManagerConfig>
 ): SessionStateManager {
   return new SessionStateManager(agent, logger, config);
 }

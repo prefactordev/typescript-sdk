@@ -37,7 +37,11 @@ export class AgentSpanClient {
     });
   }
 
-  async finish(spanId: string, timestamp: string, options?: AgentSpanFinishOptions): Promise<AgentSpanResponse> {
+  async finish(
+    spanId: string,
+    timestamp: string,
+    options?: AgentSpanFinishOptions
+  ): Promise<AgentSpanResponse> {
     try {
       return await this.httpClient.request(`/api/v1/agent_spans/${spanId}/finish`, {
         method: 'POST',
