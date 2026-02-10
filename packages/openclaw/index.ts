@@ -69,10 +69,10 @@ interface MessageContext {
 
 export default function register(api: PluginAPI) {
   // The config passed by OpenClaw is the full config, we need to extract
-  // the plugin-specific config from plugins.entries[prefactor-openclaw].config
+  // the plugin-specific config from plugins.entries.prefactor.config
   const fullConfig = api.config || {};
   const pluginsConfig = (fullConfig.plugins as { entries?: Record<string, { config?: Record<string, unknown> }> }) || {};
-  const pluginEntry = pluginsConfig.entries?.['prefactor-openclaw'];
+  const pluginEntry = pluginsConfig.entries?.prefactor;
   const pluginConfig = pluginEntry?.config || {};
 
   // Merge plugin config with any top-level config (for backwards compatibility)
@@ -122,7 +122,7 @@ export default function register(api: PluginAPI) {
         apiToken: config.apiKey,
         agentId: config.agentId,
         openclawVersion: api.version || 'unknown',
-        pluginVersion: '1.0.1',
+        pluginVersion: '1.0.0',
         userAgentVersion: config.agentVersion || 'default',
         maxRetries: 3,
         initialRetryDelay: 1000,
@@ -623,40 +623,6 @@ export default function register(api: PluginAPI) {
         });
       });
     }
-  });
-
-  // ==================== CLI COMMAND ====================
-
-  // Register CLI command for metrics/status
-  api.registerCli(({ program }: { program: any }) => {
-    program
-      .command('prefactor:status')
-      .description('Show prefactor plugin status and metrics')
-      .action(() => {
-        console.log('=== Prefactor Plugin Status ===');
-        console.log('Version: 1.0.0');
-        console.log('Log Level:', logLevel);
-        console.log('Metrics Enabled:', enableMetrics);
-        console.log('Prefactor Agent Initialized:', agentInitialized);
-
-        if (config.apiUrl) {
-          console.log('API URL:', config.apiUrl);
-        }
-        if (config.agentId) {
-          console.log('Agent ID:', config.agentId);
-        }
-        if (config.agentVersion) {
-          console.log('Agent Version:', config.agentVersion);
-        }
-
-        if (metrics.isEnabled()) {
-          const summary = metrics.getSummary();
-          console.log('\n=== Metrics Summary ===');
-          console.log(JSON.stringify(summary, null, 2));
-        } else {
-          console.log('\nMetrics are disabled.');
-        }
-      });
   });
 
   logger.info('plugin_registered_prefactor', {

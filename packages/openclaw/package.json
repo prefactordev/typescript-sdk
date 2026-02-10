@@ -1,13 +1,13 @@
 {
-  "name": "prefactor-openclaw",
+  "name": "@prefactor/openclaw",
   "version": "1.0.0",
   "description": "OpenClaw lifecycle event monitoring and instrumentation plugin",
   "type": "module",
   "main": "./index.ts",
   "openclaw": {
     "extensions": ["./index.ts"],
-    "id": "prefactor-openclaw",
-    "name": "Prefactor Lifecycle Plugin",
+    "id": "prefactor",
+    "name": "@prefactor/openclaw",
     "entry": "./index.ts",
     "configSchema": {
       "type": "object",
