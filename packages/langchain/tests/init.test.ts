@@ -47,7 +47,7 @@ describe('langchain init schema registration', () => {
 
     expect(registeredSchemas).toHaveLength(1);
     expect(registeredSchemas[0]).toMatchObject({
-      external_identifier: 'prefactor',
+      external_identifier: 'langchain-schema',
       span_schemas: expect.any(Object),
     });
   });
