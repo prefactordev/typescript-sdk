@@ -1,6 +1,7 @@
 import {
   type AgentInstanceManager,
   createSpanTypePrefixer,
+  getLogger,
   SpanContext,
   SpanType,
   serializeValue,
@@ -9,6 +10,7 @@ import {
 import { extractTokenUsage } from './metadata-extractor.js';
 
 const toLangchainSpanType = createSpanTypePrefixer('langchain');
+const logger = getLogger('middleware');
 
 /**
  * Prefactor middleware for LangChain.js agents.
@@ -247,8 +249,12 @@ export class PrefactorMiddleware {
       return;
     }
 
-    this.agentManager.startInstance(this.agentInfo);
-    this.agentInstanceStarted = true;
+    try {
+      this.agentManager.startInstance(this.agentInfo);
+      this.agentInstanceStarted = true;
+    } catch (error) {
+      logger.error('Failed to start agent instance:', error);
+    }
   }
 
   private finishAgentInstance(): void {
@@ -256,7 +262,11 @@ export class PrefactorMiddleware {
       return;
     }
 
-    this.agentManager.finishInstance();
-    this.agentInstanceStarted = false;
+    try {
+      this.agentManager.finishInstance();
+      this.agentInstanceStarted = false;
+    } catch (error) {
+      logger.error('Failed to finish agent instance:', error);
+    }
   }
 }
