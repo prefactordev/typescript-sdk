@@ -23,9 +23,12 @@ function createSpan(spanId: string, spanType: string): Span {
 describe('middleware timeout handling', () => {
   test('fails request and marks agent span failed when generate hangs', async () => {
     const ended: Array<{ span: Span; options?: unknown }> = [];
+    const startedSpanTypes: string[] = [];
     const tracer: Tracer = {
-      startSpan: (options) =>
-        createSpan(`span-${options.spanType}-${Math.random()}`, options.spanType),
+      startSpan: (options) => {
+        startedSpanTypes.push(options.spanType);
+        return createSpan(`span-${options.spanType}-${Math.random()}`, options.spanType);
+      },
       endSpan: (span, options) => {
         ended.push({ span, options });
       },
@@ -68,5 +71,7 @@ describe('middleware timeout handling', () => {
     expect(result).toBe('rejected');
     expect(finished).toBe(true);
     expect(ended).toHaveLength(2);
+    expect(startedSpanTypes).toContain('ai:agent');
+    expect(startedSpanTypes).toContain('ai:llm');
   });
 });

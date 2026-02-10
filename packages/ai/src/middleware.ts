@@ -10,6 +10,7 @@
 
 import {
   type AgentInstanceManager,
+  createSpanTypePrefixer,
   type Span,
   SpanContext,
   SpanType,
@@ -21,6 +22,7 @@ import type { LanguageModelMiddleware, MiddlewareConfig, ToolCallInfo } from './
 /** Root AGENT span for the middleware session. Created on first call, ended on shutdown. */
 let rootAgentSpan: Span | undefined;
 const AGENT_DEAD_TIMEOUT_MS = 5 * 60 * 1000;
+const toAiSpanType = createSpanTypePrefixer('ai');
 
 /**
  * Gets or creates the root AGENT span.
@@ -30,7 +32,7 @@ function getOrCreateRootAgentSpan(tracer: Tracer): Span {
   if (!rootAgentSpan) {
     rootAgentSpan = tracer.startSpan({
       name: 'ai:agent',
-      spanType: `ai:${SpanType.AGENT}`,
+      spanType: toAiSpanType(SpanType.AGENT),
       inputs: {},
     });
   }
@@ -164,14 +166,13 @@ function extractToolResults(
  *
  * @param tracer - The tracer instance
  * @param toolCall - The tool call information
- * @param parentSpan - The parent span (usually an LLM span)
  * @returns The created span
  * @internal
  */
 function createToolSpan(tracer: Tracer, toolCall: ToolCallInfo): Span {
   return tracer.startSpan({
     name: 'ai:tool-call',
-    spanType: `ai:${SpanType.TOOL}`,
+    spanType: toAiSpanType(SpanType.TOOL),
     inputs: {
       'ai.tool.name': toolCall.toolName,
       toolName: toolCall.toolName,
@@ -367,7 +368,7 @@ function createLlmSpan(
   const modelName = `${model.provider ?? 'unknown'}.${model.modelId ?? 'unknown'}`;
   const spanOptions = {
     name: 'ai:llm-call',
-    spanType: `ai:${SpanType.LLM}`,
+    spanType: toAiSpanType(SpanType.LLM),
     inputs: {
       'ai.model.name': modelName,
       'ai.model.id': model.modelId,
@@ -446,7 +447,7 @@ export function createPrefactorMiddleware(
       try {
         // Execute the generation within the LLM span context
         const result = await runWithTimeout(
-          () => SpanContext.runAsync(span, async () => doGenerate()),
+          () => SpanContext.runAsync(span, () => Promise.resolve(doGenerate())),
           deadTimeoutMs,
           'Agent did not respond within timeout duration and was marked as failed.'
         );
@@ -497,7 +498,7 @@ export function createPrefactorMiddleware(
       try {
         // Execute the stream within the span context
         const result = await runWithTimeout(
-          () => SpanContext.runAsync(span, async () => doStream()),
+          () => SpanContext.runAsync(span, () => Promise.resolve(doStream())),
           deadTimeoutMs,
           'Agent did not respond within timeout duration and was marked as failed.'
         );

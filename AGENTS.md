@@ -93,6 +93,8 @@ This file guides coding agents working in this repo.
 - Context propagation relies on `AsyncLocalStorage` wrappers.
 - Wrap async work in `SpanContext.runAsync(span, async () => ...)`.
 - Use `SpanContext.run` for sync work and `SpanContext.getCurrent()` for parents.
+- Provider package span types are always package-prefixed (`<package>:*`).
+- Do not normalize provider spans to core enum literals; keep package-specific values like `langchain:agent`, `langchain:llm`, `langchain:tool`, `ai:agent`, `ai:llm`, and `ai:tool`.
 - AGENT spans are emitted immediately and later finished (`finishSpan` path).
 - Do not break parent/child relationships; always execute child work inside context.
 - Ensure LLM/tool spans capture inputs/outputs and token usage when available.

@@ -16,6 +16,7 @@ export { type CoreRuntime, createCore } from './create-core.js';
 export { registerShutdownHandler, shutdown } from './lifecycle.js';
 export { SpanContext } from './tracing/context.js';
 export {
+  createSpanTypePrefixer,
   type ErrorInfo,
   type Span,
   SpanStatus,

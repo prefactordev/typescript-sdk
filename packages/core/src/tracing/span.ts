@@ -10,6 +10,10 @@ export const SpanType = {
 
 export type SpanType = (typeof SpanType)[keyof typeof SpanType] | string;
 
+export function createSpanTypePrefixer(namespace: string): (spanType: string) => string {
+  return (spanType: string) => `${namespace}:${spanType}`;
+}
+
 /**
  * Status of a span
  */

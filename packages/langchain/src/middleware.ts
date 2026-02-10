@@ -1,11 +1,14 @@
 import {
   type AgentInstanceManager,
+  createSpanTypePrefixer,
   SpanContext,
   SpanType,
   serializeValue,
   type Tracer,
 } from '@prefactor/core';
 import { extractTokenUsage } from './metadata-extractor.js';
+
+const toLangchainSpanType = createSpanTypePrefixer('langchain');
 
 /**
  * Prefactor middleware for LangChain.js agents.
@@ -34,6 +37,7 @@ import { extractTokenUsage } from './metadata-extractor.js';
  */
 export class PrefactorMiddleware {
   private rootSpan: ReturnType<Tracer['startSpan']> | null = null;
+  private agentInstanceStarted = false;
 
   constructor(
     private tracer: Tracer,
@@ -50,11 +54,11 @@ export class PrefactorMiddleware {
   async beforeAgent(state: any): Promise<void> {
     const messages = state?.messages ?? [];
 
-    this.agentManager.startInstance(this.agentInfo);
+    this.ensureAgentInstanceStarted();
 
     const span = this.tracer.startSpan({
       name: 'langchain:agent',
-      spanType: `langchain:${SpanType.AGENT}`,
+      spanType: toLangchainSpanType(SpanType.AGENT),
       inputs: { messages: serializeValue(messages.slice(-3)) },
     });
 
@@ -78,9 +82,21 @@ export class PrefactorMiddleware {
       outputs: { messages: serializeValue(messages.slice(-3)) },
     });
 
-    this.agentManager.finishInstance();
     SpanContext.exit();
     this.rootSpan = null;
+  }
+
+  shutdown(): void {
+    if (this.rootSpan) {
+      this.tracer.endSpan(this.rootSpan, {
+        outputs: {},
+      });
+
+      SpanContext.exit();
+      this.rootSpan = null;
+    }
+
+    this.finishAgentInstance();
   }
 
   /**
@@ -92,10 +108,12 @@ export class PrefactorMiddleware {
    */
   // biome-ignore lint/suspicious/noExplicitAny: LangChain request/handler types are dynamic
   async wrapModelCall<T>(request: any, handler: (req: any) => Promise<T>): Promise<T> {
+    this.ensureAgentInstanceStarted();
+
     const modelName = this.extractModelName(request);
     const span = this.tracer.startSpan({
       name: 'langchain:llm-call',
-      spanType: `langchain:${SpanType.AGENT}`,
+      spanType: toLangchainSpanType(SpanType.LLM),
       inputs: {
         ...this.extractModelInputs(request),
         'langchain.model.name': modelName,
@@ -103,10 +121,7 @@ export class PrefactorMiddleware {
     });
 
     try {
-      // CRITICAL: Wrap handler in context so child operations see this span
-      const response = await SpanContext.runAsync(span, async () => {
-        return handler(request);
-      });
+      const response = await SpanContext.runAsync(span, () => handler(request));
 
       const outputs = this.extractModelOutputs(response);
       const tokenUsage = extractTokenUsage(response);
@@ -128,10 +143,12 @@ export class PrefactorMiddleware {
    */
   // biome-ignore lint/suspicious/noExplicitAny: LangChain request/handler types are dynamic
   async wrapToolCall<T>(request: any, handler: (req: any) => Promise<T>): Promise<T> {
+    this.ensureAgentInstanceStarted();
+
     const toolName = this.extractToolName(request);
     const span = this.tracer.startSpan({
       name: 'langchain:tool-call',
-      spanType: `langchain:${SpanType.AGENT}`,
+      spanType: toLangchainSpanType(SpanType.TOOL),
       inputs: {
         ...this.extractToolInputs(request),
         'langchain.tool.name': toolName,
@@ -139,10 +156,7 @@ export class PrefactorMiddleware {
     });
 
     try {
-      // CRITICAL: Wrap handler in context so child operations see this span
-      const response = await SpanContext.runAsync(span, async () => {
-        return handler(request);
-      });
+      const response = await SpanContext.runAsync(span, () => handler(request));
 
       this.tracer.endSpan(span, {
         outputs: this.extractToolOutputs(response),
@@ -226,5 +240,23 @@ export class PrefactorMiddleware {
   // biome-ignore lint/suspicious/noExplicitAny: LangChain response structure is dynamic
   private extractToolOutputs(response: any): Record<string, unknown> {
     return { output: response?.output ?? response };
+  }
+
+  private ensureAgentInstanceStarted(): void {
+    if (this.agentInstanceStarted) {
+      return;
+    }
+
+    this.agentManager.startInstance(this.agentInfo);
+    this.agentInstanceStarted = true;
+  }
+
+  private finishAgentInstance(): void {
+    if (!this.agentInstanceStarted) {
+      return;
+    }
+
+    this.agentManager.finishInstance();
+    this.agentInstanceStarted = false;
   }
 }
