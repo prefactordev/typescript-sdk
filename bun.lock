@@ -40,6 +40,8 @@
       "version": "0.2.5",
       "dependencies": {
         "@prefactor/pfid": "^0.1.0",
+      },
+      "peerDependencies": {
         "zod": "^3.23.0",
       },
     },
