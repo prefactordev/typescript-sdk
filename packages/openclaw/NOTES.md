@@ -46,7 +46,6 @@ prefactor-openclaw/
         "enabled": true,
         "config": {
           "logLevel": "debug",
-          "enableMetrics": true
         }
       }
     }

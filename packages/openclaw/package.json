@@ -1,51 +1,20 @@
 {
   "name": "@prefactor/openclaw",
   "version": "0.0.0",
-  "description": "OpenClaw lifecycle event monitoring and instrumentation plugin",
+  "description": "OpenClaw lifecycle event monitoring and instrumentation for Prefactor",
   "type": "module",
-  "main": "./index.ts",
+  "dependencies": {
+    "zod": "^3.23.0"
+  },
+  "devDependencies": {
+    "openclaw": "^2026.2.9",
+    "typescript": "^5.0.0",
+    "@types/node": "^22.0.0"
+  },
   "openclaw": {
-    "extensions": ["./index.ts"],
-    "id": "prefactor",
-    "name": "@prefactor/openclaw",
-    "entry": "./index.ts",
-    "configSchema": {
-      "type": "object",
-      "properties": {
-        "apiUrl": {
-          "type": "string",
-          "description": "Prefactor API URL (e.g., https://api.prefactor.dev)"
-        },
-        "apiKey": {
-          "type": "string",
-          "description": "Prefactor API key for authentication"
-        },
-        "agentId": {
-          "type": "string",
-          "description": "Agent ID registered in Prefactor"
-        },
-        "agentVersion": {
-          "type": "string",
-          "description": "Optional user-supplied version suffix for this agent deployment",
-          "default": "default"
-        },
-        "logLevel": {
-          "type": "string",
-          "enum": ["debug", "info", "warn", "error"],
-          "default": "info"
-        }
-      },
-      "required": []
-    }
+    "extensions": ["./index.ts"]
   },
   "scripts": {
     "typecheck": "tsc --noEmit"
-  },
-  "dependencies": {
-    "@prefactor/core": "workspace:*"
-  },
-  "devDependencies": {
-    "typescript": "^5.0.0",
-    "@types/node": "^20.0.0"
   }
 }
