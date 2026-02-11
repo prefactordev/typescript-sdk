@@ -307,10 +307,10 @@ export class SessionStateManager {
       await this.closeAgentRunSpan(sessionKey, 'cancelled');
     }
 
-    // Get the last 5 messages from the context to reduce payload size
+    // Get the last 3 messages from the context to reduce payload size
     const raw = (rawContext as { raw?: { messages?: unknown[]; [key: string]: unknown } })?.raw;
     const filteredContext = raw?.messages
-      ? { raw: { ...raw, messages: raw.messages.slice(-5) } }
+      ? { raw: { ...raw, messages: raw.messages.slice(-3) } }
       : { raw: rawContext };
 
     const spanId = await this.agent.createSpan(
@@ -439,10 +439,16 @@ export class SessionStateManager {
       return null;
     }
 
+    // Get the last 3 messages from the context to reduce payload size
+    const raw = (rawContext as { raw?: { messages?: unknown[]; [key: string]: unknown } })?.raw;
+    const filteredContext = raw?.messages
+      ? { raw: { ...raw, messages: raw.messages.slice(-3) } }
+      : { raw: rawContext };
+
     const spanId = await this.agent.createSpan(
       sessionKey,
       'openclaw:assistant_response',
-      { raw: rawContext },
+      filteredContext,
       interactionSpanId // Child of interaction
     );
 
