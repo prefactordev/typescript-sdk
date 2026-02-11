@@ -23,7 +23,7 @@
     },
     "packages/ai": {
       "name": "@prefactor/ai",
-      "version": "0.2.5",
+      "version": "0.2.6",
       "dependencies": {
         "@prefactor/core": "workspace:*",
         "@prefactor/pfid": "^0.1.0",
@@ -37,7 +37,7 @@
     },
     "packages/core": {
       "name": "@prefactor/core",
-      "version": "0.2.5",
+      "version": "0.2.6",
       "dependencies": {
         "@prefactor/pfid": "^0.1.0",
       },
@@ -47,7 +47,7 @@
     },
     "packages/langchain": {
       "name": "@prefactor/langchain",
-      "version": "0.2.5",
+      "version": "0.2.6",
       "dependencies": {
         "@prefactor/core": "workspace:*",
         "@prefactor/pfid": "^0.1.0",

@@ -1,6 +1,6 @@
 {
   "name": "@prefactor/core",
-  "version": "0.2.5",
+  "version": "0.2.6",
   "description": "Framework-agnostic observability primitives for Prefactor",
   "type": "module",
   "main": "dist/index.cjs",
