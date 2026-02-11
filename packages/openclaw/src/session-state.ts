@@ -278,7 +278,7 @@ export class SessionStateManager {
 
     const spanId = await this.agent.createSpan(
       sessionKey,
-      'user_message',
+      'openclaw:user_message',
       { raw: rawContext },
       interactionSpanId
     );
@@ -309,7 +309,7 @@ export class SessionStateManager {
 
     const spanId = await this.agent.createSpan(
       sessionKey,
-      'agent_run',
+      'openclaw:agent_run',
       { raw: rawContext },
       interactionSpanId // Child of interaction
     );
@@ -370,7 +370,7 @@ export class SessionStateManager {
 
     const spanId = await this.agent.createSpan(
       sessionKey,
-      'tool_call',
+      'openclaw:tool_call',
       { toolName, raw: rawContext },
       state.agentRunSpanId // Child of agent_run
     );
@@ -435,7 +435,7 @@ export class SessionStateManager {
 
     const spanId = await this.agent.createSpan(
       sessionKey,
-      'assistant_response',
+      'openclaw:assistant_response',
       { raw: rawContext },
       interactionSpanId // Child of interaction
     );

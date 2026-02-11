@@ -209,32 +209,32 @@ export class Agent {
     this.agentSchemaVersion = {
       external_identifier: `plugin-${pluginVersion}`,
       span_schemas: {
-        agent_run: {
+        'openclaw:agent_run': {
           description: 'Agent execution run span',
           fields: {
             raw: { type: 'object', description: 'Raw OpenClaw context' },
           },
         },
-        tool_call: {
+        'openclaw:tool_call': {
           description: 'Tool execution span',
           fields: {
             toolName: { type: 'string', description: 'Name of the tool called' },
             raw: { type: 'object', description: 'Raw OpenClaw tool context' },
           },
         },
-        user_message: {
+        'openclaw:user_message': {
           description: 'Inbound message from user',
           fields: {
             raw: { type: 'object', description: 'Raw OpenClaw message context' },
           },
         },
-        assistant_message: {
+        'openclaw:assistant_message': {
           description: 'Outbound message to user',
           fields: {
             raw: { type: 'object', description: 'Raw OpenClaw message context' },
           },
         },
-        assistant_response: {
+        'openclaw:assistant_response': {
           description: 'Assistant response generation span',
           fields: {
             raw: { type: 'object', description: 'Raw OpenClaw context with messages' },
@@ -721,7 +721,7 @@ export class Agent {
 
   // Utility for creating spans with proper parent relationships
   async createAgentRunSpan(sessionKey: string, rawContext: unknown): Promise<string | null> {
-    return this.createSpan(sessionKey, 'agent_run', { raw: rawContext }, null);
+    return this.createSpan(sessionKey, 'openclaw:agent_run', { raw: rawContext }, null);
   }
 
   async createToolCallSpan(
@@ -730,21 +730,26 @@ export class Agent {
     rawContext: unknown
   ): Promise<string | null> {
     // First, close any existing tool_call span (workaround for broken after_tool_call)
-    await this.closeSpanBySchema(sessionKey, 'tool_call');
+    await this.closeSpanBySchema(sessionKey, 'openclaw:tool_call');
 
     const parentSpanId = this.getParentSpanId(sessionKey);
-    return this.createSpan(sessionKey, 'tool_call', { toolName, raw: rawContext }, parentSpanId);
+    return this.createSpan(
+      sessionKey,
+      'openclaw:tool_call',
+      { toolName, raw: rawContext },
+      parentSpanId
+    );
   }
 
   async closeToolCallSpan(sessionKey: string): Promise<void> {
-    await this.closeSpanBySchema(sessionKey, 'tool_call');
+    await this.closeSpanBySchema(sessionKey, 'openclaw:tool_call');
   }
 
   async createUserMessageSpan(sessionKey: string, rawContext: unknown): Promise<string | null> {
     const parentSpanId = this.getParentSpanId(sessionKey);
     const spanId = await this.createSpan(
       sessionKey,
-      'user_message',
+      'openclaw:user_message',
       { raw: rawContext },
       parentSpanId
     );
@@ -762,11 +767,16 @@ export class Agent {
     rawContext: unknown
   ): Promise<string | null> {
     const parentSpanId = this.getParentSpanId(sessionKey);
-    return this.createSpan(sessionKey, 'assistant_message', { raw: rawContext }, parentSpanId);
+    return this.createSpan(
+      sessionKey,
+      'openclaw:assistant_message',
+      { raw: rawContext },
+      parentSpanId
+    );
   }
 
   async closeAssistantMessageSpan(sessionKey: string): Promise<void> {
-    await this.closeSpanBySchema(sessionKey, 'assistant_message');
+    await this.closeSpanBySchema(sessionKey, 'openclaw:assistant_message');
   }
 }
 
