@@ -22,7 +22,7 @@ import type { LanguageModelMiddleware, MiddlewareConfig, ToolCallInfo } from './
 /** Root AGENT span for the middleware session. Created on first call, ended on shutdown. */
 let rootAgentSpan: Span | undefined;
 const AGENT_DEAD_TIMEOUT_MS = 5 * 60 * 1000;
-const toAiSpanType = createSpanTypePrefixer('ai');
+const toAiSpanType = createSpanTypePrefixer('ai-sdk');
 
 /**
  * Gets or creates the root AGENT span.
