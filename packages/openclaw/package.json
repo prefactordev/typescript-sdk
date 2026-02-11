@@ -1,5 +1,5 @@
 {
-  "name": "@prefactor/openclaw-prefactor",
+  "name": "@prefactor/openclaw",
   "version": "0.0.0",
   "description": "OpenClaw lifecycle event monitoring and instrumentation for Prefactor",
   "type": "module",
@@ -31,6 +31,7 @@
     "monitoring"
   ],
   "dependencies": {
+    "@prefactor/core": "workspace:*",
     "zod": "^3.23.0"
   },
   "devDependencies": {

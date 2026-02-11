@@ -27,10 +27,10 @@ Enable the plugin in `~/.openclaw/.openclaw.json`:
 
 ```bash
 # Install the plugin
-openclaw plugins install @prefactor/openclaw-prefactor
+openclaw plugins install @prefactor/openclaw
 
 # Upgrade to latest version
-openclaw plugins update @prefactor/openclaw-prefactor
+openclaw plugins update @prefactor/openclaw
 
 # List all plugins
 openclaw plugins list
@@ -43,7 +43,7 @@ openclaw plugins enable prefactor
 openclaw plugins disable prefactor
 
 # Uninstall
-openclaw plugins uninstall @prefactor/openclaw-prefactor
+openclaw plugins uninstall @prefactor/openclaw
 ```
 
 ## Overview
