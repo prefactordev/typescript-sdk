@@ -617,7 +617,7 @@ function wrapStreamForCompletion(
         controller.enqueue(value);
       } catch (error) {
         // End the span with error
-        tracer.endSpan(span, { error: error as Error });
+        tracer.endSpan(span, { error: toError(error) });
         controller.error(error);
       }
     },
