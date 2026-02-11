@@ -3,7 +3,6 @@
 
 import { randomUUID } from 'crypto';
 import { createLogger, LogLevel } from './src/logger.js';
-import { createMetrics } from './src/metrics.js';
 import { createAgent, Agent, AgentConfig } from './src/agent.js';
 import { createSessionStateManager, SessionStateManager } from './src/session-state.js';
 
@@ -82,23 +81,19 @@ export default function register(api: PluginAPI) {
     agentId?: string;
     agentVersion?: string;
     logLevel: LogLevel;
-    enableMetrics: boolean;
     userInteractionTimeoutMinutes: number;
     sessionTimeoutHours: number;
   } = {
     ...(pluginConfig as Record<string, unknown>),
     // Keep other top-level values if they exist
     logLevel: (pluginConfig.logLevel as LogLevel) || (fullConfig.logLevel as LogLevel) || 'info',
-    enableMetrics: pluginConfig.enableMetrics !== false && fullConfig.enableMetrics !== false,
     userInteractionTimeoutMinutes: (pluginConfig.userInteractionTimeoutMinutes as number) || 5,
     sessionTimeoutHours: (pluginConfig.sessionTimeoutHours as number) || 24,
   };
 
   const logLevel = config.logLevel || 'info';
-  const enableMetrics = config.enableMetrics !== false;
 
   const logger = createLogger(logLevel);
-  const metrics = createMetrics(enableMetrics);
 
   // Debug: Log the plugin config extracted
   logger.info('prefactor_plugin_config', {
@@ -154,7 +149,6 @@ export default function register(api: PluginAPI) {
 
   logger.info('plugin_init_prefactor', {
     logLevel,
-    enableMetrics,
     agentInitialized,
     version: '1.0.0',
   });
@@ -177,11 +171,6 @@ export default function register(api: PluginAPI) {
       pid: process.pid,
       agentInitialized,
     });
-
-    if (metrics.isEnabled()) {
-      metrics.recordEvent('gateway_start');
-      metrics.recordGatewayStart();
-    }
   });
 
   // Hook: gateway_stop - Gateway is shutting down
@@ -192,11 +181,6 @@ export default function register(api: PluginAPI) {
     logger.info('gateway_stop', {
       timestamp,
     });
-
-    if (metrics.isEnabled()) {
-      metrics.recordEvent('gateway_stop');
-      metrics.recordGatewayStop();
-    }
 
     // Emergency cleanup for Prefactor Agent
     if (agent) {
@@ -230,12 +214,6 @@ export default function register(api: PluginAPI) {
         });
       });
     }
-
-    // Log final metrics summary
-    if (metrics.isEnabled()) {
-      const summary = metrics.getSummary();
-      logger.info('metrics_summary', summary);
-    }
   });
 
   // ==================== SESSION LIFECYCLE ====================
@@ -250,11 +228,6 @@ export default function register(api: PluginAPI) {
       sessionKey,
       timestamp,
     });
-
-    if (metrics.isEnabled()) {
-      metrics.recordEvent('session_start');
-      metrics.recordSessionStart(sessionKey);
-    }
 
     // Log that we're ready to track spans for this session
     if (agent) {
@@ -274,11 +247,6 @@ export default function register(api: PluginAPI) {
       sessionKey,
       timestamp,
     });
-
-    if (metrics.isEnabled()) {
-      metrics.recordEvent('session_end');
-      metrics.recordSessionEnd(sessionKey);
-    }
 
     // Finish Prefactor AgentInstance for this session
     if (agent) {
@@ -325,10 +293,6 @@ export default function register(api: PluginAPI) {
       logger.debug('context_injected', { sessionKey, marker });
     }
 
-    if (metrics.isEnabled()) {
-      metrics.recordEvent('before_agent_start');
-    }
-
     // Create agent_run span using hierarchical session manager
     if (sessionManager) {
       sessionManager.createAgentRunSpan(sessionKey, ctx).then((spanId) => {
@@ -359,10 +323,6 @@ export default function register(api: PluginAPI) {
       endTime,
       messageCount,
     });
-
-    if (metrics.isEnabled()) {
-      metrics.recordEvent('agent_end');
-    }
 
     // Close agent_run span and create assistant_response span using session manager
     if (sessionManager) {
@@ -400,10 +360,6 @@ export default function register(api: PluginAPI) {
       sessionKey,
       tokensBefore,
     });
-
-    if (metrics.isEnabled()) {
-      metrics.recordEvent('before_compaction');
-    }
   });
 
   // Hook: after_compaction - After context compaction
@@ -416,10 +372,6 @@ export default function register(api: PluginAPI) {
       sessionKey,
       tokensAfter,
     });
-
-    if (metrics.isEnabled()) {
-      metrics.recordEvent('after_compaction');
-    }
   });
 
   // ==================== TOOL LIFECYCLE ====================
@@ -434,10 +386,6 @@ export default function register(api: PluginAPI) {
       sessionKey,
       tool: toolName,
     });
-
-    if (metrics.isEnabled()) {
-      metrics.recordEvent('before_tool_call');
-    }
 
     // Create tool_call span using hierarchical session manager
     if (sessionManager) {
@@ -472,10 +420,6 @@ export default function register(api: PluginAPI) {
       tool: toolName,
       note: 'This hook is broken in OpenClaw but we handle cleanup elsewhere',
     });
-
-    if (metrics.isEnabled()) {
-      metrics.recordEvent('after_tool_call');
-    }
   });
 
   // Hook: tool_result_persist - Synchronous transform before persistence
@@ -489,10 +433,6 @@ export default function register(api: PluginAPI) {
       sessionKey,
       tool: toolName,
     });
-
-    if (metrics.isEnabled()) {
-      metrics.recordEvent('tool_result_persist');
-    }
 
     // Close the tool_call span using hierarchical session manager
     if (sessionManager) {
@@ -530,10 +470,6 @@ export default function register(api: PluginAPI) {
       sender: senderId,
       preview,
     });
-
-    if (metrics.isEnabled()) {
-      metrics.recordEvent('message_received');
-    }
 
     // Hierarchical span management:
     // 1. Ensure session span exists (24hr timeout)
@@ -573,10 +509,6 @@ export default function register(api: PluginAPI) {
       hasText,
     });
 
-    if (metrics.isEnabled()) {
-      metrics.recordEvent('message_sending');
-    }
-
     // Create assistant_message span
     if (agent) {
       agent.createAssistantMessageSpan(sessionKey, ctx).then((spanId) => {
@@ -606,10 +538,6 @@ export default function register(api: PluginAPI) {
       messageId,
     });
 
-    if (metrics.isEnabled()) {
-      metrics.recordEvent('message_sent');
-    }
-
     // Close assistant_message span
     if (agent) {
       agent.closeAssistantMessageSpan(sessionKey).then(() => {
@@ -628,7 +556,6 @@ export default function register(api: PluginAPI) {
   logger.info('plugin_registered_prefactor', {
     hooks: 13,
     logLevel,
-    metricsEnabled: enableMetrics,
     agentInitialized,
   });
 }
