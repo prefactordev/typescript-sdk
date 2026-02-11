@@ -182,7 +182,7 @@ export class Agent {
       apiUrl: config.apiUrl,
       apiToken: config.apiToken,
       agentId: config.agentId,
-      agentIdentifier: 'v1.0.0',
+      agentIdentifier: 'v0.0.0',
       requestTimeout: config.requestTimeout ?? 30000,
       maxRetries: config.maxRetries ?? 3,
       initialRetryDelay: config.initialRetryDelay ?? 1000,
@@ -197,7 +197,7 @@ export class Agent {
 
     // Build version identifiers
     const openclawVersion = config.openclawVersion || 'unknown';
-    const pluginVersion = config.pluginVersion || '1.0.1';
+    const pluginVersion = config.pluginVersion || '0.0.0';
     const userVersion = config.userAgentVersion || 'default';
 
     this.agentVersion = {

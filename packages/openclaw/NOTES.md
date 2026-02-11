@@ -206,4 +206,4 @@ echo "- after_tool_call: NOT IMPLEMENTED in OpenClaw core (documented but never 
 ---
 
 *Last updated: 2026-02-04*
-*Plugin version: 1.0.0*
+*Plugin version: 0.0.0*

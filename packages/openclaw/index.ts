@@ -117,7 +117,7 @@ export default function register(api: PluginAPI) {
         apiToken: config.apiKey,
         agentId: config.agentId,
         openclawVersion: api.version || 'unknown',
-        pluginVersion: '1.0.0',
+        pluginVersion: '0.0.0',
         userAgentVersion: config.agentVersion || 'default',
         maxRetries: 3,
         initialRetryDelay: 1000,
@@ -150,7 +150,7 @@ export default function register(api: PluginAPI) {
   logger.info('plugin_init_prefactor', {
     logLevel,
     agentInitialized,
-    version: '1.0.0',
+    version: '0.0.0',
   });
 
   // Initialize Session State Manager for hierarchical span tracking
