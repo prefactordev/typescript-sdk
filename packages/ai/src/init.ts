@@ -28,10 +28,10 @@ const logger = getLogger('ai-init');
 const DEFAULT_AI_AGENT_SCHEMA = {
   external_identifier: 'ai-sdk-schema',
   span_schemas: {
-    'ai:agent': { type: 'object', additionalProperties: true },
-    'ai:llm': { type: 'object', additionalProperties: true },
-    'ai:tool': { type: 'object', additionalProperties: true },
-    'ai:chain': { type: 'object', additionalProperties: true },
+    'ai-sdk:agent': { type: 'object', additionalProperties: true },
+    'ai-sdk:llm': { type: 'object', additionalProperties: true },
+    'ai-sdk:tool': { type: 'object', additionalProperties: true },
+    'ai-sdk:chain': { type: 'object', additionalProperties: true },
   },
 } as const;
 

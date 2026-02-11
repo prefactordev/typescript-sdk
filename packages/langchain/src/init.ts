@@ -28,8 +28,11 @@ const DEFAULT_LANGCHAIN_AGENT_SCHEMA = {
 let globalCore: CoreRuntime | null = null;
 let globalTracer: Tracer | null = null;
 let globalMiddleware: AgentMiddleware | null = null;
+let globalPrefactorMiddleware: PrefactorMiddleware | null = null;
 
 registerShutdownHandler('prefactor-langchain', () => {
+  globalPrefactorMiddleware?.shutdown();
+
   if (globalCore) {
     logger.info('Shutting down Prefactor SDK');
   }
@@ -37,6 +40,7 @@ registerShutdownHandler('prefactor-langchain', () => {
   globalCore = null;
   globalTracer = null;
   globalMiddleware = null;
+  globalPrefactorMiddleware = null;
 });
 
 export type ManualSpanOptions = {
@@ -174,6 +178,7 @@ export function init(config?: Partial<Config>): AgentMiddleware {
   });
 
   globalMiddleware = middleware;
+  globalPrefactorMiddleware = prefactorMiddleware;
   return middleware;
 }
 

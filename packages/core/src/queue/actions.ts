@@ -1,5 +1,5 @@
 import type { Span } from '../tracing/span.js';
-import type { AgentInstanceOptions } from '../transport/http.js';
+import type { AgentInstanceOptions, FinishSpanOptions } from '../transport/http.js';
 
 export type SchemaRegisterAction = {
   type: 'schema_register';
@@ -24,7 +24,7 @@ export type SpanFinishAction = {
   type: 'span_finish';
   spanId: string;
   endTime: number;
-};
+} & FinishSpanOptions;
 
 export type TransportAction =
   | SchemaRegisterAction
