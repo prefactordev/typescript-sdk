@@ -4,6 +4,7 @@ import { randomUUID } from 'crypto';
 import { createLogger } from './src/logger.js';
 import { createAgent, Agent, AgentConfig } from './src/agent.js';
 import { createSessionStateManager } from './src/session-state.js';
+import packageJson from './package.json' with { type: 'json' };
 
 // Zod schema for config validation
 const prefactorConfigSchema = z
@@ -36,7 +37,7 @@ export default function register (api: OpenClawPluginApi) {
         apiToken: config.apiKey,
         agentId: config.agentId,
         openclawVersion: api.version || 'unknown',
-        pluginVersion: '0.0.0',
+        pluginVersion: packageJson.version,
         userAgentVersion: config.agentVersion,
         maxRetries: 3,
         initialRetryDelay: 1000,
@@ -69,7 +70,7 @@ export default function register (api: OpenClawPluginApi) {
   logger.info('plugin_init_prefactor', {
     logLevel,
     agentInitialized,
-    version: '0.0.0',
+    version: packageJson.version,
   });
 
   // Initialize Session State Manager for hierarchical span tracking
