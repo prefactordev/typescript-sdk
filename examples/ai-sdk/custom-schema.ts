@@ -10,7 +10,7 @@
  */
 
 import { anthropic } from '@ai-sdk/anthropic';
-import { generateText, tool, wrapLanguageModel } from 'ai';
+import { generateText, stepCountIs, tool, wrapLanguageModel } from 'ai';
 import { init, shutdown, withSpan } from '@prefactor/ai';
 import { z } from 'zod';
 
@@ -98,8 +98,23 @@ const customSchema = {
       },
       additionalProperties: true,
     },
-    'custom:normalize-response': { type: 'object', additionalProperties: false },
-    'custom:build-summary': { type: 'object', additionalProperties: false },
+    'custom:normalize-response': {
+      type: 'object',
+      properties: {
+        result: { type: 'string' },
+      },
+      required: ['result'],
+      additionalProperties: false,
+    },
+    'custom:build-summary': {
+      type: 'object',
+      properties: {
+        preview: { type: 'string' },
+        wordCount: { type: 'number' },
+      },
+      required: ['preview', 'wordCount'],
+      additionalProperties: false,
+    },
   },
 };
 
@@ -155,22 +170,33 @@ async function main() {
   const result = await generateText({
     model,
     prompt:
-      'Use the get_today_date tool to get today\'s date, then respond with a short greeting including that date.',
+      'Use the get_today_date tool, then write a short daily standup update that includes the date and one practical engineering focus for today.',
     tools: {
       get_today_date: getTodayDateTool,
     },
-    toolChoice: 'required',
+    toolChoice: 'auto',
+    stopWhen: stepCountIs(2),
   });
+
+  const responseText = result.text.trim();
+  const toolDate = result.toolResults?.find(
+    (entry) => entry.toolName === 'get_today_date'
+  )?.output as string | undefined;
+
+  const resolvedResponse =
+    responseText.length > 0
+      ? responseText
+      : `Today is ${toolDate ?? 'an unknown date'}. Focus: review failing tests, fix the smallest root-cause issue first, and ship with confidence.`;
 
   const normalizedResponse = await withSpan(
     {
       name: 'custom:normalize_response',
       spanType: 'custom:normalize-response',
       inputs: {
-        rawLength: result.text.length,
+        rawLength: resolvedResponse.length,
       },
     },
-    async () => result.text.replace(/\s+/g, ' ').trim()
+    async () => resolvedResponse.replace(/\s+/g, ' ').trim()
   );
 
   const summary = await withSpan(

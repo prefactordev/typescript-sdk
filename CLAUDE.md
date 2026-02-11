@@ -134,7 +134,7 @@ In `http.ts` switch statement, queue item data is cast to specific types (`as Sp
 
 ## Dependencies
 
-Production: `@langchain/core` (^0.3.0), `zod` (^3.23.0)
+Production: `@langchain/core` (^0.3.0), `zod` (^4.0.0)
 Dev: `typescript` (^5.3.0), `@biomejs/biome` (2.3.11), `@types/node` (^20.0.0), `bun-types`
 
 ## Related Files

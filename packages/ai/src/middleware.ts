@@ -17,38 +17,18 @@ import {
   type TokenUsage,
   type Tracer,
 } from '@prefactor/core';
-import type { LanguageModelMiddleware, MiddlewareConfig, ToolCallInfo } from './types.js';
+import type { LanguageModelMiddleware, MiddlewareConfig } from './types.js';
 
-/** Root AGENT span for the middleware session. Created on first call, ended on shutdown. */
-let rootAgentSpan: Span | undefined;
 const AGENT_DEAD_TIMEOUT_MS = 5 * 60 * 1000;
 const toAiSpanType = createSpanTypePrefixer('ai-sdk');
+const WRAPPED_TOOL_EXECUTE = Symbol('prefactor-ai-wrapped-tool-execute');
 
-/**
- * Gets or creates the root AGENT span.
- * @internal
- */
-function getOrCreateRootAgentSpan(tracer: Tracer): Span {
-  if (!rootAgentSpan) {
-    rootAgentSpan = tracer.startSpan({
-      name: 'ai:agent',
-      spanType: toAiSpanType(SpanType.AGENT),
-      inputs: {},
-    });
-  }
-  return rootAgentSpan;
-}
-
-/**
- * Ends the root AGENT span. Called during shutdown.
- * @internal
- */
-export function endRootAgentSpan(tracer: Tracer): void {
-  if (rootAgentSpan) {
-    tracer.endSpan(rootAgentSpan, {});
-    rootAgentSpan = undefined;
-  }
-}
+type PromptToolResult = {
+  toolName: string;
+  toolCallId?: string;
+  input?: unknown;
+  output: unknown;
+};
 
 function toError(error: unknown): Error {
   return error instanceof Error ? error : new Error(String(error));
@@ -77,16 +57,9 @@ function runWithTimeout<T>(
 }
 
 function markAgentDead(
-  tracer: Tracer,
   agentManager: AgentInstanceManager | undefined,
-  agentLifecycle: { started: boolean },
-  error: Error
+  agentLifecycle: { started: boolean }
 ): void {
-  if (rootAgentSpan) {
-    tracer.endSpan(rootAgentSpan, { error });
-    rootAgentSpan = undefined;
-  }
-
   if (!agentManager || !agentLifecycle.started) {
     return;
   }
@@ -95,90 +68,215 @@ function markAgentDead(
   agentLifecycle.started = false;
 }
 
-/**
- * Extract tool calls from an AI SDK response.
- *
- * @param result - The generation result from AI SDK
- * @returns Array of tool call information
- * @internal
- */
-function extractToolCalls(
-  // biome-ignore lint/suspicious/noExplicitAny: AI SDK result structure is dynamic
-  result: any
-): ToolCallInfo[] {
-  const toolCalls: ToolCallInfo[] = [];
+function wrapToolExecute(
+  tracer: Tracer,
+  toolName: string,
+  // biome-ignore lint/suspicious/noExplicitAny: Tool execute signatures vary by provider/version
+  execute: (...args: any[]) => unknown
+  // biome-ignore lint/suspicious/noExplicitAny: Tool execute signatures vary by provider/version
+): (...args: any[]) => Promise<unknown> {
+  // biome-ignore lint/suspicious/noExplicitAny: Symbol metadata on function object
+  if ((execute as any)[WRAPPED_TOOL_EXECUTE]) {
+    return execute as (...args: any[]) => Promise<unknown>;
+  }
 
-  // Extract from result.toolCalls (direct property)
-  if (result.toolCalls && Array.isArray(result.toolCalls)) {
-    for (const tc of result.toolCalls) {
-      toolCalls.push({
-        toolName: tc.toolName ?? tc.name ?? 'unknown',
-        toolCallId: tc.toolCallId ?? tc.id ?? '',
-        input: tc.args ?? tc.input,
-        output: tc.output,
+  // biome-ignore lint/suspicious/noExplicitAny: Tool execute signatures vary by provider/version
+  const wrapped = async function wrappedExecute(this: unknown, ...args: any[]): Promise<unknown> {
+    const input = args[0] ?? {};
+    const span = tracer.startSpan({
+      name: 'ai:tool-call',
+      spanType: toAiSpanType(SpanType.TOOL),
+      inputs: {
+        'ai.tool.name': toolName,
+        toolName,
+        input,
+      },
+    });
+
+    try {
+      const output = await SpanContext.runAsync(span, () =>
+        Promise.resolve(execute.apply(this, args))
+      );
+      tracer.endSpan(span, { outputs: { output } });
+      return output;
+    } catch (error) {
+      const normalizedError = toError(error);
+      tracer.endSpan(span, { error: normalizedError });
+      throw error;
+    }
+  };
+
+  // biome-ignore lint/suspicious/noExplicitAny: Symbol metadata on function object
+  (wrapped as any)[WRAPPED_TOOL_EXECUTE] = true;
+  return wrapped;
+}
+
+// biome-ignore lint/suspicious/noExplicitAny: AI SDK call options are dynamic
+function wrapToolsInParams(params: any, tracer: Tracer): any {
+  if (!params?.tools || typeof params.tools !== 'object') {
+    return params;
+  }
+
+  if (Array.isArray(params.tools)) {
+    params.tools = params.tools.map((tool: unknown, index: number) => {
+      if (!tool || typeof tool !== 'object') {
+        return tool;
+      }
+
+      const typedTool = tool as {
+        name?: string;
+        execute?: (...args: any[]) => unknown;
+      };
+
+      if (typeof typedTool.execute !== 'function') {
+        return tool;
+      }
+
+      const toolName = typedTool.name ?? `tool_${index}`;
+      return {
+        ...typedTool,
+        execute: wrapToolExecute(tracer, toolName, typedTool.execute),
+      };
+    });
+    return params;
+  }
+
+  const tools = params.tools as Record<string, unknown>;
+  for (const [toolName, tool] of Object.entries(tools)) {
+    if (!tool || typeof tool !== 'object') {
+      continue;
+    }
+
+    const typedTool = tool as {
+      execute?: (...args: any[]) => unknown;
+    };
+
+    if (typeof typedTool.execute !== 'function') {
+      continue;
+    }
+
+    tools[toolName] = {
+      ...typedTool,
+      execute: wrapToolExecute(tracer, toolName, typedTool.execute),
+    };
+  }
+
+  return params;
+}
+
+// biome-ignore lint/suspicious/noExplicitAny: AI SDK call options are dynamic
+function hasExecutableToolsInParams(params: any): boolean {
+  if (Array.isArray(params?.tools)) {
+    return params.tools.some(
+      (tool: unknown) =>
+        typeof tool === 'object' &&
+        tool !== null &&
+        typeof (tool as { execute?: unknown }).execute === 'function'
+    );
+  }
+
+  if (params?.tools && typeof params.tools === 'object') {
+    return Object.values(params.tools as Record<string, unknown>).some(
+      (tool: unknown) =>
+        typeof tool === 'object' &&
+        tool !== null &&
+        typeof (tool as { execute?: unknown }).execute === 'function'
+    );
+  }
+
+  return false;
+}
+
+function normalizeToolResultOutput(output: unknown): unknown {
+  if (
+    typeof output === 'object' &&
+    output !== null &&
+    (output as { type?: unknown }).type === 'text' &&
+    typeof (output as { value?: unknown }).value === 'string'
+  ) {
+    return (output as { value: string }).value;
+  }
+
+  return output;
+}
+
+// biome-ignore lint/suspicious/noExplicitAny: AI SDK prompt/message structures are dynamic
+function extractPromptToolResults(params: any): PromptToolResult[] {
+  const prompt = Array.isArray(params?.prompt) ? params.prompt : [];
+  const toolCallInputs = new Map<string, unknown>();
+  const results: PromptToolResult[] = [];
+
+  for (const message of prompt) {
+    const content = Array.isArray(message?.content) ? message.content : [];
+
+    if (message?.role === 'assistant') {
+      for (const part of content) {
+        if (
+          (part?.type === 'tool-call' || part?.type === 'tool') &&
+          typeof part?.toolCallId === 'string'
+        ) {
+          toolCallInputs.set(part.toolCallId, part.input ?? part.args);
+        }
+      }
+      continue;
+    }
+
+    if (message?.role !== 'tool') {
+      continue;
+    }
+
+    for (const part of content) {
+      if (part?.type !== 'tool-result') {
+        continue;
+      }
+
+      const toolCallId = typeof part.toolCallId === 'string' ? part.toolCallId : undefined;
+      results.push({
+        toolName: part.toolName ?? 'unknown',
+        toolCallId,
+        input: toolCallId ? toolCallInputs.get(toolCallId) : undefined,
+        output: part.output,
       });
     }
   }
 
-  // Extract from result.content (array format)
-  if (result.content && Array.isArray(result.content)) {
-    for (const part of result.content) {
-      if (part?.type === 'tool-call' || part?.type === 'tool') {
-        toolCalls.push({
-          toolName: part.toolName ?? part.name ?? 'unknown',
-          toolCallId: part.toolCallId ?? part.id ?? '',
-          input: part.args ?? part.input,
-        });
-      }
-    }
-  }
-
-  return toolCalls;
+  return results;
 }
 
-/**
- * Extract tool results from an AI SDK response.
- *
- * @param result - The generation result from AI SDK
- * @returns Map of tool call ID to tool output
- * @internal
- */
-function extractToolResults(
-  // biome-ignore lint/suspicious/noExplicitAny: AI SDK result structure is dynamic
-  result: any
-): Map<string, unknown> {
-  const toolResults = new Map<string, unknown>();
-
-  // Extract from result.content (array format with tool-result)
-  if (result.content && Array.isArray(result.content)) {
-    for (const part of result.content) {
-      if (part?.type === 'tool-result') {
-        toolResults.set(part.toolCallId ?? '', part.output);
-      }
-    }
+function emitToolResultSpansFromPrompt(
+  tracer: Tracer,
+  span: Span,
+  toolResults: PromptToolResult[],
+  seenToolCallIds: Set<string>
+): void {
+  if (toolResults.length === 0) {
+    return;
   }
 
-  return toolResults;
-}
+  SpanContext.run(span, () => {
+    for (const toolResult of toolResults) {
+      if (toolResult.toolCallId) {
+        if (seenToolCallIds.has(toolResult.toolCallId)) {
+          continue;
+        }
+        seenToolCallIds.add(toolResult.toolCallId);
+      }
 
-/**
- * Create a TOOL span for a tool call.
- *
- * @param tracer - The tracer instance
- * @param toolCall - The tool call information
- * @returns The created span
- * @internal
- */
-function createToolSpan(tracer: Tracer, toolCall: ToolCallInfo): Span {
-  return tracer.startSpan({
-    name: 'ai:tool-call',
-    spanType: toAiSpanType(SpanType.TOOL),
-    inputs: {
-      'ai.tool.name': toolCall.toolName,
-      toolName: toolCall.toolName,
-      toolCallId: toolCall.toolCallId,
-      input: toolCall.input,
-    },
+      const toolSpan = tracer.startSpan({
+        name: 'ai:tool-call',
+        spanType: toAiSpanType(SpanType.TOOL),
+        inputs: {
+          'ai.tool.name': toolResult.toolName,
+          toolName: toolResult.toolName,
+          ...(toolResult.toolCallId ? { toolCallId: toolResult.toolCallId } : {}),
+          ...(toolResult.input !== undefined ? { input: toolResult.input } : {}),
+        },
+      });
+
+      tracer.endSpan(toolSpan, {
+        outputs: { output: normalizeToolResultOutput(toolResult.output) },
+      });
+    }
   });
 }
 
@@ -434,15 +532,27 @@ export function createPrefactorMiddleware(
 
   return {
     specificationVersion: 'v3',
+    transformParams: async ({ params }) =>
+      config?.captureTools === false ? params : wrapToolsInParams(params, tracer),
     /**
      * Wraps non-streaming generation calls.
      */
     wrapGenerate: async ({ doGenerate, params, model }) => {
       ensureAgentInstanceStarted();
 
-      // Use existing context or fall back to root AGENT span
-      const parentSpan = SpanContext.getCurrent() ?? getOrCreateRootAgentSpan(tracer);
+      // Use existing context when available; otherwise the LLM span becomes root
+      const parentSpan = SpanContext.getCurrent();
       const span = createLlmSpan(tracer, model, params, config, parentSpan);
+      const seenToolCallIds = new Set<string>();
+
+      if (config?.captureTools !== false && !hasExecutableToolsInParams(params)) {
+        emitToolResultSpansFromPrompt(
+          tracer,
+          span,
+          extractPromptToolResults(params),
+          seenToolCallIds
+        );
+      }
 
       try {
         // Execute the generation within the LLM span context
@@ -451,23 +561,6 @@ export function createPrefactorMiddleware(
           deadTimeoutMs,
           'Agent did not respond within timeout duration and was marked as failed.'
         );
-
-        // Extract and instrument tool calls
-        if (config?.captureTools !== false) {
-          const toolCalls = extractToolCalls(result);
-          const toolResults = extractToolResults(result);
-
-          SpanContext.run(span, () => {
-            for (const toolCall of toolCalls) {
-              const toolSpan = createToolSpan(tracer, toolCall);
-
-              const output = toolResults.get(toolCall.toolCallId);
-              tracer.endSpan(toolSpan, {
-                outputs: output !== undefined ? { output } : undefined,
-              });
-            }
-          });
-        }
 
         // End the span with outputs
         tracer.endSpan(span, {
@@ -480,7 +573,7 @@ export function createPrefactorMiddleware(
         // End the span with error
         const normalizedError = toError(error);
         tracer.endSpan(span, { error: normalizedError });
-        markAgentDead(tracer, agentManager, agentLifecycle, normalizedError);
+        markAgentDead(agentManager, agentLifecycle);
         throw error;
       }
     },
@@ -491,9 +584,19 @@ export function createPrefactorMiddleware(
     wrapStream: async ({ doStream, params, model }) => {
       ensureAgentInstanceStarted();
 
-      // Use existing context or fall back to root AGENT span
-      const parentSpan = SpanContext.getCurrent() ?? getOrCreateRootAgentSpan(tracer);
+      // Use existing context when available; otherwise the LLM span becomes root
+      const parentSpan = SpanContext.getCurrent();
       const span = createLlmSpan(tracer, model, params, config, parentSpan);
+      const seenToolCallIds = new Set<string>();
+
+      if (config?.captureTools !== false && !hasExecutableToolsInParams(params)) {
+        emitToolResultSpansFromPrompt(
+          tracer,
+          span,
+          extractPromptToolResults(params),
+          seenToolCallIds
+        );
+      }
 
       try {
         // Execute the stream within the span context
@@ -514,7 +617,7 @@ export function createPrefactorMiddleware(
         // End the span with error
         const normalizedError = toError(error);
         tracer.endSpan(span, { error: normalizedError });
-        markAgentDead(tracer, agentManager, agentLifecycle, normalizedError);
+        markAgentDead(agentManager, agentLifecycle);
         throw error;
       }
     },
@@ -544,7 +647,6 @@ function wrapStreamForCompletion(
   let usage: TokenUsage | undefined;
   // biome-ignore lint/suspicious/noExplicitAny: Collecting stream chunks
   const textChunks: any[] = [];
-  const toolCalls: ToolCallInfo[] = [];
 
   return new ReadableStream({
     async pull(controller) {
@@ -561,17 +663,6 @@ function wrapStreamForCompletion(
 
           if (config?.captureContent !== false && textChunks.length > 0) {
             outputs['ai.response.text'] = textChunks.join('');
-          }
-
-          // Instrument tool calls
-          if (config?.captureTools !== false && toolCalls.length > 0) {
-            SpanContext.run(span, () => {
-              for (const toolCall of toolCalls) {
-                const toolSpan = createToolSpan(tracer, toolCall);
-                // Tool output is not available in streaming mode
-                tracer.endSpan(toolSpan, {});
-              }
-            });
           }
 
           tracer.endSpan(span, {
@@ -592,15 +683,6 @@ function wrapStreamForCompletion(
             if (delta) {
               textChunks.push(delta);
             }
-          }
-
-          // Capture tool calls
-          if (part.type === 'tool-call' || part.type === 'tool') {
-            toolCalls.push({
-              toolName: part.toolName ?? part.name ?? 'unknown',
-              toolCallId: part.toolCallId ?? part.id ?? '',
-              input: part.args ?? part.input,
-            });
           }
 
           // Capture finish reason
