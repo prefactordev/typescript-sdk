@@ -56,7 +56,12 @@ describe('ai init schema registration', () => {
     expect(registeredSchemas).toHaveLength(1);
     expect(registeredSchemas[0]).toMatchObject({
       external_identifier: 'ai-sdk-schema',
-      span_schemas: expect.any(Object),
+      span_schemas: {
+        'ai-sdk:agent': { type: 'object', additionalProperties: true },
+        'ai-sdk:llm': { type: 'object', additionalProperties: true },
+        'ai-sdk:tool': { type: 'object', additionalProperties: true },
+        'ai-sdk:chain': { type: 'object', additionalProperties: true },
+      },
     });
   });
 

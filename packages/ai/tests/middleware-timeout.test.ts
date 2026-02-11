@@ -71,7 +71,7 @@ describe('middleware timeout handling', () => {
     expect(result).toBe('rejected');
     expect(finished).toBe(true);
     expect(ended).toHaveLength(2);
-    expect(startedSpanTypes).toContain('ai:agent');
-    expect(startedSpanTypes).toContain('ai:llm');
+    expect(startedSpanTypes).toContain('ai-sdk:agent');
+    expect(startedSpanTypes).toContain('ai-sdk:llm');
   });
 });
