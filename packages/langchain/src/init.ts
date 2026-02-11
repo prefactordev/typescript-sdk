@@ -23,6 +23,12 @@ const DEFAULT_LANGCHAIN_AGENT_SCHEMA = {
     'langchain:tool': { type: 'object', additionalProperties: true },
     'langchain:chain': { type: 'object', additionalProperties: true },
   },
+  span_result_schemas: {
+    'langchain:agent': { type: 'object', additionalProperties: true },
+    'langchain:llm': { type: 'object', additionalProperties: true },
+    'langchain:tool': { type: 'object', additionalProperties: true },
+    'langchain:chain': { type: 'object', additionalProperties: true },
+  },
 } as const;
 
 let globalCore: CoreRuntime | null = null;

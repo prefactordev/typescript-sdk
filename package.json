@@ -10,7 +10,8 @@
     "lint": "biome check .",
     "format": "biome format --write .",
     "example:langchain": "bun examples/anthropic-agent/simple-agent.ts",
-    "example:ai": "bun examples/ai-sdk/simple-agent.ts"
+    "example:ai": "bun examples/ai-sdk/simple-agent.ts",
+    "example:ai-schema": "bun examples/ai-sdk/custom-schema.ts"
   },
   "devDependencies": {
     "@ai-sdk/anthropic": "^3.0.18",

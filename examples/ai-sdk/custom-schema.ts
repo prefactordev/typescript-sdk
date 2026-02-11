@@ -1,7 +1,8 @@
 /**
  * Vercel AI SDK Example with a custom Prefactor schema
  *
- * This example demonstrates passing a custom schema to Prefactor via httpConfig.agentSchema.
+ * This example demonstrates passing a custom input/result schema to Prefactor
+ * via httpConfig.agentSchema.
  *
  * Prerequisites:
  * - ANTHROPIC_API_KEY environment variable set
@@ -9,34 +10,96 @@
  */
 
 import { anthropic } from '@ai-sdk/anthropic';
-import { generateText, wrapLanguageModel } from 'ai';
+import { generateText, tool, wrapLanguageModel } from 'ai';
 import { init, shutdown, withSpan } from '@prefactor/ai';
+import { z } from 'zod';
 
 const customSchema = {
-  external_identifier: 'ai-sdk-example-2026-01-28',
+  external_identifier: 'ai-sdk-example-2026-02-11',
   span_schemas: {
-    agent: {
+    'ai-sdk:agent': {
       type: 'object',
       properties: {
-        workflowId: { type: 'string' },
-        type: { type: 'string', const: 'agent' },
+        name: { type: 'string' },
+        status: { type: 'string' },
+        inputs: { type: 'object' },
       },
+      additionalProperties: true,
     },
-    llm: {
+    'ai-sdk:llm': {
       type: 'object',
       properties: {
-        'ai.model.id': { type: 'string' },
-        'ai.model.provider': { type: 'string' },
-        'ai.finishReason': { type: 'string' },
-        type: { type: 'string', const: 'llm' },
+        inputs: {
+          type: 'object',
+          properties: {
+            'ai.model.id': { type: 'string' },
+            'ai.model.provider': { type: 'string' },
+          },
+          additionalProperties: true,
+        },
       },
+      additionalProperties: true,
     },
-    tool: {
+    'ai-sdk:tool': {
       type: 'object',
       properties: {
-        type: { type: 'string', const: 'tool' },
+        inputs: {
+          type: 'object',
+          properties: {
+            toolName: { type: 'string' },
+          },
+          additionalProperties: true,
+        },
       },
+      additionalProperties: true,
     },
+    'custom:normalize-response': {
+      type: 'object',
+      properties: {
+        inputs: {
+          type: 'object',
+          properties: {
+            rawLength: { type: 'number' },
+          },
+          required: ['rawLength'],
+          additionalProperties: true,
+        },
+      },
+      additionalProperties: true,
+    },
+    'custom:build-summary': {
+      type: 'object',
+      properties: {
+        inputs: {
+          type: 'object',
+          properties: {
+            normalizedLength: { type: 'number' },
+          },
+          required: ['normalizedLength'],
+          additionalProperties: true,
+        },
+      },
+      additionalProperties: true,
+    },
+  },
+  span_result_schemas: {
+    'ai-sdk:agent': { type: 'object', additionalProperties: false },
+    'ai-sdk:llm': {
+      type: 'object',
+      properties: {
+        'ai.response.text': { type: 'string' },
+      },
+      additionalProperties: true,
+    },
+    'ai-sdk:tool': {
+      type: 'object',
+      properties: {
+        output: { type: 'string' },
+      },
+      additionalProperties: true,
+    },
+    'custom:normalize-response': { type: 'object', additionalProperties: false },
+    'custom:build-summary': { type: 'object', additionalProperties: false },
   },
 };
 
@@ -83,24 +146,52 @@ async function main() {
     middleware,
   });
 
-  const result = await generateText({
-    model,
-    prompt: 'Say hello and include today\'s date.',
+  const getTodayDateTool = tool({
+    description: 'Get today\'s date in YYYY-MM-DD format.',
+    inputSchema: z.object({}),
+    execute: async () => new Date().toISOString().slice(0, 10),
   });
 
-  const formattedResponse = await withSpan(
+  const result = await generateText({
+    model,
+    prompt:
+      'Use the get_today_date tool to get today\'s date, then respond with a short greeting including that date.',
+    tools: {
+      get_today_date: getTodayDateTool,
+    },
+    toolChoice: 'required',
+  });
+
+  const normalizedResponse = await withSpan(
     {
-      name: 'custom:format_response',
-      spanType: 'custom:response-processing',
+      name: 'custom:normalize_response',
+      spanType: 'custom:normalize-response',
       inputs: {
-        responseLength: result.text.length,
+        rawLength: result.text.length,
       },
     },
-    async () => result.text.trim()
+    async () => result.text.replace(/\s+/g, ' ').trim()
+  );
+
+  const summary = await withSpan(
+    {
+      name: 'custom:build_summary',
+      spanType: 'custom:build-summary',
+      inputs: {
+        normalizedLength: normalizedResponse.length,
+      },
+    },
+    async () => ({
+      preview: normalizedResponse.slice(0, 80),
+      wordCount: normalizedResponse.split(/\s+/).filter(Boolean).length,
+    })
   );
 
   console.log('Agent Response:');
-  console.log(formattedResponse);
+  console.log(normalizedResponse);
+  console.log();
+  console.log('Summary:');
+  console.log(summary);
   console.log();
 
   await shutdown();

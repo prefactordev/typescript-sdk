@@ -62,6 +62,12 @@ describe('ai init schema registration', () => {
         'ai-sdk:tool': { type: 'object', additionalProperties: true },
         'ai-sdk:chain': { type: 'object', additionalProperties: true },
       },
+      span_result_schemas: {
+        'ai-sdk:agent': { type: 'object', additionalProperties: true },
+        'ai-sdk:llm': { type: 'object', additionalProperties: true },
+        'ai-sdk:tool': { type: 'object', additionalProperties: true },
+        'ai-sdk:chain': { type: 'object', additionalProperties: true },
+      },
     });
   });
 
