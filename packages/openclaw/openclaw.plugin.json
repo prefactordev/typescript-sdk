@@ -30,10 +30,6 @@
         "enum": ["debug", "info", "warn", "error"],
         "default": "info"
       },
-      "enableMetrics": {
-        "type": "boolean",
-        "default": true
-      },
       "userInteractionTimeoutMinutes": {
         "type": "number",
         "description": "Timeout for user interaction spans in minutes (default: 5)",
@@ -72,9 +68,6 @@
     "logLevel": {
       "label": "Log Level",
       "placeholder": "info"
-    },
-    "enableMetrics": {
-      "label": "Enable Metrics Collection"
     },
     "userInteractionTimeoutMinutes": {
       "label": "User Interaction Timeout (minutes)"

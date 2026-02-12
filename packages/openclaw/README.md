@@ -11,7 +11,7 @@ Enable the plugin in `~/.openclaw/.openclaw.json`:
   "plugins": {
     "entries": {
       "prefactor": {
-        "enabled": false,
+        "enabled": true,
         "config": {
           "agentId": "$PREFACTOR_AGENT_ID",
           "apiKey": "$PREFACTOR_API_KEY",
@@ -42,13 +42,15 @@ openclaw plugins info prefactor
 openclaw plugins enable prefactor
 openclaw plugins disable prefactor
 
-# Uninstall
-openclaw plugins uninstall @prefactor/openclaw
+# Configuration
+openclaw config set plugins.entries.prefactor.config.agentId "<your_agent_id>"
+openclaw config set plugins.entries.prefactor.config.apiKey "<your_api_key>"
+openclaw config set plugins.entries.prefactor.config.apiUrl "<prefacor_api_url>"
 ```
 
 ## Overview
 
-This plugin provides lifecycle event monitoring and instrumentation for Prefactor SDK within OpenClaw environments. It automatically traces agent operations and sends telemetry to your Prefactor backend.
+This plugin provides lifecycle event monitoring and instrumentation for OpenClaw agents. It automatically collects agent runtime operations and sends them to Prefactor.
 
 
 ## License
