@@ -30,7 +30,7 @@ This file guides coding agents working in this repo.
 - Do not add optional, speculative, or future-use code, APIs, schemas, configs, or examples unless explicitly requested.
 
 ## Toolchain
-- Runtime: Node >= 24 (see `package.json`), dev uses Bun.
+- Runtime: Node >= 22 (see `package.json`), dev uses Bun.
 - Install toolchain: `mise install`.
 - Install deps: `mise run install` or `bun install`.
 - Prefer `mise run` commands; they wrap the canonical Bun commands.

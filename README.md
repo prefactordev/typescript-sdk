@@ -354,7 +354,7 @@ The SDK consists of five main layers:
 
 ## Requirements
 
-- Node.js >= 24.0.0
+- Node.js >= 22.0.0
 - TypeScript >= 5.0.0 (for TypeScript projects)
 - Bun >= 1.0.0 (optional, for development)
 - LangChain.js >= 1.0.0 (peer dependency for `@prefactor/langchain`)

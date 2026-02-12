@@ -227,7 +227,7 @@ enum SpanStatus {
 
 ## Requirements
 
-- Node.js >= 24.0.0
+- Node.js >= 22.0.0
 
 ## License
 
