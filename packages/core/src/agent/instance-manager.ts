@@ -1,11 +1,15 @@
 import type { AgentInstanceOptions, Transport } from '../transport/http.js';
 
 export type AgentInstanceManagerOptions = {
+  /** Allows starting instances before a schema has been registered. */
   allowUnregisteredSchema?: boolean;
 };
 
 type AgentInstanceStartOptions = AgentInstanceOptions;
 
+/**
+ * Coordinates agent instance lifecycle and schema registration for a transport.
+ */
 export class AgentInstanceManager {
   private registeredSchema: Record<string, unknown> | null = null;
 

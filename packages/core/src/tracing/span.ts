@@ -8,8 +8,17 @@ export const SpanType = {
   CHAIN: 'chain',
 } as const;
 
+/**
+ * String union of built-in span types plus custom provider-prefixed values.
+ */
 export type SpanType = (typeof SpanType)[keyof typeof SpanType] | string;
 
+/**
+ * Creates a helper that prefixes span types with a package/provider namespace.
+ *
+ * @param namespace - Namespace to prepend, such as `langchain`.
+ * @returns Function that produces `${namespace}:${spanType}`.
+ */
 export function createSpanTypePrefixer(namespace: string): (spanType: string) => string {
   return (spanType: string) => `${namespace}:${spanType}`;
 }

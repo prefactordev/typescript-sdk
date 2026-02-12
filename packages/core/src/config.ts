@@ -29,7 +29,7 @@ export const HttpTransportConfigSchema = z.object({
   agentDescription: z.string().optional(),
 
   /** Optional agent schema for validation (full schema object) */
-  agentSchema: z.record(z.unknown()).optional(),
+  agentSchema: z.record(z.string(), z.unknown()).optional(),
 
   /** Request timeout in milliseconds */
   requestTimeout: z.number().positive().default(30000),
@@ -62,7 +62,7 @@ export const PartialHttpConfigSchema = z.object({
   agentIdentifier: z.string().optional(),
   agentName: z.string().optional(),
   agentDescription: z.string().optional(),
-  agentSchema: z.record(z.unknown()).optional(),
+  agentSchema: z.record(z.string(), z.unknown()).optional(),
   requestTimeout: z.number().positive().optional(),
   maxRetries: z.number().int().nonnegative().optional(),
   initialRetryDelay: z.number().positive().optional(),
