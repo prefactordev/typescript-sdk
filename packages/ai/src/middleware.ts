@@ -125,7 +125,7 @@ function wrapToolsInParams(params: any, tracer: Tracer): any {
 
       const typedTool = tool as {
         name?: string;
-        execute?: (...args: any[]) => unknown;
+        execute?: (...args: unknown[]) => unknown;
       };
 
       if (typeof typedTool.execute !== 'function') {
@@ -148,7 +148,7 @@ function wrapToolsInParams(params: any, tracer: Tracer): any {
     }
 
     const typedTool = tool as {
-      execute?: (...args: any[]) => unknown;
+      execute?: (...args: unknown[]) => unknown;
     };
 
     if (typeof typedTool.execute !== 'function') {
