@@ -89,6 +89,11 @@ await SpanContext.runAsync(span, async () => {
 
 ## Code Patterns and Conventions
 
+### Core Philosophy
+- Implement only the minimum behavior required for current requirements.
+- Prefer a direct 1:1 mapping between requirements and implementation.
+- Do not add optional, speculative, or future-use abstractions unless explicitly requested.
+
 ### Type Safety
 - Use `unknown` instead of `any` where possible
 - LangChain integration layer legitimately uses `any` types (with `// biome-ignore` comments) because LangChain request/response structures are dynamic and vary by provider
