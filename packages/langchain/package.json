@@ -1,6 +1,6 @@
 {
   "name": "@prefactor/langchain",
-  "version": "0.2.6",
+  "version": "0.2.7",
   "description": "LangChain.js integration for Prefactor observability",
   "type": "module",
   "main": "dist/index.cjs",

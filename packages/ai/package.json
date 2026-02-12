@@ -1,6 +1,6 @@
 {
   "name": "@prefactor/ai",
-  "version": "0.2.6",
+  "version": "0.2.7",
   "description": "Vercel AI SDK middleware integration for Prefactor observability",
   "type": "module",
   "main": "dist/index.cjs",
