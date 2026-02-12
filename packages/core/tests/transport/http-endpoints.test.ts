@@ -98,7 +98,10 @@ describe('HTTP endpoint clients', () => {
       },
     });
 
-    await client.finish('backend-span-1', '2026-02-09T00:00:01.000Z');
+    await client.finish('backend-span-1', '2026-02-09T00:00:01.000Z', {
+      status: 'complete',
+      result_payload: { text: 'world' },
+    });
 
     expect(calls).toEqual([
       {
@@ -132,7 +135,11 @@ describe('HTTP endpoint clients', () => {
         path: '/api/v1/agent_spans/backend-span-1/finish',
         options: {
           method: 'POST',
-          body: { timestamp: '2026-02-09T00:00:01.000Z' },
+          body: {
+            timestamp: '2026-02-09T00:00:01.000Z',
+            status: 'complete',
+            result_payload: { text: 'world' },
+          },
         },
       },
     ]);

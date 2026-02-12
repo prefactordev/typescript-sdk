@@ -12,8 +12,8 @@
 
 import { createAgent, tool } from 'langchain';
 import { z } from 'zod';
-import { init, withSpan } from '@prefactor/langchain';
-import { shutdown } from '@prefactor/core';
+import { init } from '@prefactor/langchain';
+import { shutdown, withSpan } from '@prefactor/core';
 
 // Define simple tools for the agent
 const calculatorTool = tool(

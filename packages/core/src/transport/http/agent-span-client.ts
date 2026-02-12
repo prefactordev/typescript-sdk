@@ -2,12 +2,20 @@ import { HttpClientError, type HttpRequester } from './http-client.js';
 
 export type AgentSpanStatus = 'active' | 'complete' | 'failed';
 
+export type AgentSpanFinishStatus = 'complete' | 'failed' | 'cancelled';
+
+export type AgentSpanFinishOptions = {
+  status?: AgentSpanFinishStatus;
+  result_payload?: Record<string, unknown>;
+};
+
 export type AgentSpanCreatePayload = {
   details: {
     agent_instance_id: string | null;
     schema_name: string;
     status: AgentSpanStatus;
     payload: Record<string, unknown>;
+    result_payload?: Record<string, unknown>;
     parent_span_id: string | null;
     started_at: string;
     finished_at: string | null;
@@ -20,11 +28,6 @@ export type AgentSpanResponse = {
     id?: string;
     started_at?: string;
   };
-};
-
-export type AgentSpanFinishOptions = {
-  status?: 'complete' | 'failed' | 'cancelled';
-  idempotency_key?: string;
 };
 
 export class AgentSpanClient {
@@ -40,12 +43,15 @@ export class AgentSpanClient {
   async finish(
     spanId: string,
     timestamp: string,
-    options?: AgentSpanFinishOptions
-  ): Promise<AgentSpanResponse> {
+    options: AgentSpanFinishOptions = {}
+  ): Promise<void> {
     try {
-      return await this.httpClient.request(`/api/v1/agent_spans/${spanId}/finish`, {
+      await this.httpClient.request(`/api/v1/agent_spans/${spanId}/finish`, {
         method: 'POST',
-        body: { timestamp, ...options },
+        body: {
+          timestamp,
+          ...options,
+        },
       });
     } catch (error) {
       if (
@@ -53,7 +59,7 @@ export class AgentSpanClient {
         error.status === 409 &&
         isAlreadyFinishedError(error.responseBody)
       ) {
-        return {};
+        return;
       }
 
       throw error;

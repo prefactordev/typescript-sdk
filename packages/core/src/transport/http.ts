@@ -2,12 +2,14 @@ import type { HttpTransportConfig } from '../config.js';
 import type { TransportAction } from '../queue/actions.js';
 import { InMemoryQueue } from '../queue/in-memory-queue.js';
 import { TaskExecutor } from '../queue/task-executor.js';
+import { buildSpanResultPayload } from '../tracing/result-payload.js';
 import type { Span } from '../tracing/span.js';
 import { getLogger } from '../utils/logging.js';
 import { AgentInstanceClient } from './http/agent-instance-client.js';
 import {
   AgentSpanClient,
   type AgentSpanCreatePayload,
+  type AgentSpanFinishStatus,
   type AgentSpanStatus,
 } from './http/agent-span-client.js';
 import { HttpClient } from './http/http-client.js';
@@ -22,7 +24,7 @@ export type AgentInstanceOptions = {
 export interface Transport {
   emit(span: Span): void;
 
-  finishSpan(spanId: string, endTime: number): void;
+  finishSpan(spanId: string, endTime: number, options?: FinishSpanOptions): void;
 
   startAgentInstance(options?: AgentInstanceOptions): void;
 
@@ -32,6 +34,15 @@ export interface Transport {
 
   close(): void | Promise<void>;
 }
+
+export type FinishSpanOptions = {
+  status?: AgentSpanFinishStatus;
+  resultPayload?: Record<string, unknown>;
+};
+
+type PendingFinish = {
+  endTime: number;
+} & FinishSpanOptions;
 
 const logger = getLogger('http-transport');
 
@@ -46,7 +57,7 @@ export class HttpTransport implements Transport {
   private previousAgentIdentifier: string | null = null;
   private agentInstanceId: string | null = null;
   private spanIdMap = new Map<string, string>();
-  private pendingFinishes = new Map<string, number>();
+  private pendingFinishes = new Map<string, PendingFinish>();
   private pendingChildren = new Map<string, Span[]>();
 
   constructor(private config: HttpTransportConfig) {
@@ -78,8 +89,14 @@ export class HttpTransport implements Transport {
     this.enqueue({ type: 'span_end', span });
   }
 
-  finishSpan(spanId: string, endTime: number): void {
-    this.enqueue({ type: 'span_finish', spanId, endTime });
+  finishSpan(spanId: string, endTime: number, options?: FinishSpanOptions): void {
+    this.enqueue({
+      type: 'span_finish',
+      spanId,
+      endTime,
+      status: options?.status,
+      resultPayload: options?.resultPayload,
+    });
   }
 
   async close(): Promise<void> {
@@ -167,12 +184,17 @@ export class HttpTransport implements Transport {
         await this.sendSpan(action.span);
         return;
       case 'span_finish': {
-        const backendSpanId = this.spanIdMap.get(action.spanId);
-        if (backendSpanId) {
-          const timestamp = new Date(action.endTime).toISOString();
-          await this.finishSpanHttp({ spanId: action.spanId, timestamp });
+        if (this.spanIdMap.has(action.spanId)) {
+          await this.finishSpanHttp(action.spanId, action.endTime, {
+            status: action.status,
+            resultPayload: action.resultPayload,
+          });
         } else {
-          this.pendingFinishes.set(action.spanId, action.endTime);
+          this.pendingFinishes.set(action.spanId, {
+            endTime: action.endTime,
+            status: action.status,
+            resultPayload: action.resultPayload,
+          });
         }
         return;
       }
@@ -180,18 +202,16 @@ export class HttpTransport implements Transport {
   };
 
   private async processPendingFinishes(spanId: string): Promise<void> {
-    if (!this.pendingFinishes.has(spanId)) {
-      return;
-    }
-
-    const pendingEndTime = this.pendingFinishes.get(spanId);
-    if (pendingEndTime === undefined) {
+    const pendingFinish = this.pendingFinishes.get(spanId);
+    if (pendingFinish === undefined) {
       return;
     }
 
     try {
-      const timestamp = new Date(pendingEndTime).toISOString();
-      await this.finishSpanHttp({ spanId, timestamp });
+      await this.finishSpanHttp(spanId, pendingFinish.endTime, {
+        status: pendingFinish.status,
+        resultPayload: pendingFinish.resultPayload,
+      });
       this.pendingFinishes.delete(spanId);
     } catch (error) {
       logger.error('Error processing pending span finish:', error);
@@ -238,6 +258,7 @@ export class HttpTransport implements Transport {
     const startedAt = new Date(span.startTime).toISOString();
     const finishedAt = span.endTime ? new Date(span.endTime).toISOString() : null;
     const apiStatus = this.mapStatusForApi(span.status);
+    const resultPayload = apiStatus === 'active' ? undefined : buildSpanResultPayload(span);
 
     const payload: Record<string, unknown> = {
       span_id: span.spanId,
@@ -275,6 +296,7 @@ export class HttpTransport implements Transport {
         schema_name: span.spanType,
         status: apiStatus,
         payload,
+        result_payload: resultPayload,
         parent_span_id: parentSpanId,
         started_at: startedAt,
         finished_at: finishedAt,
@@ -354,15 +376,22 @@ export class HttpTransport implements Transport {
     this.agentInstanceId = null;
   }
 
-  private async finishSpanHttp(data: { spanId: string; timestamp: string }): Promise<void> {
-    const backendSpanId = this.spanIdMap.get(data.spanId);
+  private async finishSpanHttp(
+    spanId: string,
+    endTime: number,
+    options?: FinishSpanOptions
+  ): Promise<void> {
+    const backendSpanId = this.spanIdMap.get(spanId);
     if (!backendSpanId) {
-      logger.warn(`Cannot finish span ${data.spanId}: backend ID not found`);
+      logger.warn(`Cannot finish span ${spanId}: backend ID not found`);
       return;
     }
 
     try {
-      await this.agentSpanClient.finish(backendSpanId, data.timestamp);
+      await this.agentSpanClient.finish(backendSpanId, new Date(endTime).toISOString(), {
+        status: options?.status,
+        result_payload: options?.resultPayload ?? {},
+      });
     } catch (error) {
       logger.error('Error finishing span:', error);
     }

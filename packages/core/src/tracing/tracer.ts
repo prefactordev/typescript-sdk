@@ -1,6 +1,7 @@
 import { generate, generatePartition, type Partition } from '@prefactor/pfid';
 import type { Transport } from '../transport/http.js';
 import { SpanContext } from './context.js';
+import { buildSpanResultPayload } from './result-payload.js';
 import type { Span, TokenUsage } from './span.js';
 import { SpanStatus, SpanType } from './span.js';
 
@@ -145,7 +146,12 @@ export class Tracer {
       // AGENT spans use finishSpan API (they were already emitted on start)
       // Other span types are emitted here
       if (span.spanType === SpanType.AGENT) {
-        this.transport.finishSpan(span.spanId, endTime);
+        const status = span.status === SpanStatus.ERROR ? 'failed' : 'complete';
+
+        this.transport.finishSpan(span.spanId, endTime, {
+          status,
+          resultPayload: buildSpanResultPayload(span),
+        });
       } else {
         this.transport.emit(span);
       }

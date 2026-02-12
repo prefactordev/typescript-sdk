@@ -96,7 +96,10 @@ describe('HttpTransport', () => {
       metadata: {},
     };
 
-    transport.finishSpan('span-1', endTime);
+    transport.finishSpan('span-1', endTime, {
+      status: 'complete',
+      resultPayload: { result: 'ok' },
+    });
     transport.emit(span);
     await transport.close();
 
@@ -105,6 +108,20 @@ describe('HttpTransport', () => {
       'https://example.com/api/v1/agent_spans',
       'https://example.com/api/v1/agent_spans/backend-span-1/finish',
     ]);
+
+    const createCall = fetchCalls[1];
+    const createPayload = JSON.parse(String(createCall?.options?.body)) as {
+      details: Record<string, unknown>;
+    };
+    expect(createPayload.details.result_payload).toEqual({ result: 'ok' });
+
+    const finishCall = fetchCalls[2];
+    const finishPayload = JSON.parse(String(finishCall?.options?.body)) as Record<string, unknown>;
+    expect(finishPayload).toEqual({
+      timestamp: '2023-11-14T22:13:20.000Z',
+      status: 'complete',
+      result_payload: { result: 'ok' },
+    });
   });
 
   test('buffers child span emission until parent backend id is available', async () => {

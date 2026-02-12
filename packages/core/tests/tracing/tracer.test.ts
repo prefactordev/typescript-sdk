@@ -3,11 +3,16 @@ import { extractPartition, isPfid, type Partition } from '@prefactor/pfid';
 import { SpanContext } from '../../src/tracing/context';
 import { type Span, SpanStatus, SpanType } from '../../src/tracing/span';
 import { Tracer } from '../../src/tracing/tracer';
-import type { Transport } from '../../src/transport/base';
+import type { FinishSpanOptions, Transport } from '../../src/transport/http';
 
 class MockTransport implements Transport {
   emitted: Span[] = [];
-  finished: Array<{ spanId: string; endTime: number }> = [];
+  finished: Array<{
+    spanId: string;
+    endTime: number;
+    status?: string;
+    resultPayload?: Record<string, unknown>;
+  }> = [];
   startedInstances = 0;
   finishedInstances = 0;
 
@@ -15,8 +20,8 @@ class MockTransport implements Transport {
     this.emitted.push(span);
   }
 
-  finishSpan(spanId: string, endTime: number): void {
-    this.finished.push({ spanId, endTime });
+  finishSpan(spanId: string, endTime: number, options?: FinishSpanOptions): void {
+    this.finished.push({ spanId, endTime, ...options });
   }
 
   startAgentInstance(): void {
@@ -136,6 +141,39 @@ describe('Tracer', () => {
     expect(transport.finished).toHaveLength(1);
     expect(transport.finished[0]?.spanId).toBe(span.spanId);
     expect(typeof transport.finished[0]?.endTime).toBe('number');
+    expect(transport.finished[0]?.status).toBe('complete');
+    expect(transport.finished[0]?.resultPayload).toEqual({});
+  });
+
+  test('should include agent result payload when finished successfully', () => {
+    const span = tracer.startSpan({
+      name: 'agent',
+      spanType: SpanType.AGENT,
+      inputs: {},
+    });
+
+    tracer.endSpan(span, { outputs: { message: 'done' } });
+
+    expect(transport.finished).toHaveLength(1);
+    expect(transport.finished[0]?.status).toBe('complete');
+    expect(transport.finished[0]?.resultPayload).toEqual({ message: 'done' });
+  });
+
+  test('should include error result payload when agent span fails', () => {
+    const span = tracer.startSpan({
+      name: 'agent',
+      spanType: SpanType.AGENT,
+      inputs: {},
+    });
+
+    tracer.endSpan(span, { error: new Error('boom') });
+
+    expect(transport.finished).toHaveLength(1);
+    expect(transport.finished[0]?.status).toBe('failed');
+    expect(transport.finished[0]?.resultPayload).toMatchObject({
+      error_type: 'Error',
+      message: 'boom',
+    });
   });
 
   test('should handle token usage', () => {

@@ -358,7 +358,7 @@ The SDK consists of five main layers:
 - TypeScript >= 5.0.0 (for TypeScript projects)
 - Bun >= 1.0.0 (optional, for development)
 - LangChain.js >= 1.0.0 (peer dependency for `@prefactor/langchain`)
-- AI SDK ^4.0.0 || ^5.0.0 (peer dependency for `@prefactor/ai`)
+- AI SDK ^4.0.0 || ^5.0.0 || ^6.0.0 (peer dependency for `@prefactor/ai`)
 
 ## Development
 
