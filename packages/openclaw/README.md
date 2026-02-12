@@ -13,9 +13,9 @@ Enable the plugin in `~/.openclaw/.openclaw.json`:
       "prefactor": {
         "enabled": true,
         "config": {
-          "agentId": "$PREFACTOR_AGENT_ID",
-          "apiKey": "$PREFACTOR_API_KEY",
-          "apiUrl": "$PREFACTOR_API_URL",
+          "agentId": "${PREFACTOR_AGENT_ID}",
+          "apiKey": "${PREFACTOR_API_KEY}",
+          "apiUrl": "${PREFACTOR_API_URL}",
         }
       }
     }
