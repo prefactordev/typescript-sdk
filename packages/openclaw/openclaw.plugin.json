@@ -12,9 +12,9 @@
         "type": "string",
         "description": "Prefactor API URL (e.g., https://api.prefactor.dev)"
       },
-      "apiKey": {
+      "apiToken": {
         "type": "string",
-        "description": "Prefactor API key for authentication"
+        "description": "Prefactor API token for authentication"
       },
       "agentId": {
         "type": "string",
@@ -52,9 +52,9 @@
       "label": "Prefactor API URL",
       "placeholder": "https://api.prefactor.dev"
     },
-    "apiKey": {
-      "label": "Prefactor API Key",
-      "placeholder": "sk_...",
+    "apiToken": {
+      "label": "Prefactor API token",
+      "placeholder": "yout-api-token",
       "sensitive": true
     },
     "agentId": {

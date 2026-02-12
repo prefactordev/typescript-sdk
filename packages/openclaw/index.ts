@@ -10,7 +10,7 @@ import packageJson from './package.json' with { type: 'json' };
 const prefactorConfigSchema = z
   .object({
     apiUrl: z.string().optional(),
-    apiKey: z.string().optional(),
+    apiToken: z.string().optional(),
     agentId: z.string().optional(),
     agentVersion: z.string().optional().default('default'),
     logLevel: z.enum(['debug', 'info', 'warn', 'error']).optional().default('info'),
@@ -30,11 +30,11 @@ export default function register (api: OpenClawPluginApi) {
   let agent: Agent | null = null;
   let agentInitialized = false;
 
-  if (config.apiUrl && config.apiKey && config.agentId) {
+  if (config.apiUrl && config.apiToken && config.agentId) {
     try {
       const agentConfig: AgentConfig = {
         apiUrl: config.apiUrl,
-        apiToken: config.apiKey,
+        apiToken: config.apiToken,
         agentId: config.agentId,
         openclawVersion: api.version || 'unknown',
         pluginVersion: packageJson.version,
@@ -61,7 +61,7 @@ export default function register (api: OpenClawPluginApi) {
     logger.warn('prefactor_agent_not_configured', {
       missing: [
         !config.apiUrl && 'apiUrl',
-        !config.apiKey && 'apiKey',
+        !config.apiToken && 'apiToken',
         !config.agentId && 'agentId',
       ].filter(Boolean),
     });
