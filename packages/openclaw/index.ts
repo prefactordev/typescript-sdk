@@ -19,9 +19,15 @@ const prefactorConfigSchema = z
   })
   .strict();
 
+const defaultConfig = {
+  apiUrl: process.env.PREFACTOR_API_URL,
+  apiToken: process.env.PREFACTOR_API_TOKEN,
+  agentId: process.env.PREFACTOR_AGENT_ID,
+}
+
 export default function register (api: OpenClawPluginApi) {
   // Parse and validate config using Zod
-  const config = prefactorConfigSchema.parse(api.pluginConfig);
+  const config = prefactorConfigSchema.parse(api.pluginConfig || defaultConfig);
 
   const logLevel = config.logLevel;
   const logger = createLogger(logLevel);
