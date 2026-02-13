@@ -43,7 +43,6 @@ export {
 // HTTP Client & API Clients
 export {
   HttpClient,
-  HttpClient as HTTPClient,
   HttpClientError,
   type HttpRequester,
 } from './transport/http/http-client.js';
