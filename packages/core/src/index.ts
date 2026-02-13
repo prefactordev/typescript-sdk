@@ -25,6 +25,11 @@ export {
 } from './tracing/span.js';
 export { type EndSpanOptions, type StartSpanOptions, Tracer } from './tracing/tracer.js';
 export { withSpan } from './tracing/with-span.js';
+export {
+  HttpClient,
+  HttpClient as HTTPClient,
+  HttpClientError,
+} from './transport/http/http-client.js';
 // Transport
 export type { AgentInstanceOptions, Transport } from './transport/http.js';
 export { HttpTransport } from './transport/http.js';
