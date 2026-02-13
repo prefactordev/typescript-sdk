@@ -1,7 +1,7 @@
 {
   "id": "prefactor",
   "name": "@prefactor/openclaw",
-  "version": "0.0.11",
+  "version": "0.0.12",
   "description": "Comprehensive lifecycle event monitoring and instrumentation for OpenClaw",
   "runtime": "node",
   "entry": "./dist/index.js",
