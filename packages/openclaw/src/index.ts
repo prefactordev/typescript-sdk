@@ -1,10 +1,10 @@
+import { randomUUID } from 'node:crypto';
 import type { OpenClawPluginApi } from 'openclaw/plugin-sdk';
 import { z } from 'zod';
-import { randomUUID } from 'node:crypto';
-import { createLogger } from './logger.js';
-import { createAgent, type Agent, type AgentConfig } from './agent.js';
-import { createSessionStateManager } from './session-state.js';
 import packageJson from '../package.json' with { type: 'json' };
+import { type Agent, type AgentConfig, createAgent } from './agent.js';
+import { createLogger } from './logger.js';
+import { createSessionStateManager } from './session-state.js';
 
 // Zod schema for config validation
 const prefactorConfigSchema = z
