@@ -87,18 +87,19 @@ export default function register(api: OpenClawPluginApi) {
 
   // ==================== GATEWAY LIFECYCLE ====================
 
-  api.on('gateway_start', () => {
+  api.on('gateway_start', (event, _ctx) => {
     const timestamp = Date.now();
     logger.info('gateway_start', {
       timestamp,
+      port: event.port,
       pid: process.pid,
       agentInitialized,
     });
   });
 
-  api.on('gateway_stop', () => {
+  api.on('gateway_stop', (event, _ctx) => {
     const timestamp = Date.now();
-    logger.info('gateway_stop', { timestamp });
+    logger.info('gateway_stop', { timestamp, reason: event.reason });
 
     if (agent) {
       agent.emergencyCleanup().catch((err) => {
@@ -117,24 +118,22 @@ export default function register(api: OpenClawPluginApi) {
 
   // ==================== SESSION LIFECYCLE ====================
 
-  api.on('session_start', (ctx: unknown) => {
-    const sessionCtx = ctx as { sessionKey: string; timestamp?: number };
-    const sessionKey = sessionCtx?.sessionKey || 'unknown';
+  api.on('session_start', (event, ctx) => {
+    const sessionKey = ctx.sessionId;
     const timestamp = Date.now();
 
-    logger.info('session_start', { sessionKey, timestamp });
+    logger.info('session_start', { sessionKey, timestamp, resumedFrom: event.resumedFrom });
 
     if (agent) {
       logger.info('prefactor_session_ready', { sessionKey });
     }
   });
 
-  api.on('session_end', (ctx: unknown) => {
-    const sessionCtx = ctx as { sessionKey: string; timestamp?: number };
-    const sessionKey = sessionCtx?.sessionKey || 'unknown';
+  api.on('session_end', (event, ctx) => {
+    const sessionKey = ctx.sessionId;
     const timestamp = Date.now();
 
-    logger.info('session_end', { sessionKey, timestamp });
+    logger.info('session_end', { sessionKey, timestamp, messageCount: event.messageCount });
 
     if (agent) {
       agent.finishAgentInstance(sessionKey, 'complete').catch((err) => {
@@ -148,57 +147,46 @@ export default function register(api: OpenClawPluginApi) {
 
   // ==================== AGENT LIFECYCLE ====================
 
-  api.on('before_agent_start', (ctx: unknown) => {
-    const agentCtx = ctx as {
-      sessionKey: string;
-      messages?: unknown[];
-      context?: { bootstrapFiles?: Array<{ path: string; content: string }> };
-      startTime?: number;
-    };
-
-    const sessionKey = agentCtx?.sessionKey || 'unknown';
+  api.on('before_agent_start', (event, ctx) => {
+    const sessionKey = ctx.sessionKey || 'unknown';
     const startTime = Date.now();
     const marker = `prefactor-${randomUUID()}`;
 
     logger.info('before_agent_start', { sessionKey, marker, startTime });
 
-    // Inject context marker into bootstrap files
-    if (agentCtx?.context?.bootstrapFiles) {
-      agentCtx.context.bootstrapFiles.push({
-        path: 'PREFACTOR_MARKER.md',
-        content: `# Prefactor Context Marker\n\nSession is being monitored by prefactor plugin.\nMarker: ${marker}\nTimestamp: ${new Date(startTime).toISOString()}`,
-      });
-      logger.debug('context_injected', { sessionKey, marker });
-    }
-
     // Create agent_run span
-    sessionManager.createAgentRunSpan(sessionKey, agentCtx).catch((err) => {
+    sessionManager.createAgentRunSpan(sessionKey, { event, ctx }).catch((err) => {
       logger.error('prefactor_agent_run_span_failed', {
         sessionKey,
         error: err instanceof Error ? err.message : String(err),
       });
     });
+
+    // Inject context marker via prependContext
+    logger.debug('context_injected', { sessionKey, marker });
+    return {
+      prependContext: `<!-- Prefactor session monitored. Marker: ${marker} Timestamp: ${new Date(startTime).toISOString()} -->`,
+    };
   });
 
-  api.on('agent_end', (ctx: unknown) => {
-    const agentCtx = ctx as {
-      sessionKey: string;
-      messages?: unknown[];
-      startTime?: number;
-      endTime?: number;
-    };
-
-    const sessionKey = agentCtx?.sessionKey || 'unknown';
+  api.on('agent_end', (event, ctx) => {
+    const sessionKey = ctx.sessionKey || 'unknown';
     const endTime = Date.now();
-    const messageCount = agentCtx?.messages?.length || 0;
+    const messageCount = event.messages?.length || 0;
 
-    logger.info('agent_end', { sessionKey, endTime, messageCount });
+    logger.info('agent_end', {
+      sessionKey,
+      endTime,
+      messageCount,
+      success: event.success,
+      durationMs: event.durationMs,
+    });
 
     // Close agent_run span and create assistant_response span
     sessionManager
-      .closeAgentRunSpan(sessionKey, 'complete')
+      .closeAgentRunSpan(sessionKey, event.success ? 'complete' : 'failed')
       .then(() => {
-        return sessionManager.createAssistantResponseSpan(sessionKey, agentCtx);
+        return sessionManager.createAssistantResponseSpan(sessionKey, { event, ctx });
       })
       .catch((err) => {
         logger.error('prefactor_agent_end_span_failed', {
@@ -210,33 +198,37 @@ export default function register(api: OpenClawPluginApi) {
 
   // ==================== COMPACTION LIFECYCLE ====================
 
-  api.on('before_compaction', (ctx: unknown) => {
-    const compactionCtx = ctx as { sessionKey: string; tokensBefore?: number };
-    const sessionKey = compactionCtx?.sessionKey || 'unknown';
-    const tokensBefore = compactionCtx?.tokensBefore || 0;
+  api.on('before_compaction', (event, ctx) => {
+    const sessionKey = ctx.sessionKey || 'unknown';
 
-    logger.info('before_compaction', { sessionKey, tokensBefore });
+    logger.info('before_compaction', {
+      sessionKey,
+      messageCount: event.messageCount,
+      tokenCount: event.tokenCount,
+    });
   });
 
-  api.on('after_compaction', (ctx: unknown) => {
-    const compactionCtx = ctx as { sessionKey: string; tokensAfter?: number };
-    const sessionKey = compactionCtx?.sessionKey || 'unknown';
-    const tokensAfter = compactionCtx?.tokensAfter || 0;
+  api.on('after_compaction', (event, ctx) => {
+    const sessionKey = ctx.sessionKey || 'unknown';
 
-    logger.info('after_compaction', { sessionKey, tokensAfter });
+    logger.info('after_compaction', {
+      sessionKey,
+      messageCount: event.messageCount,
+      tokenCount: event.tokenCount,
+      compactedCount: event.compactedCount,
+    });
   });
 
   // ==================== TOOL LIFECYCLE ====================
 
-  api.on('before_tool_call', (ctx: unknown) => {
-    const toolCtx = ctx as { sessionKey: string; toolName: string; params?: unknown };
-    const sessionKey = toolCtx?.sessionKey || 'unknown';
-    const toolName = toolCtx?.toolName || 'unknown';
+  api.on('before_tool_call', (event, ctx) => {
+    const sessionKey = ctx.sessionKey || 'unknown';
+    const toolName = event.toolName;
 
     logger.info('before_tool_call', { sessionKey, tool: toolName });
 
     // Create tool_call span
-    sessionManager.createToolCallSpan(sessionKey, toolName, toolCtx).catch((err) => {
+    sessionManager.createToolCallSpan(sessionKey, toolName, { event, ctx }).catch((err) => {
       logger.error('prefactor_tool_call_span_failed', {
         sessionKey,
         tool: toolName,
@@ -245,14 +237,15 @@ export default function register(api: OpenClawPluginApi) {
     });
   });
 
-  api.on('after_tool_call', (ctx: unknown) => {
-    const toolCtx = ctx as { sessionKey: string; toolName: string };
-    const sessionKey = toolCtx?.sessionKey || 'unknown';
-    const toolName = toolCtx?.toolName || 'unknown';
+  api.on('after_tool_call', (event, ctx) => {
+    const sessionKey = ctx.sessionKey || 'unknown';
+    const toolName = event.toolName;
 
     logger.info('after_tool_call', {
       sessionKey,
       tool: toolName,
+      durationMs: event.durationMs,
+      error: event.error,
       note: 'This hook is broken in OpenClaw but we handle cleanup elsewhere',
     });
   });
@@ -278,26 +271,22 @@ export default function register(api: OpenClawPluginApi) {
 
   // ==================== MESSAGE LIFECYCLE ====================
 
-  api.on('message_received', (ctx: unknown) => {
-    const msgCtx = ctx as {
-      sessionKey: string;
-      channel?: string;
-      senderId?: string;
-      text?: string;
-    };
+  api.on('message_received', (event, ctx) => {
+    const sessionKey = ctx.conversationId || ctx.channelId;
+    const preview = event.content ? event.content.slice(0, 50) : '';
 
-    const sessionKey = msgCtx?.sessionKey || 'unknown';
-    const channel = msgCtx?.channel || 'unknown';
-    const senderId = msgCtx?.senderId || 'unknown';
-    const preview = msgCtx?.text ? msgCtx.text.slice(0, 50) : '';
-
-    logger.info('message_received', { sessionKey, channel, sender: senderId, preview });
+    logger.info('message_received', {
+      sessionKey,
+      channelId: ctx.channelId,
+      from: event.from,
+      preview,
+    });
 
     // Hierarchical span management
     sessionManager
       .createSessionSpan(sessionKey)
       .then(() => sessionManager.createOrGetInteractionSpan(sessionKey))
-      .then(() => sessionManager.createUserMessageSpan(sessionKey, msgCtx))
+      .then(() => sessionManager.createUserMessageSpan(sessionKey, { event, ctx }))
       .then((spanId) => {
         if (spanId) {
           logger.info('prefactor_user_message_span_created', { sessionKey, spanId });
@@ -311,22 +300,18 @@ export default function register(api: OpenClawPluginApi) {
       });
   });
 
-  api.on('message_sending', (ctx: unknown) => {
-    const msgCtx = ctx as {
-      sessionKey: string;
-      recipient?: string;
-      text?: string;
-    };
+  api.on('message_sending', (event, ctx) => {
+    const sessionKey = ctx.conversationId || ctx.channelId;
 
-    const sessionKey = msgCtx?.sessionKey || 'unknown';
-    const recipient = msgCtx?.recipient || 'unknown';
-    const hasText = msgCtx?.text ? 'yes' : 'no';
-
-    logger.info('message_sending', { sessionKey, recipient, hasText });
+    logger.info('message_sending', {
+      sessionKey,
+      to: event.to,
+      hasContent: event.content ? 'yes' : 'no',
+    });
 
     // Create assistant_message span
     agent
-      ?.createAssistantMessageSpan(sessionKey, msgCtx)
+      ?.createAssistantMessageSpan(sessionKey, { event, ctx })
       .then((spanId) => {
         if (spanId) {
           logger.info('prefactor_assistant_message_span_created', { sessionKey, spanId });
@@ -340,13 +325,15 @@ export default function register(api: OpenClawPluginApi) {
       });
   });
 
-  api.on('message_sent', (ctx: unknown) => {
-    const msgCtx = ctx as { sessionKey: string; messageId?: string };
+  api.on('message_sent', (event, ctx) => {
+    const sessionKey = ctx.conversationId || ctx.channelId;
 
-    const sessionKey = msgCtx?.sessionKey || 'unknown';
-    const messageId = msgCtx?.messageId || 'unknown';
-
-    logger.info('message_sent', { sessionKey, messageId });
+    logger.info('message_sent', {
+      sessionKey,
+      to: event.to,
+      success: event.success,
+      error: event.error,
+    });
 
     // Close assistant_message span
     agent
@@ -363,7 +350,7 @@ export default function register(api: OpenClawPluginApi) {
   });
 
   logger.info('plugin_registered_prefactor', {
-    hooks: 13,
+    hooks: 14,
     logLevel,
     agentInitialized,
   });
