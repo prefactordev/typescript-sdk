@@ -38,7 +38,6 @@ const logger = getLogger('middleware');
  * ```
  */
 export class PrefactorMiddleware {
-  private rootSpan: ReturnType<Tracer['startSpan']> | null = null;
   private agentInstanceStarted = false;
 
   constructor(
@@ -54,18 +53,7 @@ export class PrefactorMiddleware {
    */
   // biome-ignore lint/suspicious/noExplicitAny: LangChain state can be any structure
   async beforeAgent(state: any): Promise<void> {
-    const messages = state?.messages ?? [];
-
     this.ensureAgentInstanceStarted();
-
-    const span = this.tracer.startSpan({
-      name: 'langchain:agent',
-      spanType: toLangchainSpanType(SpanType.AGENT),
-      inputs: { messages: serializeValue(messages.slice(-3)) },
-    });
-
-    this.rootSpan = span;
-    SpanContext.enter(span);
   }
 
   /**
@@ -75,29 +63,11 @@ export class PrefactorMiddleware {
    */
   // biome-ignore lint/suspicious/noExplicitAny: LangChain state can be any structure
   async afterAgent(state: any): Promise<void> {
-    if (!this.rootSpan) {
-      return;
-    }
-
-    const messages = state?.messages ?? [];
-    this.tracer.endSpan(this.rootSpan, {
-      outputs: { messages: serializeValue(messages.slice(-3)) },
-    });
-
-    SpanContext.exit();
-    this.rootSpan = null;
+    // Root agent spans are intentionally not emitted.
+    void state;
   }
 
   shutdown(): void {
-    if (this.rootSpan) {
-      this.tracer.endSpan(this.rootSpan, {
-        outputs: {},
-      });
-
-      SpanContext.exit();
-      this.rootSpan = null;
-    }
-
     this.finishAgentInstance();
   }
 
