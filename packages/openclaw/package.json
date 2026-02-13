@@ -32,7 +32,7 @@
   ],
   "dependencies": {
     "@prefactor/core": "workspace:*",
-    "zod": "^3.23.0"
+    "zod": "^4.0.0"
   },
   "devDependencies": {
     "openclaw": "^2026.2.9",
