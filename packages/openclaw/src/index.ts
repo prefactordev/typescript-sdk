@@ -1,4 +1,3 @@
-import { randomUUID } from 'node:crypto';
 import type { OpenClawPluginApi } from 'openclaw/plugin-sdk';
 import { z } from 'zod';
 import packageJson from '../package.json' with { type: 'json' };
@@ -149,10 +148,8 @@ export default function register(api: OpenClawPluginApi) {
 
   api.on('before_agent_start', (event, ctx) => {
     const sessionKey = ctx.sessionKey || 'unknown';
-    const startTime = Date.now();
-    const marker = `prefactor-${randomUUID()}`;
 
-    logger.info('before_agent_start', { sessionKey, marker, startTime });
+    logger.info('before_agent_start', { sessionKey });
 
     // Create agent_run span
     sessionManager.createAgentRunSpan(sessionKey, { event, ctx }).catch((err) => {
@@ -161,12 +158,6 @@ export default function register(api: OpenClawPluginApi) {
         error: err instanceof Error ? err.message : String(err),
       });
     });
-
-    // Inject context marker via prependContext
-    logger.debug('context_injected', { sessionKey, marker });
-    return {
-      prependContext: `<!-- Prefactor session monitored. Marker: ${marker} Timestamp: ${new Date(startTime).toISOString()} -->`,
-    };
   });
 
   api.on('agent_end', (event, ctx) => {
