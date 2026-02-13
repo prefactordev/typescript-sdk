@@ -1,5 +1,5 @@
 [tools]
-node = "24"
+node = "22"
 bun = "latest"
 
 [tasks.build]
@@ -17,6 +17,10 @@ description = "Build @prefactor/langchain package"
 [tasks.build-ai]
 run = "bun run scripts/build.ts --filter @prefactor/ai"
 description = "Build @prefactor/ai package"
+
+[tasks.build-openclaw]
+run = "bun run scripts/build.ts --filter @prefactor/openclaw"
+description = "Build @prefactor/openclaw package"
 
 [tasks.test]
 run = "bun test"
@@ -54,13 +58,14 @@ description = "Install dependencies"
 description = "Publish all packages (in dependency order)"
 run = """cd packages/core && bun publish --access public &&
 cd ../langchain && bun publish --access public &&
-cd ../ai && bun publish --access public
-
+cd ../ai && bun publish --access public &&
+cd ../openclaw && bun publish --access public
 """
 
 [tasks.publish-dry]
 description = "Dry run publish"
 run = """cd packages/core && bun publish --access public --dry-run &&
 cd ../langchain && bun publish --access public --dry-run &&
-cd ../ai && bun publish --access public --dry-run
+cd ../ai && bun publish --access public --dry-run &&
+cd ../openclaw && bun publish --access public --dry-run
 """
