@@ -134,7 +134,7 @@ export class SessionStateManager {
 
     const spanId = await this.agent.createSpan(
       sessionKey,
-      'session',
+      'openclaw:session',
       { createdAt: new Date().toISOString() },
       null // No parent - this is the root
     );
@@ -226,7 +226,7 @@ export class SessionStateManager {
     if (!state.interactionSpanId) {
       const spanId = await this.agent.createSpan(
         sessionKey,
-        'user_interaction',
+        'openclaw:user_interaction',
         { startedAt: new Date().toISOString() },
         state.sessionSpanId // Child of session
       );
