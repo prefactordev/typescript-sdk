@@ -58,7 +58,7 @@ description = "Install dependencies"
 description = "Publish all packages (in dependency order)"
 run = """cd packages/core && bun publish --access public &&
 cd ../langchain && bun publish --access public &&
-cd ../ai && bun publish --access public
+cd ../ai && bun publish --access public &&
 cd ../openclaw && bun publish --access public
 """
 
