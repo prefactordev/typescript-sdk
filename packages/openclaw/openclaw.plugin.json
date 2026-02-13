@@ -54,7 +54,7 @@
     },
     "apiToken": {
       "label": "Prefactor API token",
-      "placeholder": "yout-api-token",
+      "placeholder": "your-api-token",
       "sensitive": true
     },
     "agentId": {

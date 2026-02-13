@@ -53,7 +53,7 @@ Enable the plugin in `~/.openclaw/.openclaw.json`:
         "config": {
           "agentId": "${PREFACTOR_AGENT_ID}",
           "apiToken": "${PREFACTOR_API_TOKEN}",
-          "apiUrl": "${PREFACTOR_API_URL}",
+          "apiUrl": "${PREFACTOR_API_URL}"
         }
       }
     }
