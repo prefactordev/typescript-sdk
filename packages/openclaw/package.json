@@ -1,6 +1,6 @@
 {
   "name": "@prefactor/openclaw",
-  "version": "0.0.7",
+  "version": "0.0.8",
   "description": "OpenClaw lifecycle event monitoring and instrumentation for Prefactor",
   "type": "module",
   "main": "./dist/index.cjs",
