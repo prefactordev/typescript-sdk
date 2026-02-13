@@ -1,0 +1,38 @@
+{
+  "$schema": "https://typedoc.org/schema.json",
+  "entryPoints": [
+    "packages/core/src/index.ts",
+    "packages/langchain/src/index.ts",
+    "packages/ai/src/index.ts"
+  ],
+  "entryPointStrategy": "resolve",
+  "plugin": ["typedoc-rhineai-theme", "./scripts/typedoc/cmdk-search-plugin.mjs"],
+  "tsconfig": "tsconfig.json",
+
+  "exclude": ["**/tests/**", "**/*.test.ts", "**/dist/**"],
+
+  "out": "docs/api",
+  "name": "Prefactor Typescript SDK",
+  "readme": "docs/api-readme.md",
+
+  "excludePrivate": true,
+  "excludeInternal": true,
+  "excludeProtected": true,
+
+  "hideGenerator": true,
+
+  "validation": {
+    "invalidLink": false,
+    "notExported": false
+  },
+
+  "categoryOrder": ["Core", "Packages", "*"],
+  "navigation": {
+    "includeCategories": true
+  },
+
+  "sort": ["kind"],
+  "groupOrder": ["Functions", "*"],
+  "categorizeByGroup": true,
+  "defaultCategory": "Other",
+}

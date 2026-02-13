@@ -2,12 +2,32 @@ import { getActiveTracer } from './active-tracer.js';
 import { SpanContext } from './context.js';
 import type { StartSpanOptions, Tracer } from './tracer.js';
 
+/**
+ * Runs work inside a new span using an explicit tracer.
+ *
+ * @param tracer - Tracer to use for span lifecycle.
+ * @param options - Span creation options.
+ * @param fn - Work to execute within the span context.
+ */
 export async function withSpan<T>(
   tracer: Tracer,
   options: StartSpanOptions,
   fn: () => Promise<T> | T
 ): Promise<T>;
+
+/**
+ * Runs work inside a new span using the globally active tracer.
+ *
+ * Throws when no active tracer exists.
+ *
+ * @param options - Span creation options.
+ * @param fn - Work to execute within the span context.
+ */
 export async function withSpan<T>(options: StartSpanOptions, fn: () => Promise<T> | T): Promise<T>;
+
+/**
+ * Wraps sync/async work in a span and automatically captures outputs or errors.
+ */
 export async function withSpan<T>(
   tracerOrOptions: Tracer | StartSpanOptions,
   optionsOrFn: StartSpanOptions | (() => Promise<T> | T),

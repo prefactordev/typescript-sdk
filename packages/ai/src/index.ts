@@ -1,49 +1,66 @@
 /**
- * @fileoverview Prefactor AI Middleware - Vercel AI SDK integration via middleware.
+ * Prefactor middleware integration for the Vercel AI SDK.
  *
- * This package provides middleware for the Vercel AI SDK that captures telemetry
- * data and sends it to the Prefactor platform for observability.
+ * ## What this package is
  *
- * ## Quick Start
+ * `@prefactor/ai` connects Vercel AI SDK model calls to Prefactor tracing. It captures
+ * agent/model/tool span data and sends it through the configured transport.
+ *
+ * ## What you can do with it
+ *
+ * - initialize middleware for `wrapLanguageModel` (`init`)
+ * - automatically trace non-streaming and streaming calls
+ * - create manual spans around custom application logic (`withSpan`)
+ * - access the tracer directly for advanced use (`getTracer`)
+ *
+ * ## Example: wrap a model with Prefactor middleware
  *
  * ```ts
- * import { init, shutdown } from "@prefactor/ai";
- * import { generateText, wrapLanguageModel } from "ai";
- * import { anthropic } from "@ai-sdk/anthropic";
+ * import { init, shutdown } from '@prefactor/ai';
+ * import { generateText, wrapLanguageModel } from 'ai';
+ * import { anthropic } from '@ai-sdk/anthropic';
  *
- * // Initialize with HTTP transport
  * const middleware = init({
  *   transportType: 'http',
  *   httpConfig: {
  *     apiUrl: 'https://api.prefactor.ai',
  *     apiToken: process.env.PREFACTOR_API_TOKEN!,
+ *     agentIdentifier: 'chat-app-v1',
  *   },
  * });
  *
- * // Or with HTTP transport for production
- * const middleware = init({
- *   transportType: 'http',
- *   httpConfig: {
- *     apiUrl: 'https://api.prefactor.ai',
- *     apiToken: process.env.PREFACTOR_API_TOKEN!,
- *   },
- * });
- *
- * // Wrap your model with the middleware
  * const model = wrapLanguageModel({
- *   model: anthropic("claude-3-haiku-20240307"),
+ *   model: anthropic('claude-3-haiku-20240307'),
  *   middleware,
  * });
  *
  * const result = await generateText({
  *   model,
- *   prompt: "Hello!",
+ *   prompt: 'Hello!',
  * });
  *
  * await shutdown();
  * ```
  *
- * @module @prefactor/ai
+ * ## Example: manual span around custom code
+ *
+ * ```ts
+ * import { withSpan } from '@prefactor/ai';
+ *
+ * await withSpan(
+ *   {
+ *     name: 'hydrate-user-context',
+ *     spanType: 'ai-sdk:chain',
+ *     inputs: { userId: 'u_123' },
+ *   },
+ *   async () => {
+ *     // custom app logic before/after model calls
+ *   }
+ * );
+ * ```
+ *
+ * @module @prefactor/packages/ai
+ * @category Packages
  * @packageDocumentation
  */
 

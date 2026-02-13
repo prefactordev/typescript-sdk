@@ -4,6 +4,7 @@
   "workspaces": ["packages/*"],
   "scripts": {
     "build": "bun run scripts/build.ts",
+    "docs:api": "typedoc --options typedoc.json",
     "test": "bun test",
     "test:watch": "bun test --watch",
     "typecheck": "tsc --build",
@@ -26,6 +27,8 @@
     "ai": "^6.0.79",
     "bun-types": "latest",
     "langchain": "^1.2.21",
+    "typedoc": "^0.28.14",
+    "typedoc-rhineai-theme": "^1.2.0",
     "typescript": "^5.9.3",
     "zod": "^4.0.0"
   },
