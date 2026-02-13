@@ -20,7 +20,7 @@ import {
   type Tracer,
   withSpan as withCoreSpan,
 } from '@prefactor/core';
-import { createPrefactorMiddleware, endRootAgentSpan } from './middleware.js';
+import { createPrefactorMiddleware } from './middleware.js';
 import type { MiddlewareConfig } from './types.js';
 
 const logger = getLogger('ai-init');
@@ -31,7 +31,11 @@ const DEFAULT_AI_AGENT_SCHEMA = {
     'ai-sdk:agent': { type: 'object', additionalProperties: true },
     'ai-sdk:llm': { type: 'object', additionalProperties: true },
     'ai-sdk:tool': { type: 'object', additionalProperties: true },
-    'ai-sdk:chain': { type: 'object', additionalProperties: true },
+  },
+  span_result_schemas: {
+    'ai-sdk:agent': { type: 'object', additionalProperties: true },
+    'ai-sdk:llm': { type: 'object', additionalProperties: true },
+    'ai-sdk:tool': { type: 'object', additionalProperties: true },
   },
   span_result_schemas: {
     'ai-sdk:agent': { type: 'object', additionalProperties: true },
@@ -52,9 +56,6 @@ let globalMiddleware: ReturnType<typeof createPrefactorMiddleware> | null = null
 registerShutdownHandler('prefactor-ai', async () => {
   if (globalCore) {
     logger.info('Shutting down Prefactor AI Middleware');
-    if (globalTracer) {
-      endRootAgentSpan(globalTracer);
-    }
     if (agentLifecycle?.started) {
       globalCore.agentManager.finishInstance();
       agentLifecycle.started = false;

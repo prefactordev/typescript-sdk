@@ -60,7 +60,11 @@ describe('ai init schema registration', () => {
         'ai-sdk:agent': { type: 'object', additionalProperties: true },
         'ai-sdk:llm': { type: 'object', additionalProperties: true },
         'ai-sdk:tool': { type: 'object', additionalProperties: true },
-        'ai-sdk:chain': { type: 'object', additionalProperties: true },
+      },
+      span_result_schemas: {
+        'ai-sdk:agent': { type: 'object', additionalProperties: true },
+        'ai-sdk:llm': { type: 'object', additionalProperties: true },
+        'ai-sdk:tool': { type: 'object', additionalProperties: true },
       },
       span_result_schemas: {
         'ai-sdk:agent': { type: 'object', additionalProperties: true },
@@ -69,6 +73,12 @@ describe('ai init schema registration', () => {
         'ai-sdk:chain': { type: 'object', additionalProperties: true },
       },
     });
+    const schema = registeredSchemas[0] as {
+      span_schemas: Record<string, unknown>;
+      span_result_schemas: Record<string, unknown>;
+    };
+    expect(schema.span_schemas['ai-sdk:chain']).toBeUndefined();
+    expect(schema.span_result_schemas['ai-sdk:chain']).toBeUndefined();
   });
 
   test('supports manual spans for custom workflow instrumentation', async () => {

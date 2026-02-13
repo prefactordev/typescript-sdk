@@ -37,7 +37,7 @@ class CaptureTransport implements Transport {
 }
 
 describe('PrefactorMiddleware', () => {
-  test('uses context parent for root span and nests child spans', async () => {
+  test('uses existing context as parent when no root agent span is created', async () => {
     const transport = new CaptureTransport();
     const tracer = new Tracer(transport);
     const agentManager = new AgentInstanceManager(transport, {});
@@ -56,17 +56,15 @@ describe('PrefactorMiddleware', () => {
       await middleware.afterAgent({ messages: ['bye'] });
     });
 
-    const agentSpan = transport.spans.find((span) => span.spanType === 'langchain:agent');
     const llmSpan = transport.spans.find((span) => span.spanType === 'langchain:llm');
 
-    expect(agentSpan?.parentSpanId).toBe(parentSpan.spanId);
-    expect(agentSpan?.traceId).toBe(parentSpan.traceId);
-    expect(llmSpan?.parentSpanId).toBe(agentSpan?.spanId);
-    expect(llmSpan?.traceId).toBe(agentSpan?.traceId);
+    expect(transport.spans.some((span) => span.spanType === 'langchain:agent')).toBe(false);
+    expect(llmSpan?.parentSpanId).toBe(parentSpan.spanId);
+    expect(llmSpan?.traceId).toBe(parentSpan.traceId);
     expect(llmSpan?.status).toBe(SpanStatus.SUCCESS);
   });
 
-  test('uses langchain-prefixed operation names for emitted spans', async () => {
+  test('emits langchain-prefixed llm and tool spans without an agent span', async () => {
     const transport = new CaptureTransport();
     const tracer = new Tracer(transport);
     const agentManager = new AgentInstanceManager(transport, {});
@@ -92,11 +90,10 @@ describe('PrefactorMiddleware', () => {
     );
     await middleware.afterAgent({ messages: [{ type: 'ai', content: 'done' }] });
 
-    const agentSpan = transport.spans.find((span) => span.spanType === 'langchain:agent');
     const llmSpan = transport.spans.find((span) => span.spanType === 'langchain:llm');
     const toolSpan = transport.spans.find((span) => span.spanType === 'langchain:tool');
 
-    expect(agentSpan?.name).toBe('langchain:agent');
+    expect(transport.spans.some((span) => span.spanType === 'langchain:agent')).toBe(false);
     expect(llmSpan?.name).toBe('langchain:llm-call');
     expect(toolSpan?.name).toBe('langchain:tool-call');
   });

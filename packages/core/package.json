@@ -1,6 +1,6 @@
 {
   "name": "@prefactor/core",
-  "version": "0.2.6",
+  "version": "0.2.8",
   "description": "Framework-agnostic observability primitives for Prefactor",
   "type": "module",
   "main": "dist/index.cjs",
@@ -30,9 +30,9 @@
     "@prefactor/pfid": "^0.1.0"
   },
   "peerDependencies": {
-    "zod": "^3.23.0"
+    "zod": "^4.0.0"
   },
   "engines": {
-    "node": ">=24.0.0"
+    "node": ">=22.0.0"
   }
 }

@@ -89,6 +89,11 @@ await SpanContext.runAsync(span, async () => {
 
 ## Code Patterns and Conventions
 
+### Core Philosophy
+- Implement only the minimum behavior required for current requirements.
+- Prefer a direct 1:1 mapping between requirements and implementation.
+- Do not add optional, speculative, or future-use abstractions unless explicitly requested.
+
 ### Type Safety
 - Use `unknown` instead of `any` where possible
 - LangChain integration layer legitimately uses `any` types (with `// biome-ignore` comments) because LangChain request/response structures are dynamic and vary by provider
@@ -134,7 +139,7 @@ In `http.ts` switch statement, queue item data is cast to specific types (`as Sp
 
 ## Dependencies
 
-Production: `@langchain/core` (^0.3.0), `zod` (^3.23.0)
+Production: `@langchain/core` (^0.3.0), `zod` (^4.0.0)
 Dev: `typescript` (^5.3.0), `@biomejs/biome` (2.3.11), `@types/node` (^20.0.0), `bun-types`
 
 ## Related Files
