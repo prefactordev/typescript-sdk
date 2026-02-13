@@ -45,7 +45,7 @@ export {
   HttpClient,
   HttpClient as HTTPClient,
   HttpClientError,
-  type HttpRequester
+  type HttpRequester,
 } from './transport/http/http-client.js';
 // Transport
 export type { AgentInstanceOptions, Transport } from './transport/http.js';
