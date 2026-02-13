@@ -7,7 +7,7 @@ export type AgentSpanFinishStatus = 'complete' | 'failed' | 'cancelled';
 export type AgentSpanFinishOptions = {
   status?: AgentSpanFinishStatus;
   result_payload?: Record<string, unknown>;
-  idempotency_key?: string,
+  idempotency_key?: string;
 };
 
 export type AgentSpanCreatePayload = {
