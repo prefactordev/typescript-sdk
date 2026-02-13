@@ -1,5 +1,5 @@
 [tools]
-node = "24"
+node = "22"
 bun = "latest"
 
 [tasks.build]
