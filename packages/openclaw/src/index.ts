@@ -84,6 +84,10 @@ export default function register(api: OpenClawPluginApi) {
     sessionTimeoutMs: config.sessionTimeoutHours * 60 * 60 * 1000,
   });
 
+  // Cache the session key from agent hooks for use in message hooks
+  // (message hooks only have channelId/conversationId, not sessionKey)
+  let lastKnownSessionKey: string | null = null;
+
   // ==================== GATEWAY LIFECYCLE ====================
 
   api.on('gateway_start', (event, _ctx) => {
@@ -148,19 +152,17 @@ export default function register(api: OpenClawPluginApi) {
 
   api.on('before_agent_start', (event, ctx) => {
     const sessionKey = ctx.sessionKey || 'unknown';
+    lastKnownSessionKey = sessionKey;
 
     logger.info('before_agent_start', { sessionKey });
 
-    // Create user_message span (instant) then agent_run span
-    sessionManager
-      .createUserMessageSpan(sessionKey, { prompt: event.prompt })
-      .then(() => sessionManager.createAgentRunSpan(sessionKey, { event, ctx }))
-      .catch((err) => {
-        logger.error('prefactor_before_agent_start_failed', {
-          sessionKey,
-          error: err instanceof Error ? err.message : String(err),
-        });
+    // Create agent_run span
+    sessionManager.createAgentRunSpan(sessionKey, { event, ctx }).catch((err) => {
+      logger.error('prefactor_agent_run_span_failed', {
+        sessionKey,
+        error: err instanceof Error ? err.message : String(err),
       });
+    });
   });
 
   api.on('agent_end', (event, ctx) => {
@@ -278,6 +280,22 @@ export default function register(api: OpenClawPluginApi) {
       from: event.from,
       preview,
     });
+
+    // Create user_message span using cached session key from agent hooks
+    if (lastKnownSessionKey) {
+      sessionManager
+        .createUserMessageSpan(lastKnownSessionKey, {
+          from: event.from,
+          content: event.content,
+          channelId: ctx.channelId,
+        })
+        .catch((err) => {
+          logger.error('prefactor_user_message_span_failed', {
+            sessionKey: lastKnownSessionKey,
+            error: err instanceof Error ? err.message : String(err),
+          });
+        });
+    }
   });
 
   api.on('message_sending', (event, ctx) => {
