@@ -151,13 +151,16 @@ export default function register(api: OpenClawPluginApi) {
 
     logger.info('before_agent_start', { sessionKey });
 
-    // Create agent_run span
-    sessionManager.createAgentRunSpan(sessionKey, { event, ctx }).catch((err) => {
-      logger.error('prefactor_agent_run_span_failed', {
-        sessionKey,
-        error: err instanceof Error ? err.message : String(err),
+    // Create user_message span (instant) then agent_run span
+    sessionManager
+      .createUserMessageSpan(sessionKey, { prompt: event.prompt })
+      .then(() => sessionManager.createAgentRunSpan(sessionKey, { event, ctx }))
+      .catch((err) => {
+        logger.error('prefactor_before_agent_start_failed', {
+          sessionKey,
+          error: err instanceof Error ? err.message : String(err),
+        });
       });
-    });
   });
 
   api.on('agent_end', (event, ctx) => {
