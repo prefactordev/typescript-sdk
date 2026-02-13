@@ -155,6 +155,13 @@ export class SessionStateManager {
     const state = this.sessions.get(sessionKey);
     if (!state) return;
 
+    // Close interaction span if open
+    if (state.interactionSpanId) {
+      await this.agent.finishSpan(sessionKey, state.interactionSpanId, 'complete');
+      this.logger.info('interaction_span_closed', { sessionKey, spanId: state.interactionSpanId });
+      state.interactionSpanId = null;
+    }
+
     // Close all child spans first
     await this.closeAllChildSpans(sessionKey);
 
