@@ -256,8 +256,8 @@ export default function register(api: OpenClawPluginApi) {
 
     logger.info('tool_result_persist', { sessionKey, tool: toolName });
 
-    // Close the tool_call span
-    sessionManager.closeToolCallSpan(sessionKey, 'complete').catch((err) => {
+    // Close the tool_call span (pass toolName for concurrent tool call matching)
+    sessionManager.closeToolCallSpan(sessionKey, 'complete', toolName).catch((err) => {
       logger.error('prefactor_close_tool_span_failed', {
         sessionKey,
         tool: toolName,
@@ -271,82 +271,38 @@ export default function register(api: OpenClawPluginApi) {
 
   // ==================== MESSAGE LIFECYCLE ====================
 
+  // Note: Message hooks use PluginHookMessageContext which has channelId/conversationId
+  // but NOT sessionKey. Span management is handled by agent hooks (before_agent_start,
+  // agent_end) which have the correct sessionKey. These hooks are logging-only.
+
   api.on('message_received', (event, ctx) => {
-    const sessionKey = ctx.conversationId || ctx.channelId;
     const preview = event.content ? event.content.slice(0, 50) : '';
 
     logger.info('message_received', {
-      sessionKey,
       channelId: ctx.channelId,
+      conversationId: ctx.conversationId,
       from: event.from,
       preview,
     });
-
-    // Hierarchical span management
-    sessionManager
-      .createSessionSpan(sessionKey)
-      .then(() => sessionManager.createOrGetInteractionSpan(sessionKey))
-      .then(() => sessionManager.createUserMessageSpan(sessionKey, { event, ctx }))
-      .then((spanId) => {
-        if (spanId) {
-          logger.info('prefactor_user_message_span_created', { sessionKey, spanId });
-        }
-      })
-      .catch((err) => {
-        logger.error('prefactor_message_received_span_failed', {
-          sessionKey,
-          error: err instanceof Error ? err.message : String(err),
-        });
-      });
   });
 
   api.on('message_sending', (event, ctx) => {
-    const sessionKey = ctx.conversationId || ctx.channelId;
-
     logger.info('message_sending', {
-      sessionKey,
+      channelId: ctx.channelId,
+      conversationId: ctx.conversationId,
       to: event.to,
       hasContent: event.content ? 'yes' : 'no',
     });
-
-    // Create assistant_message span
-    agent
-      ?.createAssistantMessageSpan(sessionKey, { event, ctx })
-      .then((spanId) => {
-        if (spanId) {
-          logger.info('prefactor_assistant_message_span_created', { sessionKey, spanId });
-        }
-      })
-      .catch((err) => {
-        logger.error('prefactor_assistant_message_span_failed', {
-          sessionKey,
-          error: err instanceof Error ? err.message : String(err),
-        });
-      });
   });
 
   api.on('message_sent', (event, ctx) => {
-    const sessionKey = ctx.conversationId || ctx.channelId;
-
     logger.info('message_sent', {
-      sessionKey,
+      channelId: ctx.channelId,
+      conversationId: ctx.conversationId,
       to: event.to,
       success: event.success,
       error: event.error,
     });
-
-    // Close assistant_message span
-    agent
-      ?.closeAssistantMessageSpan(sessionKey)
-      .then(() => {
-        logger.info('prefactor_assistant_message_span_closed', { sessionKey });
-      })
-      .catch((err) => {
-        logger.error('prefactor_close_assistant_span_failed', {
-          sessionKey,
-          error: err instanceof Error ? err.message : String(err),
-        });
-      });
   });
 
   logger.info('plugin_registered_prefactor', {

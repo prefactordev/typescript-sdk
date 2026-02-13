@@ -15,8 +15,8 @@ interface SessionSpanState {
   interactionLastActivity: number;
   // Agent run span (child of interaction)
   agentRunSpanId: string | null;
-  // Tool call span (sequential, child of agent_run)
-  toolCallSpanId: string | null;
+  // Tool call spans (concurrent, children of agent_run)
+  toolCallSpans: Array<{ spanId: string; toolName: string }>;
 }
 
 interface SessionManagerConfig {
@@ -74,7 +74,7 @@ export class SessionStateManager {
         interactionSpanId: null,
         interactionLastActivity: now,
         agentRunSpanId: null,
-        toolCallSpanId: null,
+        toolCallSpans: [],
       };
       this.sessions.set(sessionKey, state);
       this.logger.debug('session_state_created', { sessionKey });
@@ -346,9 +346,7 @@ export class SessionStateManager {
     if (!state || !state.agentRunSpanId) return;
 
     // Close any open tool spans first
-    if (state.toolCallSpanId) {
-      await this.closeToolCallSpan(sessionKey, 'cancelled');
-    }
+    await this.closeAllToolCallSpans(sessionKey, 'cancelled');
 
     await this.agent.finishSpan(sessionKey, state.agentRunSpanId, status);
     this.logger.info('agent_run_span_closed', {
@@ -359,7 +357,7 @@ export class SessionStateManager {
     state.agentRunSpanId = null;
   }
 
-  // Create tool_call span
+  // Create tool_call span (supports concurrent tool calls)
   async createToolCallSpan(
     sessionKey: string,
     toolName: string,
@@ -376,11 +374,6 @@ export class SessionStateManager {
       await this.createAgentRunSpan(sessionKey, rawContext);
     }
 
-    // Close any existing tool call (sequential assumption)
-    if (state.toolCallSpanId) {
-      await this.closeToolCallSpan(sessionKey, 'complete');
-    }
-
     const spanId = await this.agent.createSpan(
       sessionKey,
       'openclaw:tool_call',
@@ -389,30 +382,75 @@ export class SessionStateManager {
     );
 
     if (spanId) {
-      state.toolCallSpanId = spanId;
+      state.toolCallSpans.push({ spanId, toolName });
       this.logger.info('tool_call_span_created', { sessionKey, spanId, tool: toolName });
     }
 
     return spanId;
   }
 
-  // Close tool_call span
+  // Close tool_call span by toolName match (pops last match, or oldest if no match)
   async closeToolCallSpan(
     sessionKey: string,
-    status: 'complete' | 'cancelled' | 'failed' = 'complete'
+    status: 'complete' | 'cancelled' | 'failed' = 'complete',
+    toolName?: string
   ): Promise<void> {
     if (!this.agent) return;
 
     const state = this.sessions.get(sessionKey);
-    if (!state || !state.toolCallSpanId) return;
+    if (!state || state.toolCallSpans.length === 0) return;
 
-    await this.agent.finishSpan(sessionKey, state.toolCallSpanId, status);
+    // Find the matching span - prefer last match by toolName, fall back to oldest
+    let index = -1;
+    if (toolName) {
+      // Find last span matching this toolName
+      for (let i = state.toolCallSpans.length - 1; i >= 0; i--) {
+        if (state.toolCallSpans[i].toolName === toolName) {
+          index = i;
+          break;
+        }
+      }
+    }
+    if (index === -1) {
+      // No toolName match or no toolName provided — take the oldest
+      index = 0;
+    }
+
+    // Synchronously remove from array BEFORE the async finishSpan call
+    // to prevent double-close from concurrent callers
+    const [entry] = state.toolCallSpans.splice(index, 1);
+
+    await this.agent.finishSpan(sessionKey, entry.spanId, status);
     this.logger.info('tool_call_span_closed', {
       sessionKey,
-      spanId: state.toolCallSpanId,
+      spanId: entry.spanId,
+      tool: entry.toolName,
       status,
     });
-    state.toolCallSpanId = null;
+  }
+
+  // Close ALL tool call spans (used during cleanup)
+  private async closeAllToolCallSpans(
+    sessionKey: string,
+    status: 'complete' | 'cancelled' | 'failed' = 'cancelled'
+  ): Promise<void> {
+    if (!this.agent) return;
+
+    const state = this.sessions.get(sessionKey);
+    if (!state || state.toolCallSpans.length === 0) return;
+
+    // Synchronously take all spans, then close them
+    const spans = state.toolCallSpans.splice(0);
+
+    for (const entry of spans) {
+      await this.agent.finishSpan(sessionKey, entry.spanId, status);
+      this.logger.info('tool_call_span_closed', {
+        sessionKey,
+        spanId: entry.spanId,
+        tool: entry.toolName,
+        status,
+      });
+    }
   }
 
   // Create assistant_response span (immediate event)
@@ -468,15 +506,13 @@ export class SessionStateManager {
     return spanId;
   }
 
-  // Close all child spans (agent_run, tool_call)
+  // Close all child spans (agent_run, tool_calls)
   private async closeAllChildSpans(sessionKey: string): Promise<void> {
     const state = this.sessions.get(sessionKey);
     if (!state) return;
 
-    // Close tool call if open
-    if (state.toolCallSpanId) {
-      await this.closeToolCallSpan(sessionKey, 'cancelled');
-    }
+    // Close all tool calls
+    await this.closeAllToolCallSpans(sessionKey, 'cancelled');
 
     // Close agent run if open
     if (state.agentRunSpanId) {
@@ -522,9 +558,7 @@ export class SessionStateManager {
 
     for (const [sessionKey, state] of this.sessions.entries()) {
       // Close all spans with failed status
-      if (state.toolCallSpanId) {
-        await this.closeToolCallSpan(sessionKey, 'failed');
-      }
+      await this.closeAllToolCallSpans(sessionKey, 'failed');
       if (state.agentRunSpanId) {
         await this.closeAgentRunSpan(sessionKey, 'failed');
       }

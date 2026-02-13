@@ -228,12 +228,6 @@ export class Agent {
             raw: { type: 'object', description: 'Raw OpenClaw message context' },
           },
         },
-        'openclaw:assistant_message': {
-          description: 'Outbound message to user',
-          fields: {
-            raw: { type: 'object', description: 'Raw OpenClaw message context' },
-          },
-        },
         'openclaw:assistant_response': {
           description: 'Assistant response generation span',
           fields: {
@@ -760,23 +754,6 @@ export class Agent {
     }
 
     return spanId;
-  }
-
-  async createAssistantMessageSpan(
-    sessionKey: string,
-    rawContext: unknown
-  ): Promise<string | null> {
-    const parentSpanId = this.getParentSpanId(sessionKey);
-    return this.createSpan(
-      sessionKey,
-      'openclaw:assistant_message',
-      { raw: rawContext },
-      parentSpanId
-    );
-  }
-
-  async closeAssistantMessageSpan(sessionKey: string): Promise<void> {
-    await this.closeSpanBySchema(sessionKey, 'openclaw:assistant_message');
   }
 }
 
