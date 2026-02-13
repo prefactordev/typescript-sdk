@@ -21,7 +21,7 @@ function createSpan(spanId: string, spanType: string): Span {
 }
 
 describe('middleware timeout handling', () => {
-  test('fails request and marks agent span failed when generate hangs', async () => {
+  test('fails request without creating a root agent span when generate hangs', async () => {
     const ended: Array<{ span: Span; options?: unknown }> = [];
     const startedSpanTypes: string[] = [];
     const tracer: Tracer = {
@@ -70,8 +70,8 @@ describe('middleware timeout handling', () => {
 
     expect(result).toBe('rejected');
     expect(finished).toBe(true);
-    expect(ended).toHaveLength(2);
-    expect(startedSpanTypes).toContain('ai-sdk:agent');
+    expect(ended).toHaveLength(1);
+    expect(startedSpanTypes).not.toContain('ai-sdk:agent');
     expect(startedSpanTypes).toContain('ai-sdk:llm');
   });
 });

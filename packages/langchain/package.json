@@ -1,6 +1,6 @@
 {
   "name": "@prefactor/langchain",
-  "version": "0.2.6",
+  "version": "0.2.8",
   "description": "LangChain.js integration for Prefactor observability",
   "type": "module",
   "main": "dist/index.cjs",
@@ -35,6 +35,6 @@
     "langchain": "^1.0.0"
   },
   "engines": {
-    "node": ">=24.0.0"
+    "node": ">=22.0.0"
   }
 }

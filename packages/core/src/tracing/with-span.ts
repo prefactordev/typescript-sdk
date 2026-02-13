@@ -17,14 +17,35 @@ export async function withSpan<T>(
   const span = tracer.startSpan(options);
 
   try {
-    const result = await SpanContext.runAsync(span, async () => await fn());
-    tracer.endSpan(span);
+    const result = await SpanContext.runAsync(span, () => Promise.resolve(fn()));
+    tracer.endSpan(span, { outputs: toSpanOutputs(result) });
     return result;
   } catch (error) {
     const normalizedError = error instanceof Error ? error : new Error(String(error));
     tracer.endSpan(span, { error: normalizedError });
     throw error;
   }
+}
+
+function toSpanOutputs<T>(result: T): Record<string, unknown> {
+  if (isRecord(result)) {
+    return result;
+  }
+
+  if (result === undefined) {
+    return {};
+  }
+
+  return { result };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  if (value === null || typeof value !== 'object') {
+    return false;
+  }
+
+  const prototype = Object.getPrototypeOf(value);
+  return prototype === Object.prototype || prototype === null;
 }
 
 function resolveArgs<T>(

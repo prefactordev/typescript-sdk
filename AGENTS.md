@@ -25,9 +25,12 @@ This file guides coding agents working in this repo.
 - Before adding logic to a provider package, check whether it can be a reusable core utility.
 - Avoid duplicate implementations across provider packages; extract to core first, then adapt.
 - Design decisions should default to "core-first" unless a provider-specific constraint requires local behavior.
+- Across all development work, implement only the minimum required behavior for current requirements.
+- Prefer direct 1:1 mappings between requirements and implementation; avoid speculative abstractions.
+- Do not add optional, speculative, or future-use code, APIs, schemas, configs, or examples unless explicitly requested.
 
 ## Toolchain
-- Runtime: Node >= 24 (see `package.json`), dev uses Bun.
+- Runtime: Node >= 22 (see `package.json`), dev uses Bun.
 - Install toolchain: `mise install`.
 - Install deps: `mise run install` or `bun install`.
 - Prefer `mise run` commands; they wrap the canonical Bun commands.

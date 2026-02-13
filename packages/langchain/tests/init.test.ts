@@ -49,6 +49,12 @@ describe('langchain init schema registration', () => {
     expect(registeredSchemas[0]).toMatchObject({
       external_identifier: 'langchain-schema',
       span_schemas: expect.any(Object),
+      span_result_schemas: {
+        'langchain:agent': { type: 'object', additionalProperties: true },
+        'langchain:llm': { type: 'object', additionalProperties: true },
+        'langchain:tool': { type: 'object', additionalProperties: true },
+        'langchain:chain': { type: 'object', additionalProperties: true },
+      },
     });
   });
 

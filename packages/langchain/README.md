@@ -169,7 +169,7 @@ process.on('SIGTERM', async () => {
 
 ## Requirements
 
-- Node.js >= 24.0.0
+- Node.js >= 22.0.0
 - LangChain.js >= 1.0.0
 
 ## License

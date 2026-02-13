@@ -41,7 +41,12 @@ export {
 } from './transport/http/agent-span-client.js';
 
 // HTTP Client & API Clients
-export { HttpClient, HttpClientError, type HttpRequester } from './transport/http/http-client.js';
+export {
+  HttpClient,
+  HttpClient as HTTPClient,
+  HttpClientError,
+  type HttpRequester
+} from './transport/http/http-client.js';
 // Transport
 export type { AgentInstanceOptions, Transport } from './transport/http.js';
 export { HttpTransport } from './transport/http.js';
