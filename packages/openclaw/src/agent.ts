@@ -1,5 +1,5 @@
-// Agent span management for Prefactor plugin
-// Manages AgentInstance lifecycle and span tracking with stack-based hierarchy
+// Agent HTTP client for Prefactor plugin
+// Manages AgentInstance lifecycle and span CRUD via HTTP API
 // Multi-session support - tracks multiple independent AgentInstances simultaneously
 
 import {
@@ -14,7 +14,6 @@ import type { Logger } from './logger.js';
 
 // Session state tracking
 interface SessionState {
-  stack: SpanStack;
   instanceId: string | null;
   instanceRegistered: boolean;
   instanceStarted: boolean;
@@ -70,52 +69,6 @@ type SpanOperation =
       timestamp: string;
       idempotency_key: string;
     };
-
-// Active span tracking
-interface ActiveSpan {
-  spanId: string;
-  schemaName: string;
-  startedAt: string;
-  sessionKey: string;
-}
-
-// Span stack for single session
-class SpanStack {
-  private spans: ActiveSpan[] = [];
-
-  push(span: ActiveSpan): void {
-    this.spans.push(span);
-  }
-
-  pop(): ActiveSpan | undefined {
-    return this.spans.pop();
-  }
-
-  peek(): ActiveSpan | undefined {
-    return this.spans[this.spans.length - 1];
-  }
-
-  findBySchema(schemaName: string): ActiveSpan | undefined {
-    for (let i = this.spans.length - 1; i >= 0; i--) {
-      if (this.spans[i].schemaName === schemaName) {
-        return this.spans[i];
-      }
-    }
-    return undefined;
-  }
-
-  getAll(): ActiveSpan[] {
-    return [...this.spans];
-  }
-
-  clear(): void {
-    this.spans = [];
-  }
-
-  isEmpty(): boolean {
-    return this.spans.length === 0;
-  }
-}
 
 // Replay queue for failed operations
 class ReplayQueue {
@@ -250,7 +203,6 @@ export class Agent {
   private getOrCreateSession(sessionKey: string): SessionState {
     if (!this.sessions.has(sessionKey)) {
       this.sessions.set(sessionKey, {
-        stack: new SpanStack(),
         instanceId: null,
         instanceRegistered: false,
         instanceStarted: false,
@@ -405,9 +357,6 @@ export class Agent {
       return;
     }
 
-    // First, close all remaining spans
-    await this.closeAllSpans(sessionKey);
-
     try {
       const idempotencyKey = `instance-finish-${sessionKey}-${Date.now()}`;
       const timestamp = new Date().toISOString();
@@ -516,14 +465,6 @@ export class Agent {
         return null;
       }
 
-      // Push to stack
-      session.stack.push({
-        spanId,
-        schemaName,
-        startedAt: response.details?.started_at || new Date().toISOString(),
-        sessionKey,
-      });
-
       this.logger.info('span_created', {
         sessionKey,
         spanId,
@@ -565,18 +506,6 @@ export class Agent {
         idempotency_key: idempotencyKey,
       });
 
-      // Remove from stack
-      const session = this.getOrCreateSession(sessionKey);
-      const spans = session.stack.getAll();
-      const spanIndex = spans.findIndex((s) => s.spanId === spanId);
-      if (spanIndex > -1) {
-        // Remove this span and all children above it
-        while (!session.stack.isEmpty()) {
-          const popped = session.stack.pop();
-          if (popped?.spanId === spanId) break;
-        }
-      }
-
       this.logger.info('span_finished', { sessionKey, spanId, status });
     } catch (err) {
       this.logger.error('finish_span_failed', {
@@ -596,37 +525,6 @@ export class Agent {
         idempotency_key: idempotencyKey,
       });
     }
-  }
-
-  async closeAllSpans(sessionKey: string): Promise<void> {
-    const session = this.getOrCreateSession(sessionKey);
-    const spans = session.stack.getAll();
-
-    // Finish spans in reverse order (LIFO)
-    for (let i = spans.length - 1; i >= 0; i--) {
-      await this.finishSpan(sessionKey, spans[i].spanId, 'complete');
-    }
-
-    session.stack.clear();
-  }
-
-  async closeSpanBySchema(sessionKey: string, schemaName: string): Promise<void> {
-    const session = this.getOrCreateSession(sessionKey);
-    const span = session.stack.findBySchema(schemaName);
-
-    if (span) {
-      await this.finishSpan(sessionKey, span.spanId, 'complete');
-    }
-  }
-
-  getCurrentSpan(sessionKey: string): ActiveSpan | undefined {
-    const session = this.getOrCreateSession(sessionKey);
-    return session.stack.peek();
-  }
-
-  getParentSpanId(sessionKey: string): string | null {
-    const current = this.getCurrentSpan(sessionKey);
-    return current?.spanId || null;
   }
 
   async flushQueue(): Promise<void> {
@@ -713,48 +611,6 @@ export class Agent {
     });
   }
 
-  // Utility for creating spans with proper parent relationships
-  async createAgentRunSpan(sessionKey: string, rawContext: unknown): Promise<string | null> {
-    return this.createSpan(sessionKey, 'openclaw:agent_run', { raw: rawContext }, null);
-  }
-
-  async createToolCallSpan(
-    sessionKey: string,
-    toolName: string,
-    rawContext: unknown
-  ): Promise<string | null> {
-    // First, close any existing tool_call span (workaround for broken after_tool_call)
-    await this.closeSpanBySchema(sessionKey, 'openclaw:tool_call');
-
-    const parentSpanId = this.getParentSpanId(sessionKey);
-    return this.createSpan(
-      sessionKey,
-      'openclaw:tool_call',
-      { toolName, raw: rawContext },
-      parentSpanId
-    );
-  }
-
-  async closeToolCallSpan(sessionKey: string): Promise<void> {
-    await this.closeSpanBySchema(sessionKey, 'openclaw:tool_call');
-  }
-
-  async createUserMessageSpan(sessionKey: string, rawContext: unknown): Promise<string | null> {
-    const parentSpanId = this.getParentSpanId(sessionKey);
-    const spanId = await this.createSpan(
-      sessionKey,
-      'openclaw:user_message',
-      { raw: rawContext },
-      parentSpanId
-    );
-
-    // User message spans are instant - close immediately
-    if (spanId) {
-      await this.finishSpan(sessionKey, spanId, 'complete');
-    }
-
-    return spanId;
-  }
 }
 
 // Factory function

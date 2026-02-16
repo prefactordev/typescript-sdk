@@ -84,9 +84,10 @@ export default function register(api: OpenClawPluginApi) {
     sessionTimeoutMs: config.sessionTimeoutHours * 60 * 60 * 1000,
   });
 
-  // Cache the session key from agent hooks for use in message hooks
-  // (message hooks only have channelId/conversationId, not sessionKey)
-  let lastKnownSessionKey: string | null = null;
+  // Buffer the last received user message for span creation in before_agent_start.
+  // message_received fires before before_agent_start and lacks sessionKey,
+  // so we buffer the message and create the span when sessionKey is available.
+  let pendingUserMessage: { from: string; content: string; channelId: string } | null = null;
 
   // ==================== GATEWAY LIFECYCLE ====================
 
@@ -138,26 +139,39 @@ export default function register(api: OpenClawPluginApi) {
 
     logger.info('session_end', { sessionKey, timestamp, messageCount: event.messageCount });
 
-    if (agent) {
-      agent.finishAgentInstance(sessionKey, 'complete').catch((err) => {
+    // Close all spans through SessionStateManager, then finish the agent instance
+    sessionManager
+      .closeSessionSpan(sessionKey)
+      .then(() => agent?.finishAgentInstance(sessionKey, 'complete'))
+      .catch((err) => {
         logger.error('prefactor_session_finish_failed', {
           sessionKey,
           error: err instanceof Error ? err.message : String(err),
         });
       });
-    }
   });
 
   // ==================== AGENT LIFECYCLE ====================
 
   api.on('before_agent_start', (event, ctx) => {
     const sessionKey = ctx.sessionKey || 'unknown';
-    lastKnownSessionKey = sessionKey;
 
     logger.info('before_agent_start', { sessionKey });
 
-    // Create agent_run span
-    sessionManager.createAgentRunSpan(sessionKey, { event, ctx }).catch((err) => {
+    // Consume buffered user message and create spans sequentially.
+    // The operation queue in SessionStateManager ensures these complete
+    // before any closeAgentRunSpan from agent_end can execute.
+    const userMsg = pendingUserMessage;
+    pendingUserMessage = null;
+
+    const work = async () => {
+      if (userMsg) {
+        await sessionManager.createUserMessageSpan(sessionKey, userMsg);
+      }
+      await sessionManager.createAgentRunSpan(sessionKey, { event, ctx });
+    };
+
+    work().catch((err) => {
       logger.error('prefactor_agent_run_span_failed', {
         sessionKey,
         error: err instanceof Error ? err.message : String(err),
@@ -268,8 +282,8 @@ export default function register(api: OpenClawPluginApi) {
   // ==================== MESSAGE LIFECYCLE ====================
 
   // Note: Message hooks use PluginHookMessageContext which has channelId/conversationId
-  // but NOT sessionKey. Span management is handled by agent hooks (before_agent_start,
-  // agent_end) which have the correct sessionKey. These hooks are logging-only.
+  // but NOT sessionKey. User message spans are created in before_agent_start which has
+  // the sessionKey. We buffer the message here for consumption there.
 
   api.on('message_received', (event, ctx) => {
     const preview = event.content ? event.content.slice(0, 50) : '';
@@ -281,21 +295,12 @@ export default function register(api: OpenClawPluginApi) {
       preview,
     });
 
-    // Create user_message span using cached session key from agent hooks
-    if (lastKnownSessionKey) {
-      sessionManager
-        .createUserMessageSpan(lastKnownSessionKey, {
-          from: event.from,
-          content: event.content,
-          channelId: ctx.channelId,
-        })
-        .catch((err) => {
-          logger.error('prefactor_user_message_span_failed', {
-            sessionKey: lastKnownSessionKey,
-            error: err instanceof Error ? err.message : String(err),
-          });
-        });
-    }
+    // Buffer for consumption by before_agent_start (which has the sessionKey)
+    pendingUserMessage = {
+      from: event.from,
+      content: event.content,
+      channelId: ctx.channelId,
+    };
   });
 
   api.on('message_sending', (event, ctx) => {

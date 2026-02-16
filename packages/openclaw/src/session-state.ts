@@ -1,5 +1,6 @@
 // Session State Manager for Prefactor plugin
 // Manages span hierarchies and timeouts per OpenClaw session
+// All public methods are serialized per session key via the operation queue
 
 import type { Agent } from './agent.js';
 import type { Logger } from './logger.js';
@@ -24,14 +25,42 @@ interface SessionManagerConfig {
   sessionTimeoutMs: number;
 }
 
+// Serializes async operations per session key to prevent race conditions
+// between fire-and-forget hook handlers (e.g. createAgentRunSpan must complete
+// before closeAgentRunSpan can execute on the same session)
+class SessionOperationQueue {
+  private queues: Map<string, Promise<void>> = new Map();
+
+  enqueue<T>(sessionKey: string, operation: () => Promise<T>): Promise<T> {
+    const current = this.queues.get(sessionKey) ?? Promise.resolve();
+
+    let resolve!: (value: T) => void;
+    let reject!: (reason: unknown) => void;
+    const result = new Promise<T>((res, rej) => {
+      resolve = res;
+      reject = rej;
+    });
+
+    const next = current.then(() => operation().then(resolve, reject));
+
+    // Store the queue chain — catch to prevent unhandled rejection propagation
+    this.queues.set(sessionKey, next.catch(() => {}));
+
+    return result;
+  }
+
+  clear(sessionKey: string): void {
+    this.queues.delete(sessionKey);
+  }
+}
+
 export class SessionStateManager {
   private sessions: Map<string, SessionSpanState> = new Map();
   private agent: Agent | null;
   private logger: Logger;
   private config: SessionManagerConfig;
   private cleanupInterval: NodeJS.Timeout | null = null;
-  // Track in-flight span creation operations to prevent duplicates
-  private inFlightOperations: Map<string, Promise<string | null>> = new Map();
+  private queue: SessionOperationQueue = new SessionOperationQueue();
 
   constructor(agent: Agent | null, logger: Logger, config: Partial<SessionManagerConfig> = {}) {
     this.agent = agent;
@@ -86,8 +115,128 @@ export class SessionStateManager {
     return state;
   }
 
+  // --- Public methods (serialized via operation queue) ---
+
   // Create synthetic session span (24hr lifetime)
   async createSessionSpan(sessionKey: string): Promise<string | null> {
+    return this.queue.enqueue(sessionKey, () => this._createSessionSpan(sessionKey));
+  }
+
+  // Close session span and all its children
+  async closeSessionSpan(sessionKey: string): Promise<void> {
+    return this.queue.enqueue(sessionKey, () => this._closeSessionSpan(sessionKey));
+  }
+
+  // Create or get user interaction span (5min timeout)
+  async createOrGetInteractionSpan(sessionKey: string): Promise<string | null> {
+    return this.queue.enqueue(sessionKey, () => this._createOrGetInteractionSpan(sessionKey));
+  }
+
+  // Close interaction span and all its children
+  async closeInteractionSpan(
+    sessionKey: string,
+    status: 'complete' | 'cancelled' | 'failed' = 'complete'
+  ): Promise<void> {
+    return this.queue.enqueue(sessionKey, () => this._closeInteractionSpan(sessionKey, status));
+  }
+
+  // Create user_message span (immediate event)
+  async createUserMessageSpan(sessionKey: string, rawContext: unknown): Promise<string | null> {
+    return this.queue.enqueue(sessionKey, () =>
+      this._createUserMessageSpan(sessionKey, rawContext)
+    );
+  }
+
+  // Create agent_run span
+  async createAgentRunSpan(sessionKey: string, rawContext: unknown): Promise<string | null> {
+    return this.queue.enqueue(sessionKey, () =>
+      this._createAgentRunSpan(sessionKey, rawContext)
+    );
+  }
+
+  // Close agent_run span
+  async closeAgentRunSpan(
+    sessionKey: string,
+    status: 'complete' | 'cancelled' | 'failed' = 'complete'
+  ): Promise<void> {
+    return this.queue.enqueue(sessionKey, () => this._closeAgentRunSpan(sessionKey, status));
+  }
+
+  // Create tool_call span (supports concurrent tool calls)
+  async createToolCallSpan(
+    sessionKey: string,
+    toolName: string,
+    rawContext: unknown
+  ): Promise<string | null> {
+    return this.queue.enqueue(sessionKey, () =>
+      this._createToolCallSpan(sessionKey, toolName, rawContext)
+    );
+  }
+
+  // Close tool_call span by toolName match
+  async closeToolCallSpan(
+    sessionKey: string,
+    status: 'complete' | 'cancelled' | 'failed' = 'complete',
+    toolName?: string
+  ): Promise<void> {
+    return this.queue.enqueue(sessionKey, () =>
+      this._closeToolCallSpan(sessionKey, status, toolName)
+    );
+  }
+
+  // Create assistant_response span (immediate event)
+  async createAssistantResponseSpan(
+    sessionKey: string,
+    rawContext: unknown
+  ): Promise<string | null> {
+    return this.queue.enqueue(sessionKey, () =>
+      this._createAssistantResponseSpan(sessionKey, rawContext)
+    );
+  }
+
+  // Force cleanup all sessions (for gateway_stop)
+  async cleanupAllSessions(): Promise<void> {
+    this.logger.info('cleanup_all_sessions_start', { count: this.sessions.size });
+
+    for (const [sessionKey, state] of this.sessions.entries()) {
+      // Close all spans with failed status (bypass queue — this is emergency cleanup)
+      await this._closeAllToolCallSpans(sessionKey, 'failed');
+      if (state.agentRunSpanId) {
+        await this._closeAgentRunSpan(sessionKey, 'failed');
+      }
+      if (state.interactionSpanId) {
+        await this._closeInteractionSpan(sessionKey, 'failed');
+      }
+      if (state.sessionSpanId) {
+        await this._closeSessionSpan(sessionKey);
+      }
+    }
+
+    this.sessions.clear();
+    this.stop();
+
+    this.logger.info('cleanup_all_sessions_complete', {});
+  }
+
+  // Get session state for debugging
+  getSessionState(sessionKey: string): SessionSpanState | undefined {
+    return this.sessions.get(sessionKey);
+  }
+
+  // Get all session keys
+  getAllSessionKeys(): string[] {
+    return Array.from(this.sessions.keys());
+  }
+
+  // Check if interaction exists
+  hasActiveInteraction(sessionKey: string): boolean {
+    const state = this.sessions.get(sessionKey);
+    return !!state?.interactionSpanId;
+  }
+
+  // --- Internal implementations (called within the operation queue) ---
+
+  private async _createSessionSpan(sessionKey: string): Promise<string | null> {
     if (!this.agent) {
       this.logger.debug('no_agent_for_session_span', { sessionKey });
       return null;
@@ -96,38 +245,6 @@ export class SessionStateManager {
     const state = this.getOrCreateSessionState(sessionKey);
 
     // If session span already exists, don't recreate
-    if (state.sessionSpanId) {
-      return state.sessionSpanId;
-    }
-
-    // Check for in-flight operation to prevent duplicate spans
-    const operationKey = `${sessionKey}:session`;
-    const existingOperation = this.inFlightOperations.get(operationKey);
-    if (existingOperation) {
-      this.logger.debug('reusing_in_flight_session_span', { sessionKey });
-      return existingOperation;
-    }
-
-    // Create and track the in-flight operation
-    const operation = this.executeCreateSessionSpan(sessionKey, state);
-    this.inFlightOperations.set(operationKey, operation);
-
-    try {
-      const spanId = await operation;
-      return spanId;
-    } finally {
-      // Always clean up the in-flight operation
-      this.inFlightOperations.delete(operationKey);
-    }
-  }
-
-  private async executeCreateSessionSpan(
-    sessionKey: string,
-    state: SessionSpanState
-  ): Promise<string | null> {
-    if (!this.agent) return null;
-
-    // Re-check after await in case another call completed while we were waiting
     if (state.sessionSpanId) {
       return state.sessionSpanId;
     }
@@ -148,72 +265,36 @@ export class SessionStateManager {
     return spanId;
   }
 
-  // Close session span and all its children
-  async closeSessionSpan(sessionKey: string): Promise<void> {
+  private async _closeSessionSpan(sessionKey: string): Promise<void> {
     if (!this.agent) return;
 
     const state = this.sessions.get(sessionKey);
     if (!state) return;
 
-    // Close interaction span if open
-    if (state.interactionSpanId) {
-      await this.agent.finishSpan(sessionKey, state.interactionSpanId, 'complete');
-      this.logger.info('interaction_span_closed', { sessionKey, spanId: state.interactionSpanId });
-      state.interactionSpanId = null;
-    }
-
     // Close all child spans first
-    await this.closeAllChildSpans(sessionKey);
+    await this._closeAllChildSpans(sessionKey);
 
-    // Close session span
-    if (state.sessionSpanId) {
-      await this.agent.finishSpan(sessionKey, state.sessionSpanId, 'complete');
-      this.logger.info('session_span_closed', { sessionKey, spanId: state.sessionSpanId });
-      state.sessionSpanId = null;
-    }
+    // Capture and null synchronously to prevent double-close
+    const spanId = state.sessionSpanId;
+    if (!spanId) return;
+    state.sessionSpanId = null;
+
+    await this.agent.finishSpan(sessionKey, spanId, 'complete');
+    this.logger.info('session_span_closed', { sessionKey, spanId });
   }
 
-  // Create or get user interaction span (5min timeout)
-  async createOrGetInteractionSpan(sessionKey: string): Promise<string | null> {
+  private async _createOrGetInteractionSpan(sessionKey: string): Promise<string | null> {
     if (!this.agent) return null;
 
     const state = this.getOrCreateSessionState(sessionKey);
-
-    // Check for in-flight operation to prevent duplicate spans
-    const operationKey = `${sessionKey}:interaction`;
-    const existingOperation = this.inFlightOperations.get(operationKey);
-    if (existingOperation) {
-      this.logger.debug('reusing_in_flight_interaction_span', { sessionKey });
-      return existingOperation;
-    }
-
-    // Create and track the in-flight operation
-    const operation = this.executeCreateInteractionSpan(sessionKey, state);
-    this.inFlightOperations.set(operationKey, operation);
-
-    try {
-      const spanId = await operation;
-      return spanId;
-    } finally {
-      // Always clean up the in-flight operation
-      this.inFlightOperations.delete(operationKey);
-    }
-  }
-
-  private async executeCreateInteractionSpan(
-    sessionKey: string,
-    state: SessionSpanState
-  ): Promise<string | null> {
-    if (!this.agent) return null;
-
     const now = Date.now();
 
     // Ensure session span exists first
     if (!state.sessionSpanId) {
-      await this.createSessionSpan(sessionKey);
+      await this._createSessionSpan(sessionKey);
     }
 
-    // Re-check after await in case another call completed while we were waiting
+    // Check if existing interaction has timed out
     if (state.interactionSpanId) {
       const idleTime = now - state.interactionLastActivity;
       if (idleTime > this.config.userInteractionTimeoutMs) {
@@ -221,7 +302,7 @@ export class SessionStateManager {
           sessionKey,
           idleTimeMinutes: idleTime / 60000,
         });
-        await this.closeInteractionSpan(sessionKey, 'cancelled');
+        await this._closeInteractionSpan(sessionKey, 'cancelled');
       } else {
         // Interaction span exists and hasn't expired
         state.interactionLastActivity = now;
@@ -229,58 +310,52 @@ export class SessionStateManager {
       }
     }
 
-    // Create new interaction span if needed
-    if (!state.interactionSpanId) {
-      const spanId = await this.agent.createSpan(
-        sessionKey,
-        'openclaw:user_interaction',
-        { startedAt: new Date().toISOString() },
-        state.sessionSpanId // Child of session
-      );
+    // Create new interaction span
+    const spanId = await this.agent.createSpan(
+      sessionKey,
+      'openclaw:user_interaction',
+      { startedAt: new Date().toISOString() },
+      state.sessionSpanId // Child of session
+    );
 
-      if (spanId) {
-        state.interactionSpanId = spanId;
-        state.interactionLastActivity = now;
-        this.logger.info('interaction_span_created', { sessionKey, spanId });
-      }
-
-      return spanId;
+    if (spanId) {
+      state.interactionSpanId = spanId;
+      state.interactionLastActivity = now;
+      this.logger.info('interaction_span_created', { sessionKey, spanId });
     }
 
-    // Update last activity for existing interaction
-    state.interactionLastActivity = now;
-    return state.interactionSpanId;
+    return spanId;
   }
 
-  // Close interaction span and all its children
-  async closeInteractionSpan(
+  private async _closeInteractionSpan(
     sessionKey: string,
     status: 'complete' | 'cancelled' | 'failed' = 'complete'
   ): Promise<void> {
     if (!this.agent) return;
 
     const state = this.sessions.get(sessionKey);
-    if (!state || !state.interactionSpanId) return;
+    if (!state) return;
 
-    // Close all child spans
-    await this.closeAllChildSpans(sessionKey);
+    // Close all child spans first
+    await this._closeAllChildSpans(sessionKey);
 
-    // Close interaction span
-    await this.agent.finishSpan(sessionKey, state.interactionSpanId, status);
-    this.logger.info('interaction_span_closed', {
-      sessionKey,
-      spanId: state.interactionSpanId,
-      status,
-    });
+    // Capture and null synchronously to prevent double-close
+    const spanId = state.interactionSpanId;
+    if (!spanId) return;
     state.interactionSpanId = null;
+
+    await this.agent.finishSpan(sessionKey, spanId, status);
+    this.logger.info('interaction_span_closed', { sessionKey, spanId, status });
   }
 
-  // Create user_message span (immediate event)
-  async createUserMessageSpan(sessionKey: string, rawContext: unknown): Promise<string | null> {
+  private async _createUserMessageSpan(
+    sessionKey: string,
+    rawContext: unknown
+  ): Promise<string | null> {
     if (!this.agent) return null;
 
     // Ensure interaction exists
-    const interactionSpanId = await this.createOrGetInteractionSpan(sessionKey);
+    const interactionSpanId = await this._createOrGetInteractionSpan(sessionKey);
     if (!interactionSpanId) return null;
 
     const spanId = await this.agent.createSpan(
@@ -299,19 +374,21 @@ export class SessionStateManager {
     return spanId;
   }
 
-  // Create agent_run span
-  async createAgentRunSpan(sessionKey: string, rawContext: unknown): Promise<string | null> {
+  private async _createAgentRunSpan(
+    sessionKey: string,
+    rawContext: unknown
+  ): Promise<string | null> {
     if (!this.agent) return null;
 
     const state = this.getOrCreateSessionState(sessionKey);
 
     // Ensure interaction exists and update activity
-    const interactionSpanId = await this.createOrGetInteractionSpan(sessionKey);
+    const interactionSpanId = await this._createOrGetInteractionSpan(sessionKey);
     if (!interactionSpanId) return null;
 
     // Close any existing agent run (orphan cleanup)
     if (state.agentRunSpanId) {
-      await this.closeAgentRunSpan(sessionKey, 'cancelled');
+      await this._closeAgentRunSpan(sessionKey, 'cancelled');
     }
 
     // Get the last 3 messages from the context to reduce payload size
@@ -335,30 +412,28 @@ export class SessionStateManager {
     return spanId;
   }
 
-  // Close agent_run span
-  async closeAgentRunSpan(
+  private async _closeAgentRunSpan(
     sessionKey: string,
     status: 'complete' | 'cancelled' | 'failed' = 'complete'
   ): Promise<void> {
     if (!this.agent) return;
 
     const state = this.sessions.get(sessionKey);
-    if (!state || !state.agentRunSpanId) return;
+    if (!state) return;
+
+    // Capture and null synchronously to prevent double-close
+    const spanId = state.agentRunSpanId;
+    if (!spanId) return;
+    state.agentRunSpanId = null;
 
     // Close any open tool spans first
-    await this.closeAllToolCallSpans(sessionKey, 'cancelled');
+    await this._closeAllToolCallSpans(sessionKey, 'cancelled');
 
-    await this.agent.finishSpan(sessionKey, state.agentRunSpanId, status);
-    this.logger.info('agent_run_span_closed', {
-      sessionKey,
-      spanId: state.agentRunSpanId,
-      status,
-    });
-    state.agentRunSpanId = null;
+    await this.agent.finishSpan(sessionKey, spanId, status);
+    this.logger.info('agent_run_span_closed', { sessionKey, spanId, status });
   }
 
-  // Create tool_call span (supports concurrent tool calls)
-  async createToolCallSpan(
+  private async _createToolCallSpan(
     sessionKey: string,
     toolName: string,
     rawContext: unknown
@@ -371,7 +446,7 @@ export class SessionStateManager {
     if (!state.agentRunSpanId) {
       this.logger.warn('tool_call_without_agent_run', { sessionKey, toolName });
       // Create agent run on-the-fly
-      await this.createAgentRunSpan(sessionKey, rawContext);
+      await this._createAgentRunSpan(sessionKey, rawContext);
     }
 
     const spanId = await this.agent.createSpan(
@@ -389,8 +464,7 @@ export class SessionStateManager {
     return spanId;
   }
 
-  // Close tool_call span by toolName match (pops last match, or oldest if no match)
-  async closeToolCallSpan(
+  private async _closeToolCallSpan(
     sessionKey: string,
     status: 'complete' | 'cancelled' | 'failed' = 'complete',
     toolName?: string
@@ -429,8 +503,7 @@ export class SessionStateManager {
     });
   }
 
-  // Close ALL tool call spans (used during cleanup)
-  private async closeAllToolCallSpans(
+  private async _closeAllToolCallSpans(
     sessionKey: string,
     status: 'complete' | 'cancelled' | 'failed' = 'cancelled'
   ): Promise<void> {
@@ -453,8 +526,7 @@ export class SessionStateManager {
     }
   }
 
-  // Create assistant_response span (immediate event)
-  async createAssistantResponseSpan(
+  private async _createAssistantResponseSpan(
     sessionKey: string,
     rawContext: unknown
   ): Promise<string | null> {
@@ -476,7 +548,7 @@ export class SessionStateManager {
         reason: state.interactionSpanId ? 'timeout' : 'missing',
         idleTimeMinutes: state.interactionSpanId ? idleTime / 60000 : undefined,
       });
-      interactionSpanId = await this.createOrGetInteractionSpan(sessionKey);
+      interactionSpanId = await this._createOrGetInteractionSpan(sessionKey);
     }
 
     if (!interactionSpanId) {
@@ -507,16 +579,16 @@ export class SessionStateManager {
   }
 
   // Close all child spans (agent_run, tool_calls)
-  private async closeAllChildSpans(sessionKey: string): Promise<void> {
+  private async _closeAllChildSpans(sessionKey: string): Promise<void> {
     const state = this.sessions.get(sessionKey);
     if (!state) return;
 
     // Close all tool calls
-    await this.closeAllToolCallSpans(sessionKey, 'cancelled');
+    await this._closeAllToolCallSpans(sessionKey, 'cancelled');
 
     // Close agent run if open
     if (state.agentRunSpanId) {
-      await this.closeAgentRunSpan(sessionKey, 'cancelled');
+      await this._closeAgentRunSpan(sessionKey, 'cancelled');
     }
   }
 
@@ -550,46 +622,6 @@ export class SessionStateManager {
         }
       }
     }
-  }
-
-  // Force cleanup all sessions (for gateway_stop)
-  async cleanupAllSessions(): Promise<void> {
-    this.logger.info('cleanup_all_sessions_start', { count: this.sessions.size });
-
-    for (const [sessionKey, state] of this.sessions.entries()) {
-      // Close all spans with failed status
-      await this.closeAllToolCallSpans(sessionKey, 'failed');
-      if (state.agentRunSpanId) {
-        await this.closeAgentRunSpan(sessionKey, 'failed');
-      }
-      if (state.interactionSpanId) {
-        await this.closeInteractionSpan(sessionKey, 'failed');
-      }
-      if (state.sessionSpanId) {
-        await this.closeSessionSpan(sessionKey);
-      }
-    }
-
-    this.sessions.clear();
-    this.stop();
-
-    this.logger.info('cleanup_all_sessions_complete', {});
-  }
-
-  // Get session state for debugging
-  getSessionState(sessionKey: string): SessionSpanState | undefined {
-    return this.sessions.get(sessionKey);
-  }
-
-  // Get all session keys
-  getAllSessionKeys(): string[] {
-    return Array.from(this.sessions.keys());
-  }
-
-  // Check if interaction exists
-  hasActiveInteraction(sessionKey: string): boolean {
-    const state = this.sessions.get(sessionKey);
-    return !!state?.interactionSpanId;
   }
 }
 
