@@ -306,6 +306,9 @@ export class SessionStateManager {
 
     await this.agent.finishSpan(sessionKey, spanId, 'complete');
     this.logger.info('session_span_closed', { sessionKey, spanId });
+
+    this.sessions.delete(sessionKey);
+    this.queue.clear(sessionKey);
   }
 
   private async _createOrGetInteractionSpan(sessionKey: string): Promise<string | null> {
