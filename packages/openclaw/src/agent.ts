@@ -610,7 +610,6 @@ export class Agent {
       remaining,
     });
   }
-
 }
 
 // Factory function

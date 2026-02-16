@@ -148,9 +148,7 @@ export class SessionStateManager {
     sessionKey: string,
     payload: Record<string, unknown>
   ): Promise<string | null> {
-    return this.queue.enqueue(sessionKey, () =>
-      this._createUserMessageSpan(sessionKey, payload)
-    );
+    return this.queue.enqueue(sessionKey, () => this._createUserMessageSpan(sessionKey, payload));
   }
 
   // Create agent_run span

@@ -269,13 +269,15 @@ export default function register(api: OpenClawPluginApi) {
     logger.info('before_tool_call', { sessionKey, tool: toolName });
 
     // Create tool_call span
-    sessionManager.createToolCallSpan(sessionKey, toolName, { toolName, event, ctx }).catch((err) => {
-      logger.error('prefactor_tool_call_span_failed', {
-        sessionKey,
-        tool: toolName,
-        error: err instanceof Error ? err.message : String(err),
+    sessionManager
+      .createToolCallSpan(sessionKey, toolName, { toolName, event, ctx })
+      .catch((err) => {
+        logger.error('prefactor_tool_call_span_failed', {
+          sessionKey,
+          tool: toolName,
+          error: err instanceof Error ? err.message : String(err),
+        });
       });
-    });
   });
 
   api.on('after_tool_call', (event, ctx) => {
