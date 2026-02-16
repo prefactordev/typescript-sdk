@@ -1,156 +1,119 @@
-# Agent Instructions - Prefactor Plugin
+# Agent Instructions - Prefactor OpenClaw Plugin
 
 ## Project Overview
-This is a TypeScript Node.js plugin for OpenClaw that hooks into lifecycle events for monitoring and instrumentation.
+This is a TypeScript plugin for OpenClaw (`@prefactor/openclaw`) that hooks into lifecycle events to create distributed traces via the Prefactor API. It tracks spans in a hierarchy: `session > user_interaction > {user_message, agent_run > tool_call, assistant_response}`.
+
+Part of the `@prefactor/typescript-sdk` monorepo. Depends on `@prefactor/core` for HTTP clients (`AgentInstanceClient`, `AgentSpanClient`, `HttpClient`).
 
 ## Build/Lint/Test Commands
 
-### Standard Commands
-- **Build**: No build step needed - OpenClaw loads TypeScript directly via jiti
-- **Lint**: Use TypeScript compiler for type checking: `npx tsc --noEmit`
-- **Test**: No test framework configured yet (manual testing via OpenClaw CLI)
+This project uses `mise` as the task runner and `bun` as the runtime.
 
-### Single Test Verification
 ```bash
-# Test specific hook by triggering scenario
-cat /.sprite/logs/services/openclaw.log | grep "\[prefactor:HOOK_NAME\]"
+# From repo root
+mise install          # Install toolchain (bun, node)
+mise build-openclaw   # Build ESM + CJS bundles
+mise typecheck        # Type check all packages (tsc --build)
+mise lint             # Lint with Biome
+mise build            # Build all packages
 
-# Example: Test before_tool_call
-openclaw agent -m "Read file README.md" --agent main
-cat /.sprite/logs/services/openclaw.log | grep "\[prefactor:before_tool_call\]"
+# No test framework configured yet - manual testing via OpenClaw
 ```
 
-### Gateway Management (Sprite)
-```bash
-# Start/stop/restart
-sprite-env services start openclaw
-sprite-env services stop openclaw
-sprite-env services restart openclaw
+## Source Files
 
-# View logs
-sprite-env services logs openclaw  # if supported
-cat /.sprite/logs/services/openclaw.log | tail -50
+```
+packages/openclaw/src/
+  index.ts          # Plugin entry point - registers 14 hooks via api.on()
+  agent.ts          # HTTP client for Prefactor API (span CRUD, instance lifecycle)
+  session-state.ts  # Span hierarchy state management with per-session operation queue
+  logger.ts         # Structured logger with [prefactor:<event>] prefix
 ```
 
-## Code Style Guidelines
+## Architecture
 
-### Imports
-- Use ES modules (`"type": "module"` in package.json)
-- Use `.js` extension for local imports (TypeScript with jiti): `import { foo } from './bar.js'`
-- Node built-ins: `import { randomUUID } from 'crypto'`
-- Group imports: 1) Node built-ins, 2) npm packages, 3) local modules
+### Three Layers
 
-### Formatting
-- 2 spaces indentation
-- Single quotes for strings
-- Trailing commas in objects/arrays
-- Max line length: 100 characters
-- Semicolons required
+1. **Hook handlers** (`index.ts`): Registered via `api.on('hook_name', handler)` using the `OpenClawPluginApi` from `openclaw/plugin-sdk`. Handlers are fire-and-forget (`.catch()` pattern) since hooks cannot be async.
 
-### Types
-- Use TypeScript interfaces for contexts
-- Always type function parameters and return types
-- Use `unknown` over `any` for flexible types
-- Prefer explicit typing over inference for public APIs
+2. **SessionStateManager** (`session-state.ts`): Owns the span hierarchy. Tracks span IDs via flat fields (`sessionSpanId`, `interactionSpanId`, `agentRunSpanId`, `toolCallSpans[]`). All public methods are serialized per session key via `SessionOperationQueue` to prevent race conditions between hooks.
 
-```typescript
-// Good
-interface ToolContext {
-  sessionKey: string;
-  toolName: string;
-  params?: unknown;
-}
+3. **Agent** (`agent.ts`): Pure HTTP client. Calls `@prefactor/core` clients (`AgentSpanClient.create()`, `.finish()`, `AgentInstanceClient.register()`, `.start()`, `.finish()`). Has a `ReplayQueue` for retrying failed operations. Does NOT manage span hierarchy.
 
-// Bad
-interface ToolContext {
-  sessionKey: any;
-  toolName: any;
-  params?: any;
-}
+### Span Hierarchy
+```
+session (24hr lifetime, root span)
+  └─ user_interaction (5min idle timeout)
+      ├─ user_message (instant, auto-closed)
+      ├─ agent_run (child of interaction)
+      │   ├─ tool_call (concurrent, children of agent_run)
+      │   └─ tool_call
+      └─ assistant_response (instant, auto-closed)
 ```
 
-### Naming Conventions
-- **Files**: kebab-case for multi-word (e.g., `openclaw.plugin.json`)
-- **Functions**: camelCase (e.g., `createLogger()`)
-- **Classes/Interfaces**: PascalCase (e.g., `Logger`, `PluginAPI`)
-- **Constants**: UPPER_SNAKE_CASE or camelCase depending on scope
-- **Plugin hooks**: snake_case matching OpenClaw convention (e.g., `before_agent_start`)
+### Hook Event Flow
 
-### Error Handling
-- Never throw errors in hooks - log and continue
-- Use try/catch for external operations
-- Graceful degradation: hooks should not break core functionality
-
-```typescript
-// Good
-api.on('some_hook', (ctx) => {
-  try {
-    riskyOperation(ctx);
-  } catch (err) {
-    logger.error('hook_failed', { error: err.message });
-    // Continue without throwing
-  }
-});
+For each user message, hooks fire in this order:
+```
+message_received  → buffers message (no sessionKey available)
+before_agent_start → creates user_message span + agent_run span (has sessionKey)
+  before_tool_call → creates tool_call span
+  tool_result_persist → closes tool_call span
+agent_end         → closes agent_run span, creates assistant_response span
 ```
 
-### Logging
-- Use structured logging format: `[prefactor:EVENT_NAME] key=value key2=value2`
-- Log levels: debug, info, warn, error
-- Never log sensitive data (API keys, tokens, personal data)
-- Tool calls: log tool name only, not parameters
+Key context differences between hooks:
+- Agent/tool hooks have `ctx.sessionKey`
+- Message hooks have `ctx.channelId` / `ctx.conversationId` but NOT `sessionKey`
+- Session hooks have `ctx.sessionId`
+- `session_start` does not reliably fire in practice
 
-### Plugin Structure
-```typescript
-// Main entry: index.ts
-export default function register(api: PluginAPI) {
-  // 1. Initialize from config
-  // 2. Register all hooks
-  // 3. Log registration
-}
+### Concurrency Model
 
-// Separate utilities into src/
-```
+The `SessionOperationQueue` serializes all span operations per session key. This prevents:
+- `agent_end` from racing ahead of `before_agent_start` (the agent can finish faster than span HTTP calls complete)
+- Double-finishing spans when orphan cleanup and normal close both fire
+- Close methods use synchronous capture-and-null of span IDs before any `await` as defense in depth
 
-## Hook Implementation Pattern
+### Configuration
 
-```typescript
-// Always type the context, use unknown for flexibility
-api.on('hook_name', (_ctx: unknown) => {
-  const ctx = _ctx as HookContext;
-  const sessionKey = ctx?.sessionKey || 'unknown';
-  
-  // Log event
-  logger.info('hook_name', {
-    sessionKey,
-    // other relevant fields
-  });
-  
-  // Update metrics if enabled
-  if (metrics.isEnabled()) {
-    metrics.recordEvent('hook_name');
-  }
-  
-  // Return value only if hook expects it (e.g., tool_result_persist)
-  return ctx?.result;
-});
-```
+Zod-validated config from `api.pluginConfig` with env var fallbacks:
+- `PREFACTOR_API_URL`, `PREFACTOR_API_TOKEN`, `PREFACTOR_AGENT_ID` (required for tracing)
+- `logLevel`: debug | info | warn | error (default: info)
+- `userInteractionTimeoutMinutes`: idle timeout (default: 5)
+- `sessionTimeoutHours`: session lifetime (default: 24)
 
-## Configuration
-- Plugin config in `~/.openclaw/openclaw.json` under `plugins.entries`
-- Schema validation in `openclaw.plugin.json`
-- Environment: Sprite VM with openclaw gateway service
+## Code Style
 
-## Testing Checklist
-When modifying hooks, verify:
-- [ ] Hook logs with `[prefactor:HOOK_NAME]` prefix
-- [ ] No sensitive data in logs
-- [ ] Metrics updated if enabled
-- [ ] No errors thrown
-- [ ] Gateway starts without warnings
-- [ ] Check logs: `cat /.sprite/logs/services/openclaw.log | grep "\[prefactor:"`
+- ES modules with `.js` extensions on local imports
+- 2 spaces, single quotes, trailing commas, semicolons
+- `unknown` over `any` for flexible types
+- Structured logging: `logger.info('event_name', { key: value })`
+- Never throw from hooks - log and continue
+- Hook handlers use snake_case matching OpenClaw convention
 
-## Important Notes
-- No build step - TypeScript loaded directly by OpenClaw
-- Console.log goes to gateway logs (captured by sprite)
-- Plugin runs in-process with gateway - treat as trusted code
-- All 13 lifecycle hooks must be registered in index.ts
+## Registered Hooks (14)
+
+| Hook | Category | Action |
+|------|----------|--------|
+| `gateway_start` | Gateway | Logging |
+| `gateway_stop` | Gateway | Emergency cleanup |
+| `session_start` | Session | Logging |
+| `session_end` | Session | Close all spans, finish agent instance |
+| `before_agent_start` | Agent | Create user_message + agent_run spans |
+| `agent_end` | Agent | Close agent_run, create assistant_response |
+| `before_compaction` | Compaction | Logging |
+| `after_compaction` | Compaction | Logging |
+| `before_tool_call` | Tool | Create tool_call span |
+| `after_tool_call` | Tool | Logging (hook is broken in OpenClaw) |
+| `tool_result_persist` | Tool | Close tool_call span |
+| `message_received` | Message | Buffer message for before_agent_start |
+| `message_sending` | Message | Logging |
+| `message_sent` | Message | Logging |
+
+## Important Design Decisions
+
+- **No SpanStack**: The span lifecycle is NOT LIFO (instant spans, concurrent tool calls), so a stack-based approach was deliberately rejected. Hierarchy is tracked via explicit flat fields in `SessionSpanState`.
+- **Operation queue over in-flight dedup**: A serial queue per session replaces the previous `inFlightOperations` map. It prevents all classes of race conditions, not just duplicates.
+- **Message buffering**: `message_received` buffers the message; `before_agent_start` consumes it. This solves the cross-context sessionKey problem without global state.
+- **Agent is stateless for hierarchy**: `Agent` only tracks instance registration state (`instanceId`, `instanceRegistered`, `instanceStarted`). All span parent-child relationships are managed by `SessionStateManager`.
