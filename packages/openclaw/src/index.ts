@@ -215,7 +215,7 @@ export default function register(api: OpenClawPluginApi) {
       .closeAgentRunSpan(sessionKey, event.success ? 'complete' : 'failed')
       .then(() => {
         // Limit to last 3 messages to reduce payload size
-        const messages = event.messages.slice(-3);
+        const messages = (event.messages || []).slice(-3);
         return sessionManager.createAssistantResponseSpan(sessionKey, {
           event: { ...event, messages },
           ctx,
