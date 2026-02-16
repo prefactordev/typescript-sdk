@@ -468,6 +468,11 @@ export class SessionStateManager {
       this.logger.warn('tool_call_without_agent_run', { sessionKey, toolName });
       // Create agent run on-the-fly with minimal payload
       await this._createAgentRunSpan(sessionKey, {});
+
+      if (!state.agentRunSpanId) {
+        this.logger.error('failed_to_create_agent_run_for_tool_call', { sessionKey, toolName });
+        return null;
+      }
     }
 
     const spanId = await this.agent.createSpan(
