@@ -41,7 +41,11 @@ class SessionOperationQueue {
       reject = rej;
     });
 
-    const next = current.then(() => operation().then(resolve, reject));
+    const next = current.then(() =>
+      Promise.resolve()
+        .then(() => operation())
+        .then(resolve, reject)
+    );
 
     // Store the queue chain — catch to prevent unhandled rejection propagation
     this.queues.set(
