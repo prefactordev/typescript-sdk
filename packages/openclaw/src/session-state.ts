@@ -44,7 +44,10 @@ class SessionOperationQueue {
     const next = current.then(() => operation().then(resolve, reject));
 
     // Store the queue chain — catch to prevent unhandled rejection propagation
-    this.queues.set(sessionKey, next.catch(() => {}));
+    this.queues.set(
+      sessionKey,
+      next.catch(() => {})
+    );
 
     return result;
   }
@@ -149,9 +152,7 @@ export class SessionStateManager {
 
   // Create agent_run span
   async createAgentRunSpan(sessionKey: string, rawContext: unknown): Promise<string | null> {
-    return this.queue.enqueue(sessionKey, () =>
-      this._createAgentRunSpan(sessionKey, rawContext)
-    );
+    return this.queue.enqueue(sessionKey, () => this._createAgentRunSpan(sessionKey, rawContext));
   }
 
   // Close agent_run span
@@ -386,9 +387,15 @@ export class SessionStateManager {
     const interactionSpanId = await this._createOrGetInteractionSpan(sessionKey);
     if (!interactionSpanId) return null;
 
-    // Close any existing agent run (orphan cleanup)
+    // If agent run already exists (created on-the-fly by tool_call), reuse it
+    // instead of closing and recreating. This prevents spurious 'cancelled' status
+    // when before_agent_start fires after tool calls have already started.
     if (state.agentRunSpanId) {
-      await this._closeAgentRunSpan(sessionKey, 'cancelled');
+      this.logger.debug('agent_run_span_reused', {
+        sessionKey,
+        spanId: state.agentRunSpanId,
+      });
+      return state.agentRunSpanId;
     }
 
     // Get the last 3 messages from the context to reduce payload size

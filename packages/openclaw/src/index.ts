@@ -154,7 +154,13 @@ export default function register(api: OpenClawPluginApi) {
   // ==================== AGENT LIFECYCLE ====================
 
   api.on('before_agent_start', (event, ctx) => {
-    const sessionKey = ctx.sessionKey || 'unknown';
+    const sessionKey = ctx.sessionKey;
+    if (!sessionKey) {
+      logger.warn('prefactor_skipped_no_session_key', {
+        hook: 'before_agent_start',
+      });
+      return;
+    }
 
     logger.info('before_agent_start', { sessionKey });
 
@@ -180,7 +186,14 @@ export default function register(api: OpenClawPluginApi) {
   });
 
   api.on('agent_end', (event, ctx) => {
-    const sessionKey = ctx.sessionKey || 'unknown';
+    const sessionKey = ctx.sessionKey;
+    if (!sessionKey) {
+      logger.warn('prefactor_skipped_no_session_key', {
+        hook: 'agent_end',
+      });
+      return;
+    }
+
     const endTime = Date.now();
     const messageCount = event.messages?.length || 0;
 
@@ -232,7 +245,15 @@ export default function register(api: OpenClawPluginApi) {
   // ==================== TOOL LIFECYCLE ====================
 
   api.on('before_tool_call', (event, ctx) => {
-    const sessionKey = ctx.sessionKey || 'unknown';
+    const sessionKey = ctx.sessionKey;
+    if (!sessionKey) {
+      logger.warn('prefactor_skipped_no_session_key', {
+        hook: 'before_tool_call',
+        tool: event.toolName,
+      });
+      return;
+    }
+
     const toolName = event.toolName;
 
     logger.info('before_tool_call', { sessionKey, tool: toolName });
@@ -261,7 +282,15 @@ export default function register(api: OpenClawPluginApi) {
   });
 
   api.on('tool_result_persist', (event, ctx) => {
-    const sessionKey = ctx.sessionKey || 'unknown';
+    const sessionKey = ctx.sessionKey;
+    if (!sessionKey) {
+      logger.warn('prefactor_skipped_no_session_key', {
+        hook: 'tool_result_persist',
+        tool: ctx.toolName || event.toolName || 'unknown',
+      });
+      return;
+    }
+
     const toolName = ctx.toolName || event.toolName || 'unknown';
 
     logger.info('tool_result_persist', { sessionKey, tool: toolName });
