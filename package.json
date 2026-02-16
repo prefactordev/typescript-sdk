@@ -27,7 +27,8 @@
     "ai": "^6.0.79",
     "bun-types": "latest",
     "langchain": "^1.2.21",
-    "typedoc": "^0.28.14",
+    "typedoc": "^0.28.17",
+    "typedoc-plugin-markdown": "^4.10.0",
     "typedoc-rhineai-theme": "^1.2.0",
     "typescript": "^5.9.3",
     "zod": "^4.0.0"
