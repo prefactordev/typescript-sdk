@@ -105,7 +105,16 @@ export class SessionStateManager {
   private startCleanupInterval(): void {
     // Check for expired sessions every 30 seconds
     this.cleanupInterval = setInterval(() => {
-      this.cleanupExpiredSessions();
+      void this.cleanupExpiredSessions().catch((error: unknown) => {
+        const err = error instanceof Error ? error : new Error(String(error));
+        this.logger.error('cleanup_expired_sessions_failed', {
+          error: {
+            errorType: err.name,
+            message: err.message,
+            stacktrace: err.stack ?? '',
+          },
+        });
+      });
     }, 30000);
   }
 
