@@ -172,9 +172,14 @@ export default function register(api: OpenClawPluginApi) {
 
     const work = async () => {
       if (userMsg) {
-        await sessionManager.createUserMessageSpan(sessionKey, userMsg);
+        await sessionManager.createUserMessageSpan(sessionKey, { raw: userMsg });
       }
-      await sessionManager.createAgentRunSpan(sessionKey, { event, ctx });
+      // Limit to last 3 messages to reduce payload size
+      const messages = (event.messages ?? []).slice(-3);
+      await sessionManager.createAgentRunSpan(sessionKey, {
+        event: { ...event, messages },
+        ctx,
+      });
     };
 
     work().catch((err) => {
@@ -209,7 +214,12 @@ export default function register(api: OpenClawPluginApi) {
     sessionManager
       .closeAgentRunSpan(sessionKey, event.success ? 'complete' : 'failed')
       .then(() => {
-        return sessionManager.createAssistantResponseSpan(sessionKey, { event, ctx });
+        // Limit to last 3 messages to reduce payload size
+        const messages = event.messages.slice(-3);
+        return sessionManager.createAssistantResponseSpan(sessionKey, {
+          event: { ...event, messages },
+          ctx,
+        });
       })
       .catch((err) => {
         logger.error('prefactor_agent_end_span_failed', {
@@ -259,7 +269,7 @@ export default function register(api: OpenClawPluginApi) {
     logger.info('before_tool_call', { sessionKey, tool: toolName });
 
     // Create tool_call span
-    sessionManager.createToolCallSpan(sessionKey, toolName, { event, ctx }).catch((err) => {
+    sessionManager.createToolCallSpan(sessionKey, toolName, { toolName, event, ctx }).catch((err) => {
       logger.error('prefactor_tool_call_span_failed', {
         sessionKey,
         tool: toolName,

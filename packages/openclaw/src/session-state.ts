@@ -144,15 +144,21 @@ export class SessionStateManager {
   }
 
   // Create user_message span (immediate event)
-  async createUserMessageSpan(sessionKey: string, rawContext: unknown): Promise<string | null> {
+  async createUserMessageSpan(
+    sessionKey: string,
+    payload: Record<string, unknown>
+  ): Promise<string | null> {
     return this.queue.enqueue(sessionKey, () =>
-      this._createUserMessageSpan(sessionKey, rawContext)
+      this._createUserMessageSpan(sessionKey, payload)
     );
   }
 
   // Create agent_run span
-  async createAgentRunSpan(sessionKey: string, rawContext: unknown): Promise<string | null> {
-    return this.queue.enqueue(sessionKey, () => this._createAgentRunSpan(sessionKey, rawContext));
+  async createAgentRunSpan(
+    sessionKey: string,
+    payload: Record<string, unknown>
+  ): Promise<string | null> {
+    return this.queue.enqueue(sessionKey, () => this._createAgentRunSpan(sessionKey, payload));
   }
 
   // Close agent_run span
@@ -167,10 +173,10 @@ export class SessionStateManager {
   async createToolCallSpan(
     sessionKey: string,
     toolName: string,
-    rawContext: unknown
+    payload: Record<string, unknown>
   ): Promise<string | null> {
     return this.queue.enqueue(sessionKey, () =>
-      this._createToolCallSpan(sessionKey, toolName, rawContext)
+      this._createToolCallSpan(sessionKey, toolName, payload)
     );
   }
 
@@ -188,10 +194,10 @@ export class SessionStateManager {
   // Create assistant_response span (immediate event)
   async createAssistantResponseSpan(
     sessionKey: string,
-    rawContext: unknown
+    payload: Record<string, unknown>
   ): Promise<string | null> {
     return this.queue.enqueue(sessionKey, () =>
-      this._createAssistantResponseSpan(sessionKey, rawContext)
+      this._createAssistantResponseSpan(sessionKey, payload)
     );
   }
 
@@ -351,7 +357,7 @@ export class SessionStateManager {
 
   private async _createUserMessageSpan(
     sessionKey: string,
-    rawContext: unknown
+    payload: Record<string, unknown>
   ): Promise<string | null> {
     if (!this.agent) return null;
 
@@ -362,7 +368,7 @@ export class SessionStateManager {
     const spanId = await this.agent.createSpan(
       sessionKey,
       'openclaw:user_message',
-      { raw: rawContext },
+      payload,
       interactionSpanId
     );
 
@@ -377,7 +383,7 @@ export class SessionStateManager {
 
   private async _createAgentRunSpan(
     sessionKey: string,
-    rawContext: unknown
+    payload: Record<string, unknown>
   ): Promise<string | null> {
     if (!this.agent) return null;
 
@@ -398,16 +404,10 @@ export class SessionStateManager {
       return state.agentRunSpanId;
     }
 
-    // Get the last 3 messages from the context to reduce payload size
-    const raw = (rawContext as { raw?: { messages?: unknown[]; [key: string]: unknown } })?.raw;
-    const filteredContext = raw?.messages
-      ? { raw: { ...raw, messages: raw.messages.slice(-3) } }
-      : { raw: rawContext };
-
     const spanId = await this.agent.createSpan(
       sessionKey,
       'openclaw:agent_run',
-      filteredContext,
+      payload,
       interactionSpanId // Child of interaction
     );
 
@@ -443,7 +443,7 @@ export class SessionStateManager {
   private async _createToolCallSpan(
     sessionKey: string,
     toolName: string,
-    rawContext: unknown
+    payload: Record<string, unknown>
   ): Promise<string | null> {
     if (!this.agent) return null;
 
@@ -452,14 +452,14 @@ export class SessionStateManager {
     // Ensure agent run exists
     if (!state.agentRunSpanId) {
       this.logger.warn('tool_call_without_agent_run', { sessionKey, toolName });
-      // Create agent run on-the-fly
-      await this._createAgentRunSpan(sessionKey, rawContext);
+      // Create agent run on-the-fly with minimal payload
+      await this._createAgentRunSpan(sessionKey, {});
     }
 
     const spanId = await this.agent.createSpan(
       sessionKey,
       'openclaw:tool_call',
-      { toolName, raw: rawContext },
+      payload,
       state.agentRunSpanId // Child of agent_run
     );
 
@@ -535,7 +535,7 @@ export class SessionStateManager {
 
   private async _createAssistantResponseSpan(
     sessionKey: string,
-    rawContext: unknown
+    payload: Record<string, unknown>
   ): Promise<string | null> {
     if (!this.agent) return null;
 
@@ -563,16 +563,10 @@ export class SessionStateManager {
       return null;
     }
 
-    // Get the last 3 messages from the context to reduce payload size
-    const raw = (rawContext as { raw?: { messages?: unknown[]; [key: string]: unknown } })?.raw;
-    const filteredContext = raw?.messages
-      ? { raw: { ...raw, messages: raw.messages.slice(-3) } }
-      : { raw: rawContext };
-
     const spanId = await this.agent.createSpan(
       sessionKey,
       'openclaw:assistant_response',
-      filteredContext,
+      payload,
       interactionSpanId // Child of interaction
     );
 
