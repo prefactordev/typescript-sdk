@@ -219,8 +219,11 @@ export class Agent {
   private startFlushLoop(): void {
     // Flush every 30 seconds
     this.flushInterval = setInterval(() => {
-      this.flushQueue().catch((err) => {
-        this.logger.error('flush_queue_failed', { error: err.message });
+      this.flushQueue().catch((err: unknown) => {
+        const error = err instanceof Error
+          ? { message: err.message, stack: err.stack }
+          : { message: String(err) };
+        this.logger.error('flush_queue_failed', { error });
       });
     }, 30000);
   }
