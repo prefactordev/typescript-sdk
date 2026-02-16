@@ -6,7 +6,7 @@
     "packages/ai/src/index.ts"
   ],
   "entryPointStrategy": "resolve",
-  "plugin": ["typedoc-rhineai-theme", "./scripts/typedoc/cmdk-search-plugin.mjs"],
+  "plugin": ["typedoc-plugin-markdown"],
   "tsconfig": "tsconfig.json",
 
   "exclude": ["**/tests/**", "**/*.test.ts", "**/dist/**"],
