@@ -57,6 +57,22 @@ class SessionOperationQueue {
   }
 }
 
+/**
+ * Manages span hierarchies and timeouts per OpenClaw session.
+ *
+ * Tracks session, interaction, agent-run, and tool-call spans in an internal
+ * `Map<string, SessionSpanState>`. All public async methods are serialized
+ * per session key through a {@link SessionOperationQueue} to prevent race
+ * conditions between concurrent fire-and-forget hook handlers.
+ *
+ * Starts a 30-second cleanup interval on construction that expires idle
+ * interactions and aged-out sessions; call {@link stop} to clear it.
+ *
+ * @param agent  - Agent used to create/finish spans, or `null` to disable tracing.
+ * @param logger - Logger instance for structured diagnostics.
+ * @param config - Optional overrides for `userInteractionTimeoutMs` (default 5 min)
+ *                 and `sessionTimeoutMs` (default 24 hr).
+ */
 export class SessionStateManager {
   private sessions: Map<string, SessionSpanState> = new Map();
   private agent: Agent | null;
@@ -624,7 +640,14 @@ export class SessionStateManager {
   }
 }
 
-// Factory function
+/**
+ * Creates a new {@link SessionStateManager}.
+ *
+ * @param agent  - Agent used to create/finish spans, or `null` to disable tracing.
+ * @param logger - Logger instance for structured diagnostics.
+ * @param config - Optional timeout overrides (see {@link SessionStateManager}).
+ * @returns A fully initialised {@link SessionStateManager} with its cleanup interval running.
+ */
 export function createSessionStateManager(
   agent: Agent | null,
   logger: Logger,
