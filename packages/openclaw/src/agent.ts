@@ -103,7 +103,19 @@ class ReplayQueue {
   }
 }
 
-// Agent configuration
+/**
+ * Configuration for the Prefactor Agent HTTP client.
+ *
+ * @property apiUrl - Base URL of the Prefactor API.
+ * @property apiToken - Bearer token used to authenticate API requests.
+ * @property agentId - Unique identifier for this agent in the Prefactor backend.
+ * @property maxRetries - Maximum number of retry attempts for failed HTTP requests. Defaults to `3`.
+ * @property initialRetryDelay - Initial delay in milliseconds before the first retry, doubled on each subsequent attempt. Defaults to `1000`.
+ * @property requestTimeout - HTTP request timeout in milliseconds. Defaults to `30000`.
+ * @property openclawVersion - Version string of the OpenClaw runtime (used in the agent version identifier).
+ * @property pluginVersion - Version string of the Prefactor plugin (used in the agent and schema version identifiers).
+ * @property userAgentVersion - Caller-supplied version tag appended to the agent version identifier.
+ */
 export interface AgentConfig {
   apiUrl: string;
   apiToken: string;
@@ -116,6 +128,25 @@ export interface AgentConfig {
   userAgentVersion?: string;
 }
 
+/**
+ * HTTP client that manages AgentInstance lifecycle and span CRUD against the
+ * Prefactor API. Supports multiple concurrent sessions, each backed by its own
+ * AgentInstance, and automatically retries failed operations via a background
+ * replay queue.
+ *
+ * @param config - {@link AgentConfig} with connection and retry settings.
+ * @param logger - Logger instance used for structured diagnostic output.
+ *
+ * Key public methods:
+ * - {@link Agent.createSpan} — Creates a span under the given session, registering
+ *   an AgentInstance first if one does not yet exist.
+ * - {@link Agent.finishSpan} — Marks a span as finished; queues the operation for
+ *   retry on failure.
+ * - {@link Agent.finishAgentInstance} — Completes the AgentInstance for a session.
+ * - {@link Agent.flushQueue} — Replays any queued operations that previously failed.
+ * - {@link Agent.stop} — Stops the background flush loop.
+ * - {@link Agent.emergencyCleanup} — Tears down all sessions and clears the queue.
+ */
 export class Agent {
   private agentInstanceClient: AgentInstanceClient;
   private agentSpanClient: AgentSpanClient;
@@ -615,7 +646,18 @@ export class Agent {
   }
 }
 
-// Factory function
+/**
+ * Creates and returns a fully initialised {@link Agent} instance.
+ *
+ * On construction the Agent starts a background flush loop (every 30 s) that
+ * retries any previously failed network operations. No immediate network calls
+ * are made; the first API request occurs when a span is created or an
+ * AgentInstance is registered for a session.
+ *
+ * @param config - {@link AgentConfig} with API URL, token, agent ID, and optional retry/timeout settings.
+ * @param logger - Logger instance for structured diagnostic output.
+ * @returns A new {@link Agent} ready to manage sessions and spans.
+ */
 export function createAgent(config: AgentConfig, logger: Logger): Agent {
   return new Agent(config, logger);
 }
