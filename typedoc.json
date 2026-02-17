@@ -12,8 +12,16 @@
   "exclude": ["**/tests/**", "**/*.test.ts", "**/dist/**"],
 
   "out": "docs/api",
-  "name": "Prefactor Typescript SDK",
+  "name": "Prefactor TypeScript SDK",
   "readme": "docs/api-readme.md",
+  "projectDocuments": [
+    "docs/typedoc/getting-started.md",
+    "docs/typedoc/core-instrumentation.md",
+    "docs/typedoc/providers-langchain.md",
+    "docs/typedoc/providers-ai-sdk.md",
+    "docs/typedoc/concepts-schemas.md",
+    "docs/typedoc/configuration.md"
+  ],
 
   "excludePrivate": true,
   "excludeInternal": true,
@@ -28,7 +36,10 @@
 
   "categoryOrder": ["Core", "Packages", "*"],
   "navigation": {
-    "includeCategories": true
+    "includeCategories": false,
+    "includeGroups": false,
+    "includeFolders": true,
+    "compactFolders": false
   },
 
   "sort": ["kind"],

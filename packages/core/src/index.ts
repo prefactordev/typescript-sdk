@@ -1,20 +1,17 @@
 /**
  * Shared runtime, tracing primitives, and transport abstractions for Prefactor SDK adapters.
  *
- * ## What this package is
+ * ## `@prefactor/core` overview
  *
- * `@prefactor/core` is the low-level building block used by adapter packages like
- * `@prefactor/ai` and `@prefactor/langchain`. It gives you full control over tracer lifecycle,
- * span creation, configuration, and transport behavior.
+ * `@prefactor/core` is the foundation for Prefactor integrations. Use it when you want direct
+ * control over tracing lifecycle, transport behavior, and custom instrumentation in your app.
  *
- * ## What you can do with it
+ * The package supports validated runtime configuration through `createConfig`, runtime
+ * initialization through `createCore`, manual instrumentation through `withSpan` and
+ * `Tracer.startSpan`, and graceful lifecycle handling with `shutdown` and
+ * `registerShutdownHandler`.
  *
- * - create validated runtime config from env + code (`createConfig`)
- * - initialize a core runtime (`createCore`) and access tracer/agent manager
- * - create manual spans (`withSpan`, `Tracer.startSpan`) for custom instrumentation
- * - manage graceful teardown (`shutdown`, `registerShutdownHandler`)
- *
- * ## Example: initialize runtime directly
+ * ## Quick start: initialize runtime directly
  *
  * ```ts
  * import { createConfig, createCore } from '@prefactor/core';
@@ -32,7 +29,7 @@
  * // core.tracer, core.agentManager, core.shutdown()
  * ```
  *
- * ## Example: wrap custom work in a span
+ * ## Example: instrument custom work
  *
  * ```ts
  * import { withSpan } from '@prefactor/core';

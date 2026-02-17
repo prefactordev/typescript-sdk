@@ -1,19 +1,16 @@
 /**
  * Prefactor middleware integration for the Vercel AI SDK.
  *
- * ## What this package is
+ * ## `@prefactor/ai` overview
  *
  * `@prefactor/ai` connects Vercel AI SDK model calls to Prefactor tracing. It captures
- * agent/model/tool span data and sends it through the configured transport.
+ * agent, model, and tool spans and sends them through your configured transport.
  *
- * ## What you can do with it
+ * The package initializes middleware for `wrapLanguageModel` through `init`, traces both
+ * non-streaming and streaming calls automatically, and exposes `withSpan` plus `getTracer`
+ * for custom instrumentation needs.
  *
- * - initialize middleware for `wrapLanguageModel` (`init`)
- * - automatically trace non-streaming and streaming calls
- * - create manual spans around custom application logic (`withSpan`)
- * - access the tracer directly for advanced use (`getTracer`)
- *
- * ## Example: wrap a model with Prefactor middleware
+ * ## Quick start: wrap a model with Prefactor middleware
  *
  * ```ts
  * import { init, shutdown } from '@prefactor/ai';
@@ -42,7 +39,7 @@
  * await shutdown();
  * ```
  *
- * ## Example: manual span around custom code
+ * ## Example: trace custom code
  *
  * ```ts
  * import { withSpan } from '@prefactor/ai';

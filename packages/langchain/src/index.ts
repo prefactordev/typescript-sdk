@@ -1,19 +1,16 @@
 /**
  * LangChain adapter package exposing Prefactor initialization helpers and middleware.
  *
- * ## What this package is
+ * ## `@prefactor/langchain` overview
  *
- * `@prefactor/langchain` integrates Prefactor tracing with LangChain middleware so you can
- * observe agent, model, chain, and tool execution without wiring low-level tracing by hand.
+ * `@prefactor/langchain` adds Prefactor tracing to LangChain middleware so agent, model,
+ * chain, and tool activity is captured automatically.
  *
- * ## What you can do with it
+ * The package initializes once with `init`, then captures model and tool traces through
+ * LangChain middleware hooks. It also exposes `withSpan` for custom orchestration spans and
+ * `getTracer` for advanced instrumentation patterns.
  *
- * - initialize once and attach middleware to LangChain agents (`init`)
- * - capture token usage and structured span payloads automatically
- * - add manual spans around custom orchestration (`withSpan`)
- * - access the underlying tracer for advanced instrumentation (`getTracer`)
- *
- * ## Example: initialize and attach middleware
+ * ## Quick start: initialize and attach middleware
  *
  * ```ts
  * import { init } from '@prefactor/langchain';
@@ -35,7 +32,7 @@
  * });
  * ```
  *
- * ## Example: manual span for custom logic
+ * ## Example: trace custom logic
  *
  * ```ts
  * import { withSpan } from '@prefactor/langchain';
