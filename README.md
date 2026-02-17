@@ -437,5 +437,5 @@ MIT
 ## Support
 
 - Documentation: [https://docs.prefactor.ai](https://docs.prefactor.ai)
-- Issues: [GitHub Issues](https://github.com/prefactor/typescript-sdk/issues)
+- Issues: [GitHub Issues](https://github.com/prefactordev/typescript-sdk/issues)
 - Email: support@prefactor.ai
