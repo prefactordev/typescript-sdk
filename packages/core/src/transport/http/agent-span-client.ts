@@ -7,6 +7,7 @@ export type AgentSpanFinishStatus = 'complete' | 'failed' | 'cancelled';
 export type AgentSpanFinishOptions = {
   status?: AgentSpanFinishStatus;
   result_payload?: Record<string, unknown>;
+  idempotency_key?: string;
 };
 
 export type AgentSpanCreatePayload = {
@@ -20,11 +21,13 @@ export type AgentSpanCreatePayload = {
     started_at: string;
     finished_at: string | null;
   };
+  idempotency_key?: string;
 };
 
 export type AgentSpanResponse = {
   details?: {
     id?: string;
+    started_at?: string;
   };
 };
 

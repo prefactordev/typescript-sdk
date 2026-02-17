@@ -32,6 +32,12 @@ const packages: PackageConfig[] = [
     entrypoint: './packages/langchain/src/index.ts',
     external: ['@prefactor/core', '@prefactor/pfid', '@langchain/core', 'langchain', 'zod'],
   },
+  {
+    name: '@prefactor/openclaw',
+    path: 'packages/openclaw',
+    entrypoint: './packages/openclaw/src/index.ts',
+    external: ['@prefactor/core', 'zod'],
+  },
 ];
 
 async function buildPackage(pkg: PackageConfig): Promise<void> {

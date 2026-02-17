@@ -1,0 +1,79 @@
+{
+  "id": "prefactor",
+  "name": "@prefactor/openclaw",
+  "version": "0.0.15",
+  "description": "Comprehensive lifecycle event monitoring and instrumentation for OpenClaw",
+  "runtime": "node",
+  "entry": "./dist/index.js",
+  "configSchema": {
+    "type": "object",
+    "properties": {
+      "apiUrl": {
+        "type": "string",
+        "description": "Prefactor API URL (e.g., https://api.prefactor.dev)"
+      },
+      "apiToken": {
+        "type": "string",
+        "description": "Prefactor API token for authentication"
+      },
+      "agentId": {
+        "type": "string",
+        "description": "Agent ID registered in Prefactor"
+      },
+      "agentVersion": {
+        "type": "string",
+        "description": "Optional user-supplied version suffix for this agent deployment",
+        "default": "default"
+      },
+      "logLevel": {
+        "type": "string",
+        "enum": ["debug", "info", "warn", "error"],
+        "default": "info"
+      },
+      "userInteractionTimeoutMinutes": {
+        "type": "number",
+        "description": "Timeout for user interaction spans in minutes (default: 5)",
+        "default": 5,
+        "minimum": 1,
+        "maximum": 60
+      },
+      "sessionTimeoutHours": {
+        "type": "number",
+        "description": "Timeout for synthetic session spans in hours (default: 24)",
+        "default": 24,
+        "minimum": 1,
+        "maximum": 168
+      }
+    },
+    "required": []
+  },
+  "uiHints": {
+    "apiUrl": {
+      "label": "Prefactor API URL",
+      "placeholder": "https://api.prefactor.dev"
+    },
+    "apiToken": {
+      "label": "Prefactor API token",
+      "placeholder": "your-api-token",
+      "sensitive": true
+    },
+    "agentId": {
+      "label": "Agent ID",
+      "placeholder": "your-agent-id"
+    },
+    "agentVersion": {
+      "label": "Agent Version Suffix",
+      "placeholder": "default"
+    },
+    "logLevel": {
+      "label": "Log Level",
+      "placeholder": "info"
+    },
+    "userInteractionTimeoutMinutes": {
+      "label": "User Interaction Timeout (minutes)"
+    },
+    "sessionTimeoutHours": {
+      "label": "Session Span Timeout (hours)"
+    }
+  }
+}
