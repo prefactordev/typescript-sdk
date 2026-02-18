@@ -218,6 +218,12 @@ export class Agent {
             raw: { type: 'object', description: 'Raw OpenClaw context with messages' },
           },
         },
+        'openclaw:session': {
+          description: 'OpenClaw session span',
+          fields: {
+            createdAt: { type: 'string', description: 'Session created timestamp' },
+          },
+        },
       },
     };
 
