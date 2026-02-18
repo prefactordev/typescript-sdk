@@ -224,6 +224,12 @@ export class Agent {
             createdAt: { type: 'string', description: 'Session created timestamp' },
           },
         },
+        'openclaw:user_interaction': {
+          description: 'User interaction span',
+          fields: {
+            startedAt: { type: 'string', description: 'User interaction timestamp' },
+          },
+        },
       },
     };
 
