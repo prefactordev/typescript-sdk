@@ -58,7 +58,7 @@
     },
     "packages/openclaw": {
       "name": "@prefactor/openclaw",
-      "version": "0.0.15",
+      "version": "0.0.17",
       "dependencies": {
         "@prefactor/core": "workspace:*",
         "zod": "^4.0.0",
