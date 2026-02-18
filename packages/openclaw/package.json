@@ -1,0 +1,48 @@
+{
+  "name": "@prefactor/openclaw",
+  "version": "0.0.15",
+  "description": "OpenClaw lifecycle event monitoring and instrumentation for Prefactor",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "files": [
+    "dist/index.js",
+    "dist/index.cjs",
+    "openclaw.plugin.json",
+    "README.md",
+    "LICENSE"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/prefactordev/typescript-sdk"
+  },
+  "keywords": [
+    "openclaw",
+    "prefactor",
+    "tracing",
+    "observability",
+    "monitoring"
+  ],
+  "dependencies": {
+    "@prefactor/core": "workspace:*",
+    "zod": "^4.0.0"
+  },
+  "devDependencies": {
+    "openclaw": "^2026.2.9",
+    "typescript": "^5.0.0",
+    "@types/node": "^22.0.0"
+  },
+  "openclaw": {
+    "extensions": ["./dist/index.js"]
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  }
+}

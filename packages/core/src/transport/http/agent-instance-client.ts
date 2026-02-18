@@ -8,12 +8,24 @@ export type AgentInstanceRegisterPayload = {
     description: string;
   };
   agent_schema_version?: Record<string, unknown>;
+  idempotency_key?: string;
 };
 
 export type AgentInstanceResponse = {
   details?: {
     id?: string;
   };
+};
+
+export type AgentInstanceStartOptions = {
+  timestamp?: string;
+  idempotency_key?: string;
+};
+
+export type AgentInstanceFinishOptions = {
+  status?: 'complete' | 'failed' | 'cancelled';
+  timestamp?: string;
+  idempotency_key?: string;
 };
 
 export class AgentInstanceClient {
@@ -26,17 +38,23 @@ export class AgentInstanceClient {
     });
   }
 
-  async start(agentInstanceId: string): Promise<void> {
-    await this.httpClient.request(`/api/v1/agent_instance/${agentInstanceId}/start`, {
+  start(
+    agentInstanceId: string,
+    options?: AgentInstanceStartOptions
+  ): Promise<AgentInstanceResponse> {
+    return this.httpClient.request(`/api/v1/agent_instance/${agentInstanceId}/start`, {
       method: 'POST',
-      body: {},
+      body: options ?? {},
     });
   }
 
-  async finish(agentInstanceId: string): Promise<void> {
-    await this.httpClient.request(`/api/v1/agent_instance/${agentInstanceId}/finish`, {
+  finish(
+    agentInstanceId: string,
+    options?: AgentInstanceFinishOptions
+  ): Promise<AgentInstanceResponse> {
+    return this.httpClient.request(`/api/v1/agent_instance/${agentInstanceId}/finish`, {
       method: 'POST',
-      body: {},
+      body: options ?? {},
     });
   }
 }

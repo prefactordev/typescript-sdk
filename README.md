@@ -342,6 +342,31 @@ See the `examples/` directory for complete examples:
 - [`examples/anthropic-agent/simple-agent.ts`](./examples/anthropic-agent/simple-agent.ts) - Full working example with Anthropic Claude
 - [`examples/ai-sdk/simple-agent.ts`](./examples/ai-sdk/simple-agent.ts) - Vercel AI SDK example with tools
 
+## Skills
+
+This repo includes reusable skills for coding tools and AI agents.
+
+### Install via skills CLI (recommended)
+
+```bash
+# Install skills from this repository
+bunx skills add https://github.com/prefactordev/typescript-sdk/
+```
+
+### LLM instructions (Copy/Paste)
+
+Use this when a tool does not support direct skills installation yet:
+
+```text
+Clone the skills repo to a temporary folder, copy the skill folders, then delete the clone.
+
+1) git clone https://github.com/prefactordev/typescript-sdk /tmp/prefactor-skills
+2) Copy the folders into your coding tool's local skills directory:
+   - /tmp/prefactor-skills/skills
+3) Delete the temporary clone:
+   rm -rf /tmp/prefactor-skills
+```
+
 ## Architecture
 
 The SDK consists of five main layers:
@@ -412,5 +437,5 @@ MIT
 ## Support
 
 - Documentation: [https://docs.prefactor.ai](https://docs.prefactor.ai)
-- Issues: [GitHub Issues](https://github.com/prefactor/typescript-sdk/issues)
+- Issues: [GitHub Issues](https://github.com/prefactordev/typescript-sdk/issues)
 - Email: support@prefactor.ai
