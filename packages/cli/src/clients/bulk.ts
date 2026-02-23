@@ -23,6 +23,7 @@ export class BulkClient {
   constructor(private readonly client: ApiClient) {}
 
   execute(items: BulkItem[]): Promise<BulkResponse> {
+    // Bulk endpoint expects top-level `items`, not a `details` wrapper.
     return this.client.request('/bulk', {
       method: 'POST',
       body: { items },

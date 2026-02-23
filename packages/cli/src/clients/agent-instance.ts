@@ -55,6 +55,7 @@ export class AgentInstanceClient {
   }
 
   register(payload: AgentInstanceRegistrationPayload): Promise<AgentInstanceResponse> {
+    // Backend expects a top-level registration payload for this endpoint.
     return this.client.request('/agent_instance/register', {
       method: 'POST',
       body: payload,

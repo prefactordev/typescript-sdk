@@ -163,6 +163,24 @@ describe('CLI profiles command', () => {
     expect(output).toContain("Profile 'demo' removed.");
   });
 
+  test('profiles add validates baseUrl', async () => {
+    const cwd = join(tempRoot, 'cwd');
+    mkdirSync(cwd, { recursive: true });
+    process.chdir(cwd);
+
+    await expect(
+      createCli('1.0.0').parseAsync([
+        'node',
+        'prefactor',
+        'profiles',
+        'add',
+        'demo',
+        'api-key',
+        'not-a-url',
+      ])
+    ).rejects.toThrow('--baseUrl must be a valid URL.');
+  });
+
   test('profiles list shows guidance when no profiles are configured', async () => {
     const cwd = join(tempRoot, 'cwd');
     mkdirSync(cwd, { recursive: true });
@@ -303,7 +321,7 @@ describe('CLI command validation', () => {
     );
   });
 
-  test('falls back to env token with default API URL when profile is missing', async () => {
+  test('falls back to env token with profile default API URL when profile is missing', async () => {
     const cwd = join(tempRoot, 'cwd');
     mkdirSync(cwd, { recursive: true });
     process.chdir(cwd);
@@ -321,7 +339,7 @@ describe('CLI command validation', () => {
     const cli = createCli('1.0.0');
     await cli.parseAsync(['node', 'prefactor', 'accounts', 'list']);
 
-    expect(requestUrl).toStartWith('https://p2demo.prefactor.dev/');
+    expect(requestUrl).toStartWith('https://api.prefactor.ai/');
   });
 
   test('uses PREFACTOR_API_URL with env token fallback when profile is missing', async () => {
@@ -504,6 +522,33 @@ describe('CLI command validation', () => {
         '[]',
       ])
     ).rejects.toThrow('Use only one of --span_schemas or --span_type_schemas.');
+  });
+
+  test('requires --span_result_schemas to be used with --span_schemas', async () => {
+    const cwd = join(tempRoot, 'cwd');
+    mkdirSync(cwd, { recursive: true });
+    process.chdir(cwd);
+    writeFileSync(
+      join(cwd, 'prefactor.json'),
+      JSON.stringify({ default: { api_key: 'token', base_url: 'https://example.com' } })
+    );
+
+    const cli = createCli('1.0.0');
+
+    await expect(
+      cli.parseAsync([
+        'node',
+        'prefactor',
+        'agent_schema_versions',
+        'create',
+        '--agent_id',
+        'agent_1',
+        '--external_identifier',
+        'schema_v1',
+        '--span_result_schemas',
+        '{}',
+      ])
+    ).rejects.toThrow('--span_result_schemas can only be used with --span_schemas.');
   });
 
   test('requires --items JSON to be an array for bulk execute', async () => {

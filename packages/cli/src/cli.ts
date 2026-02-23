@@ -15,10 +15,12 @@ import type { BulkItem } from './clients/bulk.js';
 import { BulkClient } from './clients/bulk.js';
 import { EnvironmentClient } from './clients/environment.js';
 import { PfidClient } from './clients/pfid.js';
-import { ProfileManager, resolveCurrentProfileName } from './profile-manager.js';
+import { DEFAULT_BASE_URL, ProfileManager, resolveCurrentProfileName } from './profile-manager.js';
 
 const VALID_TOKEN_SCOPES = ['account', 'environment'] as const;
-const ENV_FALLBACK_BASE_URL = 'https://p2demo.prefactor.dev';
+// When env auth is used without PREFACTOR_API_URL, fall back to the same
+// production default used for profile creation to avoid divergent defaults.
+const ENV_FALLBACK_BASE_URL = DEFAULT_BASE_URL;
 
 type GlobalOptions = { profile?: string };
 type ProfileSelectionSource = 'explicit' | 'environment' | 'default';
@@ -65,8 +67,8 @@ export function createCli(version: string): Command {
     profiles
       .command('list')
       .description('List configured profiles')
-      .action(function (this: Command) {
-        const manager = new ProfileManager();
+      .action(async function (this: Command) {
+        const manager = await ProfileManager.create();
         const options = this.optsWithGlobals() as { profile?: string };
         const currentProfileName = resolveCurrentProfileName(options.profile);
         const profiles = manager.getProfileEntries();
@@ -90,18 +92,22 @@ export function createCli(version: string): Command {
     profiles
       .command('add <name> <apiKey> [baseUrl]')
       .description('Add or update a profile')
-      .action((name: string, apiKey: string, baseUrl?: string) => {
-        const manager = new ProfileManager();
-        manager.addProfile(name, apiKey, baseUrl);
+      .action(async (name: string, apiKey: string, baseUrl?: string) => {
+        if (baseUrl) {
+          validateBaseUrl(baseUrl);
+        }
+
+        const manager = await ProfileManager.create();
+        await manager.addProfile(name, apiKey, baseUrl);
         console.log(`Profile '${name}' saved.`);
       });
 
     profiles
       .command('remove <name>')
       .description('Remove a profile')
-      .action((name: string) => {
-        const manager = new ProfileManager();
-        const removed = manager.removeProfile(name);
+      .action(async (name: string) => {
+        const manager = await ProfileManager.create();
+        const removed = await manager.removeProfile(name);
 
         if (removed) {
           console.log(`Profile '${name}' removed.`);
@@ -329,7 +335,7 @@ export function createCli(version: string): Command {
 
   registerEnvironmentsCommands();
 
-  function registerAgentVersionCommands(): void {
+  function registerAgentVersionAndSchemaVersionCommands(): void {
     const agentVersions = program.command('agent_versions').description('Manage agent versions');
 
     agentVersions
@@ -452,7 +458,7 @@ export function createCli(version: string): Command {
       });
   }
 
-  registerAgentVersionCommands();
+  registerAgentVersionAndSchemaVersionCommands();
 
   function registerAgentInstanceCommands(): void {
     const agentInstances = program.command('agent_instances').description('Manage agent instances');
@@ -965,8 +971,8 @@ function printJson(value: unknown): void {
   console.log(JSON.stringify(value, null, 2));
 }
 
-function getApiClient(command: Command): ApiClient {
-  const manager = new ProfileManager();
+async function getApiClient(command: Command): Promise<ApiClient> {
+  const manager = await ProfileManager.create();
   const options = command.optsWithGlobals() as GlobalOptions;
   const profileSelection = resolveProfileSelection(options.profile);
   const selectedProfile = manager.getProfile(profileSelection.name);
@@ -1005,7 +1011,7 @@ async function executeAuthed(
   command: Command,
   action: (apiClient: ApiClient) => Promise<void>
 ): Promise<void> {
-  await action(getApiClient(command));
+  await action(await getApiClient(command));
 }
 
 async function parseJsonOption<T>(
@@ -1042,6 +1048,8 @@ async function parseJsonOption<T>(
 }
 
 async function readJsonOptionFile(filePath: string, optionName: string): Promise<string> {
+  // `@file` is an explicit local CLI convenience and should only be used with
+  // trusted user input in local workflows.
   try {
     return await readFile(filePath, 'utf8');
   } catch (error) {
@@ -1095,6 +1103,14 @@ function validateTokenCreateOptions(tokenScope: string, environmentId?: string):
   }
 
   throw new Error("--environment_id is required when --token_scope is 'environment'.");
+}
+
+function validateBaseUrl(baseUrl: string): void {
+  try {
+    void new URL(baseUrl);
+  } catch {
+    throw new Error('--baseUrl must be a valid URL.');
+  }
 }
 
 function parsePositiveInt(value: string): number {

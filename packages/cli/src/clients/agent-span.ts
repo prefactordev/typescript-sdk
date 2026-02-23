@@ -1,4 +1,4 @@
-import type { ApiClient, ApiClientQuery } from '../api-client.js';
+import type { ApiClient } from '../api-client.js';
 
 export interface AgentSpan {
   id: string;
@@ -48,7 +48,14 @@ export class AgentSpanClient {
   list(params: AgentSpanListParams): Promise<AgentSpanListResponse> {
     return this.client.request('/agent_spans', {
       method: 'GET',
-      query: params as unknown as ApiClientQuery,
+      query: {
+        agent_instance_id: params.agent_instance_id,
+        start_time: params.start_time,
+        end_time: params.end_time,
+        ...(params.include_summaries !== undefined
+          ? { include_summaries: params.include_summaries }
+          : {}),
+      },
     });
   }
 

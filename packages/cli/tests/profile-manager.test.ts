@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { ProfileManager } from '../src/profile-manager.js';
@@ -27,7 +27,7 @@ describe('ProfileManager', () => {
     }
   });
 
-  test('prefers ./prefactor.json over $HOME fallback', () => {
+  test('prefers ./prefactor.json over $HOME fallback', async () => {
     const cwd = join(tempRoot, 'cwd');
     const home = join(tempRoot, 'home');
     mkdirSync(cwd, { recursive: true });
@@ -45,12 +45,12 @@ describe('ProfileManager', () => {
     process.chdir(cwd);
     process.env.HOME = home;
 
-    const manager = new ProfileManager();
+    const manager = await ProfileManager.create();
     expect(manager.getProfile('local')).not.toBeNull();
     expect(manager.getProfile('home')).toBeNull();
   });
 
-  test('falls back to $HOME/.prefactor/prefactor.json when local file is absent', () => {
+  test('falls back to $HOME/.prefactor/prefactor.json when local file is absent', async () => {
     const cwd = join(tempRoot, 'cwd');
     const home = join(tempRoot, 'home');
     mkdirSync(cwd, { recursive: true });
@@ -64,15 +64,15 @@ describe('ProfileManager', () => {
     process.chdir(cwd);
     process.env.HOME = home;
 
-    const manager = new ProfileManager();
+    const manager = await ProfileManager.create();
     expect(manager.getProfile('home')).not.toBeNull();
   });
 
-  test('uses default base URL when omitted on add', () => {
+  test('uses default base URL when omitted on add', async () => {
     const configPath = join(tempRoot, 'prefactor.json');
-    const manager = new ProfileManager(configPath);
+    const manager = await ProfileManager.create(configPath);
 
-    manager.addProfile('demo', 'token-value');
+    await manager.addProfile('demo', 'token-value');
 
     expect(manager.getProfile('demo')).toEqual({
       api_key: 'token-value',
@@ -80,7 +80,7 @@ describe('ProfileManager', () => {
     });
   });
 
-  test('ignores malformed profile entries when loading config', () => {
+  test('ignores malformed profile entries when loading config', async () => {
     const configPath = join(tempRoot, 'prefactor.json');
     writeFileSync(
       configPath,
@@ -93,7 +93,7 @@ describe('ProfileManager', () => {
       })
     );
 
-    const manager = new ProfileManager(configPath);
+    const manager = await ProfileManager.create(configPath);
 
     expect(manager.getProfile('valid')).toEqual({
       api_key: 'valid-key',
@@ -103,5 +103,45 @@ describe('ProfileManager', () => {
     expect(manager.getProfile('missingBaseUrl')).toBeNull();
     expect(manager.getProfile('wrongTypes')).toBeNull();
     expect(manager.getProfile('stringEntry')).toBeNull();
+  });
+
+  test('adds prefactor.json to local .gitignore when creating local profile file', async () => {
+    const cwd = join(tempRoot, 'cwd');
+    mkdirSync(cwd, { recursive: true });
+    mkdirSync(join(cwd, '.git'), { recursive: true });
+    process.chdir(cwd);
+
+    const manager = await ProfileManager.create(join(cwd, 'prefactor.json'));
+    await manager.addProfile('default', 'token');
+
+    const gitignore = readFileSync(join(cwd, '.gitignore'), 'utf8');
+    expect(gitignore).toContain('prefactor.json');
+  });
+
+  test('does not duplicate prefactor.json in local .gitignore', async () => {
+    const cwd = join(tempRoot, 'cwd');
+    mkdirSync(cwd, { recursive: true });
+    mkdirSync(join(cwd, '.git'), { recursive: true });
+    process.chdir(cwd);
+
+    writeFileSync(join(cwd, '.gitignore'), 'node_modules/\nprefactor.json\n');
+
+    const manager = await ProfileManager.create(join(cwd, 'prefactor.json'));
+    await manager.addProfile('default', 'token');
+
+    const gitignore = readFileSync(join(cwd, '.gitignore'), 'utf8');
+    const matches = gitignore.split('\n').filter((line) => line.trim() === 'prefactor.json');
+    expect(matches).toHaveLength(1);
+  });
+
+  test('skips .gitignore updates when not in a git repository', async () => {
+    const cwd = join(tempRoot, 'cwd');
+    mkdirSync(cwd, { recursive: true });
+    process.chdir(cwd);
+
+    const manager = await ProfileManager.create(join(cwd, 'prefactor.json'));
+    await manager.addProfile('default', 'token');
+
+    expect(() => readFileSync(join(cwd, '.gitignore'), 'utf8')).toThrow();
   });
 });
