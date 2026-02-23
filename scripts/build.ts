@@ -10,6 +10,7 @@ interface PackageConfig {
   name: string;
   path: string;
   entrypoint: string;
+  entrypoints?: string[];
   external: string[];
 }
 
@@ -19,6 +20,13 @@ const packages: PackageConfig[] = [
     path: 'packages/core',
     entrypoint: './packages/core/src/index.ts',
     external: ['@prefactor/pfid', 'zod'],
+  },
+  {
+    name: '@prefactor/cli',
+    path: 'packages/cli',
+    entrypoint: './packages/cli/src/index.ts',
+    entrypoints: ['./packages/cli/src/index.ts', './packages/cli/src/bin/cli.ts'],
+    external: ['@prefactor/core', 'commander'],
   },
   {
     name: '@prefactor/ai',
@@ -43,6 +51,9 @@ const packages: PackageConfig[] = [
 async function buildPackage(pkg: PackageConfig): Promise<void> {
   const pkgDir = join(ROOT, pkg.path);
   const distDir = join(pkgDir, 'dist');
+  const entrypoints = (pkg.entrypoints ?? [pkg.entrypoint]).map((entrypoint) =>
+    join(ROOT, entrypoint)
+  );
 
   console.log(`\n📦 Building ${pkg.name}...`);
 
@@ -54,7 +65,7 @@ async function buildPackage(pkg: PackageConfig): Promise<void> {
   // Bundle ESM
   console.log(`  📦 Bundling ESM...`);
   const esmResult = await Bun.build({
-    entrypoints: [join(ROOT, pkg.entrypoint)],
+    entrypoints,
     outdir: distDir,
     target: 'node',
     format: 'esm',
@@ -71,7 +82,7 @@ async function buildPackage(pkg: PackageConfig): Promise<void> {
   // Bundle CommonJS
   console.log(`  📦 Bundling CommonJS...`);
   const cjsResult = await Bun.build({
-    entrypoints: [join(ROOT, pkg.entrypoint)],
+    entrypoints,
     outdir: distDir,
     target: 'node',
     format: 'cjs',

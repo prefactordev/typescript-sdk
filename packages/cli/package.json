@@ -1,0 +1,42 @@
+{
+  "name": "@prefactor/cli",
+  "version": "0.1.0",
+  "description": "Prefactor command-line interface",
+  "type": "module",
+  "main": "dist/index.cjs",
+  "module": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": {
+    "prefactor": "dist/bin/cli.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "keywords": [
+    "prefactor",
+    "cli",
+    "observability"
+  ],
+  "author": "Prefactor",
+  "license": "MIT",
+  "dependencies": {
+    "@prefactor/pfid": "^0.1.0",
+    "commander": "^14.0.1"
+  },
+  "peerDependencies": {
+    "@prefactor/core": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  }
+}
