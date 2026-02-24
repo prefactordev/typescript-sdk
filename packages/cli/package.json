@@ -38,8 +38,5 @@
   },
   "engines": {
     "node": ">=22.0.0"
-  },
-  "scripts": {
-    "e2e:smoke": "bun scripts/e2e-cli-smoke.ts"
   }
 }

@@ -172,7 +172,7 @@ describe('CLI profiles command', () => {
         'profiles',
         'add',
         'demo',
-        '--api-key',
+        '--api-token',
         'api-key',
       ]);
       await createCli('1.0.0').parseAsync(['node', 'prefactor', 'profiles', 'remove', 'demo']);
@@ -198,7 +198,7 @@ describe('CLI profiles command', () => {
         'add',
         'demo',
         'not-a-url',
-        '--api-key',
+        '--api-token',
         'api-key',
       ])
     ).rejects.toThrow('--baseUrl must be a valid URL.');
@@ -220,7 +220,7 @@ describe('CLI profiles command', () => {
     }
 
     expect(log.mock.calls.flat().join('\n')).toContain(
-      "No profiles configured. Use 'prefactor profiles add <name> [baseUrl] --api-key <apiKey>'."
+      "No profiles configured. Use 'prefactor profiles add <name> [baseUrl] --api-token <apiToken>'."
     );
   });
 
@@ -311,7 +311,7 @@ describe('CLI command validation', () => {
     const cli = createCli('1.0.0');
 
     await expect(cli.parseAsync(['node', 'prefactor', 'accounts', 'list'])).rejects.toThrow(
-      "No profile found for 'default'. Run 'prefactor profiles add <name> [baseUrl] --api-key <apiKey>' to configure one."
+      "No profile found for 'default'. Run 'prefactor profiles add <name> [baseUrl] --api-token <apiToken>' to configure one."
     );
   });
 
@@ -331,7 +331,7 @@ describe('CLI command validation', () => {
         'list',
       ])
     ).rejects.toThrow(
-      "No profile found for 'missing'. Run 'prefactor profiles add <name> [baseUrl] --api-key <apiKey>' to configure one."
+      "No profile found for 'missing'. Run 'prefactor profiles add <name> [baseUrl] --api-token <apiToken>' to configure one."
     );
   });
 
@@ -345,7 +345,7 @@ describe('CLI command validation', () => {
     await expect(
       createCli('1.0.0').parseAsync(['node', 'prefactor', 'accounts', 'list'])
     ).rejects.toThrow(
-      "No profile found for 'missing-from-env'. Run 'prefactor profiles add <name> [baseUrl] --api-key <apiKey>' to configure one."
+      "No profile found for 'missing-from-env'. Run 'prefactor profiles add <name> [baseUrl] --api-token <apiToken>' to configure one."
     );
   });
 

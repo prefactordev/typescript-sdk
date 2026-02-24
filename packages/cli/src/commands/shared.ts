@@ -35,7 +35,7 @@ async function getApiClient(command: Command): Promise<ApiClient> {
   }
 
   throw new Error(
-    `No profile found for '${profileSelection.name}'. Run 'prefactor profiles add <name> [baseUrl] --api-key <apiKey>' to configure one.`
+    `No profile found for '${profileSelection.name}'. Run 'prefactor profiles add <name> [baseUrl] --api-token <apiToken>' to configure one.`
   );
 }
 

@@ -63,7 +63,7 @@ yarn add @prefactor/cli
 Run these in order:
 
 ```bash
-prefactor profiles add default <api-key> [base-url]
+prefactor profiles add default [base-url] --api-token <api-token>
 prefactor accounts list
 prefactor environments create --name <env-name> --account_id <account-id>
 prefactor agents create --name <agent-name> --environment_id <environment-id>
