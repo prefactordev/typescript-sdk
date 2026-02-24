@@ -4,7 +4,7 @@
   "workspaces": ["packages/*"],
   "scripts": {
     "build": "bun run scripts/build.ts",
-    "docs:api": "typedoc --options typedoc.json && cp docs/api-readme.md docs/api/README.md",
+    "docs:api": "typedoc --options typedoc.json && cp docs/api-readme.md docs/api/README.md && cp packages/openclaw/README.md docs/api/@prefactor/openclaw/README.md",
     "test": "bun test",
     "test:watch": "bun test --watch",
     "typecheck": "tsc --build",

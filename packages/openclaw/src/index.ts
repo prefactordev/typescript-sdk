@@ -1,3 +1,54 @@
+/**
+ * OpenClaw plugin for Prefactor observability. Provides automatic tracing of agent
+ * lifecycle events including sessions, user interactions, agent runs, and tool calls.
+ *
+ * ## `@prefactor/openclaw` overview
+ *
+ * This plugin hooks into OpenClaw's lifecycle events to create a hierarchical span
+ * structure for distributed tracing. The span hierarchy follows:
+ *
+ * ```
+ * session (24hr lifetime, root span)
+ *   └─ user_interaction (5min idle timeout)
+ *       ├─ user_message (instant, auto-closed)
+ *       ├─ agent_run (child of interaction)
+ *       │   ├─ tool_call (concurrent, children of agent_run)
+ *       │   └─ tool_call
+ *       └─ assistant_response (instant, auto-closed)
+ * ```
+ *
+ * ## Hook handlers
+ *
+ * The plugin registers 14 hooks that automatically create and manage spans:
+ *
+ * - **Gateway**: `gateway_start`, `gateway_stop`
+ * - **Session**: `session_start`, `session_end`
+ * - **Agent**: `before_agent_start`, `agent_end`
+ * - **Compaction**: `before_compaction`, `after_compaction`
+ * - **Tool**: `before_tool_call`, `after_tool_call`, `tool_result_persist`
+ * - **Message**: `message_received`, `message_sending`, `message_sent`
+ *
+ * ## Span types
+ *
+ * - `openclaw:session` - Root span for the OpenClaw session (24hr lifetime)
+ * - `openclaw:user_interaction` - User interaction context (5min idle timeout)
+ * - `openclaw:user_message` - Inbound user message event
+ * - `openclaw:agent_run` - Agent execution run
+ * - `openclaw:tool_call` - Tool execution (supports concurrent calls)
+ * - `openclaw:assistant_response` - Assistant response event
+ *
+ * ## Exports
+ *
+ * - {@link Agent} - HTTP client for Prefactor API (span CRUD, instance lifecycle)
+ * - {@link SessionStateManager} - Manages span hierarchy and timeouts per session
+ * - {@link Logger} - Structured logger for plugin diagnostics
+ * - {@link register} - Plugin entry point (used by OpenClaw, not imported directly)
+ *
+ * @module @prefactor/openclaw
+ * @category Packages
+ * @packageDocumentation
+ */
+
 import type { OpenClawPluginApi } from 'openclaw/plugin-sdk';
 import { z } from 'zod';
 import packageJson from '../package.json' with { type: 'json' };
@@ -369,3 +420,11 @@ export default function register(api: OpenClawPluginApi) {
     agentInitialized,
   });
 }
+
+// Re-export types for TypeDoc visibility
+export type { Agent, AgentConfig } from './agent.js';
+export { createAgent } from './agent.js';
+export type { Logger, LogLevel } from './logger.js';
+export { createLogger } from './logger.js';
+export type { SessionStateManager } from './session-state.js';
+export { createSessionStateManager } from './session-state.js';
