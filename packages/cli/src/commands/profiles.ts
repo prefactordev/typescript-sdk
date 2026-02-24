@@ -16,7 +16,7 @@ export function registerProfilesCommands(program: Command): void {
 
       if (profiles.length === 0) {
         console.log(
-          "No profiles configured. Use 'prefactor profiles add <name> <apiKey> [baseUrl]'."
+          "No profiles configured. Use 'prefactor profiles add <name> [baseUrl] --api-key <apiKey>'."
         );
         return;
       }
@@ -31,17 +31,31 @@ export function registerProfilesCommands(program: Command): void {
     });
 
   profiles
-    .command('add <name> <apiKey> [baseUrl]')
+    .command('add <name> [baseUrl]')
     .description('Add or update a profile')
-    .action(async (name: string, apiKey: string, baseUrl?: string) => {
-      if (baseUrl) {
-        validateBaseUrl(baseUrl);
-      }
+    .requiredOption('--api-key <apiKey>', 'API key for this profile')
+    .option('--token <apiKey>', 'Deprecated alias for --api-key')
+    .action(
+      async (
+        name: string,
+        baseUrl: string | undefined,
+        options: { apiKey: string; token?: string }
+      ) => {
+        const apiKey = options.apiKey || options.token;
 
-      const manager = await ProfileManager.create();
-      await manager.addProfile(name, apiKey, baseUrl);
-      console.log(`Profile '${name}' saved.`);
-    });
+        if (!apiKey || apiKey.trim().length === 0) {
+          throw new Error('Missing API key. Specify --api-key <apiKey>.');
+        }
+
+        if (baseUrl) {
+          validateBaseUrl(baseUrl);
+        }
+
+        const manager = await ProfileManager.create();
+        await manager.addProfile(name, apiKey, baseUrl);
+        console.log(`Profile '${name}' saved.`);
+      }
+    );
 
   profiles
     .command('remove <name>')

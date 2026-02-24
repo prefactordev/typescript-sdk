@@ -51,6 +51,10 @@ export function registerEnvironmentsCommands(program: Command): void {
     .option('--name <name>', 'Environment name')
     .action(function (this: Command, id: string, options: { name?: string }) {
       return executeAuthed(this, async (apiClient) => {
+        if (!options.name || options.name.trim().length === 0) {
+          throw new Error('No fields provided to update. Specify --name <name>.');
+        }
+
         const result = await new EnvironmentClient(apiClient).update(id, {
           ...(options.name ? { name: options.name } : {}),
         });

@@ -37,7 +37,7 @@
     },
     "packages/cli": {
       "name": "@prefactor/cli",
-      "version": "0.1.0",
+      "version": "0.0.1",
       "bin": {
         "prefactor": "dist/bin/cli.js",
       },
@@ -46,7 +46,7 @@
         "commander": "^14.0.1",
       },
       "devDependencies": {
-        "@types/bun": "latest",
+        "@types/bun": "1.3.9",
       },
       "peerDependencies": {
         "@prefactor/core": "workspace:*",

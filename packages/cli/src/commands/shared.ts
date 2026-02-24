@@ -1,4 +1,4 @@
-import { readFile } from 'node:fs/promises';
+import { readFile, stat } from 'node:fs/promises';
 import { isPfid } from '@prefactor/pfid';
 import type { Command } from 'commander';
 import { ApiClient } from '../api-client.js';
@@ -6,6 +6,7 @@ import type { BulkItem } from '../clients/bulk.js';
 import { DEFAULT_BASE_URL, ProfileManager, resolveCurrentProfileName } from '../profile-manager.js';
 
 const VALID_TOKEN_SCOPES = ['account', 'environment'] as const;
+const MAX_JSON_OPTION_FILE_SIZE_BYTES = 1024 * 1024;
 // When env auth is used without PREFACTOR_API_URL, fall back to the same
 // production default used for profile creation to avoid divergent defaults.
 const ENV_FALLBACK_BASE_URL = DEFAULT_BASE_URL;
@@ -34,7 +35,7 @@ async function getApiClient(command: Command): Promise<ApiClient> {
   }
 
   throw new Error(
-    `No profile found for '${profileSelection.name}'. Run 'prefactor profiles add <name> <apiKey> [baseUrl]' to configure one.`
+    `No profile found for '${profileSelection.name}'. Run 'prefactor profiles add <name> [baseUrl] --api-key <apiKey>' to configure one.`
   );
 }
 
@@ -97,6 +98,13 @@ async function readJsonOptionFile(filePath: string, optionName: string): Promise
   // `@file` is an explicit local CLI convenience and should only be used with
   // trusted user input in local workflows.
   try {
+    const fileStats = await stat(filePath);
+    if (fileStats.size > MAX_JSON_OPTION_FILE_SIZE_BYTES) {
+      throw new Error(
+        `File for ${optionName} is too large (${fileStats.size} bytes). Maximum allowed size is ${MAX_JSON_OPTION_FILE_SIZE_BYTES} bytes.`
+      );
+    }
+
     return await readFile(filePath, 'utf8');
   } catch (error) {
     throw new Error(

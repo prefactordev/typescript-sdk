@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 
-import { existsSync, mkdirSync, renameSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { $ } from 'bun';
 
@@ -9,7 +9,7 @@ const ROOT = import.meta.dir.replace('/scripts', '');
 interface PackageConfig {
   name: string;
   path: string;
-  entrypoint: string;
+  entrypoint?: string;
   entrypoints?: string[];
   binaryEntrypoint?: string;
   binaryName?: string;
@@ -26,7 +26,6 @@ const packages: PackageConfig[] = [
   {
     name: '@prefactor/cli',
     path: 'packages/cli',
-    entrypoint: './packages/cli/src/index.ts',
     entrypoints: ['./packages/cli/src/index.ts', './packages/cli/src/bin/cli.ts'],
     binaryEntrypoint: './packages/cli/src/bin/cli.ts',
     binaryName: 'prefactor',
@@ -55,9 +54,12 @@ const packages: PackageConfig[] = [
 async function buildPackage(pkg: PackageConfig): Promise<void> {
   const pkgDir = join(ROOT, pkg.path);
   const distDir = join(pkgDir, 'dist');
-  const entrypoints = (pkg.entrypoints ?? [pkg.entrypoint]).map((entrypoint) =>
-    join(ROOT, entrypoint)
-  );
+  const configuredEntrypoints = pkg.entrypoints ?? (pkg.entrypoint ? [pkg.entrypoint] : []);
+  if (configuredEntrypoints.length === 0) {
+    throw new Error(`No entrypoints configured for ${pkg.name}`);
+  }
+
+  const entrypoints = configuredEntrypoints.map((entrypoint) => join(ROOT, entrypoint));
 
   console.log(`\n📦 Building ${pkg.name}...`);
 
@@ -105,11 +107,11 @@ async function buildPackage(pkg: PackageConfig): Promise<void> {
     console.log(`  📦 Compiling binary...`);
     const binaryResult = await Bun.build({
       entrypoints: [join(ROOT, pkg.binaryEntrypoint)],
-      outdir: distDir,
-      naming: pkg.binaryName,
       target: 'bun',
       format: 'esm',
-      compile: true,
+      compile: {
+        outfile: join(distDir, pkg.binaryName),
+      },
       minify: false,
       sourcemap: 'none',
     });
@@ -117,13 +119,6 @@ async function buildPackage(pkg: PackageConfig): Promise<void> {
     if (!binaryResult.success) {
       console.error(`  ❌ Binary build failed:`, binaryResult.logs);
       process.exit(1);
-    }
-
-    const compiledBinaryPath = join(distDir, 'cli');
-    const desiredBinaryPath = join(distDir, pkg.binaryName);
-    if (compiledBinaryPath !== desiredBinaryPath && existsSync(compiledBinaryPath)) {
-      rmSync(desiredBinaryPath, { force: true });
-      renameSync(compiledBinaryPath, desiredBinaryPath);
     }
   }
 

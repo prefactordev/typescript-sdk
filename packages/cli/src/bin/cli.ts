@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import { inspect } from 'node:util';
 import { HttpClientError } from '@prefactor/core';
 import { runCli } from '../cli.js';
 
@@ -14,7 +15,16 @@ void main().catch((error: unknown) => {
       if (typeof error.responseBody === 'string') {
         console.error(error.responseBody);
       } else {
-        console.error(JSON.stringify(error.responseBody, null, 2));
+        try {
+          console.error(JSON.stringify(error.responseBody, null, 2));
+        } catch (serializationError) {
+          const reason =
+            serializationError instanceof Error
+              ? serializationError.message
+              : String(serializationError);
+          console.error(`[unserializable responseBody] ${reason}`);
+          console.error(inspect(error.responseBody));
+        }
       }
     }
     process.exitCode = 1;

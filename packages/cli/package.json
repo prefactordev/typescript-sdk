@@ -34,7 +34,7 @@
     "@prefactor/core": "workspace:*"
   },
   "devDependencies": {
-    "@types/bun": "latest"
+    "@types/bun": "1.3.9"
   },
   "engines": {
     "node": ">=22.0.0"

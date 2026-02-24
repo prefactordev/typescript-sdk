@@ -29,7 +29,7 @@ export function createCli(version: string): Command {
     [
       '',
       'Examples:',
-      '  prefactor profiles add default <api-key>',
+      '  prefactor profiles add default --api-key <api-key>',
       '  prefactor accounts list',
       '  prefactor agents list --environment_id <environment_id>',
       '  prefactor agent_spans create --agent_instance_id <id> --payload \'{"step":"tool"}\'',

@@ -60,7 +60,7 @@ export class ProfileManager {
 
   private async save(): Promise<void> {
     await mkdir(dirname(this.configPath), { recursive: true });
-    await writeFile(this.configPath, JSON.stringify(this.profiles, null, 2));
+    await writeFile(this.configPath, JSON.stringify(this.profiles, null, 2), { mode: 0o600 });
     await ensureLocalGitignoreEntry(this.configPath);
   }
 }

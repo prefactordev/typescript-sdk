@@ -76,9 +76,19 @@ function main(): void {
   const commandCwd = join(tempRoot, 'workspace');
   mkdirSync(homeDir, { recursive: true });
   mkdirSync(commandCwd, { recursive: true });
+  let environmentId: string | undefined;
+  let agentId: string | undefined;
+  let agentInstanceId: string | undefined;
 
   try {
-    runCli(repoRoot, homeDir, commandCwd, ['profiles', 'add', profileName, apiKey, baseUrl]);
+    runCli(repoRoot, homeDir, commandCwd, [
+      'profiles',
+      'add',
+      profileName,
+      baseUrl,
+      '--api-key',
+      apiKey,
+    ]);
 
     const environmentName = `cli-e2e-env-${runId}`;
     const environmentRaw = runCli(repoRoot, homeDir, commandCwd, [
@@ -92,7 +102,7 @@ function main(): void {
       accountId,
     ]);
     const environment = parseJson<EntityResponse>(environmentRaw, 'environments create');
-    const environmentId = getId(environment.details, 'environments create');
+    environmentId = getId(environment.details, 'environments create');
 
     const agentName = `cli-e2e-agent-${runId}`;
     const agentRaw = runCli(repoRoot, homeDir, commandCwd, [
@@ -106,7 +116,7 @@ function main(): void {
       environmentId,
     ]);
     const agent = parseJson<EntityResponse>(agentRaw, 'agents create');
-    const agentId = getId(agent.details, 'agents create');
+    agentId = getId(agent.details, 'agents create');
 
     const agentInstanceRaw = runCli(repoRoot, homeDir, commandCwd, [
       '--profile',
@@ -126,7 +136,7 @@ function main(): void {
       '--update_current_version',
     ]);
     const agentInstance = parseJson<EntityResponse>(agentInstanceRaw, 'agent_instances register');
-    const agentInstanceId = getId(agentInstance.details, 'agent_instances register');
+    agentInstanceId = getId(agentInstance.details, 'agent_instances register');
 
     console.log(
       JSON.stringify(
@@ -143,6 +153,40 @@ function main(): void {
       )
     );
   } finally {
+    if (agentId) {
+      try {
+        runCli(repoRoot, homeDir, commandCwd, ['--profile', profileName, 'agents', 'delete', agentId]);
+      } catch (error) {
+        console.error(
+          `Failed to clean up agent ${agentId}: ${error instanceof Error ? error.message : String(error)}`
+        );
+      }
+    }
+
+    if (environmentId) {
+      try {
+        runCli(repoRoot, homeDir, commandCwd, [
+          '--profile',
+          profileName,
+          'environments',
+          'delete',
+          environmentId,
+        ]);
+      } catch (error) {
+        console.error(
+          `Failed to clean up environment ${environmentId}: ${error instanceof Error ? error.message : String(error)}`
+        );
+      }
+    }
+
+    try {
+      runCli(repoRoot, homeDir, commandCwd, ['profiles', 'remove', profileName]);
+    } catch (error) {
+      console.error(
+        `Failed to clean up profile ${profileName}: ${error instanceof Error ? error.message : String(error)}`
+      );
+    }
+
     rmSync(tempRoot, { recursive: true, force: true });
   }
 }
@@ -155,13 +199,12 @@ function extractAccountIdFromToken(token: string): string {
   };
 
   const accountId = payload._?.a;
-  if (typeof accountId !== 'string' || accountId.length === 0) {
-    throw new Error(
-      'Unable to derive account id from token. Set PREFACTOR_E2E_ACCOUNT_ID explicitly.'
-    );
+  if (typeof accountId === 'string' && accountId.length > 0) {
+    return accountId;
   }
 
-  return accountId;
+
+  throw new Error('Unable to derive account id from token.');
 }
 
 function validateTokenCanCreateEnvironment(token: string): void {
