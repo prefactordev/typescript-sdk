@@ -11,8 +11,6 @@ interface PackageConfig {
   path: string;
   entrypoint?: string;
   entrypoints?: string[];
-  binaryEntrypoint?: string;
-  binaryName?: string;
   external: string[];
 }
 
@@ -27,8 +25,6 @@ const packages: PackageConfig[] = [
     name: '@prefactor/cli',
     path: 'packages/cli',
     entrypoints: ['./packages/cli/src/index.ts', './packages/cli/src/bin/cli.ts'],
-    binaryEntrypoint: './packages/cli/src/bin/cli.ts',
-    binaryName: 'prefactor',
     external: ['@prefactor/core', 'commander'],
   },
   {
@@ -101,25 +97,6 @@ async function buildPackage(pkg: PackageConfig): Promise<void> {
   if (!cjsResult.success) {
     console.error(`  ❌ CJS build failed:`, cjsResult.logs);
     process.exit(1);
-  }
-
-  if (pkg.binaryEntrypoint && pkg.binaryName) {
-    console.log(`  📦 Compiling binary...`);
-    const binaryResult = await Bun.build({
-      entrypoints: [join(ROOT, pkg.binaryEntrypoint)],
-      target: 'bun',
-      format: 'esm',
-      compile: {
-        outfile: join(distDir, pkg.binaryName),
-      },
-      minify: false,
-      sourcemap: 'none',
-    });
-
-    if (!binaryResult.success) {
-      console.error(`  ❌ Binary build failed:`, binaryResult.logs);
-      process.exit(1);
-    }
   }
 
   console.log(`  ✅ ${pkg.name} built successfully`);

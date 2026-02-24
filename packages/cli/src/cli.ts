@@ -14,6 +14,16 @@ import { registerUtilitiesCommands } from './commands/utilities.js';
 
 const CLI_VERSION = typeof packageJson.version === 'string' ? packageJson.version : '0.0.0';
 
+/**
+ * Creates a configured Commander CLI program.
+ *
+ * This factory is exported for test usage to assert command registration and
+ * parse behavior without going through the bin entrypoint.
+ *
+ * @param version CLI version string shown in help/version output.
+ * @returns Configured Commander command instance.
+ * @internal
+ */
 export function createCli(version: string): Command {
   const program = new Command()
     .name('prefactor')
@@ -51,6 +61,12 @@ export function createCli(version: string): Command {
   return program;
 }
 
+/**
+ * Parses and executes CLI commands for the current process invocation.
+ *
+ * @param argv Process argument vector, typically `process.argv`.
+ * @returns Promise that resolves when command execution completes.
+ */
 export async function runCli(argv: string[]): Promise<void> {
   const program = createCli(CLI_VERSION);
   await program.parseAsync(argv);
