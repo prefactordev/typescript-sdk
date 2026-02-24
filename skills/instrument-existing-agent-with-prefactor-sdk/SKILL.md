@@ -32,7 +32,6 @@ Use the created `agent_id` for `PREFACTOR_AGENT_ID`.
 
 Also ensure dependencies are installed from npm via the project's package manager:
 
-- `@prefactor/cli`
 - one of `@prefactor/langchain`, `@prefactor/ai`, `@prefactor/openclaw`
 - `@prefactor/core` only when no built-in adapter is available
 
