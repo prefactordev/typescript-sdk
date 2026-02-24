@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { AgentInstanceClient as CoreAgentInstanceClient } from '@prefactor/core';
 import { ApiClient } from '../src/api-client.js';
 import { AccountClient } from '../src/clients/account.js';
 import { AdminUserClient } from '../src/clients/admin-user.js';
@@ -43,6 +44,7 @@ describe('resource clients', () => {
     expect(typeof cliExports.ApiTokenClient).toBe('function');
     expect(typeof cliExports.PfidClient).toBe('function');
     expect(typeof cliExports.BulkClient).toBe('function');
+    expect(cliExports.AgentInstanceClient).toBe(CoreAgentInstanceClient);
   });
 
   test('agent list uses query filters for GET', async () => {
@@ -172,6 +174,59 @@ describe('resource clients', () => {
     expect(captured?.init?.body).toBe('{"items":[{"method":"GET","path":"/account"}]}');
   });
 
+  test('agent instance register/start/finish contract remains unchanged', async () => {
+    const calls: CapturedRequest[] = [];
+    globalThis.fetch = (async (input, init) => {
+      calls.push({ url: String(input), init });
+      return new Response(JSON.stringify({ details: { id: 'agent_instance_1' } }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }) as typeof fetch;
+
+    const apiClient = new ApiClient('https://example.com', 'test-token');
+    const client = new AgentInstanceClient(apiClient);
+
+    await client.register({
+      agent_id: 'agent_1',
+      agent_version: { external_identifier: 'v1', name: 'Agent' },
+      agent_schema_version: { external_identifier: 'schema_v1' },
+    });
+    await client.start('agent_instance_1', {
+      timestamp: '2026-02-24T12:00:00.000Z',
+    });
+    await client.finish('agent_instance_1', {
+      timestamp: '2026-02-24T12:05:00.000Z',
+      status: 'finished',
+    });
+
+    const expected: Array<{ path: string; method: string; body: string }> = [
+      {
+        path: '/api/v1/agent_instance/register',
+        method: 'POST',
+        body: '{"agent_id":"agent_1","agent_version":{"external_identifier":"v1","name":"Agent"},"agent_schema_version":{"external_identifier":"schema_v1"}}',
+      },
+      {
+        path: '/api/v1/agent_instance/agent_instance_1/start',
+        method: 'POST',
+        body: '{"timestamp":"2026-02-24T12:00:00.000Z"}',
+      },
+      {
+        path: '/api/v1/agent_instance/agent_instance_1/finish',
+        method: 'POST',
+        body: '{"timestamp":"2026-02-24T12:05:00.000Z","status":"finished"}',
+      },
+    ];
+
+    for (const [index, check] of expected.entries()) {
+      const call = calls[index];
+      const url = new URL(call?.url ?? 'https://example.com');
+      expect(url.pathname).toBe(check.path);
+      expect(call?.init?.method).toBe(check.method);
+      expect(call?.init?.body).toBe(check.body);
+    }
+  });
+
   test('covers additional wrapper request shapes', async () => {
     const calls: CapturedRequest[] = [];
     globalThis.fetch = (async (input, init) => {
@@ -188,7 +243,6 @@ describe('resource clients', () => {
     const adminUserInviteClient = new AdminUserInviteClient(apiClient);
     const agentVersionClient = new AgentVersionClient(apiClient);
     const agentSchemaVersionClient = new AgentSchemaVersionClient(apiClient);
-    const agentInstanceClient = new AgentInstanceClient(apiClient);
 
     await accountClient.update('acct_1', { name: 'Renamed' });
     await adminUserClient.list('acct_1');
@@ -196,11 +250,6 @@ describe('resource clients', () => {
     await agentVersionClient.create('agent_1', 'v1');
     await agentSchemaVersionClient.create('agent_1', 'schema_v1', {
       span_schemas: { root: { type: 'object' } },
-    });
-    await agentInstanceClient.register({
-      agent_id: 'agent_1',
-      agent_version: { external_identifier: 'v1', name: 'Agent' },
-      agent_schema_version: { external_identifier: 'schema_v1' },
     });
 
     const checks: Array<{
@@ -239,12 +288,6 @@ describe('resource clients', () => {
         path: '/api/v1/agent_schema_version',
         method: 'POST',
         body: '{"details":{"agent_id":"agent_1","external_identifier":"schema_v1","span_schemas":{"root":{"type":"object"}}}}',
-      },
-      {
-        index: 5,
-        path: '/api/v1/agent_instance/register',
-        method: 'POST',
-        body: '{"agent_id":"agent_1","agent_version":{"external_identifier":"v1","name":"Agent"},"agent_schema_version":{"external_identifier":"schema_v1"}}',
       },
     ];
 

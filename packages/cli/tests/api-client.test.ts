@@ -12,52 +12,7 @@ describe('ApiClient', () => {
     globalThis.fetch = originalFetch;
   });
 
-  test('prefixes request paths with /api/v1', async () => {
-    const calls: Array<{ url: string; init?: RequestInit }> = [];
-    globalThis.fetch = (async (input, init) => {
-      calls.push({ url: String(input), init });
-      return new Response(JSON.stringify({ ok: true }), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-      });
-    }) as typeof fetch;
-
-    const client = new ApiClient('https://example.com', 'test-token');
-    await client.request('/agent_spans');
-    await client.request('/api/v1/agent_spans');
-
-    expect(calls[0]?.url).toBe('https://example.com/api/v1/agent_spans');
-    expect(calls[1]?.url).toBe('https://example.com/api/v1/agent_spans');
-  });
-
-  test('serializes query params into URL search string', async () => {
-    let requestUrl = '';
-    globalThis.fetch = (async (input) => {
-      requestUrl = String(input);
-      return new Response(JSON.stringify({ ok: true }), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-      });
-    }) as typeof fetch;
-
-    const client = new ApiClient('https://example.com', 'test-token');
-    await client.request('/agent_spans', {
-      method: 'GET',
-      query: {
-        page: 2,
-        search: 'hello world',
-        includeArchived: false,
-      },
-    });
-
-    const url = new URL(requestUrl);
-    expect(url.pathname).toBe('/api/v1/agent_spans');
-    expect(url.searchParams.get('page')).toBe('2');
-    expect(url.searchParams.get('search')).toBe('hello world');
-    expect(url.searchParams.get('includeArchived')).toBe('false');
-  });
-
-  test('does not duplicate /api/v1 prefix when path already includes query', async () => {
+  test('preserves /api/v1 prefix when path already has query', async () => {
     let requestUrl = '';
     globalThis.fetch = (async (input) => {
       requestUrl = String(input);
@@ -70,18 +25,16 @@ describe('ApiClient', () => {
     const client = new ApiClient('https://example.com', 'test-token');
     await client.request('/api/v1?existing=true', {
       method: 'GET',
-      query: {
-        page: 2,
-      },
+      query: { page: 2 },
     });
 
-    const url = new URL(requestUrl);
-    expect(url.pathname).toBe('/api/v1');
-    expect(url.searchParams.get('existing')).toBe('true');
-    expect(url.searchParams.get('page')).toBe('2');
+    const prefixedUrl = new URL(requestUrl);
+    expect(prefixedUrl.pathname).toBe('/api/v1');
+    expect(prefixedUrl.searchParams.get('existing')).toBe('true');
+    expect(prefixedUrl.searchParams.get('page')).toBe('2');
   });
 
-  test('does not duplicate /api/v1 prefix when path already includes hash', async () => {
+  test('serializes query params for prefixed endpoint paths', async () => {
     let requestUrl = '';
     globalThis.fetch = (async (input) => {
       requestUrl = String(input);
@@ -92,14 +45,18 @@ describe('ApiClient', () => {
     }) as typeof fetch;
 
     const client = new ApiClient('https://example.com', 'test-token');
-    await client.request('/api/v1#cursor');
+    await client.request('/agent_spans', {
+      method: 'GET',
+      query: { search: 'hello world', includeArchived: false },
+    });
 
-    const url = new URL(requestUrl);
-    expect(url.pathname).toBe('/api/v1');
-    expect(url.hash).toBe('#cursor');
+    const queriedUrl = new URL(requestUrl);
+    expect(queriedUrl.pathname).toBe('/api/v1/agent_spans');
+    expect(queriedUrl.searchParams.get('search')).toBe('hello world');
+    expect(queriedUrl.searchParams.get('includeArchived')).toBe('false');
   });
 
-  test('appends query before hash fragments', async () => {
+  test('appends query params before URL hash', async () => {
     let requestUrl = '';
     globalThis.fetch = (async (input) => {
       requestUrl = String(input);
@@ -112,9 +69,7 @@ describe('ApiClient', () => {
     const client = new ApiClient('https://example.com', 'test-token');
     await client.request('/api/v1/agent_spans#cursor', {
       method: 'GET',
-      query: {
-        page: 2,
-      },
+      query: { page: 2 },
     });
 
     const url = new URL(requestUrl);
@@ -163,5 +118,31 @@ describe('ApiClient', () => {
     expect(init?.method).toBe('POST');
     expect(init?.body).toBe('{"name":"demo"}');
     expect(headers.get('content-type')).toBe('application/json');
+  });
+
+  test('api client retries on default retryable status codes', async () => {
+    const retryableStatus = 598;
+
+    let attempts = 0;
+    globalThis.fetch = (async (_input, _init) => {
+      attempts += 1;
+      if (attempts === 1) {
+        return new Response(JSON.stringify({ error: 'retry me' }), {
+          status: retryableStatus,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+
+      return new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }) as typeof fetch;
+
+    const client = new ApiClient('https://example.com', 'test-token');
+    const response = await client.request<{ ok: boolean }>('/agent_spans');
+
+    expect(response).toEqual({ ok: true });
+    expect(attempts).toBe(2);
   });
 });

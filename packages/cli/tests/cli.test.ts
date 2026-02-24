@@ -49,6 +49,27 @@ describe('CLI profiles command', () => {
     ]);
   });
 
+  test('registers same top-level commands after modularization', () => {
+    const cli = createCli('1.0.0');
+
+    expect(cli.commands.map((command) => command.name())).toEqual([
+      'profiles',
+      'accounts',
+      'agents',
+      'environments',
+      'agent_versions',
+      'agent_schema_versions',
+      'agent_instances',
+      'agent_spans',
+      'admin_users',
+      'admin_user_invites',
+      'api_tokens',
+      'pfid',
+      'bulk',
+      'version',
+    ]);
+  });
+
   test('profiles list uses explicit --profile as current selection', async () => {
     const cwd = join(tempRoot, 'cwd');
     mkdirSync(cwd, { recursive: true });
@@ -298,10 +319,15 @@ describe('CLI command validation', () => {
     process.chdir(cwd);
     process.env.PREFACTOR_API_TOKEN = 'env-token';
 
-    const cli = createCli('1.0.0');
-
     await expect(
-      cli.parseAsync(['node', 'prefactor', '--profile', 'missing', 'accounts', 'list'])
+      createCli('1.0.0').parseAsync([
+        'node',
+        'prefactor',
+        '--profile',
+        'missing',
+        'accounts',
+        'list',
+      ])
     ).rejects.toThrow(
       "No profile found for 'missing'. Run 'prefactor profiles add <name> <apiKey> [baseUrl]' to configure one."
     );
@@ -314,19 +340,19 @@ describe('CLI command validation', () => {
     process.env.PREFACTOR_API_TOKEN = 'env-token';
     process.env.PREFACTOR_PROFILE = 'missing-from-env';
 
-    const cli = createCli('1.0.0');
-
-    await expect(cli.parseAsync(['node', 'prefactor', 'accounts', 'list'])).rejects.toThrow(
+    await expect(
+      createCli('1.0.0').parseAsync(['node', 'prefactor', 'accounts', 'list'])
+    ).rejects.toThrow(
       "No profile found for 'missing-from-env'. Run 'prefactor profiles add <name> <apiKey> [baseUrl]' to configure one."
     );
   });
 
-  test('falls back to env token with profile default API URL when profile is missing', async () => {
+  test('falls back to env token for default profile selection', async () => {
     const cwd = join(tempRoot, 'cwd');
     mkdirSync(cwd, { recursive: true });
     process.chdir(cwd);
     process.env.PREFACTOR_API_TOKEN = 'env-token';
-
+    delete process.env.PREFACTOR_PROFILE;
     let requestUrl = '';
     globalThis.fetch = (async (input) => {
       requestUrl = String(input);
@@ -336,8 +362,7 @@ describe('CLI command validation', () => {
       });
     }) as typeof fetch;
 
-    const cli = createCli('1.0.0');
-    await cli.parseAsync(['node', 'prefactor', 'accounts', 'list']);
+    await createCli('1.0.0').parseAsync(['node', 'prefactor', 'accounts', 'list']);
 
     expect(requestUrl).toStartWith('https://api.prefactor.ai/');
   });
