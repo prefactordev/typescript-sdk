@@ -2,16 +2,34 @@
 
 ## Pre-Integration
 
-- Confirm which package to use first: `@prefactor/langchain` or `@prefactor/ai`.
+- Bootstrap Prefactor resources with CLI (`profile`, `environment`, `agent`, `agent_instance`).
+- Confirm which package to use first: `@prefactor/langchain`, `@prefactor/ai`, or `@prefactor/openclaw`.
 - Use `@prefactor/core` only if adapter hooks cannot cover required boundaries.
 - Identify top-level agent execution boundary and child LLM/tool boundaries.
+
+## CLI Bootstrap Commands
+
+```bash
+prefactor profiles add default <api-key> [base-url]
+prefactor accounts list
+prefactor environments create --name <env-name> --account_id <account-id>
+prefactor agents create --name <agent-name> --environment_id <environment-id>
+prefactor agent_instances register \
+  --agent_id <agent-id> \
+  --agent_version_external_identifier <agent-version-id> \
+  --agent_version_name <agent-version-name> \
+  --agent_schema_version_external_identifier <schema-version-id> \
+  --update_current_version
+```
+
+If no built-in adapter exists for the target provider, use `skills/create-provider-package-with-core/SKILL.md`.
 
 ## Integration
 
 - Add one top-level run/agent span per execution.
 - Add child spans around each LLM call and each external tool invocation.
 - Ensure child operations execute inside active context propagation.
-- Keep span types package-prefixed (`langchain:*` or `ai-sdk:*`).
+- Keep custom span types package-prefixed (`langchain:*`, `ai-sdk:*`, or `openclaw:*`).
 - Capture token usage and model metadata when available.
 - Capture inputs/outputs with truncation and redaction enabled.
 
