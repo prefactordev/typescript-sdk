@@ -1,6 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { isPfid } from '@prefactor/pfid';
 import { Command } from 'commander';
+import packageJson from '../package.json';
 import { ApiClient } from './api-client.js';
 import { AccountClient } from './clients/account.js';
 import { AdminUserClient } from './clients/admin-user.js';
@@ -25,19 +26,7 @@ const ENV_FALLBACK_BASE_URL = DEFAULT_BASE_URL;
 type GlobalOptions = { profile?: string };
 type ProfileSelectionSource = 'explicit' | 'environment' | 'default';
 
-async function loadVersion(): Promise<string> {
-  try {
-    const packageJsonPath = new URL('../package.json', import.meta.url);
-    const packageJsonContents = await readFile(packageJsonPath, 'utf8');
-    const packageJson = JSON.parse(packageJsonContents) as { version?: unknown };
-
-    if (typeof packageJson.version === 'string') {
-      return packageJson.version;
-    }
-  } catch {}
-
-  return '0.0.0';
-}
+const CLI_VERSION = typeof packageJson.version === 'string' ? packageJson.version : '0.0.0';
 
 export function createCli(version: string): Command {
   const program = new Command()
@@ -1161,7 +1150,6 @@ async function parseBulkItems(value: string): Promise<BulkItem[]> {
 }
 
 export async function runCli(argv: string[]): Promise<void> {
-  const version = await loadVersion();
-  const program = createCli(version);
+  const program = createCli(CLI_VERSION);
   await program.parseAsync(argv);
 }

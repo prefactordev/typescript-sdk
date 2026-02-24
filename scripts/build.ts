@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 
-import { existsSync, mkdirSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, renameSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { $ } from 'bun';
 
@@ -11,6 +11,8 @@ interface PackageConfig {
   path: string;
   entrypoint: string;
   entrypoints?: string[];
+  binaryEntrypoint?: string;
+  binaryName?: string;
   external: string[];
 }
 
@@ -26,6 +28,8 @@ const packages: PackageConfig[] = [
     path: 'packages/cli',
     entrypoint: './packages/cli/src/index.ts',
     entrypoints: ['./packages/cli/src/index.ts', './packages/cli/src/bin/cli.ts'],
+    binaryEntrypoint: './packages/cli/src/bin/cli.ts',
+    binaryName: 'prefactor',
     external: ['@prefactor/core', 'commander'],
   },
   {
@@ -95,6 +99,32 @@ async function buildPackage(pkg: PackageConfig): Promise<void> {
   if (!cjsResult.success) {
     console.error(`  ❌ CJS build failed:`, cjsResult.logs);
     process.exit(1);
+  }
+
+  if (pkg.binaryEntrypoint && pkg.binaryName) {
+    console.log(`  📦 Compiling binary...`);
+    const binaryResult = await Bun.build({
+      entrypoints: [join(ROOT, pkg.binaryEntrypoint)],
+      outdir: distDir,
+      naming: pkg.binaryName,
+      target: 'bun',
+      format: 'esm',
+      compile: true,
+      minify: false,
+      sourcemap: 'none',
+    });
+
+    if (!binaryResult.success) {
+      console.error(`  ❌ Binary build failed:`, binaryResult.logs);
+      process.exit(1);
+    }
+
+    const compiledBinaryPath = join(distDir, 'cli');
+    const desiredBinaryPath = join(distDir, pkg.binaryName);
+    if (compiledBinaryPath !== desiredBinaryPath && existsSync(compiledBinaryPath)) {
+      rmSync(desiredBinaryPath, { force: true });
+      renameSync(compiledBinaryPath, desiredBinaryPath);
+    }
   }
 
   console.log(`  ✅ ${pkg.name} built successfully`);

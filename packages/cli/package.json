@@ -1,6 +1,6 @@
 {
   "name": "@prefactor/cli",
-  "version": "0.1.0",
+  "version": "0.0.1",
   "description": "Prefactor command-line interface",
   "type": "module",
   "main": "dist/index.cjs",
@@ -38,5 +38,8 @@
   },
   "engines": {
     "node": ">=22.0.0"
+  },
+  "scripts": {
+    "e2e:smoke": "bun scripts/e2e-cli-smoke.ts"
   }
 }
