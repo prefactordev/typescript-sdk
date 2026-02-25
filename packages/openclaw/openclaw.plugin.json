@@ -5,6 +5,7 @@
   "description": "Comprehensive lifecycle event monitoring and instrumentation for OpenClaw",
   "runtime": "node",
   "entry": "./dist/index.js",
+  "skills": ["./skills"],
   "configSchema": {
     "type": "object",
     "properties": {
