@@ -206,7 +206,7 @@ export class Agent {
     } satisfies AgentVersionForRegister;
 
     this.agentSchemaVersion = {
-      external_identifier: 'plugin-0.0.19',
+      external_identifier: `plugin-${pluginVersion}`,
       span_type_schemas: [
         {
           name: 'openclaw:user_message',
