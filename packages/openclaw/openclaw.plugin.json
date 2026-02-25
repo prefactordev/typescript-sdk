@@ -10,7 +10,7 @@
     "properties": {
       "apiUrl": {
         "type": "string",
-        "description": "Prefactor API URL (e.g., https://api.prefactor.dev)"
+        "description": "Prefactor API URL (e.g., https://app.prefactorai.com)"
       },
       "apiToken": {
         "type": "string",
@@ -50,7 +50,7 @@
   "uiHints": {
     "apiUrl": {
       "label": "Prefactor API URL",
-      "placeholder": "https://api.prefactor.dev"
+      "placeholder": "https://app.prefactorai.com"
     },
     "apiToken": {
       "label": "Prefactor API token",

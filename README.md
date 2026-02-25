@@ -130,7 +130,7 @@ import { init } from '@prefactor/langchain';
 const middleware = init({
   transportType: 'http',
   httpConfig: {
-    apiUrl: 'https://api.prefactor.ai',
+    apiUrl: 'https://app.prefactorai.com',
     apiToken: process.env.PREFACTOR_API_TOKEN!,
     agentId: 'my-agent',
     agentIdentifier: '1.0.0',
@@ -167,7 +167,7 @@ import { init } from '@prefactor/langchain';
 const middleware = init({
   transportType: 'http',
   httpConfig: {
-    apiUrl: 'https://api.prefactor.ai',
+    apiUrl: 'https://app.prefactorai.com',
     apiToken: process.env.PREFACTOR_API_TOKEN!,
     agentId: 'my-agent',
     agentIdentifier: '1.0.0',
@@ -436,6 +436,6 @@ MIT
 
 ## Support
 
-- Documentation: [https://docs.prefactor.ai](https://docs.prefactor.ai)
+- Documentation: [https://app.prefactorai.com](https://app.prefactorai.com)
 - Issues: [GitHub Issues](https://github.com/prefactordev/typescript-sdk/issues)
 - Email: support@prefactor.ai

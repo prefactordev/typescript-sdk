@@ -9,7 +9,7 @@ export interface Profile {
 export type Profiles = Record<string, Profile>;
 
 export const DEFAULT_PROFILE_NAME = 'default';
-export const DEFAULT_BASE_URL = 'https://api.prefactor.ai';
+export const DEFAULT_BASE_URL = 'https://app.prefactorai.com';
 
 export class ProfileManager {
   private constructor(

@@ -74,7 +74,7 @@ export type ManualSpanOptions = {
  * const middleware = init({
  *   transportType: 'http',
  *   httpConfig: {
- *     apiUrl: 'https://api.prefactor.ai',
+ *     apiUrl: 'https://app.prefactorai.com',
  *     apiToken: process.env.PREFACTOR_API_TOKEN!,
  *     agentIdentifier: 'my-langchain-agent',
  *   },
@@ -84,7 +84,7 @@ export type ManualSpanOptions = {
  * const middleware = init({
  *   transportType: 'http',
  *   httpConfig: {
- *     apiUrl: 'https://api.prefactor.ai',
+ *     apiUrl: 'https://app.prefactorai.com',
  *     apiToken: process.env.PREFACTOR_API_TOKEN!,
  *     agentIdentifier: 'my-langchain-agent', // Required
  *     agentId: 'legacy-agent-id', // Optional legacy identifier

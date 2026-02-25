@@ -24,7 +24,7 @@ To send telemetry to the Prefactor platform:
 
 ```bash
 export ANTHROPIC_API_KEY=your-anthropic-key
-export PREFACTOR_API_URL=https://api.prefactor.ai
+export PREFACTOR_API_URL=https://app.prefactorai.com
 export PREFACTOR_API_TOKEN=your-prefactor-token
 export PREFACTOR_AGENT_ID=your-agent-id  # optional
 export PREFACTOR_AGENT_IDENTIFIER=1.0.0     # optional
@@ -86,7 +86,7 @@ const tracer = init();
 const tracer = init({
   transportType: 'http',
   httpConfig: {
-    apiUrl: 'https://api.prefactor.ai',
+    apiUrl: 'https://app.prefactorai.com',
     apiToken: 'your-token',
     agentId: 'your-agent-id',
     agentIdentifier: '1.0.0',

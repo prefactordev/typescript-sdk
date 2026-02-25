@@ -366,7 +366,7 @@ describe('CLI command validation', () => {
 
     await createCli('1.0.0').parseAsync(['node', 'prefactor', 'accounts', 'list']);
 
-    expect(requestUrl).toStartWith('https://api.prefactor.ai/');
+    expect(requestUrl).toStartWith('https://app.prefactorai.com/');
   });
 
   test('uses PREFACTOR_API_URL with env token fallback when profile is missing', async () => {

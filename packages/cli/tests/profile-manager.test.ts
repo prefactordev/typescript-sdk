@@ -76,7 +76,7 @@ describe('ProfileManager', () => {
 
     expect(manager.getProfile('demo')).toEqual({
       api_key: 'token-value',
-      base_url: 'https://api.prefactor.ai',
+      base_url: 'https://app.prefactorai.com',
     });
   });
 
