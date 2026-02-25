@@ -245,7 +245,10 @@ export class Agent {
           params_schema: {
             type: 'object',
             properties: {
-              raw: { type: 'object', description: 'Raw OpenClaw context with messages' },
+              text: { type: 'string', description: 'Assistant response text' },
+              tokens: { type: 'object', description: 'Token usage for this LLM call' },
+              provider: { type: 'string', description: 'LLM provider name' },
+              model: { type: 'string', description: 'LLM model name' },
             },
           },
           result_schema: {
@@ -285,6 +288,27 @@ export class Agent {
             type: 'object',
             properties: {
               startedAt: { type: 'string', description: 'User interaction timestamp' },
+            },
+          },
+        },
+        {
+          name: 'openclaw:agent_thinking',
+          description: 'Agent thinking/reasoning span',
+          template: '{{ thinking | default: "(thinking)" }}',
+          params_schema: {
+            type: 'object',
+            properties: {
+              thinking: { type: 'string', description: 'Agent thinking content' },
+              tokens: { type: 'object', description: 'Token usage for this LLM call' },
+              signature: { type: 'string', description: 'Thinking signature type' },
+              provider: { type: 'string', description: 'LLM provider name' },
+              model: { type: 'string', description: 'LLM model name' },
+            },
+          },
+          result_schema: {
+            type: 'object',
+            properties: {
+              thinking: { type: 'string', description: 'Agent thinking content' },
             },
           },
         },

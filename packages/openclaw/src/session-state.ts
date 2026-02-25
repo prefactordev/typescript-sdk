@@ -5,43 +5,20 @@
 import type { Agent } from './agent.js';
 import type { Logger } from './logger.js';
 
-function extractAssistantText(payload: Record<string, unknown>): string | null {
-  const event = payload.event as Record<string, unknown> | undefined;
-  if (!event) return null;
-
-  const messages = event.messages;
-  if (!Array.isArray(messages)) return null;
-
-  for (let i = messages.length - 1; i >= 0; i--) {
-    const msg = messages[i] as Record<string, unknown> | undefined;
-    if (msg?.role === 'assistant') {
-      const content = msg.content;
-      if (!Array.isArray(content)) continue;
-
-      for (let j = content.length - 1; j >= 0; j--) {
-        const item = content[j] as Record<string, unknown> | undefined;
-        if (item?.type === 'text' && typeof item.text === 'string') {
-          return item.text;
-        }
-      }
-    }
-  }
-  return null;
+interface ToolCallEntry {
+  spanId: string;
+  toolName: string;
+  toolCallId?: string;
 }
 
-// Session state structure tracking all active spans
 interface SessionSpanState {
   sessionKey: string;
-  // Synthetic session span (24hr timeout)
   sessionSpanId: string | null;
   sessionCreatedAt: number;
-  // User interaction span (5min timeout)
   interactionSpanId: string | null;
   interactionLastActivity: number;
-  // Agent run span (child of interaction)
   agentRunSpanId: string | null;
-  // Tool call spans (concurrent, children of agent_run)
-  toolCallSpans: Array<{ spanId: string; toolName: string }>;
+  toolCallSpans: ToolCallEntry[];
 }
 
 interface SessionManagerConfig {
@@ -49,9 +26,6 @@ interface SessionManagerConfig {
   sessionTimeoutMs: number;
 }
 
-// Serializes async operations per session key to prevent race conditions
-// between fire-and-forget hook handlers (e.g. createAgentRunSpan must complete
-// before closeAgentRunSpan can execute on the same session)
 class SessionOperationQueue {
   private queues: Map<string, Promise<void>> = new Map();
 
@@ -71,7 +45,6 @@ class SessionOperationQueue {
         .then(resolve, reject)
     );
 
-    // Store the queue chain — catch to prevent unhandled rejection propagation
     this.queues.set(
       sessionKey,
       next.catch(() => {})
@@ -85,22 +58,6 @@ class SessionOperationQueue {
   }
 }
 
-/**
- * Manages span hierarchies and timeouts per OpenClaw session.
- *
- * Tracks session, interaction, agent-run, and tool-call spans in an internal
- * `Map<string, SessionSpanState>`. All public async methods are serialized
- * per session key through a {@link SessionOperationQueue} to prevent race
- * conditions between concurrent fire-and-forget hook handlers.
- *
- * Starts a 30-second cleanup interval on construction that expires idle
- * interactions and aged-out sessions; call {@link stop} to clear it.
- *
- * @param agent  - Agent used to create/finish spans, or `null` to disable tracing.
- * @param logger - Logger instance for structured diagnostics.
- * @param config - Optional overrides for `userInteractionTimeoutMs` (default 5 min)
- *                 and `sessionTimeoutMs` (default 24 hr).
- */
 export class SessionStateManager {
   private sessions: Map<string, SessionSpanState> = new Map();
   private agent: Agent | null;
@@ -113,11 +70,10 @@ export class SessionStateManager {
     this.agent = agent;
     this.logger = logger;
     this.config = {
-      userInteractionTimeoutMs: config.userInteractionTimeoutMs || 5 * 60 * 1000, // 5 minutes
-      sessionTimeoutMs: config.sessionTimeoutMs || 24 * 60 * 60 * 1000, // 24 hours
+      userInteractionTimeoutMs: config.userInteractionTimeoutMs || 5 * 60 * 1000,
+      sessionTimeoutMs: config.sessionTimeoutMs || 24 * 60 * 60 * 1000,
     };
 
-    // Start cleanup interval
     this.startCleanupInterval();
 
     this.logger.info('session_manager_init', {
@@ -127,7 +83,6 @@ export class SessionStateManager {
   }
 
   private startCleanupInterval(): void {
-    // Check for expired sessions every 30 seconds
     this.cleanupInterval = setInterval(() => {
       void this.cleanupExpiredSessions().catch((error: unknown) => {
         const err = error instanceof Error ? error : new Error(String(error));
@@ -171,24 +126,20 @@ export class SessionStateManager {
     return state;
   }
 
-  // --- Public methods (serialized via operation queue) ---
+  // --- Public API ---
 
-  // Create synthetic session span (24hr lifetime)
   async createSessionSpan(sessionKey: string): Promise<string | null> {
     return this.queue.enqueue(sessionKey, () => this._createSessionSpan(sessionKey));
   }
 
-  // Close session span and all its children
   async closeSessionSpan(sessionKey: string): Promise<void> {
     return this.queue.enqueue(sessionKey, () => this._closeSessionSpan(sessionKey));
   }
 
-  // Create or get user interaction span (5min timeout)
   async createOrGetInteractionSpan(sessionKey: string): Promise<string | null> {
     return this.queue.enqueue(sessionKey, () => this._createOrGetInteractionSpan(sessionKey));
   }
 
-  // Close interaction span and all its children
   async closeInteractionSpan(
     sessionKey: string,
     status: 'complete' | 'cancelled' | 'failed' = 'complete'
@@ -196,7 +147,6 @@ export class SessionStateManager {
     return this.queue.enqueue(sessionKey, () => this._closeInteractionSpan(sessionKey, status));
   }
 
-  // Create user_message span (immediate event)
   async createUserMessageSpan(
     sessionKey: string,
     payload: Record<string, unknown>
@@ -204,7 +154,6 @@ export class SessionStateManager {
     return this.queue.enqueue(sessionKey, () => this._createUserMessageSpan(sessionKey, payload));
   }
 
-  // Create agent_run span
   async createAgentRunSpan(
     sessionKey: string,
     payload: Record<string, unknown>
@@ -212,7 +161,6 @@ export class SessionStateManager {
     return this.queue.enqueue(sessionKey, () => this._createAgentRunSpan(sessionKey, payload));
   }
 
-  // Close agent_run span
   async closeAgentRunSpan(
     sessionKey: string,
     status: 'complete' | 'cancelled' | 'failed' = 'complete'
@@ -220,7 +168,6 @@ export class SessionStateManager {
     return this.queue.enqueue(sessionKey, () => this._closeAgentRunSpan(sessionKey, status));
   }
 
-  // Create tool_call span (supports concurrent tool calls)
   async createToolCallSpan(
     sessionKey: string,
     toolName: string,
@@ -231,33 +178,46 @@ export class SessionStateManager {
     );
   }
 
-  // Close tool_call span by toolName match
-  async closeToolCallSpan(
+  async closeToolCallSpanWithResult(
     sessionKey: string,
-    status: 'complete' | 'cancelled' | 'failed' = 'complete',
-    toolName?: string
+    toolCallId: string,
+    toolName: string,
+    resultText: string | undefined,
+    isError: boolean
   ): Promise<void> {
     return this.queue.enqueue(sessionKey, () =>
-      this._closeToolCallSpan(sessionKey, status, toolName)
+      this._closeToolCallSpanWithResult(sessionKey, toolCallId, toolName, resultText, isError)
     );
   }
 
-  // Create assistant_response span (immediate event)
   async createAssistantResponseSpan(
     sessionKey: string,
-    payload: Record<string, unknown>
+    text: string,
+    tokens: { input?: number; output?: number } | undefined,
+    metadata?: { provider?: string; model?: string }
   ): Promise<string | null> {
     return this.queue.enqueue(sessionKey, () =>
-      this._createAssistantResponseSpan(sessionKey, payload)
+      this._createAssistantResponseSpan(sessionKey, text, tokens, metadata)
     );
   }
 
-  // Force cleanup all sessions (for gateway_stop)
+  async createAgentThinkingSpan(
+    sessionKey: string,
+    thinking: string,
+    tokens:
+      | { input?: number; output?: number; cacheRead?: number; cacheWrite?: number }
+      | undefined,
+    metadata?: { provider?: string; model?: string; signature?: string }
+  ): Promise<string | null> {
+    return this.queue.enqueue(sessionKey, () =>
+      this._createAgentThinkingSpan(sessionKey, thinking, tokens, metadata)
+    );
+  }
+
   async cleanupAllSessions(): Promise<void> {
     this.logger.info('cleanup_all_sessions_start', { count: this.sessions.size });
 
     for (const [sessionKey, state] of this.sessions.entries()) {
-      // Close all spans with failed status (bypass queue — this is emergency cleanup)
       await this._closeAllToolCallSpans(sessionKey, 'failed');
       if (state.agentRunSpanId) {
         await this._closeAgentRunSpan(sessionKey, 'failed');
@@ -276,23 +236,20 @@ export class SessionStateManager {
     this.logger.info('cleanup_all_sessions_complete', {});
   }
 
-  // Get session state for debugging
   getSessionState(sessionKey: string): SessionSpanState | undefined {
     return this.sessions.get(sessionKey);
   }
 
-  // Get all session keys
   getAllSessionKeys(): string[] {
     return Array.from(this.sessions.keys());
   }
 
-  // Check if interaction exists
   hasActiveInteraction(sessionKey: string): boolean {
     const state = this.sessions.get(sessionKey);
     return !!state?.interactionSpanId;
   }
 
-  // --- Internal implementations (called within the operation queue) ---
+  // --- Internal implementations ---
 
   private async _createSessionSpan(sessionKey: string): Promise<string | null> {
     if (!this.agent) {
@@ -302,7 +259,6 @@ export class SessionStateManager {
 
     const state = this.getOrCreateSessionState(sessionKey);
 
-    // If session span already exists, don't recreate
     if (state.sessionSpanId) {
       return state.sessionSpanId;
     }
@@ -311,7 +267,7 @@ export class SessionStateManager {
       sessionKey,
       'openclaw:session',
       { createdAt: new Date().toISOString() },
-      null // No parent - this is the root
+      null
     );
 
     if (spanId) {
@@ -329,10 +285,8 @@ export class SessionStateManager {
     const state = this.sessions.get(sessionKey);
     if (!state) return;
 
-    // Close all child spans first
     await this._closeAllChildSpans(sessionKey);
 
-    // Capture and null synchronously to prevent double-close
     const spanId = state.sessionSpanId;
     if (!spanId) return;
     state.sessionSpanId = null;
@@ -350,12 +304,10 @@ export class SessionStateManager {
     const state = this.getOrCreateSessionState(sessionKey);
     const now = Date.now();
 
-    // Ensure session span exists first
     if (!state.sessionSpanId) {
       await this._createSessionSpan(sessionKey);
     }
 
-    // Check if existing interaction has timed out
     if (state.interactionSpanId) {
       const idleTime = now - state.interactionLastActivity;
       if (idleTime > this.config.userInteractionTimeoutMs) {
@@ -365,18 +317,16 @@ export class SessionStateManager {
         });
         await this._closeInteractionSpan(sessionKey, 'cancelled');
       } else {
-        // Interaction span exists and hasn't expired
         state.interactionLastActivity = now;
         return state.interactionSpanId;
       }
     }
 
-    // Create new interaction span
     const spanId = await this.agent.createSpan(
       sessionKey,
       'openclaw:user_interaction',
       { startedAt: new Date().toISOString() },
-      state.sessionSpanId // Child of session
+      state.sessionSpanId
     );
 
     if (spanId) {
@@ -397,10 +347,8 @@ export class SessionStateManager {
     const state = this.sessions.get(sessionKey);
     if (!state) return;
 
-    // Close all child spans first
     await this._closeAllChildSpans(sessionKey);
 
-    // Capture and null synchronously to prevent double-close
     const spanId = state.interactionSpanId;
     if (!spanId) return;
     state.interactionSpanId = null;
@@ -415,7 +363,6 @@ export class SessionStateManager {
   ): Promise<string | null> {
     if (!this.agent) return null;
 
-    // Ensure interaction exists
     const interactionSpanId = await this._createOrGetInteractionSpan(sessionKey);
     if (!interactionSpanId) return null;
 
@@ -427,7 +374,6 @@ export class SessionStateManager {
     );
 
     if (spanId) {
-      // User message is an instant event - close immediately
       await this.agent.finishSpan(sessionKey, spanId, 'complete');
       this.logger.debug('user_message_span_created', { sessionKey, spanId });
     }
@@ -443,13 +389,9 @@ export class SessionStateManager {
 
     const state = this.getOrCreateSessionState(sessionKey);
 
-    // Ensure interaction exists and update activity
     const interactionSpanId = await this._createOrGetInteractionSpan(sessionKey);
     if (!interactionSpanId) return null;
 
-    // If agent run already exists (created on-the-fly by tool_call), reuse it
-    // instead of closing and recreating. This prevents spurious 'cancelled' status
-    // when before_agent_start fires after tool calls have already started.
     if (state.agentRunSpanId) {
       this.logger.debug('agent_run_span_reused', {
         sessionKey,
@@ -462,7 +404,7 @@ export class SessionStateManager {
       sessionKey,
       'openclaw:agent_run',
       payload,
-      interactionSpanId // Child of interaction
+      interactionSpanId
     );
 
     if (spanId) {
@@ -482,12 +424,10 @@ export class SessionStateManager {
     const state = this.sessions.get(sessionKey);
     if (!state) return;
 
-    // Capture and null synchronously to prevent double-close
     const spanId = state.agentRunSpanId;
     if (!spanId) return;
     state.agentRunSpanId = null;
 
-    // Close any open tool spans first
     await this._closeAllToolCallSpans(sessionKey, 'cancelled');
 
     await this.agent.finishSpan(sessionKey, spanId, status);
@@ -503,10 +443,8 @@ export class SessionStateManager {
 
     const state = this.getOrCreateSessionState(sessionKey);
 
-    // Ensure agent run exists
     if (!state.agentRunSpanId) {
       this.logger.warn('tool_call_without_agent_run', { sessionKey, toolName });
-      // Create agent run on-the-fly with minimal payload
       await this._createAgentRunSpan(sessionKey, {});
 
       if (!state.agentRunSpanId) {
@@ -519,7 +457,7 @@ export class SessionStateManager {
       sessionKey,
       'openclaw:tool_call',
       payload,
-      state.agentRunSpanId // Child of agent_run
+      state.agentRunSpanId
     );
 
     if (spanId) {
@@ -530,42 +468,63 @@ export class SessionStateManager {
     return spanId;
   }
 
-  private async _closeToolCallSpan(
+  private async _closeToolCallSpanWithResult(
     sessionKey: string,
-    status: 'complete' | 'cancelled' | 'failed' = 'complete',
-    toolName?: string
+    toolCallId: string,
+    toolName: string,
+    resultText: string | undefined,
+    isError: boolean
   ): Promise<void> {
     if (!this.agent) return;
 
     const state = this.sessions.get(sessionKey);
     if (!state || state.toolCallSpans.length === 0) return;
 
-    // Find the matching span - prefer last match by toolName, fall back to oldest
+    // Try to match by toolCallId first, then by toolName (oldest first = FIFO)
     let index = -1;
-    if (toolName) {
-      // Find last span matching this toolName
-      for (let i = state.toolCallSpans.length - 1; i >= 0; i--) {
+
+    // First try exact match by toolCallId
+    for (let i = 0; i < state.toolCallSpans.length; i++) {
+      if (state.toolCallSpans[i].toolCallId === toolCallId) {
+        index = i;
+        break;
+      }
+    }
+
+    // Fallback: match by toolName (take oldest = first)
+    if (index === -1 && toolName) {
+      for (let i = 0; i < state.toolCallSpans.length; i++) {
         if (state.toolCallSpans[i].toolName === toolName) {
           index = i;
           break;
         }
       }
     }
+
+    // No match found
     if (index === -1) {
-      // No toolName match or no toolName provided — take the oldest
-      index = 0;
+      this.logger.warn('tool_call_span_not_found', {
+        sessionKey,
+        toolCallId,
+        toolName,
+        pendingSpans: state.toolCallSpans.length,
+      });
+      return;
     }
 
-    // Synchronously remove from array BEFORE the async finishSpan call
-    // to prevent double-close from concurrent callers
     const [entry] = state.toolCallSpans.splice(index, 1);
 
-    await this.agent.finishSpan(sessionKey, entry.spanId, status);
+    const status = isError ? 'failed' : 'complete';
+    const resultPayload = resultText ? { text: resultText } : undefined;
+
+    await this.agent.finishSpan(sessionKey, entry.spanId, status, resultPayload);
     this.logger.info('tool_call_span_closed', {
       sessionKey,
       spanId: entry.spanId,
       tool: entry.toolName,
+      toolCallId,
       status,
+      hasResult: !!resultText,
     });
   }
 
@@ -578,7 +537,6 @@ export class SessionStateManager {
     const state = this.sessions.get(sessionKey);
     if (!state || state.toolCallSpans.length === 0) return;
 
-    // Synchronously take all spans, then close them
     const spans = state.toolCallSpans.splice(0);
 
     for (const entry of spans) {
@@ -594,13 +552,14 @@ export class SessionStateManager {
 
   private async _createAssistantResponseSpan(
     sessionKey: string,
-    payload: Record<string, unknown>
+    text: string,
+    tokens: { input?: number; output?: number } | undefined,
+    metadata?: { provider?: string; model?: string }
   ): Promise<string | null> {
     if (!this.agent) return null;
 
     const state = this.getOrCreateSessionState(sessionKey);
 
-    // Check if interaction span exists and is still active (not timed out)
     const now = Date.now();
     const idleTime = state.interactionSpanId ? now - state.interactionLastActivity : Infinity;
     const isInteractionActive =
@@ -608,7 +567,6 @@ export class SessionStateManager {
 
     let interactionSpanId = state.interactionSpanId;
     if (!isInteractionActive) {
-      // Interaction timed out or doesn't exist - create new one
       this.logger.info('assistant_response_interaction_recreated', {
         sessionKey,
         reason: state.interactionSpanId ? 'timeout' : 'missing',
@@ -622,43 +580,118 @@ export class SessionStateManager {
       return null;
     }
 
+    const payload: Record<string, unknown> = {
+      text,
+    };
+
+    if (tokens) {
+      payload.tokens = tokens;
+    }
+
+    if (metadata?.provider) {
+      payload.provider = metadata.provider;
+    }
+
+    if (metadata?.model) {
+      payload.model = metadata.model;
+    }
+
     const spanId = await this.agent.createSpan(
       sessionKey,
       'openclaw:assistant_response',
       payload,
-      interactionSpanId // Child of interaction
+      interactionSpanId
     );
 
     if (spanId) {
-      const text = extractAssistantText(payload);
-      const resultPayload = text ? { text } : {};
+      const resultPayload = { text };
       await this.agent.finishSpan(sessionKey, spanId, 'complete', resultPayload);
-      this.logger.debug('assistant_response_span_created', { sessionKey, spanId });
+      this.logger.info('assistant_response_span_created', {
+        sessionKey,
+        spanId,
+        textLength: text.length,
+        tokens,
+      });
     }
 
     return spanId;
   }
 
-  // Close all child spans (agent_run, tool_calls)
+  private async _createAgentThinkingSpan(
+    sessionKey: string,
+    thinking: string,
+    tokens:
+      | { input?: number; output?: number; cacheRead?: number; cacheWrite?: number }
+      | undefined,
+    metadata?: { provider?: string; model?: string; signature?: string }
+  ): Promise<string | null> {
+    if (!this.agent) return null;
+
+    const state = this.getOrCreateSessionState(sessionKey);
+
+    const interactionSpanId = await this._createOrGetInteractionSpan(sessionKey);
+    if (!interactionSpanId) {
+      this.logger.error('agent_thinking_no_interaction', { sessionKey });
+      return null;
+    }
+
+    const payload: Record<string, unknown> = {
+      thinking,
+    };
+
+    if (tokens) {
+      payload.tokens = tokens;
+    }
+
+    if (metadata?.signature) {
+      payload.signature = metadata.signature;
+    }
+
+    if (metadata?.provider) {
+      payload.provider = metadata.provider;
+    }
+
+    if (metadata?.model) {
+      payload.model = metadata.model;
+    }
+
+    const spanId = await this.agent.createSpan(
+      sessionKey,
+      'openclaw:agent_thinking',
+      payload,
+      interactionSpanId
+    );
+
+    if (spanId) {
+      const resultPayload = { thinking };
+      await this.agent.finishSpan(sessionKey, spanId, 'complete', resultPayload);
+      this.logger.info('agent_thinking_span_created', {
+        sessionKey,
+        spanId,
+        thinkingLength: thinking.length,
+        tokens,
+        signature: metadata?.signature,
+      });
+    }
+
+    return spanId;
+  }
+
   private async _closeAllChildSpans(sessionKey: string): Promise<void> {
     const state = this.sessions.get(sessionKey);
     if (!state) return;
 
-    // Close all tool calls
     await this._closeAllToolCallSpans(sessionKey, 'cancelled');
 
-    // Close agent run if open
     if (state.agentRunSpanId) {
       await this._closeAgentRunSpan(sessionKey, 'cancelled');
     }
   }
 
-  // Cleanup expired sessions based on timeouts
   private async cleanupExpiredSessions(): Promise<void> {
     const now = Date.now();
 
     for (const [sessionKey, state] of this.sessions.entries()) {
-      // Check session timeout (24hr)
       if (state.sessionSpanId) {
         const sessionAge = now - state.sessionCreatedAt;
         if (sessionAge > this.config.sessionTimeoutMs) {
@@ -671,7 +704,6 @@ export class SessionStateManager {
         }
       }
 
-      // Check interaction timeout (5min)
       if (state.interactionSpanId) {
         const idleTime = now - state.interactionLastActivity;
         if (idleTime > this.config.userInteractionTimeoutMs) {
@@ -686,14 +718,6 @@ export class SessionStateManager {
   }
 }
 
-/**
- * Creates a new {@link SessionStateManager}.
- *
- * @param agent  - Agent used to create/finish spans, or `null` to disable tracing.
- * @param logger - Logger instance for structured diagnostics.
- * @param config - Optional timeout overrides (see {@link SessionStateManager}).
- * @returns A fully initialised {@link SessionStateManager} with its cleanup interval running.
- */
 export function createSessionStateManager(
   agent: Agent | null,
   logger: Logger,
