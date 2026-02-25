@@ -27,11 +27,10 @@
   "author": "Prefactor",
   "license": "MIT",
   "dependencies": {
+    "@prefactor/core": "0.2.9",
     "@prefactor/pfid": "^0.1.0",
-    "commander": "^14.0.1"
-  },
-  "peerDependencies": {
-    "@prefactor/core": "workspace:*"
+    "commander": "^14.0.1",
+    "zod": "^4.0.0"
   },
   "devDependencies": {
     "@types/bun": "1.3.9"
