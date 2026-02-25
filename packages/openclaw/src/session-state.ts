@@ -5,6 +5,30 @@
 import type { Agent } from './agent.js';
 import type { Logger } from './logger.js';
 
+function extractAssistantText(payload: Record<string, unknown>): string | null {
+  const event = payload.event as Record<string, unknown> | undefined;
+  if (!event) return null;
+
+  const messages = event.messages;
+  if (!Array.isArray(messages)) return null;
+
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const msg = messages[i] as Record<string, unknown> | undefined;
+    if (msg?.role === 'assistant') {
+      const content = msg.content;
+      if (!Array.isArray(content)) continue;
+
+      for (let j = content.length - 1; j >= 0; j--) {
+        const item = content[j] as Record<string, unknown> | undefined;
+        if (item?.type === 'text' && typeof item.text === 'string') {
+          return item.text;
+        }
+      }
+    }
+  }
+  return null;
+}
+
 // Session state structure tracking all active spans
 interface SessionSpanState {
   sessionKey: string;
@@ -606,8 +630,9 @@ export class SessionStateManager {
     );
 
     if (spanId) {
-      // Assistant response is an instant event - close immediately
-      await this.agent.finishSpan(sessionKey, spanId, 'complete');
+      const text = extractAssistantText(payload);
+      const resultPayload = text ? { text } : {};
+      await this.agent.finishSpan(sessionKey, spanId, 'complete', resultPayload);
       this.logger.debug('assistant_response_span_created', { sessionKey, spanId });
     }
 

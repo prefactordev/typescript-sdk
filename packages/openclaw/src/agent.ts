@@ -42,6 +42,7 @@ type SpanOperation =
       timestamp: string;
       status: string;
       idempotency_key: string;
+      result_payload?: Record<string, unknown>;
     }
   | {
       type: 'register_instance';
@@ -191,16 +192,18 @@ export class Agent {
     } satisfies AgentVersionForRegister;
 
     this.agentSchemaVersion = {
-      external_identifier: `plugin-${pluginVersion}`,
+      external_identifier: 'plugin-0.0.19',
       span_schemas: {
         'openclaw:agent_run': {
           description: 'Agent execution run span',
+          template: null,
           fields: {
             raw: { type: 'object', description: 'Raw OpenClaw context' },
           },
         },
         'openclaw:tool_call': {
           description: 'Tool execution span',
+          template: '{{ toolName }}',
           fields: {
             toolName: { type: 'string', description: 'Name of the tool called' },
             raw: { type: 'object', description: 'Raw OpenClaw tool context' },
@@ -208,24 +211,28 @@ export class Agent {
         },
         'openclaw:user_message': {
           description: 'Inbound message from user',
+          template: '{{ raw.content }}',
           fields: {
             raw: { type: 'object', description: 'Raw OpenClaw message context' },
           },
         },
         'openclaw:assistant_response': {
           description: 'Assistant response generation span',
+          template: '{{ text | default: "(no response)" }}',
           fields: {
             raw: { type: 'object', description: 'Raw OpenClaw context with messages' },
           },
         },
         'openclaw:session': {
           description: 'OpenClaw session span',
+          template: null,
           fields: {
             createdAt: { type: 'string', description: 'Session created timestamp' },
           },
         },
         'openclaw:user_interaction': {
           description: 'User interaction span',
+          template: null,
           fields: {
             startedAt: { type: 'string', description: 'User interaction timestamp' },
           },
@@ -540,17 +547,19 @@ export class Agent {
   async finishSpan(
     sessionKey: string,
     spanId: string,
-    status: 'complete' | 'failed' | 'cancelled' = 'complete'
+    status: 'complete' | 'failed' | 'cancelled' = 'complete',
+    resultPayload?: Record<string, unknown>
   ): Promise<void> {
     try {
       const idempotencyKey = `${spanId}-finish-${Date.now()}`;
       const timestamp = new Date().toISOString();
 
-      this.logger.debug('finish_span', { sessionKey, spanId, status });
+      this.logger.debug('finish_span', { sessionKey, spanId, status, resultPayload });
 
       await this.agentSpanClient.finish(spanId, timestamp, {
         status,
         idempotency_key: idempotencyKey,
+        result_payload: resultPayload,
       });
 
       this.logger.info('span_finished', { sessionKey, spanId, status });
@@ -570,6 +579,7 @@ export class Agent {
         timestamp: new Date().toISOString(),
         status,
         idempotency_key: idempotencyKey,
+        result_payload: resultPayload,
       });
     }
   }
@@ -598,6 +608,7 @@ export class Agent {
             await this.agentSpanClient.finish(operation.spanId, operation.timestamp, {
               status: operation.status as 'complete' | 'failed' | 'cancelled',
               idempotency_key: operation.idempotency_key,
+              result_payload: operation.result_payload,
             });
             this.replayQueue.remove(operation);
             this.logger.debug('flush_queue_finish_span_success', {
