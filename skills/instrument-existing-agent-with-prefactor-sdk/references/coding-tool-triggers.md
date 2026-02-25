@@ -15,6 +15,8 @@ Use these terms in prompts, descriptions, or examples to improve discovery in co
 - instrument existing agent
 - add tracing
 - observability for agent runs
+- bootstrap prefactor resources with cli
+- create environment agent instance
 - tool call visibility
 - missing run timeline
 - missing spans
@@ -23,7 +25,9 @@ Use these terms in prompts, descriptions, or examples to improve discovery in co
 - coding tool telemetry
 - prefactor
 - prefactor sdk
+- prefactor cli
 - withSpan
+- openclaw instrumentation
 
 ## Symptom Keywords
 

@@ -38,7 +38,7 @@ import {
 const config = createConfig({
   transportType: 'http',
   httpConfig: {
-    apiUrl: 'https://api.prefactor.ai',
+    apiUrl: 'https://app.prefactorai.com',
     apiToken: 'your-token',
   },
 });

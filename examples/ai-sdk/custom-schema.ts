@@ -15,7 +15,7 @@ import { init, shutdown, withSpan } from '@prefactor/ai';
 import { z } from 'zod';
 
 const customSchema = {
-  external_identifier: 'ai-sdk-example-2026-02-11',
+  external_identifier: 'ai-sdk-example-2026-02-25',
   span_schemas: {
     'ai-sdk:llm': {
       type: 'object',
@@ -140,7 +140,7 @@ async function main() {
       apiUrl: PREFACTOR_API_URL,
       apiToken: PREFACTOR_API_TOKEN,
       agentId: PREFACTOR_AGENT_ID,
-      agentIdentifier: '1.0.0',
+      agentIdentifier: '1.0.0-schema',
       agentName: 'AI SDK Custom Schema Demo',
       agentSchema: customSchema,
     },

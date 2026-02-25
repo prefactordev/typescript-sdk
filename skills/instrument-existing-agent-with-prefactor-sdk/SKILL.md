@@ -11,12 +11,29 @@ Core principle: instrument boundaries, not business logic.
 
 ## Quick Start
 
-1. Identify runtime path: built-in adapter (`@prefactor/langchain` or `@prefactor/ai`) or custom `@prefactor/core` adapter.
-2. Add one top-level run span and child spans around LLM/tool boundaries.
-3. Preserve context propagation and package-prefixed span types.
-4. Record error metadata and rethrow original errors.
-5. Finish spans on success, error, cancel, and stream terminal paths.
-6. Verify in your project's build/test/typecheck flow.
+1. Bootstrap Prefactor resources with `skills/bootstrap-existing-agent-with-prefactor-cli/SKILL.md`.
+2. Install required Prefactor packages with the project's existing package manager (`bun`, `npm`, `pnpm`, or `yarn`).
+3. Identify runtime path: built-in adapter (`@prefactor/langchain`, `@prefactor/ai`, `@prefactor/openclaw`) or custom `@prefactor/core` adapter.
+4. Add one top-level run span and child spans around LLM/tool boundaries.
+5. Preserve context propagation and package-prefixed span types.
+6. Record error metadata and rethrow original errors.
+7. Finish spans on success, error, cancel, and stream terminal paths.
+8. Verify in your project's build/test/typecheck flow.
+
+## Prerequisite
+
+Before instrumentation, ensure these runtime credentials are set from CLI bootstrap output:
+
+- `PREFACTOR_API_URL`
+- `PREFACTOR_API_TOKEN`
+- `PREFACTOR_AGENT_ID`
+
+Use the created `agent_id` for `PREFACTOR_AGENT_ID`.
+
+Also ensure dependencies are installed from npm via the project's package manager:
+
+- one of `@prefactor/langchain`, `@prefactor/ai`, `@prefactor/openclaw`
+- `@prefactor/core` only when no built-in adapter is available
 
 ## Coding Tool Trigger Phrases
 
@@ -33,7 +50,7 @@ If the user asks for any of these, apply this skill:
 Sometimes you need both skills.
 
 - If the framework/provider is already supported by a Prefactor adapter, use this skill directly.
-- If the framework/provider is not supported yet (for example a custom Google SDK agent integration), first use `skills/create-provider-package-with-core/SKILL.md` to build a custom adapter, then use this skill to instrument the existing agent with that adapter.
+- If the framework/provider is not supported yet, first use `skills/create-provider-package-with-core/SKILL.md` to build a custom adapter, then use this skill to instrument the existing agent with that adapter.
 
 Recommended sequence when unsupported:
 
@@ -43,8 +60,12 @@ Recommended sequence when unsupported:
 
 ## Implementation Rules
 
-- Prefer `@prefactor/langchain` or `@prefactor/ai` before low-level `@prefactor/core`.
-- Keep provider span types package-prefixed (`langchain:*`, `ai-sdk:*`).
+- Prefer built-in adapters before low-level `@prefactor/core`:
+  - LangChain -> `@prefactor/langchain`
+  - AI SDK -> `@prefactor/ai`
+  - OpenClaw -> `@prefactor/openclaw`
+- If a built-in adapter does not exist, follow `skills/create-provider-package-with-core/SKILL.md`.
+- Keep provider span types package-prefixed (`langchain:*`, `ai-sdk:*`, `openclaw:*`).
 - Run nested work inside active context so parent/child trace trees stay intact.
 - Capture input/output safely (redact secrets, enforce truncation limits).
 - Instrumentation must never crash user code.
