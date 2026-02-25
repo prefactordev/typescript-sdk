@@ -27,9 +27,23 @@ interface AgentVersionForRegister {
 }
 
 // Agent schema version info for registration
+interface SpanTypeSchema {
+  name: string;
+  params_schema: {
+    type: 'object';
+    properties: Record<string, { type: string; description?: string }>;
+  };
+  result_schema?: {
+    type: 'object';
+    properties: Record<string, { type: string; description?: string }>;
+  };
+  template?: string | null;
+  description?: string;
+}
+
 interface AgentSchemaVersionForRegister extends Record<string, unknown> {
   external_identifier: string;
-  span_schemas: Record<string, unknown>;
+  span_type_schemas: SpanTypeSchema[];
 }
 
 // Operation types for replay queue
@@ -193,51 +207,88 @@ export class Agent {
 
     this.agentSchemaVersion = {
       external_identifier: 'plugin-0.0.19',
-      span_schemas: {
-        'openclaw:agent_run': {
-          description: 'Agent execution run span',
-          template: null,
-          fields: {
-            raw: { type: 'object', description: 'Raw OpenClaw context' },
-          },
-        },
-        'openclaw:tool_call': {
-          description: 'Tool execution span',
-          template: '{{ toolName }}',
-          fields: {
-            toolName: { type: 'string', description: 'Name of the tool called' },
-            raw: { type: 'object', description: 'Raw OpenClaw tool context' },
-          },
-        },
-        'openclaw:user_message': {
+      span_type_schemas: [
+        {
+          name: 'openclaw:user_message',
           description: 'Inbound message from user',
           template: '{{ raw.content }}',
-          fields: {
-            raw: { type: 'object', description: 'Raw OpenClaw message context' },
+          params_schema: {
+            type: 'object',
+            properties: {
+              raw: { type: 'object', description: 'Raw OpenClaw message context' },
+            },
           },
         },
-        'openclaw:assistant_response': {
+        {
+          name: 'openclaw:tool_call',
+          description: 'Tool execution span',
+          template: '{{ toolName }}',
+          params_schema: {
+            type: 'object',
+            properties: {
+              toolName: { type: 'string', description: 'Name of the tool called' },
+              raw: { type: 'object', description: 'Raw OpenClaw tool context' },
+            },
+          },
+          result_schema: {
+            type: 'object',
+            properties: {
+              text: { type: 'string', description: 'Tool result text' },
+              isError: { type: 'boolean', description: 'Whether tool failed' },
+            },
+          },
+        },
+        {
+          name: 'openclaw:assistant_response',
           description: 'Assistant response generation span',
           template: '{{ text | default: "(no response)" }}',
-          fields: {
-            raw: { type: 'object', description: 'Raw OpenClaw context with messages' },
+          params_schema: {
+            type: 'object',
+            properties: {
+              raw: { type: 'object', description: 'Raw OpenClaw context with messages' },
+            },
+          },
+          result_schema: {
+            type: 'object',
+            properties: {
+              text: { type: 'string', description: 'Assistant response text' },
+            },
           },
         },
-        'openclaw:session': {
+        {
+          name: 'openclaw:agent_run',
+          description: 'Agent execution run span',
+          template: null,
+          params_schema: {
+            type: 'object',
+            properties: {
+              raw: { type: 'object', description: 'Raw OpenClaw context' },
+            },
+          },
+        },
+        {
+          name: 'openclaw:session',
           description: 'OpenClaw session span',
           template: null,
-          fields: {
-            createdAt: { type: 'string', description: 'Session created timestamp' },
+          params_schema: {
+            type: 'object',
+            properties: {
+              createdAt: { type: 'string', description: 'Session created timestamp' },
+            },
           },
         },
-        'openclaw:user_interaction': {
+        {
+          name: 'openclaw:user_interaction',
           description: 'User interaction span',
           template: null,
-          fields: {
-            startedAt: { type: 'string', description: 'User interaction timestamp' },
+          params_schema: {
+            type: 'object',
+            properties: {
+              startedAt: { type: 'string', description: 'User interaction timestamp' },
+            },
           },
         },
-      },
+      ],
     };
 
     // Start background flush loop
