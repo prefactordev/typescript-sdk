@@ -15,7 +15,7 @@ import { init, shutdown, withSpan } from '@prefactor/ai';
 import { z } from 'zod';
 
 const customSchema = {
-  external_identifier: 'ai-sdk-example-25-02-2026',
+  external_identifier: 'ai-sdk-example-2026-02-25',
   span_schemas: {
     'ai-sdk:llm': {
       type: 'object',
