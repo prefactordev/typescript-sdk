@@ -16,12 +16,9 @@
   "name": "Prefactor TypeScript SDK",
   "readme": "docs/api-readme.md",
   "projectDocuments": [
-    "docs/typedoc/getting-started.md",
-    "docs/typedoc/core-instrumentation.md",
-    "docs/typedoc/providers-langchain.md",
-    "docs/typedoc/providers-ai-sdk.md",
     "docs/typedoc/concepts-schemas.md",
-    "docs/typedoc/configuration.md"
+    "docs/typedoc/configuration.md",
+    "docs/typedoc/cli-tool.md"
   ],
 
   "excludePrivate": true,
@@ -35,7 +32,7 @@
     "notExported": false
   },
 
-  "categoryOrder": ["Core", "Packages", "*"],
+  "categoryOrder": ["Core", "Tools", "Packages", "*"],
   "navigation": {
     "includeCategories": false,
     "includeGroups": false,
