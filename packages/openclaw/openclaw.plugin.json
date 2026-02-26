@@ -55,7 +55,7 @@
   "uiHints": {
     "apiUrl": {
       "label": "Prefactor API URL",
-      "placeholder": "https://api.prefactor.dev"
+      "placeholder": "https://app.prefactorai.com"
     },
     "apiToken": {
       "label": "Prefactor API token",
