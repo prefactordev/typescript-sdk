@@ -21,6 +21,10 @@
         "type": "string",
         "description": "Agent ID registered in Prefactor"
       },
+      "agentName": {
+        "type": "string",
+        "description": "Human-readable name for this agent shown in the Prefactor UI (e.g. \"My Support Bot\")"
+      },
       "agentVersion": {
         "type": "string",
         "description": "Optional user-supplied version suffix for this agent deployment",
@@ -61,6 +65,10 @@
     "agentId": {
       "label": "Agent ID",
       "placeholder": "your-agent-id"
+    },
+    "agentName": {
+      "label": "Agent Name",
+      "placeholder": "OpenClaw Agent"
     },
     "agentVersion": {
       "label": "Agent Version Suffix",
