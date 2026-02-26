@@ -42,8 +42,9 @@ Thumbs.db
 .env
 .env.local
 .env.*.local
-
-
 # Documentation artifacts
 docs/api/
 docs/plans/
+
+# Prefactor CLI profile
+prefactor.json

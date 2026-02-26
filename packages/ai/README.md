@@ -119,7 +119,7 @@ const middleware = init();
 const middleware = init({
   transportType: 'http',
   httpConfig: {
-    apiUrl: 'https://api.prefactor.ai',
+    apiUrl: 'https://app.prefactorai.com',
     apiToken: process.env.PREFACTOR_API_TOKEN!,
     agentId: 'my-agent',
     agentIdentifier: '1.0.0',

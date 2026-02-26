@@ -114,7 +114,7 @@ export type Config = z.infer<typeof ConfigSchema>;
  * const config = createConfig({
  *   transportType: 'http',
  *   httpConfig: {
- *     apiUrl: 'https://api.prefactor.ai',
+ *     apiUrl: 'https://app.prefactorai.com',
  *     apiToken: process.env.PREFACTOR_API_TOKEN!,
  *   }
  * });

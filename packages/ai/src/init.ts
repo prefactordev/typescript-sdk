@@ -93,7 +93,7 @@ export type ManualSpanOptions = {
  * const middleware = init({
  *   transportType: 'http',
  *   httpConfig: {
- *     apiUrl: 'https://api.prefactor.ai',
+ *     apiUrl: 'https://app.prefactorai.com',
  *     apiToken: process.env.PREFACTOR_API_TOKEN!,
  *     agentIdentifier: '1.0.0',
  *   },
@@ -118,7 +118,7 @@ export type ManualSpanOptions = {
  * const middleware = init({
  *   transportType: 'http',
  *   httpConfig: {
- *     apiUrl: 'https://api.prefactor.ai',
+ *     apiUrl: 'https://app.prefactorai.com',
  *     apiToken: process.env.PREFACTOR_API_TOKEN!,
  *     agentId: process.env.PREFACTOR_AGENT_ID,
  *     agentIdentifier: '1.0.0',
@@ -132,7 +132,7 @@ export type ManualSpanOptions = {
  *   {
  *     transportType: 'http',
  *     httpConfig: {
- *       apiUrl: 'https://api.prefactor.ai',
+ *       apiUrl: 'https://app.prefactorai.com',
  *       apiToken: process.env.PREFACTOR_API_TOKEN!,
  *       agentIdentifier: '1.0.0',
  *     },
