@@ -1,16 +1,17 @@
 {
   "id": "prefactor",
   "name": "@prefactor/openclaw",
-  "version": "0.0.19",
+  "version": "0.0.20",
   "description": "Comprehensive lifecycle event monitoring and instrumentation for OpenClaw",
   "runtime": "node",
   "entry": "./dist/index.js",
+  "skills": ["./skills"],
   "configSchema": {
     "type": "object",
     "properties": {
       "apiUrl": {
         "type": "string",
-        "description": "Prefactor API URL (e.g., https://app.prefactorai.com)"
+        "description": "Prefactor API URL (e.g. https://app.prefactorai.com)"
       },
       "apiToken": {
         "type": "string",
@@ -50,7 +51,7 @@
   "uiHints": {
     "apiUrl": {
       "label": "Prefactor API URL",
-      "placeholder": "https://app.prefactorai.com"
+      "placeholder": "https://api.prefactor.dev"
     },
     "apiToken": {
       "label": "Prefactor API token",
