@@ -22,8 +22,8 @@ interface SessionState {
 // Agent version info for registration
 interface AgentVersionForRegister {
   external_identifier: string;
-  name?: string;
-  description?: string;
+  name: string;
+  description: string;
 }
 
 // Agent schema version info for registration
