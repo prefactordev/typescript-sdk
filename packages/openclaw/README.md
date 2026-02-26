@@ -16,15 +16,6 @@ To get started with `@prefactor/openclaw`, follow these steps:
 openclaw plugins install @prefactor/openclaw
 ```
 
-**Note**: As of OpenClaw 2026.2.9 (33c75cb) installing the plugin will raise the following error:
-
-> [openclaw] Failed to start CLI: Error: Config validation failed: plugins.entries.openclaw: plugin not found: openclaw
-
-For now this is related to the following bug: https://github.com/openclaw/openclaw/pull/7090
-
-You should continue with the following steps.
-
-
 2. Enable the plugin:
 
 ```bash
