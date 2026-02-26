@@ -27,9 +27,23 @@ interface AgentVersionForRegister {
 }
 
 // Agent schema version info for registration
+interface SpanTypeSchema {
+  name: string;
+  params_schema: {
+    type: 'object';
+    properties: Record<string, { type: string; description?: string }>;
+  };
+  result_schema?: {
+    type: 'object';
+    properties: Record<string, { type: string; description?: string }>;
+  };
+  template?: string | null;
+  description?: string;
+}
+
 interface AgentSchemaVersionForRegister extends Record<string, unknown> {
   external_identifier: string;
-  span_schemas: Record<string, unknown>;
+  span_type_schemas: SpanTypeSchema[];
 }
 
 // Operation types for replay queue
@@ -42,6 +56,7 @@ type SpanOperation =
       timestamp: string;
       status: string;
       idempotency_key: string;
+      result_payload?: Record<string, unknown>;
     }
   | {
       type: 'register_instance';
@@ -192,45 +207,112 @@ export class Agent {
 
     this.agentSchemaVersion = {
       external_identifier: `plugin-${pluginVersion}`,
-      span_schemas: {
-        'openclaw:agent_run': {
-          description: 'Agent execution run span',
-          fields: {
-            raw: { type: 'object', description: 'Raw OpenClaw context' },
-          },
-        },
-        'openclaw:tool_call': {
-          description: 'Tool execution span',
-          fields: {
-            toolName: { type: 'string', description: 'Name of the tool called' },
-            raw: { type: 'object', description: 'Raw OpenClaw tool context' },
-          },
-        },
-        'openclaw:user_message': {
+      span_type_schemas: [
+        {
+          name: 'openclaw:user_message',
           description: 'Inbound message from user',
-          fields: {
-            raw: { type: 'object', description: 'Raw OpenClaw message context' },
+          template: '{{ raw.content }}',
+          params_schema: {
+            type: 'object',
+            properties: {
+              raw: { type: 'object', description: 'Raw OpenClaw message context' },
+            },
           },
         },
-        'openclaw:assistant_response': {
+        {
+          name: 'openclaw:tool_call',
+          description: 'Tool execution span',
+          template: '{{ toolName }}',
+          params_schema: {
+            type: 'object',
+            properties: {
+              toolName: { type: 'string', description: 'Name of the tool called' },
+              raw: { type: 'object', description: 'Raw OpenClaw tool context' },
+            },
+          },
+          result_schema: {
+            type: 'object',
+            properties: {
+              text: { type: 'string', description: 'Tool result text' },
+              isError: { type: 'boolean', description: 'Whether tool failed' },
+            },
+          },
+        },
+        {
+          name: 'openclaw:assistant_response',
           description: 'Assistant response generation span',
-          fields: {
-            raw: { type: 'object', description: 'Raw OpenClaw context with messages' },
+          template: '{{ text | default: "(no response)" }}',
+          params_schema: {
+            type: 'object',
+            properties: {
+              text: { type: 'string', description: 'Assistant response text' },
+              tokens: { type: 'object', description: 'Token usage for this LLM call' },
+              provider: { type: 'string', description: 'LLM provider name' },
+              model: { type: 'string', description: 'LLM model name' },
+            },
+          },
+          result_schema: {
+            type: 'object',
+            properties: {
+              text: { type: 'string', description: 'Assistant response text' },
+            },
           },
         },
-        'openclaw:session': {
+        {
+          name: 'openclaw:agent_run',
+          description: 'Agent execution run span',
+          template: null,
+          params_schema: {
+            type: 'object',
+            properties: {
+              raw: { type: 'object', description: 'Raw OpenClaw context' },
+            },
+          },
+        },
+        {
+          name: 'openclaw:session',
           description: 'OpenClaw session span',
-          fields: {
-            createdAt: { type: 'string', description: 'Session created timestamp' },
+          template: null,
+          params_schema: {
+            type: 'object',
+            properties: {
+              createdAt: { type: 'string', description: 'Session created timestamp' },
+            },
           },
         },
-        'openclaw:user_interaction': {
+        {
+          name: 'openclaw:user_interaction',
           description: 'User interaction span',
-          fields: {
-            startedAt: { type: 'string', description: 'User interaction timestamp' },
+          template: null,
+          params_schema: {
+            type: 'object',
+            properties: {
+              startedAt: { type: 'string', description: 'User interaction timestamp' },
+            },
           },
         },
-      },
+        {
+          name: 'openclaw:agent_thinking',
+          description: 'Agent thinking/reasoning span',
+          template: '{{ thinking | default: "(thinking)" }}',
+          params_schema: {
+            type: 'object',
+            properties: {
+              thinking: { type: 'string', description: 'Agent thinking content' },
+              tokens: { type: 'object', description: 'Token usage for this LLM call' },
+              signature: { type: 'string', description: 'Thinking signature type' },
+              provider: { type: 'string', description: 'LLM provider name' },
+              model: { type: 'string', description: 'LLM model name' },
+            },
+          },
+          result_schema: {
+            type: 'object',
+            properties: {
+              thinking: { type: 'string', description: 'Agent thinking content' },
+            },
+          },
+        },
+      ],
     };
 
     // Start background flush loop
@@ -540,17 +622,19 @@ export class Agent {
   async finishSpan(
     sessionKey: string,
     spanId: string,
-    status: 'complete' | 'failed' | 'cancelled' = 'complete'
+    status: 'complete' | 'failed' | 'cancelled' = 'complete',
+    resultPayload?: Record<string, unknown>
   ): Promise<void> {
     try {
       const idempotencyKey = `${spanId}-finish-${Date.now()}`;
       const timestamp = new Date().toISOString();
 
-      this.logger.debug('finish_span', { sessionKey, spanId, status });
+      this.logger.debug('finish_span', { sessionKey, spanId, status, resultPayload });
 
       await this.agentSpanClient.finish(spanId, timestamp, {
         status,
         idempotency_key: idempotencyKey,
+        result_payload: resultPayload,
       });
 
       this.logger.info('span_finished', { sessionKey, spanId, status });
@@ -570,6 +654,7 @@ export class Agent {
         timestamp: new Date().toISOString(),
         status,
         idempotency_key: idempotencyKey,
+        result_payload: resultPayload,
       });
     }
   }
@@ -598,6 +683,7 @@ export class Agent {
             await this.agentSpanClient.finish(operation.spanId, operation.timestamp, {
               status: operation.status as 'complete' | 'failed' | 'cancelled',
               idempotency_key: operation.idempotency_key,
+              result_payload: operation.result_payload,
             });
             this.replayQueue.remove(operation);
             this.logger.debug('flush_queue_finish_span_success', {
