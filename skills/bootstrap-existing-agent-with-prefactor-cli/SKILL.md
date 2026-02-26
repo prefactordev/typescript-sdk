@@ -106,6 +106,16 @@ Choose package by provider:
 - OpenClaw -> `@prefactor/openclaw`
 - Custom/unsupported provider -> use `skills/create-provider-package-with-core/SKILL.md`
 
+When handing off to SDK instrumentation, import helpers from that selected package directly, for example:
+
+```ts
+import { init, withSpan, shutdown } from '@prefactor/ai';
+// or '@prefactor/langchain'
+```
+
+Do not mix adapter `init` with `withSpan`/`shutdown` from `@prefactor/core` unless an explicit tracer is passed.
+This guidance targets adapter-style integrations (`@prefactor/ai`, `@prefactor/langchain`) and does not change `@prefactor/openclaw` plugin runtime behavior.
+
 If you have identified and selected an existing package, use `skills/instrument-existing-agent-with-prefactor-sdk/SKILL.md`
 
 ## Runtime Environment Variables
