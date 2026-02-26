@@ -63,9 +63,13 @@ registerShutdownHandler('prefactor-ai', async () => {
 });
 
 export type ManualSpanOptions = {
+  /** Span name shown in traces. */
   name: string;
+  /** Provider-prefixed span type (for example `ai-sdk:llm`). */
   spanType: string;
+  /** Inputs recorded for the wrapped work. */
   inputs: Record<string, unknown>;
+  /** Optional additional metadata to attach to the span. */
   metadata?: Record<string, unknown>;
 };
 
@@ -244,6 +248,13 @@ export function getTracer(): Tracer {
   return globalTracer as Tracer;
 }
 
+/**
+ * Wraps a function in a manual span using the shared core helper.
+ *
+ * @param options - Manual span options.
+ * @param fn - Function to execute in span context.
+ * @returns Result from `fn`.
+ */
 export async function withSpan<T>(
   options: ManualSpanOptions,
   fn: () => Promise<T> | T

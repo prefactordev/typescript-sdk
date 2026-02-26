@@ -1,0 +1,47 @@
+{
+  "$schema": "https://typedoc.org/schema.json",
+  "entryPoints": [
+    "packages/core/src/index.ts",
+    "packages/langchain/src/index.ts",
+    "packages/ai/src/index.ts",
+    "packages/openclaw/src/index.ts"
+  ],
+  "entryPointStrategy": "resolve",
+  "plugin": ["typedoc-plugin-markdown"],
+  "tsconfig": "tsconfig.json",
+
+  "exclude": ["**/tests/**", "**/*.test.ts", "**/dist/**"],
+
+  "out": "docs/api",
+  "name": "Prefactor TypeScript SDK",
+  "readme": "docs/api-readme.md",
+  "projectDocuments": [
+    "docs/typedoc/concepts-schemas.md",
+    "docs/typedoc/configuration.md",
+    "docs/typedoc/cli-tool.md"
+  ],
+
+  "excludePrivate": true,
+  "excludeInternal": true,
+  "excludeProtected": true,
+
+  "hideGenerator": true,
+
+  "validation": {
+    "invalidLink": false,
+    "notExported": false
+  },
+
+  "categoryOrder": ["Core", "Tools", "Packages", "*"],
+  "navigation": {
+    "includeCategories": false,
+    "includeGroups": false,
+    "includeFolders": true,
+    "compactFolders": false
+  },
+
+  "sort": ["kind"],
+  "groupOrder": ["Functions", "*"],
+  "categorizeByGroup": true,
+  "defaultCategory": "Other",
+}

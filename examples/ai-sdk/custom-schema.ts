@@ -17,6 +17,15 @@ import { z } from 'zod';
 const customSchema = {
   external_identifier: 'ai-sdk-example-2026-02-25',
   span_schemas: {
+    'ai-sdk:agent': {
+      type: 'object',
+      properties: {
+        name: { type: 'string' },
+        status: { type: 'string' },
+        inputs: { type: 'object' },
+      },
+      additionalProperties: true,
+    },
     'ai-sdk:llm': {
       type: 'object',
       properties: {
@@ -74,6 +83,7 @@ const customSchema = {
     },
   },
   span_result_schemas: {
+    'ai-sdk:agent': { type: 'object', additionalProperties: false },
     'ai-sdk:llm': {
       type: 'object',
       properties: {
@@ -169,9 +179,8 @@ async function main() {
   });
 
   const responseText = result.text.trim();
-  const toolDate = result.toolResults?.find(
-    (entry) => entry.toolName === 'get_today_date'
-  )?.output as string | undefined;
+  const toolDate = result.toolResults?.find((entry) => entry.toolName === 'get_today_date')
+    ?.output as string | undefined;
 
   const resolvedResponse =
     responseText.length > 0

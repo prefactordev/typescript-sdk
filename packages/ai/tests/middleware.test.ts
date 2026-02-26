@@ -40,7 +40,7 @@ describe('ai middleware tool instrumentation', () => {
 
     const middleware = createPrefactorMiddleware(tracer);
     const transformed = await (
-      middleware as { transformParams?: (arg: unknown) => Promise<any> }
+      middleware as { transformParams?: (arg: unknown) => Promise<unknown> }
     ).transformParams?.({
       type: 'generate',
       params: {
@@ -110,7 +110,7 @@ describe('ai middleware tool instrumentation', () => {
     } as unknown as Tracer;
 
     const middleware = createPrefactorMiddleware(tracer) as {
-      transformParams?: (arg: unknown) => Promise<any>;
+      transformParams?: (arg: unknown) => Promise<unknown>;
     };
     const transformed = await middleware.transformParams?.({
       type: 'generate',

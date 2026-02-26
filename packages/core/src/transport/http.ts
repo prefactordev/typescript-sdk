@@ -15,12 +15,19 @@ import {
 import { HttpClient } from './http/http-client.js';
 
 export type AgentInstanceOptions = {
+  /** Existing backend agent id, when available. */
   agentId?: string;
+  /** External agent version identifier. */
   agentIdentifier?: string;
+  /** Human-readable agent name. */
   agentName?: string;
+  /** Human-readable agent description. */
   agentDescription?: string;
 };
 
+/**
+ * Transport contract used by the tracer and runtime.
+ */
 export interface Transport {
   emit(span: Span): void;
 
@@ -36,7 +43,9 @@ export interface Transport {
 }
 
 export type FinishSpanOptions = {
+  /** Final status sent to backend when finishing deferred spans. */
   status?: AgentSpanFinishStatus;
+  /** Optional normalized payload included in finish request. */
   resultPayload?: Record<string, unknown>;
 };
 
@@ -46,6 +55,9 @@ type PendingFinish = {
 
 const logger = getLogger('http-transport');
 
+/**
+ * HTTP-backed transport that serializes span operations through an internal queue.
+ */
 export class HttpTransport implements Transport {
   private closed = false;
   private readonly actionQueue = new InMemoryQueue<TransportAction>();
