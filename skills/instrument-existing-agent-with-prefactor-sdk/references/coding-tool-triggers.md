@@ -27,6 +27,11 @@ Use these terms in prompts, descriptions, or examples to improve discovery in co
 - prefactor sdk
 - prefactor cli
 - withSpan
+- shutdown
+- no active tracer found
+- same-package tracer
+- captureTools false
+- manual custom span missing
 - openclaw instrumentation
 
 ## Symptom Keywords
