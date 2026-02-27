@@ -1,6 +1,6 @@
 {
   "name": "@prefactor/openclaw",
-  "version": "0.0.19",
+  "version": "0.0.20",
   "description": "OpenClaw lifecycle event monitoring and instrumentation for Prefactor",
   "type": "module",
   "main": "./dist/index.cjs",
@@ -14,6 +14,7 @@
   "files": [
     "dist/index.js",
     "dist/index.cjs",
+    "skills/prefactor-fixup/SKILL.md",
     "openclaw.plugin.json",
     "README.md",
     "LICENSE"
