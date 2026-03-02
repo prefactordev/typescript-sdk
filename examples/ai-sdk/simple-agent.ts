@@ -10,11 +10,11 @@
  * - For HTTP transport: PREFACTOR_API_URL and PREFACTOR_API_TOKEN
  */
 
+import { init } from '@prefactor/core';
+import { PrefactorAISDK, type LanguageModelMiddleware } from '@prefactor/ai';
 import { generateText, wrapLanguageModel, tool, stepCountIs } from 'ai';
 import { anthropic } from '@ai-sdk/anthropic';
 import { z } from 'zod';
-import { init } from '@prefactor/ai';
-import { shutdown, withSpan } from '@prefactor/core';
 
 const calculateTool = tool({
   description: 'Perform basic arithmetic operations (+, -, *, /).',
@@ -129,7 +129,8 @@ async function main() {
   // - PREFACTOR_AGENT_ID: Optional agent identifier
   console.log('Initializing @prefactor/ai...');
 
-  const middleware = init({
+  const prefactor = init({
+    provider: new PrefactorAISDK(),
     httpConfig: {
       apiToken: process.env.PREFACTOR_API_TOKEN!,
       apiUrl: process.env.PREFACTOR_API_URL!,
@@ -144,13 +145,13 @@ async function main() {
   // This is the key difference from the experimental_telemetry approach
   const model = wrapLanguageModel({
     model: anthropic('claude-3-haiku-20240307'),
-    middleware,
+    middleware: prefactor.getMiddleware() as LanguageModelMiddleware,
   });
 
   console.log('Model wrapped with Prefactor middleware');
   console.log();
 
-  await withSpan(
+  await prefactor.withSpan(
     {
       name: 'root-span',
       spanType: 'ai:example-root',
@@ -191,7 +192,7 @@ async function main() {
     }
   );
 
-  await shutdown();
+  await prefactor.shutdown();
   console.log('Shutdown complete');
   console.log();
   process.exit(0);

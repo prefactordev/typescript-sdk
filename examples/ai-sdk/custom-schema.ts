@@ -11,7 +11,8 @@
 
 import { anthropic } from '@ai-sdk/anthropic';
 import { generateText, stepCountIs, tool, wrapLanguageModel } from 'ai';
-import { init, shutdown, withSpan } from '@prefactor/ai';
+import { init } from '@prefactor/core';
+import { PrefactorAISDK, type LanguageModelMiddleware } from '@prefactor/ai';
 import { z } from 'zod';
 
 const customSchema = {
@@ -144,8 +145,8 @@ async function main() {
   console.log('='.repeat(80));
   console.log();
 
-  const middleware = init({
-    transportType: 'http',
+  const prefactor = init({
+    provider: new PrefactorAISDK(),
     httpConfig: {
       apiUrl: PREFACTOR_API_URL,
       apiToken: PREFACTOR_API_TOKEN,
@@ -158,7 +159,7 @@ async function main() {
 
   const model = wrapLanguageModel({
     model: anthropic('claude-3-haiku-20240307'),
-    middleware,
+    middleware: prefactor.getMiddleware() as LanguageModelMiddleware,
   });
 
   const getTodayDateTool = tool({
@@ -187,7 +188,7 @@ async function main() {
       ? responseText
       : `Today is ${toolDate ?? 'an unknown date'}. Focus: review failing tests, fix the smallest root-cause issue first, and ship with confidence.`;
 
-  const normalizedResponse = await withSpan(
+  const normalizedResponse = await prefactor.withSpan(
     {
       name: 'custom:normalize_response',
       spanType: 'custom:normalize-response',
@@ -198,7 +199,7 @@ async function main() {
     async () => resolvedResponse.replace(/\s+/g, ' ').trim()
   );
 
-  const summary = await withSpan(
+  const summary = await prefactor.withSpan(
     {
       name: 'custom:build_summary',
       spanType: 'custom:build-summary',
@@ -219,7 +220,7 @@ async function main() {
   console.log(summary);
   console.log();
 
-  await shutdown();
+  await prefactor.shutdown();
   console.log('Shutdown complete');
   console.log();
 }

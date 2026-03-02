@@ -6,18 +6,18 @@
  * `@prefactor/langchain` adds Prefactor tracing to LangChain middleware so agent, model,
  * chain, and tool activity is captured automatically.
  *
- * The package initializes once with `init`, then captures model and tool traces through
- * LangChain middleware hooks. It also exposes `withSpan` for custom orchestration spans and
- * `getTracer` for advanced instrumentation patterns.
+ * Use this package as a provider for the core `init` function.
  *
- * ## Quick start: initialize and attach middleware
+ * ## Quick start
  *
  * ```ts
- * import { init } from '@prefactor/langchain';
+ * import { init } from '@prefactor/core';
+ * import { PrefactorLangChain } from '@prefactor/langchain';
  * import { createAgent } from 'langchain';
  *
  * const prefactor = init({
- *   transportType: 'http',
+ *   provider: new PrefactorLangChain(),
+>>>>>>> b96391f (Introduce provider-based init API for v0.3.0)
  *   httpConfig: {
  *     apiUrl: 'https://api.prefactor.ai',
  *     apiToken: process.env.PREFACTOR_API_TOKEN!,
@@ -28,43 +28,15 @@
  * const agent = createAgent({
  *   model: 'claude-sonnet-4-5-20250929',
  *   tools: [],
- *   middleware: [prefactor],
+ *   middleware: [prefactor.getMiddleware()],
  * });
  * ```
- *
- * ## Example: trace custom logic
- *
- * ```ts
- * import { withSpan } from '@prefactor/langchain';
- *
- * await withSpan(
- *   {
- *     name: 'rank-documents',
- *     spanType: 'langchain:chain',
- *     inputs: { count: 12 },
- *   },
- *   async () => {
- *     // your custom chain logic
- *   }
- * );
- * ```
- *
  * @module @prefactor/packages/langchain
  * @category Packages
  * @packageDocumentation
  */
 
-// Convenience re-exports from core
-export {
-  type Config,
-  type CoreRuntime,
-  type HttpTransportConfig,
-  type Span,
-  SpanStatus,
-  SpanType,
-  shutdown,
-} from '@prefactor/core';
-export { getTracer, init, withSpan } from './init.js';
-export { extractTokenUsage } from './metadata-extractor.js';
-// Middleware
-export { PrefactorMiddleware } from './middleware.js';
+// Re-export middleware type
+export type { AgentMiddleware } from 'langchain';
+// Provider
+export { DEFAULT_LANGCHAIN_AGENT_SCHEMA, PrefactorLangChain } from './provider.js';
