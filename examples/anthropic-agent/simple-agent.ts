@@ -12,16 +12,55 @@
 
 import { createAgent, tool } from 'langchain';
 import { z } from 'zod';
-import { init } from '@prefactor/langchain';
-import { shutdown, withSpan } from '@prefactor/core';
+import { init } from '@prefactor/core';
+import { PrefactorLangChain, type AgentMiddleware } from '@prefactor/langchain';
+
+function safeEval(expr: string): number {
+  const tokens = expr.replace(/[^0-9+\-*/.()% ]/g, '').split(/(\s+)/).filter(t => t.trim());
+  let result = 0;
+  let operator = '+';
+  
+  for (const token of tokens) {
+    const trimmed = token.trim();
+    if (!trimmed) continue;
+    
+    if (trimmed === '+') {
+      operator = '+';
+    } else if (trimmed === '-') {
+      operator = '-';
+    } else if (trimmed === '*') {
+      operator = '*';
+    } else if (trimmed === '/') {
+      operator = '/';
+    } else if (trimmed === '%') {
+      operator = '%';
+    } else {
+      const num = parseFloat(trimmed);
+      if (isNaN(num)) {
+        throw new Error('Invalid expression');
+      }
+      switch (operator) {
+        case '+': result += num; break;
+        case '-': result -= num; break;
+        case '*': result *= num; break;
+        case '/': result /= num; break;
+        case '%': result %= num; break;
+        default: result = num;
+      }
+    }
+  }
+  
+  if (!isFinite(result)) {
+    throw new Error('Invalid result');
+  }
+  return result;
+}
 
 // Define simple tools for the agent
 const calculatorTool = tool(
   async ({ expression }: { expression: string }) => {
     try {
-      // Simple evaluation for demo purposes
-      // In production, use a proper math parser
-      const result = eval(expression);
+      const result = safeEval(expression);
       return `Result: ${result}`;
     } catch (error) {
       return `Error: ${error instanceof Error ? error.message : String(error)}`;
@@ -64,8 +103,8 @@ async function main() {
 
   // Initialize Prefactor SDK
   console.log('Initializing Prefactor SDK...');
-  const middleware = init({
-    transportType: 'http',
+  const prefactor = init({
+    provider: new PrefactorLangChain(),
     httpConfig: {
       apiUrl: process.env.PREFACTOR_API_URL || 'http://localhost:8000',
       apiToken: process.env.PREFACTOR_API_TOKEN || 'dev-token',
@@ -76,7 +115,7 @@ async function main() {
   console.log('Prefactor middleware initialized');
   console.log();
 
-  await withSpan(
+  await prefactor.withSpan(
     {
       name: 'langchain:example-root',
       spanType: 'custom:example-root',
@@ -92,7 +131,7 @@ async function main() {
         model: 'claude-3-haiku-20240307',
         tools,
         systemPrompt: 'You are a helpful assistant. Use the available tools to answer questions.',
-        middleware: [middleware],
+        middleware: [prefactor.getMiddleware() as AgentMiddleware],
       });
       console.log('Agent created with Prefactor tracing');
       console.log();
@@ -111,7 +150,7 @@ async function main() {
         console.log(result1.messages[result1.messages.length - 1].content);
         console.log();
       } catch (error) {
-        console.log(`Error in Example 1: ${error}`);
+        console.log(`Error in Example 1: ${error instanceof Error ? error.message : String(error)}`);
         console.log();
       }
 
@@ -128,7 +167,7 @@ async function main() {
         console.log(result2.messages[result2.messages.length - 1].content);
         console.log();
       } catch (error) {
-        console.log(`Error in Example 2: ${error}`);
+        console.log(`Error in Example 2: ${error instanceof Error ? error.message : String(error)}`);
         console.log();
       }
 
@@ -151,7 +190,7 @@ async function main() {
 
   // Explicitly flush pending spans (also happens automatically via beforeExit)
   console.log('Flushing pending spans...');
-  await shutdown();
+  await prefactor.shutdown();
   console.log('Shutdown complete');
   console.log();
 }
