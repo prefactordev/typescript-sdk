@@ -43,3 +43,4 @@ Thumbs.db
 .env.local
 .env.*.local
 prefactor.json
+.claude/skills/desloppify/SKILL.md

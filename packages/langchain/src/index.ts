@@ -31,7 +31,7 @@
  * });
  * ```
  *
- * @module @prefactor/packages/langchain
+ * @module @prefactor/langchain
  * @category Packages
  * @packageDocumentation
  */

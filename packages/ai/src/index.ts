@@ -37,7 +37,7 @@
  * await prefactor.shutdown();
  * ```
  *
- * @module @prefactor/packages/ai
+ * @module @prefactor/ai
  * @category Packages
  * @packageDocumentation
  */
