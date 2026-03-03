@@ -27,26 +27,26 @@ function safeEval(expr: string): number {
     throw new Error('Mixed operator precedence not supported');
   }
   
-  const tokens = cleaned.split(/(\s+)/).filter(t => t.trim());
+  const tokens = cleaned.match(/\d+(?:\.\d+)?|[+\-*/%()]/g) ?? [];
+  if (tokens.join('') !== cleaned.replace(/\s+/g, '')) {
+    throw new Error('Invalid expression');
+  }
   let result = 0;
   let operator = '+';
   
   for (const token of tokens) {
-    const trimmed = token.trim();
-    if (!trimmed) continue;
-    
-    if (trimmed === '+') {
+    if (token === '+') {
       operator = '+';
-    } else if (trimmed === '-') {
+    } else if (token === '-') {
       operator = '-';
-    } else if (trimmed === '*') {
+    } else if (token === '*') {
       operator = '*';
-    } else if (trimmed === '/') {
+    } else if (token === '/') {
       operator = '/';
-    } else if (trimmed === '%') {
+    } else if (token === '%') {
       operator = '%';
     } else {
-      const num = parseFloat(trimmed);
+      const num = parseFloat(token);
       if (isNaN(num)) {
         throw new Error('Invalid expression');
       }

@@ -7,23 +7,48 @@ import type { Tracer } from './tracing/tracer.js';
 import { withSpan as coreWithSpan } from './tracing/with-span.js';
 import { configureLogging } from './utils/logging.js';
 
+/**
+ * Options for creating a manual span around custom code.
+ */
 export interface ManualSpanOptions {
+  /** Human-readable span name. */
   name: string;
+  /** Provider-specific span type identifier. */
   spanType: string;
+  /** Captured input payload for the span. */
   inputs: Record<string, unknown>;
+  /** Optional metadata associated with the span. */
   metadata?: Record<string, unknown>;
 }
 
+/**
+ * Provider middleware value exposed by integrations.
+ */
 export type MiddlewareLike = unknown;
 
+/**
+ * Provider integration contract for Prefactor SDK clients.
+ */
 export interface PrefactorProvider {
+  /**
+   * Creates provider middleware bound to the core runtime services.
+   *
+   * @param tracer - Runtime tracer used for span creation.
+   * @param agentManager - Runtime agent instance manager.
+   * @param config - Resolved SDK configuration.
+   * @returns Provider middleware consumed by upstream frameworks.
+   */
   createMiddleware(
     tracer: Tracer,
     agentManager: AgentInstanceManager,
     config: Config
   ): MiddlewareLike;
-  // biome-ignore lint/suspicious/noExplicitAny: Optional method for providers that support default schemas
-  getDefaultAgentSchema?: () => any;
+  /**
+   * Provides a default agent schema when a user does not supply one.
+   *
+   * @returns Agent schema object, or `undefined` when no default is available.
+   */
+  getDefaultAgentSchema?: () => Record<string, unknown> | undefined;
 }
 
 let globalClient: PrefactorClient | null = null;
@@ -32,19 +57,43 @@ export class PrefactorClient {
   private readonly core: CoreRuntime;
   private readonly middleware: MiddlewareLike;
 
+  /**
+   * Creates a Prefactor client bound to a runtime and provider middleware.
+   *
+   * @param core - Initialized core runtime.
+   * @param middleware - Provider middleware returned by the integration.
+   * @param _provider - Provider used to construct the client.
+   */
   constructor(core: CoreRuntime, middleware: MiddlewareLike, _provider: PrefactorProvider) {
     this.core = core;
     this.middleware = middleware;
   }
 
+  /**
+   * Returns the runtime tracer used by this client.
+   *
+   * @returns Active tracer instance.
+   */
   getTracer(): Tracer {
     return this.core.tracer;
   }
 
+  /**
+   * Returns provider middleware created during initialization.
+   *
+   * @returns Provider middleware object.
+   */
   getMiddleware(): MiddlewareLike {
     return this.middleware;
   }
 
+  /**
+   * Runs a function within a manually-created span.
+   *
+   * @param options - Manual span options.
+   * @param fn - Function executed inside the created span.
+   * @returns Result of `fn` as a promise.
+   */
   withSpan<T>(options: ManualSpanOptions, fn: () => T | Promise<T>): Promise<T> {
     return coreWithSpan(
       {
@@ -57,17 +106,40 @@ export class PrefactorClient {
     ) as Promise<T>;
   }
 
+  /**
+   * Flushes pending telemetry and releases the global singleton reference.
+   *
+   * The global client reference is always cleared, even if shutdown fails.
+   *
+   * @returns Promise that resolves when shutdown completes.
+   */
   async shutdown(): Promise<void> {
-    await this.core.shutdown();
-    globalClient = null;
+    try {
+      await this.core.shutdown();
+    } finally {
+      globalClient = null;
+    }
   }
 }
 
+/**
+ * Options for initializing the global Prefactor client.
+ */
 export interface PrefactorOptions {
+  /** Provider integration used to create middleware and defaults. */
   provider: PrefactorProvider;
+  /** Optional HTTP configuration overrides for the runtime config. */
   httpConfig?: Config['httpConfig'];
 }
 
+/**
+ * Initializes and returns the process-wide Prefactor client singleton.
+ *
+ * Repeated calls return the same client instance until it is shut down.
+ *
+ * @param options - Initialization options.
+ * @returns Global Prefactor client instance.
+ */
 export function init(options: PrefactorOptions): PrefactorClient {
   if (globalClient) {
     return globalClient;
@@ -103,6 +175,11 @@ export function init(options: PrefactorOptions): PrefactorClient {
   return globalClient;
 }
 
+/**
+ * Returns the currently initialized global Prefactor client, if any.
+ *
+ * @returns Active global client or `null`.
+ */
 export function getClient(): PrefactorClient | null {
   return globalClient;
 }
