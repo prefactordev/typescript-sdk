@@ -16,7 +16,18 @@ import { init } from '@prefactor/core';
 import { PrefactorLangChain, type AgentMiddleware } from '@prefactor/langchain';
 
 function safeEval(expr: string): number {
-  const tokens = expr.replace(/[^0-9+\-*/.()% ]/g, '').split(/(\s+)/).filter(t => t.trim());
+  const cleaned = expr.replace(/[^0-9+\-*/.()% ]/g, '').trim();
+  
+  if (/[+\-*/%]/.test(cleaned) && /\([^)]+\)/.test(cleaned)) {
+    throw new Error('Parentheses not supported');
+  }
+  
+  const hasMixedOperators = /[+\-]/.test(cleaned) && /[*/%]/.test(cleaned);
+  if (hasMixedOperators) {
+    throw new Error('Mixed operator precedence not supported');
+  }
+  
+  const tokens = cleaned.split(/(\s+)/).filter(t => t.trim());
   let result = 0;
   let operator = '+';
   
@@ -101,98 +112,102 @@ async function main() {
   console.log('='.repeat(80));
   console.log();
 
-  // Initialize Prefactor SDK
-  console.log('Initializing Prefactor SDK...');
-  const prefactor = init({
-    provider: new PrefactorLangChain(),
-    httpConfig: {
-      apiUrl: process.env.PREFACTOR_API_URL || 'http://localhost:8000',
-      apiToken: process.env.PREFACTOR_API_TOKEN || 'dev-token',
-      agentId: process.env.PREFACTOR_AGENT_ID,
-      agentIdentifier: 'langchain-v1',
-    },
-  });
-  console.log('Prefactor middleware initialized');
-  console.log();
+  let prefactor: ReturnType<typeof init> | undefined;
+  try {
+    // Initialize Prefactor SDK
+    console.log('Initializing Prefactor SDK...');
+    prefactor = init({
+      provider: new PrefactorLangChain(),
+      httpConfig: {
+        apiUrl: process.env.PREFACTOR_API_URL || 'http://localhost:8000',
+        apiToken: process.env.PREFACTOR_API_TOKEN || 'dev-token',
+        agentId: process.env.PREFACTOR_AGENT_ID,
+        agentIdentifier: 'langchain-v1',
+      },
+    });
+    console.log('Prefactor middleware initialized');
+    console.log();
 
-  await prefactor.withSpan(
-    {
-      name: 'langchain:example-root',
-      spanType: 'custom:example-root',
-      inputs: { example: 'anthropic-agent/simple-agent.ts' },
-    },
-    async () => {
-      // Create tools list
-      const tools = [calculatorTool, getCurrentTimeTool];
+    await prefactor.withSpan(
+      {
+        name: 'langchain:example-root',
+        spanType: 'custom:example-root',
+        inputs: { example: 'anthropic-agent/simple-agent.ts' },
+      },
+      async () => {
+        // Create tools list
+        const tools = [calculatorTool, getCurrentTimeTool];
 
-      // Create agent using the createAgent API with middleware
-      console.log('Creating agent with createAgent API and Prefactor middleware...');
-      const agent = createAgent({
-        model: 'claude-3-haiku-20240307',
-        tools,
-        systemPrompt: 'You are a helpful assistant. Use the available tools to answer questions.',
-        middleware: [prefactor.getMiddleware() as AgentMiddleware],
-      });
-      console.log('Agent created with Prefactor tracing');
-      console.log();
-
-      // Run test interactions
-      console.log('='.repeat(80));
-      console.log('Example 1: Getting Current Time');
-      console.log('='.repeat(80));
-      console.log();
-
-      try {
-        const result1 = await agent.invoke({
-          messages: [{ role: 'user', content: 'What is the current date and time?' }],
+        // Create agent using the createAgent API with middleware
+        console.log('Creating agent with createAgent API and Prefactor middleware...');
+        const agent = createAgent({
+          model: 'claude-3-haiku-20240307',
+          tools,
+          systemPrompt: 'You are a helpful assistant. Use the available tools to answer questions.',
+          middleware: [prefactor!.getMiddleware() as AgentMiddleware],
         });
-        console.log('\nAgent Response:');
-        console.log(result1.messages[result1.messages.length - 1].content);
+        console.log('Agent created with Prefactor tracing');
         console.log();
-      } catch (error) {
-        console.log(`Error in Example 1: ${error instanceof Error ? error.message : String(error)}`);
+
+        // Run test interactions
+        console.log('='.repeat(80));
+        console.log('Example 1: Getting Current Time');
+        console.log('='.repeat(80));
+        console.log();
+
+        try {
+          const result1 = await agent.invoke({
+            messages: [{ role: 'user', content: 'What is the current date and time?' }],
+          });
+          console.log('\nAgent Response:');
+          console.log(result1.messages[result1.messages.length - 1].content);
+          console.log();
+        } catch (error) {
+          console.log(`Error in Example 1: ${error instanceof Error ? error.message : String(error)}`);
+          console.log();
+        }
+
+        console.log('='.repeat(80));
+        console.log('Example 2: Simple Calculation');
+        console.log('='.repeat(80));
+        console.log();
+
+        try {
+          const result2 = await agent.invoke({
+            messages: [{ role: 'user', content: 'What is 42 multiplied by 17?' }],
+          });
+          console.log('\nAgent Response:');
+          console.log(result2.messages[result2.messages.length - 1].content);
+          console.log();
+        } catch (error) {
+          console.log(`Error in Example 2: ${error instanceof Error ? error.message : String(error)}`);
+          console.log();
+        }
+
+        console.log('='.repeat(80));
+        console.log('Example Complete!');
+        console.log('='.repeat(80));
+        console.log();
+        console.log('The trace spans have been sent to the Prefactor API.');
+        console.log('You should see spans for:');
+        console.log('  - AGENT: Root agent execution span');
+        console.log('  - LLM: Claude API calls with token usage');
+        console.log('  - TOOL: calculator and get_current_time executions');
+        console.log();
+        console.log('Check parent_span_id fields to see the span hierarchy.');
+        console.log();
+        console.log('Note: This example uses the createAgent API from LangChain v1.');
         console.log();
       }
-
-      console.log('='.repeat(80));
-      console.log('Example 2: Simple Calculation');
-      console.log('='.repeat(80));
-      console.log();
-
-      try {
-        const result2 = await agent.invoke({
-          messages: [{ role: 'user', content: 'What is 42 multiplied by 17?' }],
-        });
-        console.log('\nAgent Response:');
-        console.log(result2.messages[result2.messages.length - 1].content);
-        console.log();
-      } catch (error) {
-        console.log(`Error in Example 2: ${error instanceof Error ? error.message : String(error)}`);
-        console.log();
-      }
-
-      console.log('='.repeat(80));
-      console.log('Example Complete!');
-      console.log('='.repeat(80));
-      console.log();
-      console.log('The trace spans have been sent to the Prefactor API.');
-      console.log('You should see spans for:');
-      console.log('  - AGENT: Root agent execution span');
-      console.log('  - LLM: Claude API calls with token usage');
-      console.log('  - TOOL: calculator and get_current_time executions');
-      console.log();
-      console.log('Check parent_span_id fields to see the span hierarchy.');
-      console.log();
-      console.log('Note: This example uses the createAgent API from LangChain v1.');
+    );
+  } finally {
+    if (prefactor) {
+      console.log('Flushing pending spans...');
+      await prefactor.shutdown();
+      console.log('Shutdown complete');
       console.log();
     }
-  );
-
-  // Explicitly flush pending spans (also happens automatically via beforeExit)
-  console.log('Flushing pending spans...');
-  await prefactor.shutdown();
-  console.log('Shutdown complete');
-  console.log();
+  }
 }
 
 main().catch((error) => {

@@ -1,10 +1,11 @@
-import type { AgentInstanceManager, Config, CoreRuntime, Tracer } from '@prefactor/core';
-import {
-  configureLogging,
-  withSpan as coreWithSpan,
-  createConfig,
-  createCore,
-} from '@prefactor/core';
+import type { AgentInstanceManager } from './agent/instance-manager.js';
+import type { Config } from './config.js';
+import { createConfig } from './config.js';
+import type { CoreRuntime } from './create-core.js';
+import { createCore } from './create-core.js';
+import type { Tracer } from './tracing/tracer.js';
+import { withSpan as coreWithSpan } from './tracing/with-span.js';
+import { configureLogging } from './utils/logging.js';
 
 export interface ManualSpanOptions {
   name: string;
@@ -68,6 +69,10 @@ export interface PrefactorOptions {
 }
 
 export function init(options: PrefactorOptions): PrefactorClient {
+  if (globalClient) {
+    return globalClient;
+  }
+
   configureLogging();
 
   const config: Partial<Config> = options.httpConfig ? { httpConfig: options.httpConfig } : {};

@@ -18,7 +18,6 @@
  *
  * const prefactor = init({
  *   provider: new PrefactorAISDK(),
->>>>>>> b96391f (Introduce provider-based init API for v0.3.0)
  *   httpConfig: {
  *     apiUrl: 'https://app.prefactorai.com',
  *     apiToken: process.env.PREFACTOR_API_TOKEN!,
@@ -29,7 +28,6 @@
  * const model = wrapLanguageModel({
  *   model: anthropic('claude-3-haiku-20240307'),
  *   middleware: prefactor.getMiddleware(),
- *   middleware: prefactor.getMiddleware(),
  * });
  *
  * const result = await generateText({
@@ -39,7 +37,8 @@
  *
  * await prefactor.shutdown();
  * ```
- * @module @prefactor/packages/ai
+ *
+ * @module @prefactor/ai
  * @category Packages
  * @packageDocumentation
  */

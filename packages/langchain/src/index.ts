@@ -17,7 +17,6 @@
  *
  * const prefactor = init({
  *   provider: new PrefactorLangChain(),
->>>>>>> b96391f (Introduce provider-based init API for v0.3.0)
  *   httpConfig: {
  *     apiUrl: 'https://api.prefactor.ai',
  *     apiToken: process.env.PREFACTOR_API_TOKEN!,
@@ -31,7 +30,8 @@
  *   middleware: [prefactor.getMiddleware()],
  * });
  * ```
- * @module @prefactor/packages/langchain
+ *
+ * @module @prefactor/langchain
  * @category Packages
  * @packageDocumentation
  */
