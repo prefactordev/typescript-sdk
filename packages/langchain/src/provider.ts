@@ -29,6 +29,7 @@ export interface PrefactorLangChainOptions {
 
 export class PrefactorLangChain implements PrefactorProvider {
   private readonly options: PrefactorLangChainOptions;
+  private middleware: PrefactorMiddleware | null = null;
 
   constructor(options: PrefactorLangChainOptions = {}) {
     this.options = options;
@@ -50,27 +51,33 @@ export class PrefactorLangChain implements PrefactorProvider {
         }
       : undefined;
 
-    const prefactorMiddleware = new PrefactorMiddleware(tracer, agentManager, agentInfo);
+    this.middleware = new PrefactorMiddleware(tracer, agentManager, agentInfo);
+    const middleware = this.middleware;
 
     return createMiddleware({
       name: 'prefactor',
       // biome-ignore lint/suspicious/noExplicitAny: LangChain middleware hooks use dynamic types
       wrapModelCall: async (request: any, handler: any) => {
-        return prefactorMiddleware.wrapModelCall(request, handler);
+        return middleware.wrapModelCall(request, handler);
       },
       // biome-ignore lint/suspicious/noExplicitAny: LangChain middleware hooks use dynamic types
       wrapToolCall: async (request: any, handler: any) => {
-        return prefactorMiddleware.wrapToolCall(request, handler);
+        return middleware.wrapToolCall(request, handler);
       },
       // biome-ignore lint/suspicious/noExplicitAny: LangChain middleware hooks use dynamic types
       beforeAgent: async (state: any) => {
-        await prefactorMiddleware.beforeAgent(state);
+        await middleware.beforeAgent(state);
       },
       // biome-ignore lint/suspicious/noExplicitAny: LangChain middleware hooks use dynamic types
       afterAgent: async (state: any) => {
-        await prefactorMiddleware.afterAgent(state);
+        await middleware.afterAgent(state);
       },
     });
+  }
+
+  shutdown(): void {
+    this.middleware?.shutdown();
+    this.middleware = null;
   }
 
   getDefaultAgentSchema(): Record<string, unknown> | undefined {

@@ -44,6 +44,10 @@ export interface PrefactorProvider {
     config: Config
   ): MiddlewareLike;
   /**
+   * Optional provider-level cleanup hook invoked during client shutdown.
+   */
+  shutdown?: () => void | Promise<void>;
+  /**
    * Provides a default agent schema when a user does not supply one.
    *
    * @returns Agent schema object, or `undefined` when no default is available.
@@ -52,21 +56,24 @@ export interface PrefactorProvider {
 }
 
 let prefactorClient: PrefactorClient | null = null;
+let prefactorInitKey: string | null = null;
 
 export class PrefactorClient {
   private readonly core: CoreRuntime;
   private readonly middleware: MiddlewareLike;
+  private readonly provider: PrefactorProvider;
 
   /**
    * Creates a Prefactor client bound to a runtime and provider middleware.
    *
    * @param core - Initialized core runtime.
    * @param middleware - Provider middleware returned by the integration.
-   * @param _provider - Provider used to construct the client.
+   * @param provider - Provider used to construct the client.
    */
-  constructor(core: CoreRuntime, middleware: MiddlewareLike, _provider: PrefactorProvider) {
+  constructor(core: CoreRuntime, middleware: MiddlewareLike, provider: PrefactorProvider) {
     this.core = core;
     this.middleware = middleware;
+    this.provider = provider;
   }
 
   /**
@@ -96,6 +103,7 @@ export class PrefactorClient {
    */
   withSpan<T>(options: ManualSpanOptions, fn: () => T | Promise<T>): Promise<T> {
     return coreWithSpan(
+      this.core.tracer,
       {
         name: options.name,
         spanType: options.spanType as Parameters<typeof coreWithSpan>[0]['spanType'],
@@ -115,9 +123,11 @@ export class PrefactorClient {
    */
   async shutdown(): Promise<void> {
     try {
+      await this.provider.shutdown?.();
       await this.core.shutdown();
     } finally {
       prefactorClient = null;
+      prefactorInitKey = null;
     }
   }
 }
@@ -141,7 +151,16 @@ export interface PrefactorOptions {
  * @returns Global Prefactor client instance.
  */
 export function init(options: PrefactorOptions): PrefactorClient {
+  const nextInitKey = buildInitKey(options);
+
   if (prefactorClient) {
+    if (prefactorInitKey !== nextInitKey) {
+      throw new Error(
+        'Prefactor is already initialized with a different provider or configuration. ' +
+          'Call shutdown() before re-initializing with different options.'
+      );
+    }
+
     return prefactorClient;
   }
 
@@ -171,6 +190,7 @@ export function init(options: PrefactorOptions): PrefactorClient {
   const middleware = options.provider.createMiddleware(core.tracer, core.agentManager, finalConfig);
 
   prefactorClient = new PrefactorClient(core, middleware, options.provider);
+  prefactorInitKey = nextInitKey;
 
   return prefactorClient;
 }
@@ -182,4 +202,31 @@ export function init(options: PrefactorOptions): PrefactorClient {
  */
 export function getClient(): PrefactorClient | null {
   return prefactorClient;
+}
+
+function buildInitKey(options: PrefactorOptions): string {
+  const providerType = options.provider.constructor?.name ?? 'anonymous-provider';
+  return `${providerType}:${stableStringify(options.httpConfig ?? null)}`;
+}
+
+function stableStringify(value: unknown): string {
+  return JSON.stringify(normalizeValue(value));
+}
+
+function normalizeValue(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map((entry) => normalizeValue(entry));
+  }
+
+  if (value && typeof value === 'object') {
+    const normalized: Record<string, unknown> = {};
+    const objectValue = value as Record<string, unknown>;
+    const keys = Object.keys(objectValue).sort((a, b) => a.localeCompare(b));
+    for (const key of keys) {
+      normalized[key] = normalizeValue(objectValue[key]);
+    }
+    return normalized;
+  }
+
+  return value;
 }
