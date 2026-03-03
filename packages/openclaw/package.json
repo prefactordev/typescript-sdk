@@ -1,6 +1,6 @@
 {
   "name": "@prefactor/openclaw",
-  "version": "0.0.19",
+  "version": "0.0.20",
   "description": "OpenClaw lifecycle event monitoring and instrumentation for Prefactor",
   "type": "module",
   "main": "./dist/index.cjs",
@@ -34,7 +34,7 @@
     "zod": "^4.0.0"
   },
   "peerDependencies": {
-    "@prefactor/core": "^0.2.0"
+    "@prefactor/core": "^0.3.0"
   },
   "devDependencies": {
     "openclaw": "^2026.2.24",
