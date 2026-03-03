@@ -18,6 +18,15 @@ import { z } from 'zod';
 const customSchema = {
   external_identifier: 'ai-sdk-example-2026-02-25',
   span_schemas: {
+    'ai-sdk:agent': {
+      type: 'object',
+      properties: {
+        name: { type: 'string' },
+        status: { type: 'string' },
+        inputs: { type: 'object' },
+      },
+      additionalProperties: true,
+    },
     'ai-sdk:llm': {
       type: 'object',
       properties: {
@@ -75,6 +84,7 @@ const customSchema = {
     },
   },
   span_result_schemas: {
+    'ai-sdk:agent': { type: 'object', additionalProperties: false },
     'ai-sdk:llm': {
       type: 'object',
       properties: {

@@ -52,7 +52,7 @@ export class PrefactorMiddleware {
    * @param state - Agent state containing messages
    */
   // biome-ignore lint/suspicious/noExplicitAny: LangChain state can be any structure
-  async beforeAgent(state: any): Promise<void> {
+  async beforeAgent(_state: any): Promise<void> {
     this.ensureAgentInstanceStarted();
   }
 

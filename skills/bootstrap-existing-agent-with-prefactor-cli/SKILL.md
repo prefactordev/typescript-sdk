@@ -26,11 +26,12 @@ After this skill completes:
 
 ## Inputs You Need
 
-- Prefactor API key (for CLI profile)
+- Prefactor API token (for CLI profile)
 - Base URL (optional, defaults to Prefactor cloud)
 - Account ID
 - Target provider/framework (`langchain`, `ai`, `openclaw`, or custom)
 - Human-readable names for environment and agent
+- Working directory to store config (recommended: repo root)
 
 ## CLI Workflow
 
@@ -43,6 +44,7 @@ Before running CLI commands, choose package first, then install required Prefact
 
 - The `prefactor` command comes from the npm package `@prefactor/cli`.
 - If the command is not globally available, run it via the package manager launcher (`bunx @prefactor/cli`, `npx @prefactor/cli`, `pnpm dlx @prefactor/cli`, or `yarn dlx @prefactor/cli`).
+- Use `prefactor help` or `prefactor <group> help` for command details.
 
 Examples:
 
@@ -75,6 +77,20 @@ prefactor agent_instances register \
   --update_current_version
 ```
 
+Profile notes:
+
+- `<profile-name>` is any key like `default`, `staging`, or `prod`.
+- Select profile with `--profile <name>`.
+- When using launchers, prefix commands consistently (for example `npx @prefactor/cli profiles add ...`).
+
+Config resolution notes:
+
+- CLI config resolution order is:
+  1. `./prefactor.json`
+  2. `~/.prefactor/prefactor.json`
+  3. if none exists, profile creation writes `./prefactor.json`
+- Global CLI install does not make config global; command working directory still controls which config file is used.
+
 Collect and persist these IDs from command output:
 
 - `environment_id`
@@ -89,6 +105,16 @@ Choose package by provider:
 - AI SDK -> `@prefactor/ai`
 - OpenClaw -> `@prefactor/openclaw`
 - Custom/unsupported provider -> use `skills/create-provider-package-with-core/SKILL.md`
+
+When handing off to SDK instrumentation, import helpers from that selected package directly, for example:
+
+```ts
+import { init, withSpan, shutdown } from '@prefactor/ai';
+// or '@prefactor/langchain'
+```
+
+Do not mix adapter `init` with `withSpan`/`shutdown` from `@prefactor/core` unless an explicit tracer is passed.
+This guidance targets adapter-style integrations (`@prefactor/ai`, `@prefactor/langchain`) and does not change `@prefactor/openclaw` plugin runtime behavior.
 
 If you have identified and selected an existing package, use `skills/instrument-existing-agent-with-prefactor-sdk/SKILL.md`
 
@@ -110,6 +136,7 @@ Use the created `agent_id` for `PREFACTOR_AGENT_ID`.
 - Confirm IDs were returned and captured.
 - Confirm package selection matches provider.
 - Confirm env vars match created resources.
+- Confirm `prefactor.json` is ignored by git (`git check-ignore prefactor.json`, `git status --short`).
 
 ## Common Mistakes
 
@@ -117,3 +144,5 @@ Use the created `agent_id` for `PREFACTOR_AGENT_ID`.
 - Using account ID where environment ID is required.
 - Forgetting to propagate created `agent_id` to `PREFACTOR_AGENT_ID`.
 - Picking `@prefactor/core` directly when a built-in adapter exists.
+- Running commands from the wrong directory and reading/writing the wrong `prefactor.json`.
+- Committing `prefactor.json` (contains API tokens).

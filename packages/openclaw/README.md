@@ -77,6 +77,74 @@ openclaw config set plugins.entries.prefactor.config.apiToken "${PREFACTOR_API_T
 openclaw config set plugins.entries.prefactor.config.apiUrl "${PREFACTOR_API_URL}"
 ```
 
+## Exports
+
+### Plugin Entry Point
+
+```typescript
+import register from '@prefactor/openclaw';
+
+// Used by OpenClaw to load the plugin
+// Do not import directly in user code
+```
+
+### Agent HTTP Client
+
+```typescript
+import { Agent, AgentConfig, createAgent } from '@prefactor/openclaw';
+```
+
+### Session State Manager
+
+```typescript
+import { SessionStateManager, createSessionStateManager } from '@prefactor/openclaw';
+```
+
+### Logging
+
+```typescript
+import { Logger, LogLevel, createLogger } from '@prefactor/openclaw';
+```
+
+## Span Types
+
+The plugin creates the following span hierarchy:
+
+| Span Type | Schema | Description |
+|-----------|--------|-------------|
+| `session` | `openclaw:session` | Root span with 24hr lifetime |
+| `user_interaction` | `openclaw:user_interaction` | User interaction with 5min idle timeout |
+| `user_message` | `openclaw:user_message` | Inbound message from user (instant) |
+| `agent_run` | `openclaw:agent_run` | Agent execution run |
+| `tool_call` | `openclaw:tool_call` | Tool execution (concurrent) |
+| `assistant_response` | `openclaw:assistant_response` | Assistant response (instant) |
+
+## Hook Handlers
+
+The plugin registers 14 hooks with OpenClaw:
+
+| Hook | Category | Action |
+|------|----------|--------|
+| `gateway_start` | Gateway | Logging |
+| `gateway_stop` | Gateway | Emergency cleanup |
+| `session_start` | Session | Logging |
+| `session_end` | Session | Close all spans, finish agent instance |
+| `before_agent_start` | Agent | Create user_message + agent_run spans |
+| `agent_end` | Agent | Close agent_run, create assistant_response |
+| `before_compaction` | Compaction | Logging |
+| `after_compaction` | Compaction | Logging |
+| `before_tool_call` | Tool | Create tool_call span |
+| `after_tool_call` | Tool | Logging (hook is broken in OpenClaw) |
+| `tool_result_persist` | Tool | Close tool_call span |
+| `message_received` | Message | Buffer message for before_agent_start |
+| `message_sending` | Message | Logging |
+| `message_sent` | Message | Logging |
+
+## Requirements
+
+- OpenClaw >= 2026.2.9
+- Node.js >= 22.0.0
+- @prefactor/core (peer dependency)
 
 ## License
 

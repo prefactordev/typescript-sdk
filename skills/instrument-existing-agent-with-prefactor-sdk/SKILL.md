@@ -64,6 +64,18 @@ Recommended sequence when unsupported:
   - LangChain -> `@prefactor/langchain`
   - AI SDK -> `@prefactor/ai`
   - OpenClaw -> `@prefactor/openclaw`
+- Import `init`, `withSpan`, and `shutdown` from the same selected adapter package (`@prefactor/ai` or `@prefactor/langchain`) when an adapter exists.
+- Do not mix adapter `init` with `withSpan`/`shutdown` imported from `@prefactor/core` unless you pass an explicit tracer to `withSpan`.
+- Why: mixed helper imports can lead to `No active tracer found` (for example with nested package instances), which drops manual custom spans.
+- Keep imports package-local and explicit, for example:
+
+```ts
+import { init, withSpan, shutdown } from '@prefactor/ai';
+// or
+import { init, withSpan, shutdown } from '@prefactor/langchain';
+```
+
+- This mixed-import tracer risk applies to adapter-style flows (`@prefactor/ai`, `@prefactor/langchain`) and not to the `@prefactor/openclaw` plugin runtime model.
 - If a built-in adapter does not exist, follow `skills/create-provider-package-with-core/SKILL.md`.
 - Keep provider span types package-prefixed (`langchain:*`, `ai-sdk:*`, `openclaw:*`).
 - Run nested work inside active context so parent/child trace trees stay intact.

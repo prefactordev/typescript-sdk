@@ -77,7 +77,7 @@ function wrapToolExecute(
 ): (...args: any[]) => Promise<unknown> {
   // biome-ignore lint/suspicious/noExplicitAny: Symbol metadata on function object
   if ((execute as any)[WRAPPED_TOOL_EXECUTE]) {
-    return execute as (...args: any[]) => Promise<unknown>;
+    return execute as (...args: unknown[]) => Promise<unknown>;
   }
 
   // biome-ignore lint/suspicious/noExplicitAny: Tool execute signatures vary by provider/version

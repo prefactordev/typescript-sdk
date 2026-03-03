@@ -21,6 +21,7 @@
  *   httpConfig: {
  *     apiUrl: 'https://app.prefactorai.com',
  *     apiToken: process.env.PREFACTOR_API_TOKEN!,
+ *     agentIdentifier: 'chat-app-v1',
  *   },
  * });
  *

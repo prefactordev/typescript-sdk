@@ -26,5 +26,6 @@ When instrumenting an existing agent, default to this order:
 1. Run `skills/bootstrap-existing-agent-with-prefactor-cli/SKILL.md` to set up resources (`environment`, `agent`, `agent_instance`).
 2. Install required Prefactor npm package(s) via the project's package manager.
 3. Choose the matching adapter package if available (`@prefactor/langchain`, `@prefactor/ai`, `@prefactor/openclaw`).
-4. If no matching adapter package exists, use `skills/create-provider-package-with-core/SKILL.md`.
-5. Instrument the existing agent with `skills/instrument-existing-agent-with-prefactor-sdk/SKILL.md`.
+4. For adapter-style instrumentation (`@prefactor/langchain` or `@prefactor/ai`), keep `init`, `withSpan`, and `shutdown` imports from that same adapter package (or pass an explicit tracer when using core `withSpan`).
+5. If no matching adapter package exists, use `skills/create-provider-package-with-core/SKILL.md`.
+6. Instrument the existing agent with `skills/instrument-existing-agent-with-prefactor-sdk/SKILL.md`.

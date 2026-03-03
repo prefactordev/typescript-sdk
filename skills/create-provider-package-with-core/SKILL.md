@@ -49,6 +49,7 @@ Use this package surface:
 ## 3) Implement instrumentation with core primitives
 
 - Depend on `@prefactor/core` for tracing, context propagation, config, transport helpers.
+- If your adapter exposes helper APIs like `init` + `withSpan`, keep them bound to the same tracer source; if calling core `withSpan` outside adapter helpers, pass an explicit tracer.
 - Wrap provider execution paths in context (`SpanContext.runAsync(...)`) so parent/child spans remain intact.
 - Capture inputs/outputs and usage metadata when available; apply truncation/redaction safeguards.
 - On errors, record span failure data and rethrow the original error.

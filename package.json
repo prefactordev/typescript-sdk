@@ -4,6 +4,7 @@
   "workspaces": ["packages/*"],
   "scripts": {
     "build": "bun run scripts/build.ts",
+    "docs:api": "typedoc --options typedoc.json && cp docs/api-readme.md docs/api/README.md && cp packages/openclaw/README.md docs/api/@prefactor/openclaw/README.md",
     "test": "bun test",
     "test:watch": "bun test --watch",
     "typecheck": "tsc --build",
@@ -26,6 +27,8 @@
     "ai": "^6.0.86",
     "bun-types": "latest",
     "langchain": "^1.2.24",
+    "typedoc": "^0.28.17",
+    "typedoc-plugin-markdown": "^4.10.0",
     "typescript": "^5.9.3",
     "zod": "^4.3.6"
   },
