@@ -2,6 +2,7 @@ import { Command } from 'commander';
 import packageJson from '../package.json';
 import { registerAccountsCommands } from './commands/accounts.js';
 import { registerAdminCommands } from './commands/admin.js';
+import { registerLoginCommand } from './commands/login.js';
 import { registerAgentInstancesCommands } from './commands/agent-instances.js';
 import { registerAgentSchemaVersionsCommands } from './commands/agent-schema-versions.js';
 import { registerAgentSpansCommands } from './commands/agent-spans.js';
@@ -46,6 +47,7 @@ export function createCli(version: string): Command {
     ].join('\n')
   );
 
+  registerLoginCommand(program);
   registerProfilesCommands(program);
   registerAccountsCommands(program);
   registerAgentsCommands(program);
