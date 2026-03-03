@@ -51,7 +51,7 @@ export interface PrefactorProvider {
   getDefaultAgentSchema?: () => Record<string, unknown> | undefined;
 }
 
-let globalClient: PrefactorClient | null = null;
+let prefactorClient: PrefactorClient | null = null;
 
 export class PrefactorClient {
   private readonly core: CoreRuntime;
@@ -117,7 +117,7 @@ export class PrefactorClient {
     try {
       await this.core.shutdown();
     } finally {
-      globalClient = null;
+      prefactorClient = null;
     }
   }
 }
@@ -141,8 +141,8 @@ export interface PrefactorOptions {
  * @returns Global Prefactor client instance.
  */
 export function init(options: PrefactorOptions): PrefactorClient {
-  if (globalClient) {
-    return globalClient;
+  if (prefactorClient) {
+    return prefactorClient;
   }
 
   configureLogging();
@@ -170,9 +170,9 @@ export function init(options: PrefactorOptions): PrefactorClient {
 
   const middleware = options.provider.createMiddleware(core.tracer, core.agentManager, finalConfig);
 
-  globalClient = new PrefactorClient(core, middleware, options.provider);
+  prefactorClient = new PrefactorClient(core, middleware, options.provider);
 
-  return globalClient;
+  return prefactorClient;
 }
 
 /**
@@ -181,5 +181,5 @@ export function init(options: PrefactorOptions): PrefactorClient {
  * @returns Active global client or `null`.
  */
 export function getClient(): PrefactorClient | null {
-  return globalClient;
+  return prefactorClient;
 }
