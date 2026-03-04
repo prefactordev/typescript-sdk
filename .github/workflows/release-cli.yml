@@ -1,0 +1,75 @@
+name: Release CLI Binaries
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - target: bun-linux-x64
+            outfile: prefactor-linux-x64
+          - target: bun-linux-arm64
+            outfile: prefactor-linux-arm64
+          - target: bun-darwin-x64
+            outfile: prefactor-macos-x64
+          - target: bun-darwin-arm64
+            outfile: prefactor-macos-arm64
+          - target: bun-windows-x64
+            outfile: prefactor-windows-x64.exe
+          - target: bun-windows-arm64
+            outfile: prefactor-windows-arm64.exe
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+      - run: |
+          bun build \
+            --compile \
+            --target=${{ matrix.target }} \
+            --minify \
+            packages/cli/src/bin/cli.ts \
+            --outfile dist/cli/${{ matrix.outfile }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: prefactor-${{ matrix.target }}
+          path: dist/cli/${{ matrix.outfile }}
+
+  release:
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist/cli
+          merge-multiple: true
+      - name: Create versioned release
+        if: github.ref_type == 'tag'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          prerelease: false
+          files: dist/cli/*
+      - name: Delete canary tag
+        if: github.ref_type != 'tag'
+        run: |
+          git push origin :refs/tags/canary || true
+          git tag -d canary || true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Create canary release
+        if: github.ref_type != 'tag'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: canary
+          prerelease: true
+          files: dist/cli/*
