@@ -130,6 +130,7 @@ class ReplayQueue {
  * @property openclawVersion - Version string of the OpenClaw runtime (used in the agent version identifier).
  * @property pluginVersion - Version string of the Prefactor plugin (used in the agent and schema version identifiers).
  * @property userAgentVersion - Caller-supplied version tag appended to the agent version identifier.
+ * @property userAgentName - Human-readable name for this agent shown in the Prefactor UI. Defaults to `"OpenClaw Agent"`.
  */
 export interface AgentConfig {
   apiUrl: string;
@@ -141,6 +142,7 @@ export interface AgentConfig {
   openclawVersion?: string;
   pluginVersion?: string;
   userAgentVersion?: string;
+  userAgentName?: string;
 }
 
 /**
@@ -199,10 +201,11 @@ export class Agent {
     const pluginVersion = config.pluginVersion || '0.0.0';
     const userVersion = config.userAgentVersion || 'default';
 
+    const agentName = config.userAgentName || 'OpenClaw Agent';
     this.agentVersion = {
       external_identifier: `openclaw-${openclawVersion}-plugin-${pluginVersion}-${userVersion}`,
-      name: 'OpenClaw Agent',
-      description: `OpenClaw ${openclawVersion} with Prefactor Plugin ${pluginVersion}`,
+      name: agentName,
+      description: `${agentName} — OpenClaw ${openclawVersion} with Prefactor Plugin ${pluginVersion}`,
     } satisfies AgentVersionForRegister;
 
     this.agentSchemaVersion = {

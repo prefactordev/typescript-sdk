@@ -1,16 +1,17 @@
 {
   "id": "prefactor",
   "name": "@prefactor/openclaw",
-  "version": "0.0.19",
+  "version": "0.0.20",
   "description": "Comprehensive lifecycle event monitoring and instrumentation for OpenClaw",
   "runtime": "node",
   "entry": "./dist/index.js",
+  "skills": ["./skills"],
   "configSchema": {
     "type": "object",
     "properties": {
       "apiUrl": {
         "type": "string",
-        "description": "Prefactor API URL (e.g., https://app.prefactorai.com)"
+        "description": "Prefactor API URL (e.g. https://app.prefactorai.com)"
       },
       "apiToken": {
         "type": "string",
@@ -19,6 +20,10 @@
       "agentId": {
         "type": "string",
         "description": "Agent ID registered in Prefactor"
+      },
+      "agentName": {
+        "type": "string",
+        "description": "Human-readable name for this agent shown in the Prefactor UI (e.g. \"My Support Bot\")"
       },
       "agentVersion": {
         "type": "string",
@@ -60,6 +65,10 @@
     "agentId": {
       "label": "Agent ID",
       "placeholder": "your-agent-id"
+    },
+    "agentName": {
+      "label": "Agent Name",
+      "placeholder": "OpenClaw Agent"
     },
     "agentVersion": {
       "label": "Agent Version Suffix",
