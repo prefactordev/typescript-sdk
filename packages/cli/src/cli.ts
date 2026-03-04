@@ -2,7 +2,6 @@ import { Command } from 'commander';
 import packageJson from '../package.json';
 import { registerAccountsCommands } from './commands/accounts.js';
 import { registerAdminCommands } from './commands/admin.js';
-import { registerLoginCommand } from './commands/login.js';
 import { registerAgentInstancesCommands } from './commands/agent-instances.js';
 import { registerAgentSchemaVersionsCommands } from './commands/agent-schema-versions.js';
 import { registerAgentSpansCommands } from './commands/agent-spans.js';
@@ -10,6 +9,7 @@ import { registerAgentVersionsCommands } from './commands/agent-versions.js';
 import { registerAgentsCommands } from './commands/agents.js';
 import { registerApiTokensCommands } from './commands/api-tokens.js';
 import { registerEnvironmentsCommands } from './commands/environments.js';
+import { registerLoginCommand } from './commands/login.js';
 import { registerProfilesCommands } from './commands/profiles.js';
 import { registerUtilitiesCommands } from './commands/utilities.js';
 

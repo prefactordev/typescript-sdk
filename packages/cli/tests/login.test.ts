@@ -9,15 +9,21 @@ import { DEFAULT_BASE_URL, DEFAULT_PROFILE_NAME, ProfileManager } from '../src/p
 
 describe('buildLoginUrl', () => {
   test('appends /cli-login to plain base URL', () => {
-    expect(buildLoginUrl('https://app.prefactorai.com')).toBe('https://app.prefactorai.com/cli-login');
+    expect(buildLoginUrl('https://app.prefactorai.com')).toBe(
+      'https://app.prefactorai.com/cli-login'
+    );
   });
 
   test('strips trailing slash before appending', () => {
-    expect(buildLoginUrl('https://app.prefactorai.com/')).toBe('https://app.prefactorai.com/cli-login');
+    expect(buildLoginUrl('https://app.prefactorai.com/')).toBe(
+      'https://app.prefactorai.com/cli-login'
+    );
   });
 
   test('strips multiple trailing slashes', () => {
-    expect(buildLoginUrl('https://app.prefactorai.com///')).toBe('https://app.prefactorai.com/cli-login');
+    expect(buildLoginUrl('https://app.prefactorai.com///')).toBe(
+      'https://app.prefactorai.com/cli-login'
+    );
   });
 });
 
@@ -95,7 +101,9 @@ describe('login command action', () => {
       console.log = originalLog;
     }
 
-    expect(logs.join('\n')).toContain(`Opening your browser to: ${buildLoginUrl(DEFAULT_BASE_URL)}`);
+    expect(logs.join('\n')).toContain(
+      `Opening your browser to: ${buildLoginUrl(DEFAULT_BASE_URL)}`
+    );
   });
 
   test('uses existing default profile custom base_url for login URL and preserves it on save', async () => {
