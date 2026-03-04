@@ -7,7 +7,7 @@
   "module": "dist/index.js",
   "types": "dist/index.d.ts",
   "bin": {
-    "prefactor": "dist/bin/cli.js"
+    "prefactor": "bin/shim.js"
   },
   "exports": {
     ".": {
@@ -17,8 +17,13 @@
     }
   },
   "files": [
-    "dist"
+    "dist",
+    "bin/shim.js",
+    "scripts/postinstall.js"
   ],
+  "scripts": {
+    "postinstall": "node scripts/postinstall.js"
+  },
   "keywords": [
     "prefactor",
     "cli",
@@ -27,7 +32,7 @@
   "author": "Prefactor",
   "license": "MIT",
   "dependencies": {
-    "@prefactor/core": "0.2.9",
+    "@prefactor/core": "workspace:*",
     "@prefactor/pfid": "^0.1.0",
     "commander": "^14.0.1",
     "zod": "^4.0.0"
