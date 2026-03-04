@@ -59,6 +59,8 @@ export function registerLoginCommand(program: Command, deps: LoginDeps = default
       validateToken(token);
 
       await manager.addProfile(DEFAULT_PROFILE_NAME, token, baseUrl);
-      console.log(`Authentication successful. Credentials saved to the '${DEFAULT_PROFILE_NAME}' profile.`);
+      console.log(
+        `Authentication successful. Credentials saved to the '${DEFAULT_PROFILE_NAME}' profile.`
+      );
     });
 }
