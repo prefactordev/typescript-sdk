@@ -48,3 +48,7 @@ docs/plans/
 
 # Prefactor CLI profile
 prefactor.json
+
+# CLI binaries placed by postinstall (never committed)
+packages/cli/bin/prefactor
+packages/cli/bin/prefactor.exe

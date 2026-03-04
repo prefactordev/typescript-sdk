@@ -7,7 +7,7 @@
   "module": "dist/index.js",
   "types": "dist/index.d.ts",
   "bin": {
-    "prefactor": "dist/bin/cli.js"
+    "prefactor": "bin/shim.js"
   },
   "exports": {
     ".": {
@@ -17,8 +17,13 @@
     }
   },
   "files": [
-    "dist"
+    "dist",
+    "bin/shim.js",
+    "scripts/postinstall.js"
   ],
+  "scripts": {
+    "postinstall": "node scripts/postinstall.js"
+  },
   "keywords": [
     "prefactor",
     "cli",
