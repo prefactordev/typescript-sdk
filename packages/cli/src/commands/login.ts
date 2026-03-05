@@ -1,16 +1,15 @@
-import { exec } from 'node:child_process';
 import { createInterface } from 'node:readline';
 import type { Command } from 'commander';
 import { DEFAULT_BASE_URL, DEFAULT_PROFILE_NAME, ProfileManager } from '../profile-manager.js';
 
 export function buildLoginUrl(baseUrl: string): string {
-  return `${baseUrl.replace(/\/+$/, '')}/cli-login`;
+  return `${baseUrl.replace(/\/+$/, '')}/cli/connect`;
 }
 
 function openBrowserImpl(url: string): void {
   const cmd =
     process.platform === 'darwin' ? 'open' : process.platform === 'win32' ? 'start' : 'xdg-open';
-  exec(`${cmd} "${url}"`); // fire-and-forget; errors silently ignored
+  Bun.spawn([cmd, url]); // fire-and-forget; errors silently ignored
 }
 
 async function promptForTokenImpl(prompt: string): Promise<string> {
