@@ -117,7 +117,7 @@ describe('HttpTransport', () => {
 
     const finishCall = fetchCalls[2];
     const finishPayload = JSON.parse(String(finishCall?.options?.body)) as Record<string, unknown>;
-    expect(finishPayload).toEqual({
+    expect(finishPayload).toMatchObject({
       timestamp: '2023-11-14T22:13:20.000Z',
       status: 'complete',
       result_payload: { result: 'ok' },

@@ -1,4 +1,5 @@
 import { HttpClientError, type HttpRequester } from './http-client.js';
+import { ensureIdempotencyKey } from './idempotency.js';
 
 export type AgentSpanStatus = 'active' | 'complete' | 'failed';
 
@@ -37,7 +38,7 @@ export class AgentSpanClient {
   create(payload: AgentSpanCreatePayload): Promise<AgentSpanResponse> {
     return this.httpClient.request('/api/v1/agent_spans', {
       method: 'POST',
-      body: payload,
+      body: { ...payload, idempotency_key: ensureIdempotencyKey(payload.idempotency_key) },
     });
   }
 
@@ -52,6 +53,7 @@ export class AgentSpanClient {
         body: {
           timestamp,
           ...options,
+          idempotency_key: ensureIdempotencyKey(options.idempotency_key),
         },
       });
     } catch (error) {

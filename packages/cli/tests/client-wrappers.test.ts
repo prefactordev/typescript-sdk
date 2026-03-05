@@ -223,7 +223,9 @@ describe('resource clients', () => {
       const url = new URL(call?.url ?? 'https://example.com');
       expect(url.pathname).toBe(check.path);
       expect(call?.init?.method).toBe(check.method);
-      expect(call?.init?.body).toBe(check.body);
+      const body = JSON.parse(String(call?.init?.body)) as Record<string, unknown>;
+      const { idempotency_key: _key, ...rest } = body;
+      expect(JSON.stringify(rest)).toBe(check.body);
     }
   });
 

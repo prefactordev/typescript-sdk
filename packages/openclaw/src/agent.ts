@@ -389,7 +389,7 @@ export class Agent {
     }
 
     try {
-      const idempotencyKey = `instance-${sessionKey}-${Date.now()}`;
+      const idempotencyKey = crypto.randomUUID();
 
       this.logger.debug('register_agent_instance', { sessionKey, idempotencyKey });
 
@@ -420,7 +420,7 @@ export class Agent {
       });
 
       // Queue for retry
-      const idempotencyKey = `instance-${sessionKey}-${Date.now()}`;
+      const idempotencyKey = crypto.randomUUID();
       this.replayQueue.add({
         type: 'register_instance',
         sessionKey,
@@ -445,7 +445,7 @@ export class Agent {
     }
 
     try {
-      const idempotencyKey = `instance-start-${sessionKey}-${Date.now()}`;
+      const idempotencyKey = crypto.randomUUID();
       const timestamp = new Date().toISOString();
 
       this.logger.debug('start_agent_instance', { sessionKey, instanceId: session.instanceId });
@@ -468,7 +468,7 @@ export class Agent {
       });
 
       // Queue for retry
-      const idempotencyKey = `instance-start-${sessionKey}-${Date.now()}`;
+      const idempotencyKey = crypto.randomUUID();
       this.replayQueue.add({
         type: 'start_instance',
         sessionKey,
@@ -490,7 +490,7 @@ export class Agent {
     }
 
     try {
-      const idempotencyKey = `instance-finish-${sessionKey}-${Date.now()}`;
+      const idempotencyKey = crypto.randomUUID();
       const timestamp = new Date().toISOString();
 
       this.logger.debug('finish_agent_instance', {
@@ -518,7 +518,7 @@ export class Agent {
       });
 
       // Queue for retry
-      const idempotencyKey = `instance-finish-${sessionKey}-${Date.now()}`;
+      const idempotencyKey = crypto.randomUUID();
       this.replayQueue.add({
         type: 'finish_instance',
         sessionKey,
@@ -551,7 +551,7 @@ export class Agent {
     const clientSpanId = `span-${sessionKey}-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
 
     try {
-      const idempotencyKey = `${clientSpanId}`;
+      const idempotencyKey = crypto.randomUUID();
 
       // Log instance details for debugging schema issues
       this.logger.info('create_span_instance_debug', {
@@ -629,7 +629,7 @@ export class Agent {
     resultPayload?: Record<string, unknown>
   ): Promise<void> {
     try {
-      const idempotencyKey = `${spanId}-finish-${Date.now()}`;
+      const idempotencyKey = crypto.randomUUID();
       const timestamp = new Date().toISOString();
 
       this.logger.debug('finish_span', { sessionKey, spanId, status, resultPayload });
@@ -649,7 +649,7 @@ export class Agent {
       });
 
       // Queue for retry
-      const idempotencyKey = `${spanId}-finish-${Date.now()}`;
+      const idempotencyKey = crypto.randomUUID();
       this.replayQueue.add({
         type: 'finish_span',
         sessionKey,

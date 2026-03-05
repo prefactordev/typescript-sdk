@@ -604,7 +604,7 @@ export default function register(api: OpenClawPluginApi) {
 
   // ==================== SUBAGENT LIFECYCLE ====================
 
-  api.on('subagent_spawning', (event, ctx) => {
+  api.on('subagent_spawning', (event, _ctx) => {
     logger.info('subagent_spawning', {
       childSessionKey: event.childSessionKey,
       agentId: event.agentId,
@@ -613,19 +613,19 @@ export default function register(api: OpenClawPluginApi) {
     });
   });
 
-  api.on('subagent_delivery_target', (event, ctx) => {
+  api.on('subagent_delivery_target', (event, _ctx) => {
     logger.info('subagent_delivery_target', {
       event: JSON.stringify(event).slice(0, 200),
     });
   });
 
-  api.on('subagent_spawned', (event, ctx) => {
+  api.on('subagent_spawned', (event, _ctx) => {
     logger.info('subagent_spawned', {
       event: JSON.stringify(event).slice(0, 200),
     });
   });
 
-  api.on('subagent_ended', (event, ctx) => {
+  api.on('subagent_ended', (event, _ctx) => {
     logger.info('subagent_ended', {
       targetSessionKey: event.targetSessionKey,
       targetKind: event.targetKind,
