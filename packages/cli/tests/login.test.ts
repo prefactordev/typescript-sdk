@@ -8,21 +8,21 @@ import { buildLoginUrl, registerLoginCommand, validateToken } from '../src/comma
 import { DEFAULT_BASE_URL, DEFAULT_PROFILE_NAME, ProfileManager } from '../src/profile-manager.js';
 
 describe('buildLoginUrl', () => {
-  test('appends /cli-login to plain base URL', () => {
+  test('appends /cli/connect to plain base URL', () => {
     expect(buildLoginUrl('https://app.prefactorai.com')).toBe(
-      'https://app.prefactorai.com/cli-login'
+      'https://app.prefactorai.com/cli/connect'
     );
   });
 
   test('strips trailing slash before appending', () => {
     expect(buildLoginUrl('https://app.prefactorai.com/')).toBe(
-      'https://app.prefactorai.com/cli-login'
+      'https://app.prefactorai.com/cli/connect'
     );
   });
 
   test('strips multiple trailing slashes', () => {
     expect(buildLoginUrl('https://app.prefactorai.com///')).toBe(
-      'https://app.prefactorai.com/cli-login'
+      'https://app.prefactorai.com/cli/connect'
     );
   });
 });
@@ -133,8 +133,8 @@ describe('login command action', () => {
       console.log = originalLog;
     }
 
-    expect(logs.join('\n')).toContain('https://custom.example.com/cli-login');
-    expect(openBrowser).toHaveBeenCalledWith('https://custom.example.com/cli-login');
+    expect(logs.join('\n')).toContain('https://custom.example.com/cli/connect');
+    expect(openBrowser).toHaveBeenCalledWith('https://custom.example.com/cli/connect');
 
     const manager = await ProfileManager.create();
     const profile = manager.getProfile(DEFAULT_PROFILE_NAME);
