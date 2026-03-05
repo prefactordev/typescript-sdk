@@ -41,15 +41,21 @@ describe('HTTP endpoint clients', () => {
       agent_version: { external_identifier: 'v1.0.0', name: 'Test Agent', description: 'test' },
       agent_schema_version: { type: 'object' },
     });
-    expect((calls[0].options.body as Record<string, unknown>).idempotency_key).toMatch(UUID_V4_REGEX);
+    expect((calls[0].options.body as Record<string, unknown>).idempotency_key).toMatch(
+      UUID_V4_REGEX
+    );
 
     expect(calls[1].path).toBe('/api/v1/agent_instance/agent-instance-1/start');
     expect(calls[1].options.method).toBe('POST');
-    expect((calls[1].options.body as Record<string, unknown>).idempotency_key).toMatch(UUID_V4_REGEX);
+    expect((calls[1].options.body as Record<string, unknown>).idempotency_key).toMatch(
+      UUID_V4_REGEX
+    );
 
     expect(calls[2].path).toBe('/api/v1/agent_instance/agent-instance-1/finish');
     expect(calls[2].options.method).toBe('POST');
-    expect((calls[2].options.body as Record<string, unknown>).idempotency_key).toMatch(UUID_V4_REGEX);
+    expect((calls[2].options.body as Record<string, unknown>).idempotency_key).toMatch(
+      UUID_V4_REGEX
+    );
   });
 
   test('agent span client posts create and finish to expected endpoints', async () => {
@@ -102,7 +108,9 @@ describe('HTTP endpoint clients', () => {
         finished_at: '2026-02-09T00:00:01.000Z',
       },
     });
-    expect((calls[0].options.body as Record<string, unknown>).idempotency_key).toMatch(UUID_V4_REGEX);
+    expect((calls[0].options.body as Record<string, unknown>).idempotency_key).toMatch(
+      UUID_V4_REGEX
+    );
 
     expect(calls[1].path).toBe('/api/v1/agent_spans/backend-span-1/finish');
     expect(calls[1].options.method).toBe('POST');
@@ -111,7 +119,9 @@ describe('HTTP endpoint clients', () => {
       status: 'complete',
       result_payload: { text: 'world' },
     });
-    expect((calls[1].options.body as Record<string, unknown>).idempotency_key).toMatch(UUID_V4_REGEX);
+    expect((calls[1].options.body as Record<string, unknown>).idempotency_key).toMatch(
+      UUID_V4_REGEX
+    );
   });
 });
 

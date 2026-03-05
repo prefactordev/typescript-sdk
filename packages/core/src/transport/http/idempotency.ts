@@ -5,9 +5,7 @@ export function ensureIdempotencyKey(key?: string): string {
     return crypto.randomUUID();
   }
   if (key.length > MAX_KEY_LENGTH) {
-    throw new Error(
-      `idempotency_key must be ≤${MAX_KEY_LENGTH} characters, got ${key.length}`
-    );
+    throw new Error(`idempotency_key must be ≤${MAX_KEY_LENGTH} characters, got ${key.length}`);
   }
   return key;
 }
