@@ -1,4 +1,5 @@
 import type { HttpRequester } from './http-client.js';
+import { ensureIdempotencyKey } from './idempotency.js';
 
 export type AgentInstanceRegisterPayload = {
   agent_id?: string;
@@ -34,7 +35,7 @@ export class AgentInstanceClient {
   register(payload: AgentInstanceRegisterPayload): Promise<AgentInstanceResponse> {
     return this.httpClient.request('/api/v1/agent_instance/register', {
       method: 'POST',
-      body: payload,
+      body: { ...payload, idempotency_key: ensureIdempotencyKey(payload.idempotency_key) },
     });
   }
 
@@ -42,9 +43,10 @@ export class AgentInstanceClient {
     agentInstanceId: string,
     options?: AgentInstanceStartOptions
   ): Promise<AgentInstanceResponse> {
+    const opts = options ?? {};
     return this.httpClient.request(`/api/v1/agent_instance/${agentInstanceId}/start`, {
       method: 'POST',
-      body: options ?? {},
+      body: { ...opts, idempotency_key: ensureIdempotencyKey(opts.idempotency_key) },
     });
   }
 
@@ -52,9 +54,10 @@ export class AgentInstanceClient {
     agentInstanceId: string,
     options?: AgentInstanceFinishOptions
   ): Promise<AgentInstanceResponse> {
+    const opts = options ?? {};
     return this.httpClient.request(`/api/v1/agent_instance/${agentInstanceId}/finish`, {
       method: 'POST',
-      body: options ?? {},
+      body: { ...opts, idempotency_key: ensureIdempotencyKey(opts.idempotency_key) },
     });
   }
 }
