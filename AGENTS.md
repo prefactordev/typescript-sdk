@@ -123,7 +123,7 @@ This file guides coding agents working in this repo.
 ## Config and env vars
 - Config is defined in `packages/core/src/config.ts` using Zod.
 - Prefer adding new settings with env var fallbacks.
-- Existing env vars include `PREFACTOR_TRANSPORT`, `PREFACTOR_API_URL`, `PREFACTOR_API_TOKEN`.
+- Existing env vars include `PREFACTOR_API_URL`, `PREFACTOR_API_TOKEN`.
 - Sampling and capture flags: `PREFACTOR_SAMPLE_RATE`, `PREFACTOR_CAPTURE_INPUTS`, `PREFACTOR_CAPTURE_OUTPUTS`.
 - Payload limits: `PREFACTOR_MAX_INPUT_LENGTH`, `PREFACTOR_MAX_OUTPUT_LENGTH`.
 - Logging: `PREFACTOR_LOG_LEVEL`.

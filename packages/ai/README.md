@@ -87,7 +87,6 @@ import {
 
 The SDK can be configured using environment variables:
 
-- `PREFACTOR_TRANSPORT`: `"http"` (default: `"http"`)
 - `PREFACTOR_API_URL`: API endpoint for HTTP transport
 - `PREFACTOR_API_TOKEN`: Authentication token for HTTP transport
 - `PREFACTOR_AGENT_ID`: Optional agent instance identifier

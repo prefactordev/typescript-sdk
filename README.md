@@ -123,7 +123,6 @@ Refer to the [Vercel AI SDK specific documentation](./packages/ai/README.md) for
 
 The SDK can be configured using environment variables:
 
-- `PREFACTOR_TRANSPORT`: `"http"` (default: `"http"`)
 - `PREFACTOR_API_URL`: API endpoint for HTTP transport
 - `PREFACTOR_API_TOKEN`: Authentication token for HTTP transport
 - `PREFACTOR_SAMPLE_RATE`: Sampling rate 0.0-1.0 (default: `1.0`)
