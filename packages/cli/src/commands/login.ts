@@ -1,4 +1,3 @@
-import { createInterface } from 'node:readline';
 import type { Command } from 'commander';
 import { DEFAULT_BASE_URL, DEFAULT_PROFILE_NAME, ProfileManager } from '../profile-manager.js';
 
@@ -13,12 +12,50 @@ function openBrowserImpl(url: string): void {
 }
 
 async function promptForTokenImpl(prompt: string): Promise<string> {
-  const rl = createInterface({ input: process.stdin, output: process.stdout });
+  process.stdout.write(prompt);
+
+  const isTTY = process.stdin.isTTY;
+  if (isTTY) {
+    process.stdin.setRawMode(true);
+  }
+
   return new Promise((resolve) => {
-    rl.question(prompt, (answer) => {
-      rl.close();
-      resolve(answer.trim());
-    });
+    let input = '';
+
+    function onData(chunk: Buffer) {
+      const str = chunk.toString('utf8');
+      for (const char of str) {
+        const code = char.charCodeAt(0);
+        if (char === '\r' || char === '\n') {
+          cleanup('\n');
+          resolve(input.trim());
+          return;
+        }
+        if (code === 3) {
+          // Ctrl+C
+          cleanup('\n');
+          process.exit(1);
+        }
+        if (code === 127 || code === 8) {
+          // Backspace
+          input = input.slice(0, -1);
+        } else {
+          input += char;
+        }
+      }
+    }
+
+    function cleanup(suffix: string) {
+      if (isTTY) {
+        process.stdin.setRawMode(false);
+      }
+      process.stdin.removeListener('data', onData);
+      process.stdin.pause();
+      process.stdout.write(suffix);
+    }
+
+    process.stdin.resume();
+    process.stdin.on('data', onData);
   });
 }
 
