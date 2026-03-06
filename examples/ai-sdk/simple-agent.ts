@@ -123,7 +123,6 @@ async function main() {
 
   // Initialize @prefactor/ai
   // Config is picked up from environment variables:
-  // - PREFACTOR_TRANSPORT: 'http'
   // - PREFACTOR_API_URL: API endpoint for HTTP transport
   // - PREFACTOR_API_TOKEN: API token for HTTP transport
   // - PREFACTOR_AGENT_ID: Optional agent identifier

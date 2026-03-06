@@ -76,7 +76,6 @@ Core initialization/lifecycle utilities come from `@prefactor/core`.
 
 ### Environment Variables
 
-- `PREFACTOR_TRANSPORT`: `"http"` (default: `"http"`)
 - `PREFACTOR_API_URL`: API endpoint for HTTP transport
 - `PREFACTOR_API_TOKEN`: Authentication token
 - `PREFACTOR_SAMPLE_RATE`: Sampling rate 0.0-1.0 (default: `1.0`)
