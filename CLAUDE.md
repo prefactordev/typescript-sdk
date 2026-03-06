@@ -12,29 +12,21 @@ This project uses Bun with mise for toolchain management.
 
 ### Setup
 ```bash
-# Install toolchain
-mise install
-
-# Install dependencies
-just install
-# or: bun install
+bun install
 ```
 
 ## Key Commands
 
-All commands use the `just` command runner (see `justfile`):
-
 ```bash
 # Development
-just install          # Install dependencies
-just build            # Build ESM and CJS bundles
-just test             # Run all tests
-just test-watch       # Run tests in watch mode
-just typecheck        # Type check without emitting
-just lint             # Lint with Biome
-just format           # Format code with Biome
-just check            # Run typecheck + lint + test
-just clean            # Remove dist and node_modules
+bun install                                           # Install dependencies
+bun run build                                         # Build ESM and CJS bundles
+bun test                                              # Run all tests
+bun test --watch                                      # Run tests in watch mode
+bun run typecheck                                     # Type check without emitting
+bun run lint                                          # Lint with Biome
+bun run format                                        # Format code with Biome
+bun run typecheck && bun run lint && bun test         # Run typecheck + lint + test
 
 # Run single test file
 bun test tests/tracing/tracer.test.ts
