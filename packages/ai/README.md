@@ -21,17 +21,24 @@ bun add @prefactor/core ai
 ## Quick Start
 
 ```typescript
-import { init, shutdown } from '@prefactor/ai';
+import { init } from '@prefactor/core';
+import { PrefactorAISDK } from '@prefactor/ai';
 import { generateText, wrapLanguageModel } from 'ai';
 import { anthropic } from '@ai-sdk/anthropic';
 
-// Initialize Prefactor (defaults to stdio transport)
-const middleware = init();
+const prefactor = init({
+  provider: new PrefactorAISDK(),
+  httpConfig: {
+    apiUrl: process.env.PREFACTOR_API_URL!,
+    apiToken: process.env.PREFACTOR_API_TOKEN!,
+    agentIdentifier: '1.0.0',
+  },
+});
 
 // Wrap your model with the middleware
 const model = wrapLanguageModel({
   model: anthropic('claude-3-haiku-20240307'),
-  middleware,
+  middleware: prefactor.getMiddleware(),
 });
 
 // All operations are automatically traced!
@@ -42,52 +49,36 @@ const result = await generateText({
 
 console.log(result.text);
 
-// Graceful shutdown
-await shutdown();
+await prefactor.shutdown();
 ```
 
 ## Exports
 
-### Main Entry Points
+### Provider
 
 ```typescript
 import {
-  init,                   // Initialize SDK and return middleware
-  shutdown,              // Flush spans and close connections
-  getTracer,             // Get tracer for manual instrumentation
+  PrefactorAISDK,
+  DEFAULT_AI_AGENT_SCHEMA,
 } from '@prefactor/ai';
-```
-
-### Middleware
-
-```typescript
-import { createPrefactorMiddleware } from '@prefactor/ai';
 ```
 
 ### Types
 
 ```typescript
 import type {
-  CallData,
+  LanguageModelMiddleware,
   MiddlewareConfig,
 } from '@prefactor/ai';
 ```
 
-### Re-exports from @prefactor/core
-
-For convenience, common types are re-exported:
+Core initialization and lifecycle utilities come from `@prefactor/core`:
 
 ```typescript
 import {
-  type Config,
-  type CoreRuntime,
-  type ErrorInfo,
-  type HttpTransportConfig,
-  type Span,
-  type TokenUsage,
-  SpanStatus,
-  SpanType,
-} from '@prefactor/ai';
+  init,
+  type PrefactorOptions,
+} from '@prefactor/core';
 ```
 
 ## Configuration
@@ -96,7 +87,6 @@ import {
 
 The SDK can be configured using environment variables:
 
-- `PREFACTOR_TRANSPORT`: `"stdio"` | `"http"` (default: `"stdio"`)
 - `PREFACTOR_API_URL`: API endpoint for HTTP transport
 - `PREFACTOR_API_TOKEN`: Authentication token for HTTP transport
 - `PREFACTOR_AGENT_ID`: Optional agent instance identifier
@@ -110,14 +100,13 @@ The SDK can be configured using environment variables:
 ### Programmatic Configuration
 
 ```typescript
-import { init } from '@prefactor/ai';
+import { init } from '@prefactor/core';
+import { PrefactorAISDK } from '@prefactor/ai';
 
-// STDIO transport (default)
-const middleware = init();
-
-// HTTP transport
-const middleware = init({
-  transportType: 'http',
+const prefactor = init({
+  provider: new PrefactorAISDK({
+    middleware: { captureContent: false },
+  }),
   httpConfig: {
     apiUrl: 'https://app.prefactorai.com',
     apiToken: process.env.PREFACTOR_API_TOKEN!,
@@ -127,12 +116,6 @@ const middleware = init({
     agentDescription: 'An AI agent',
   },
 });
-
-// With middleware-specific configuration
-const middleware = init(
-  { transportType: 'stdio' },
-  { captureContent: false } // Don't capture prompts/responses
-);
 ```
 
 ## What Gets Traced
@@ -146,31 +129,24 @@ The middleware automatically captures:
 
 ## Manual Instrumentation
 
-For operations not automatically traced:
+For operations not automatically traced, use `prefactor.withSpan(...)` from the core client.
 
 ```typescript
-import { getTracer, SpanType } from '@prefactor/ai';
-
-const tracer = getTracer();
-
-const span = tracer.startSpan({
-  name: 'custom-operation',
-  spanType: SpanType.TOOL,
-  inputs: { data: 'example' },
-});
-
-try {
-  const result = await doWork();
-  tracer.endSpan(span, { outputs: { result } });
-} catch (error) {
-  tracer.endSpan(span, { error });
-}
+await prefactor.withSpan(
+  {
+    name: 'custom-operation',
+    spanType: 'ai-sdk:tool',
+    inputs: { data: 'example' },
+  },
+  async () => doWork()
+);
 ```
 
 ## Complete Example with Tools
 
 ```typescript
-import { init, shutdown } from '@prefactor/ai';
+import { init } from '@prefactor/core';
+import { PrefactorAISDK } from '@prefactor/ai';
 import { generateText, wrapLanguageModel, tool } from 'ai';
 import { anthropic } from '@ai-sdk/anthropic';
 import { z } from 'zod';
@@ -192,11 +168,18 @@ const calculatorTool = tool({
   },
 });
 
-const middleware = init();
+const prefactor = init({
+  provider: new PrefactorAISDK(),
+  httpConfig: {
+    apiUrl: process.env.PREFACTOR_API_URL!,
+    apiToken: process.env.PREFACTOR_API_TOKEN!,
+    agentIdentifier: '1.0.0',
+  },
+});
 
 const model = wrapLanguageModel({
   model: anthropic('claude-3-haiku-20240307'),
-  middleware,
+  middleware: prefactor.getMiddleware(),
 });
 
 const result = await generateText({
@@ -208,18 +191,28 @@ const result = await generateText({
 });
 
 console.log(result.text);
-await shutdown();
+await prefactor.shutdown();
 ```
 
 ## Graceful Shutdown
 
-Always call `shutdown()` before your application exits to ensure all pending spans are flushed:
+Always call `prefactor.shutdown()` before your application exits to ensure all pending spans are flushed:
 
 ```typescript
-import { shutdown } from '@prefactor/ai';
+import { init } from '@prefactor/core';
+import { PrefactorAISDK } from '@prefactor/ai';
+
+const prefactor = init({
+  provider: new PrefactorAISDK(),
+  httpConfig: {
+    apiUrl: process.env.PREFACTOR_API_URL!,
+    apiToken: process.env.PREFACTOR_API_TOKEN!,
+    agentIdentifier: '1.0.0',
+  },
+});
 
 process.on('SIGTERM', async () => {
-  await shutdown();
+  await prefactor.shutdown();
   process.exit(0);
 });
 ```

@@ -149,7 +149,7 @@ export function init(
 
   // Build httpConfig from environment if not provided but HTTP transport is requested
   let configWithHttp = config;
-  const transportType = config?.transportType ?? process.env.PREFACTOR_TRANSPORT ?? 'http';
+  const transportType = config?.transportType ?? 'http';
 
   if (transportType === 'http' && !config?.httpConfig) {
     const apiUrl = process.env.PREFACTOR_API_URL;

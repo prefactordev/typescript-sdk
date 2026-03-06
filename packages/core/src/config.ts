@@ -126,8 +126,7 @@ export function createConfig(options?: Partial<Config>): Config {
   );
 
   const config = {
-    transportType:
-      options?.transportType ?? (process.env.PREFACTOR_TRANSPORT as 'http' | undefined) ?? 'http',
+    transportType: options?.transportType ?? 'http',
     sampleRate: options?.sampleRate ?? parseFloat(process.env.PREFACTOR_SAMPLE_RATE ?? '1.0'),
     captureInputs: options?.captureInputs ?? process.env.PREFACTOR_CAPTURE_INPUTS !== 'false',
     captureOutputs: options?.captureOutputs ?? process.env.PREFACTOR_CAPTURE_OUTPUTS !== 'false',

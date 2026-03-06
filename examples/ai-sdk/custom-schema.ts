@@ -11,7 +11,8 @@
 
 import { anthropic } from '@ai-sdk/anthropic';
 import { generateText, stepCountIs, tool, wrapLanguageModel } from 'ai';
-import { init, shutdown, withSpan } from '@prefactor/ai';
+import { init } from '@prefactor/core';
+import { PrefactorAISDK, type LanguageModelMiddleware } from '@prefactor/ai';
 import { z } from 'zod';
 
 const customSchema = {
@@ -144,84 +145,90 @@ async function main() {
   console.log('='.repeat(80));
   console.log();
 
-  const middleware = init({
-    transportType: 'http',
-    httpConfig: {
-      apiUrl: PREFACTOR_API_URL,
-      apiToken: PREFACTOR_API_TOKEN,
-      agentId: PREFACTOR_AGENT_ID,
-      agentIdentifier: '1.0.0-schema',
-      agentName: 'AI SDK Custom Schema Demo',
-      agentSchema: customSchema,
-    },
-  });
-
-  const model = wrapLanguageModel({
-    model: anthropic('claude-3-haiku-20240307'),
-    middleware,
-  });
-
-  const getTodayDateTool = tool({
-    description: 'Get today\'s date in YYYY-MM-DD format.',
-    inputSchema: z.object({}),
-    execute: async () => new Date().toISOString().slice(0, 10),
-  });
-
-  const result = await generateText({
-    model,
-    prompt:
-      'Use the get_today_date tool, then write a short daily standup update that includes the date and one practical engineering focus for today.',
-    tools: {
-      get_today_date: getTodayDateTool,
-    },
-    toolChoice: 'auto',
-    stopWhen: stepCountIs(2),
-  });
-
-  const responseText = result.text.trim();
-  const toolDate = result.toolResults?.find((entry) => entry.toolName === 'get_today_date')
-    ?.output as string | undefined;
-
-  const resolvedResponse =
-    responseText.length > 0
-      ? responseText
-      : `Today is ${toolDate ?? 'an unknown date'}. Focus: review failing tests, fix the smallest root-cause issue first, and ship with confidence.`;
-
-  const normalizedResponse = await withSpan(
-    {
-      name: 'custom:normalize_response',
-      spanType: 'custom:normalize-response',
-      inputs: {
-        rawLength: resolvedResponse.length,
+  let prefactor: ReturnType<typeof init> | undefined;
+  try {
+    prefactor = init({
+      provider: new PrefactorAISDK(),
+      httpConfig: {
+        apiUrl: PREFACTOR_API_URL,
+        apiToken: PREFACTOR_API_TOKEN,
+        agentId: PREFACTOR_AGENT_ID,
+        agentIdentifier: '1.0.0-schema',
+        agentName: 'AI SDK Custom Schema Demo',
+        agentSchema: customSchema,
       },
-    },
-    async () => resolvedResponse.replace(/\s+/g, ' ').trim()
-  );
+    });
 
-  const summary = await withSpan(
-    {
-      name: 'custom:build_summary',
-      spanType: 'custom:build-summary',
-      inputs: {
-        normalizedLength: normalizedResponse.length,
+    const model = wrapLanguageModel({
+      model: anthropic('claude-3-haiku-20240307'),
+      middleware: prefactor.getMiddleware() as LanguageModelMiddleware,
+    });
+
+    const getTodayDateTool = tool({
+      description: 'Get today\'s date in YYYY-MM-DD format.',
+      inputSchema: z.object({}),
+      execute: async () => new Date().toISOString().slice(0, 10),
+    });
+
+    const result = await generateText({
+      model,
+      prompt:
+        'Use the get_today_date tool, then write a short daily standup update that includes the date and one practical engineering focus for today.',
+      tools: {
+        get_today_date: getTodayDateTool,
       },
-    },
-    async () => ({
-      preview: normalizedResponse.slice(0, 80),
-      wordCount: normalizedResponse.split(/\s+/).filter(Boolean).length,
-    })
-  );
+      toolChoice: 'auto',
+      stopWhen: stepCountIs(2),
+    });
 
-  console.log('Agent Response:');
-  console.log(normalizedResponse);
-  console.log();
-  console.log('Summary:');
-  console.log(summary);
-  console.log();
+    const responseText = result.text.trim();
+    const toolDate = result.toolResults?.find(
+      (entry) => entry.toolName === 'get_today_date'
+    )?.output as string | undefined;
 
-  await shutdown();
-  console.log('Shutdown complete');
-  console.log();
+    const resolvedResponse =
+      responseText.length > 0
+        ? responseText
+        : `Today is ${toolDate ?? 'an unknown date'}. Focus: review failing tests, fix the smallest root-cause issue first, and ship with confidence.`;
+
+    const normalizedResponse = await prefactor.withSpan(
+      {
+        name: 'custom:normalize_response',
+        spanType: 'custom:normalize-response',
+        inputs: {
+          rawLength: resolvedResponse.length,
+        },
+      },
+      async () => resolvedResponse.replace(/\s+/g, ' ').trim()
+    );
+
+    const summary = await prefactor.withSpan(
+      {
+        name: 'custom:build_summary',
+        spanType: 'custom:build-summary',
+        inputs: {
+          normalizedLength: normalizedResponse.length,
+        },
+      },
+      async () => ({
+        preview: normalizedResponse.slice(0, 80),
+        wordCount: normalizedResponse.split(/\s+/).filter(Boolean).length,
+      })
+    );
+
+    console.log('Agent Response:');
+    console.log(normalizedResponse);
+    console.log();
+    console.log('Summary:');
+    console.log(summary);
+    console.log();
+  } finally {
+    if (prefactor) {
+      await prefactor.shutdown();
+      console.log('Shutdown complete');
+      console.log();
+    }
+  }
 }
 
 main().catch((error) => {

@@ -53,6 +53,16 @@
 
 // Agent
 export { AgentInstanceManager } from './agent/instance-manager.js';
+// Client
+export {
+  getClient,
+  init,
+  type ManualSpanOptions,
+  type MiddlewareLike,
+  PrefactorClient,
+  type PrefactorOptions,
+  type PrefactorProvider,
+} from './client.js';
 // Config
 export {
   type Config,
