@@ -106,7 +106,7 @@ export function init(config?: Partial<Config>): AgentMiddleware {
   configureLogging();
 
   let configWithHttp = config;
-  const transportType = config?.transportType ?? process.env.PREFACTOR_TRANSPORT ?? 'http';
+  const transportType = config?.transportType ?? 'http';
 
   if (transportType === 'http' && !config?.httpConfig) {
     const apiUrl = process.env.PREFACTOR_API_URL;

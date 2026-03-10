@@ -25,15 +25,15 @@
     },
     "packages/ai": {
       "name": "@prefactor/ai",
-      "version": "0.2.8",
+      "version": "0.3.0",
       "dependencies": {
-        "@prefactor/core": "workspace:*",
         "@prefactor/pfid": "^0.1.0",
       },
       "devDependencies": {
         "@types/bun": "latest",
       },
       "peerDependencies": {
+        "@prefactor/core": "^0.2.0",
         "ai": "^4.0.0 || ^5.0.0 || ^6.0.0",
       },
     },
@@ -44,7 +44,7 @@
         "prefactor": "dist/bin/cli.js",
       },
       "dependencies": {
-        "@prefactor/core": "0.2.9",
+        "@prefactor/core": "0.3.0",
         "@prefactor/pfid": "^0.1.0",
         "commander": "^14.0.1",
         "zod": "^4.0.0",
@@ -55,7 +55,7 @@
     },
     "packages/core": {
       "name": "@prefactor/core",
-      "version": "0.2.9",
+      "version": "0.3.0",
       "dependencies": {
         "@prefactor/pfid": "^0.1.0",
       },
@@ -65,26 +65,28 @@
     },
     "packages/langchain": {
       "name": "@prefactor/langchain",
-      "version": "0.2.8",
+      "version": "0.3.0",
       "dependencies": {
-        "@prefactor/core": "workspace:*",
         "@prefactor/pfid": "^0.1.0",
       },
       "peerDependencies": {
+        "@prefactor/core": "^0.2.0",
         "langchain": "^1.0.0",
       },
     },
     "packages/openclaw": {
       "name": "@prefactor/openclaw",
-      "version": "0.0.19",
+      "version": "0.0.20",
       "dependencies": {
-        "@prefactor/core": "workspace:*",
         "zod": "^4.0.0",
       },
       "devDependencies": {
         "@types/node": "^22.0.0",
         "openclaw": "^2026.2.24",
         "typescript": "^5.0.0",
+      },
+      "peerDependencies": {
+        "@prefactor/core": "^0.2.0",
       },
     },
   },

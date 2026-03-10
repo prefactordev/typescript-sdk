@@ -6,19 +6,18 @@
  * `@prefactor/ai` connects Vercel AI SDK model calls to Prefactor tracing. It captures
  * agent, model, and tool spans and sends them through your configured transport.
  *
- * The package initializes middleware for `wrapLanguageModel` through `init`, traces both
- * non-streaming and streaming calls automatically, and exposes `withSpan` plus `getTracer`
- * for custom instrumentation needs.
+ * Use this package as a provider for the core `init` function.
  *
- * ## Quick start: wrap a model with Prefactor middleware
+ * ## Quick start
  *
  * ```ts
- * import { init, shutdown } from '@prefactor/ai';
+ * import { init } from '@prefactor/core';
+ * import { PrefactorAISDK } from '@prefactor/ai';
  * import { generateText, wrapLanguageModel } from 'ai';
  * import { anthropic } from '@ai-sdk/anthropic';
  *
- * const middleware = init({
- *   transportType: 'http',
+ * const prefactor = init({
+ *   provider: new PrefactorAISDK(),
  *   httpConfig: {
  *     apiUrl: 'https://app.prefactorai.com',
  *     apiToken: process.env.PREFACTOR_API_TOKEN!,
@@ -28,7 +27,7 @@
  *
  * const model = wrapLanguageModel({
  *   model: anthropic('claude-3-haiku-20240307'),
- *   middleware,
+ *   middleware: prefactor.getMiddleware(),
  * });
  *
  * const result = await generateText({
@@ -36,61 +35,16 @@
  *   prompt: 'Hello!',
  * });
  *
- * await shutdown();
+ * await prefactor.shutdown();
  * ```
  *
- * ## Example: trace custom code
- *
- * ```ts
- * import { withSpan } from '@prefactor/ai';
- *
- * await withSpan(
- *   {
- *     name: 'hydrate-user-context',
- *     spanType: 'ai-sdk:chain',
- *     inputs: { userId: 'u_123' },
- *   },
- *   async () => {
- *     // custom app logic before/after model calls
- *   }
- * );
- * ```
- *
- * @module @prefactor/packages/ai
+ * @module @prefactor/ai
  * @category Packages
  * @packageDocumentation
  */
 
-// ============================================================================
-// Initialization Exports
-// ============================================================================
+// Provider
+export { DEFAULT_AI_AGENT_SCHEMA, PrefactorAISDK } from './provider.js';
 
-export { shutdown } from '@prefactor/core';
-export { getTracer, init, withSpan } from './init.js';
-
-// ============================================================================
-// Middleware Exports
-// ============================================================================
-
-export { createPrefactorMiddleware } from './middleware.js';
-
-// ============================================================================
-// Type Exports
-// ============================================================================
-
-export type { CallData, MiddlewareConfig } from './types.js';
-
-// ============================================================================
-// Re-exported Core Types
-// ============================================================================
-
-export type {
-  Config,
-  CoreRuntime,
-  ErrorInfo,
-  HttpTransportConfig,
-  Span,
-  TokenUsage,
-} from '@prefactor/core';
-
-export { SpanStatus, SpanType } from '@prefactor/core';
+// Types
+export type { LanguageModelMiddleware, MiddlewareConfig } from './types.js';

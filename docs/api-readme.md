@@ -31,10 +31,11 @@ npm install @prefactor/ai
 Most applications begin with a provider integration. The example below shows the LangChain setup pattern, where you initialize Prefactor once and attach the middleware to your agent.
 
 ```typescript
-import { init as initLangChain } from '@prefactor/langchain';
+import { init } from '@prefactor/core';
+import { PrefactorLangChain } from '@prefactor/langchain';
 
-const middleware = initLangChain({
-  transportType: 'http',
+const prefactor = init({
+  provider: new PrefactorLangChain(),
   httpConfig: {
     apiUrl: process.env.PREFACTOR_API_URL!,
     apiToken: process.env.PREFACTOR_API_TOKEN!,
@@ -80,10 +81,11 @@ const result = await withSpan(
 LangChain support captures model and tool execution with provider-prefixed span types and context propagation across async boundaries.
 
 ```typescript
-import { init } from '@prefactor/langchain';
+import { init } from '@prefactor/core';
+import { PrefactorLangChain } from '@prefactor/langchain';
 
-const middleware = init({
-  transportType: 'http',
+const prefactor = init({
+  provider: new PrefactorLangChain(),
   httpConfig: {
     apiUrl: process.env.PREFACTOR_API_URL!,
     apiToken: process.env.PREFACTOR_API_TOKEN!,
@@ -91,7 +93,8 @@ const middleware = init({
   },
 });
 
-// Add middleware to your LangChain agent config
+// Add middleware to your LangChain agent config:
+// middleware: [prefactor.getMiddleware()]
 ```
 
 ### AI SDK Integration
@@ -99,16 +102,19 @@ const middleware = init({
 AI SDK support captures both non-streaming and streaming model calls, including tool activity when available.
 
 ```typescript
-import { init } from '@prefactor/ai';
+import { init } from '@prefactor/core';
+import { PrefactorAISDK } from '@prefactor/ai';
 
-const middleware = init({
-  transportType: 'http',
+const prefactor = init({
+  provider: new PrefactorAISDK(),
   httpConfig: {
     apiUrl: process.env.PREFACTOR_API_URL!,
     apiToken: process.env.PREFACTOR_API_TOKEN!,
     agentIdentifier: '1.0.0',
   },
 });
+
+// Wrap model with middleware from prefactor.getMiddleware()
 ```
 
 ## API Reference

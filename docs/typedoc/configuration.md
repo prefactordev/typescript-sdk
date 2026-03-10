@@ -4,7 +4,6 @@ SDK configuration can be provided in code, through environment variables, or as 
 
 Core runtime controls include:
 
-- `PREFACTOR_TRANSPORT`: selects the transport implementation used by SDK `init`/config creation logic (currently `http` from the transport selection path). Default is `http` when unset. If you provide `transportType` programmatically, that value takes precedence over `PREFACTOR_TRANSPORT`.
 - `PREFACTOR_SAMPLE_RATE`: sets trace sampling from `0` to `1`.
 - `PREFACTOR_CAPTURE_INPUTS` and `PREFACTOR_CAPTURE_OUTPUTS`: control whether input and output payloads are recorded.
 - `PREFACTOR_MAX_INPUT_LENGTH` and `PREFACTOR_MAX_OUTPUT_LENGTH`: limit serialized payload sizes to keep telemetry bounded.

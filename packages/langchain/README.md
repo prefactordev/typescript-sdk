@@ -25,17 +25,24 @@ npm install langchain@^1.0.0
 ```typescript
 import { createAgent, tool } from 'langchain';
 import { z } from 'zod';
-import { init, shutdown } from '@prefactor/langchain';
+import { init } from '@prefactor/core';
+import { PrefactorLangChain } from '@prefactor/langchain';
 
-// Initialize Prefactor
-const middleware = init();
+const prefactor = init({
+  provider: new PrefactorLangChain(),
+  httpConfig: {
+    apiUrl: process.env.PREFACTOR_API_URL!,
+    apiToken: process.env.PREFACTOR_API_TOKEN!,
+    agentIdentifier: '1.0.0',
+  },
+});
 
 // Create agent with middleware
 const agent = createAgent({
   model: 'claude-sonnet-4-5-20250929',
   tools: [],
   systemPrompt: 'You are a helpful assistant.',
-  middleware: [middleware],
+  middleware: [prefactor.getMiddleware()],
 });
 
 // All operations are automatically traced
@@ -43,54 +50,32 @@ const result = await agent.invoke({
   messages: [{ role: 'user', content: 'Hello!' }],
 });
 
-// Graceful shutdown
-await shutdown();
+await prefactor.shutdown();
 ```
 
 ## Exports
 
-### Main Entry Points
+### Provider
 
 ```typescript
 import {
-  init,        // Initialize SDK and return middleware
-  shutdown,    // Flush spans and close connections
-  getTracer,   // Get tracer for manual instrumentation
+  PrefactorLangChain,
+  DEFAULT_LANGCHAIN_AGENT_SCHEMA,
 } from '@prefactor/langchain';
 ```
 
-### Middleware
+### Types
 
 ```typescript
-import { PrefactorMiddleware } from '@prefactor/langchain';
+import type { AgentMiddleware } from '@prefactor/langchain';
 ```
 
-### Utilities
-
-```typescript
-import { extractTokenUsage } from '@prefactor/langchain';
-```
-
-### Re-exports from @prefactor/core
-
-For convenience, common types are re-exported:
-
-```typescript
-import {
-  type Config,
-  type CoreRuntime,
-  type HttpTransportConfig,
-  type Span,
-  SpanStatus,
-  SpanType,
-} from '@prefactor/langchain';
-```
+Core initialization/lifecycle utilities come from `@prefactor/core`.
 
 ## Configuration
 
 ### Environment Variables
 
-- `PREFACTOR_TRANSPORT`: `"stdio"` | `"http"` (default: `"stdio"`)
 - `PREFACTOR_API_URL`: API endpoint for HTTP transport
 - `PREFACTOR_API_TOKEN`: Authentication token
 - `PREFACTOR_SAMPLE_RATE`: Sampling rate 0.0-1.0 (default: `1.0`)
@@ -103,14 +88,11 @@ import {
 ### Programmatic Configuration
 
 ```typescript
-import { init } from '@prefactor/langchain';
+import { init } from '@prefactor/core';
+import { PrefactorLangChain } from '@prefactor/langchain';
 
-// STDIO transport (default)
-const middleware = init();
-
-// HTTP transport
-const middleware = init({
-  transportType: 'http',
+const prefactor = init({
+  provider: new PrefactorLangChain(),
   httpConfig: {
     apiUrl: 'https://app.prefactorai.com',
     apiToken: process.env.PREFACTOR_API_TOKEN!,
@@ -133,36 +115,37 @@ The middleware automatically captures:
 
 ## Manual Instrumentation
 
-For operations not automatically traced:
+For operations not automatically traced, use `prefactor.withSpan(...)` from core.
 
 ```typescript
-import { getTracer, SpanType } from '@prefactor/langchain';
-
-const tracer = getTracer();
-
-const span = tracer.startSpan({
-  name: 'custom-operation',
-  spanType: SpanType.TOOL,
-  inputs: { data: 'example' },
-});
-
-try {
-  const result = await doWork();
-  tracer.endSpan(span, { outputs: { result } });
-} catch (error) {
-  tracer.endSpan(span, { error });
-}
+await prefactor.withSpan(
+  {
+    name: 'custom-operation',
+    spanType: 'langchain:tool',
+    inputs: { data: 'example' },
+  },
+  async () => doWork()
+);
 ```
 
 ## Graceful Shutdown
 
-Always call `shutdown()` before your application exits to ensure all pending spans are flushed:
+Always call `prefactor.shutdown()` before your application exits to ensure all pending spans are flushed:
 
 ```typescript
-import { shutdown } from '@prefactor/langchain';
+import { init } from '@prefactor/core';
+import { PrefactorLangChain } from '@prefactor/langchain';
+
+const prefactor = init({
+  provider: new PrefactorLangChain(),
+  httpConfig: {
+    apiUrl: process.env.PREFACTOR_API_URL!,
+    apiToken: process.env.PREFACTOR_API_TOKEN!,
+  },
+});
 
 process.on('SIGTERM', async () => {
-  await shutdown();
+  await prefactor.shutdown();
   process.exit(0);
 });
 ```

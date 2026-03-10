@@ -11,7 +11,7 @@ Automatic observability for LangChain.js agents. Capture distributed traces of L
 - Error tracking and debugging
 - Zero-overhead instrumentation
 - TypeScript type safety
-- Supports stdio and HTTP transports
+- HTTP transport with retry and queue controls
 
 ## Monorepo Structure
 
@@ -50,17 +50,24 @@ bun add @prefactor/core @prefactor/ai
 ```typescript
 import { createAgent, tool } from 'langchain';
 import { z } from 'zod';
-import { init, shutdown } from '@prefactor/langchain';
+import { init } from '@prefactor/core';
+import { PrefactorLangChain } from '@prefactor/langchain';
 
-// Initialize Prefactor (defaults to stdio transport)
-const middleware = init();
+const prefactor = init({
+  provider: new PrefactorLangChain(),
+  httpConfig: {
+    apiUrl: process.env.PREFACTOR_API_URL!,
+    apiToken: process.env.PREFACTOR_API_TOKEN!,
+    agentIdentifier: '1.0.0',
+  },
+});
 
 // Create your agent with middleware
 const agent = createAgent({
   model: 'claude-sonnet-4-5-20250929',
   tools: [],
   systemPrompt: 'You are a helpful assistant.',
-  middleware: [middleware],
+  middleware: [prefactor.getMiddleware()],
 });
 // All operations are automatically traced!
 const result = await agent.invoke({
@@ -69,8 +76,7 @@ const result = await agent.invoke({
 
 console.log(result.messages[result.messages.length - 1].content);
 
-// Graceful shutdown
-await shutdown();
+await prefactor.shutdown();
 ```
 
 Refer to the [Langchain specific documentation](./packages/langchain/README.md) for more details.
@@ -78,17 +84,24 @@ Refer to the [Langchain specific documentation](./packages/langchain/README.md) 
 ### For Vercel AI SDK users:
 
 ```typescript
-import { init, shutdown } from '@prefactor/ai';
+import { init } from '@prefactor/core';
+import { PrefactorAISDK } from '@prefactor/ai';
 import { generateText, wrapLanguageModel } from 'ai';
 import { anthropic } from '@ai-sdk/anthropic';
 
-// Initialize Prefactor
-const middleware = init();
+const prefactor = init({
+  provider: new PrefactorAISDK(),
+  httpConfig: {
+    apiUrl: process.env.PREFACTOR_API_URL!,
+    apiToken: process.env.PREFACTOR_API_TOKEN!,
+    agentIdentifier: '1.0.0',
+  },
+});
 
 // Wrap your model with the middleware
 const model = wrapLanguageModel({
   model: anthropic('claude-3-haiku-20240307'),
-  middleware,
+  middleware: prefactor.getMiddleware(),
 });
 
 // All operations are automatically traced!
@@ -99,8 +112,7 @@ const result = await generateText({
 
 console.log(result.text);
 
-// Graceful shutdown
-await shutdown();
+await prefactor.shutdown();
 ```
 
 Refer to the [Vercel AI SDK specific documentation](./packages/ai/README.md) for more details.
@@ -111,7 +123,6 @@ Refer to the [Vercel AI SDK specific documentation](./packages/ai/README.md) for
 
 The SDK can be configured using environment variables:
 
-- `PREFACTOR_TRANSPORT`: `"stdio"` | `"http"` (default: `"stdio"`)
 - `PREFACTOR_API_URL`: API endpoint for HTTP transport
 - `PREFACTOR_API_TOKEN`: Authentication token for HTTP transport
 - `PREFACTOR_SAMPLE_RATE`: Sampling rate 0.0-1.0 (default: `1.0`)
@@ -124,11 +135,11 @@ The SDK can be configured using environment variables:
 ### Programmatic Configuration
 
 ```typescript
-import { init } from '@prefactor/langchain';
+import { init } from '@prefactor/core';
+import { PrefactorLangChain } from '@prefactor/langchain';
 
-// HTTP Transport
-const middleware = init({
-  transportType: 'http',
+const prefactor = init({
+  provider: new PrefactorLangChain(),
   httpConfig: {
     apiUrl: 'https://app.prefactorai.com',
     apiToken: process.env.PREFACTOR_API_TOKEN!,
@@ -138,34 +149,31 @@ const middleware = init({
 });
 
 // Custom sampling
-const middleware = init({
+const prefactorWithSampling = init({
+  provider: new PrefactorLangChain(),
   sampleRate: 0.1, // Sample 10% of traces
   maxInputLength: 5000,
   maxOutputLength: 5000,
+  httpConfig: {
+    apiUrl: 'https://app.prefactorai.com',
+    apiToken: process.env.PREFACTOR_API_TOKEN!,
+    agentIdentifier: '1.0.0',
+  },
 });
 ```
 
 ## Transports
-
-### STDIO Transport (Default)
-
-The STDIO transport writes spans as newline-delimited JSON to stdout. This is useful for local development and piping to other tools.
-
-```typescript
-import { init } from '@prefactor/langchain';
-
-const middleware = init(); // Uses stdio by default
-```
 
 ### HTTP Transport
 
 The HTTP transport sends spans to a remote API endpoint with retry logic and queue-based processing.
 
 ```typescript
-import { init } from '@prefactor/langchain';
+import { init } from '@prefactor/core';
+import { PrefactorLangChain } from '@prefactor/langchain';
 
-const middleware = init({
-  transportType: 'http',
+const prefactor = init({
+  provider: new PrefactorLangChain(),
   httpConfig: {
     apiUrl: 'https://app.prefactorai.com',
     apiToken: process.env.PREFACTOR_API_TOKEN!,
@@ -179,66 +187,88 @@ const middleware = init({
 
 ## API Reference
 
-### `@prefactor/langchain`
+### `@prefactor/core`
 
-#### `init(config?: Partial<Config>): AgentMiddleware`
+#### `init(options: PrefactorOptions): PrefactorClient`
 
-Initialize the SDK and return middleware instance for LangChain.js.
+Initialize a process-wide Prefactor client and create provider middleware.
 
 **Parameters:**
-- `config` - Optional configuration object
+- `options.provider` - Provider implementation (for example `new PrefactorLangChain()`)
+- `options.httpConfig` - HTTP transport configuration
 
 **Returns:**
-- `AgentMiddleware` - Middleware instance for use with LangChain.js agents
+- `PrefactorClient` with `getMiddleware()`, `getTracer()`, `withSpan()`, and `shutdown()`
 
 **Example:**
 ```typescript
-import { init } from '@prefactor/langchain';
+import { init } from '@prefactor/core';
+import { PrefactorLangChain } from '@prefactor/langchain';
 
-const middleware = init({
-  transportType: 'stdio',
-  sampleRate: 1.0,
+const prefactor = init({
+  provider: new PrefactorLangChain(),
+  httpConfig: {
+    apiUrl: process.env.PREFACTOR_API_URL!,
+    apiToken: process.env.PREFACTOR_API_TOKEN!,
+    agentIdentifier: '1.0.0',
+  },
 });
 ```
 
 ### `@prefactor/ai`
 
-#### `init(config?: Partial<Config>, middlewareConfig?: MiddlewareConfig): LanguageModelMiddleware`
+#### `PrefactorAISDK`
 
-Initialize the SDK and return middleware instance for Vercel AI SDK.
+Provider used with core `init` for Vercel AI SDK middleware.
 
 **Parameters:**
-- `config` - Optional configuration object for transport settings
-- `middlewareConfig` - Optional middleware-specific configuration (e.g., `captureContent`)
+- `options.middleware` - Optional middleware-specific config (e.g., `captureContent`)
+- `options.agentSchema` - Optional custom agent schema
 
 **Returns:**
-- `LanguageModelMiddleware` - Middleware instance for use with `wrapLanguageModel`
+- Provider instance consumed by `@prefactor/core` `init`
 
 **Example:**
 ```typescript
-import { init } from '@prefactor/ai';
+import { init } from '@prefactor/core';
+import { PrefactorAISDK } from '@prefactor/ai';
 
-const middleware = init(
-  { transportType: 'stdio' },
-  { captureContent: false }
-);
+const prefactor = init({
+  provider: new PrefactorAISDK({
+    middleware: { captureContent: false },
+  }),
+  httpConfig: {
+    apiUrl: process.env.PREFACTOR_API_URL!,
+    apiToken: process.env.PREFACTOR_API_TOKEN!,
+    agentIdentifier: '1.0.0',
+  },
+});
 ```
 
-### `shutdown(): Promise<void>`
+### `PrefactorClient.shutdown(): Promise<void>`
 
 Flush pending spans and close connections. Call before application exit.
 
 **Example:**
 ```typescript
-import { shutdown } from '@prefactor/langchain';
+import { init } from '@prefactor/core';
+import { PrefactorLangChain } from '@prefactor/langchain';
+
+const prefactor = init({
+  provider: new PrefactorLangChain(),
+  httpConfig: {
+    apiUrl: process.env.PREFACTOR_API_URL!,
+    apiToken: process.env.PREFACTOR_API_TOKEN!,
+  },
+});
 
 process.on('SIGTERM', async () => {
-  await shutdown();
+  await prefactor.shutdown();
   process.exit(0);
 });
 ```
 
-### `getTracer(): Tracer`
+### `PrefactorClient.getTracer(): Tracer`
 
 Get the global tracer instance for manual instrumentation.
 
@@ -247,9 +277,18 @@ Get the global tracer instance for manual instrumentation.
 
 **Example:**
 ```typescript
-import { getTracer, SpanType } from '@prefactor/langchain';
+import { init, SpanType } from '@prefactor/core';
+import { PrefactorLangChain } from '@prefactor/langchain';
 
-const tracer = getTracer();
+const prefactor = init({
+  provider: new PrefactorLangChain(),
+  httpConfig: {
+    apiUrl: process.env.PREFACTOR_API_URL!,
+    apiToken: process.env.PREFACTOR_API_TOKEN!,
+  },
+});
+
+const tracer = prefactor.getTracer();
 const span = tracer.startSpan({
   name: 'custom-operation',
   spanType: SpanType.TOOL,
@@ -324,13 +363,17 @@ import type {
   SpanStatus,
   TokenUsage,
   ErrorInfo
-} from '@prefactor/langchain';
+} from '@prefactor/core';
 
 const config: Config = {
-  transportType: 'stdio',
+  transportType: 'http',
   sampleRate: 1.0,
   captureInputs: true,
   captureOutputs: true,
+  httpConfig: {
+    apiUrl: 'https://app.prefactorai.com',
+    apiToken: process.env.PREFACTOR_API_TOKEN!,
+  },
 };
 ```
 
@@ -338,7 +381,7 @@ const config: Config = {
 
 See the `examples/` directory for complete examples:
 
-- [`examples/basic.ts`](./examples/basic.ts) - Simple LangChain.js agent with stdio transport
+- [`examples/basic.ts`](./examples/basic.ts) - Simple LangChain.js agent example
 - [`examples/anthropic-agent/simple-agent.ts`](./examples/anthropic-agent/simple-agent.ts) - Full working example with Anthropic Claude
 - [`examples/ai-sdk/simple-agent.ts`](./examples/ai-sdk/simple-agent.ts) - Vercel AI SDK example with tools
 
@@ -372,7 +415,7 @@ Clone the skills repo to a temporary folder, copy the skill folders, then delete
 The SDK consists of five main layers:
 
 1. **Tracing Layer**: Span data models, Tracer for lifecycle management, Context propagation
-2. **Transport Layer**: Pluggable backends (stdio, HTTP) for span emission
+2. **Transport Layer**: HTTP backend with resilient queueing for span emission
 3. **Instrumentation Layer**: LangChain.js and Vercel AI SDK middleware integrations
 4. **Configuration**: Environment variable support, validation with Zod
 5. **Utilities**: Logging, serialization helpers
