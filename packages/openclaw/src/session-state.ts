@@ -627,7 +627,7 @@ export class SessionStateManager {
   ): Promise<string | null> {
     if (!this.agent) return null;
 
-    const state = this.getOrCreateSessionState(sessionKey);
+    const _state = this.getOrCreateSessionState(sessionKey);
 
     const interactionSpanId = await this._createOrGetInteractionSpan(sessionKey);
     if (!interactionSpanId) {
