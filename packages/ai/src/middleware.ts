@@ -8,26 +8,54 @@
  * @packageDocumentation
  */
 
+import { AsyncLocalStorage } from 'node:async_hooks';
 import {
   type AgentInstanceManager,
-  createSpanTypePrefixer,
   type Span,
   SpanContext,
   SpanType,
   type TokenUsage,
   type Tracer,
 } from '@prefactor/core';
+import { resolveToolSpanType } from './schema.js';
+import { createToolSpanInputs, createToolSpanOutputs } from './tool-span-contract.js';
 import type { LanguageModelMiddleware, MiddlewareConfig } from './types.js';
 
 const AGENT_DEAD_TIMEOUT_MS = 5 * 60 * 1000;
-const toAiSpanType = createSpanTypePrefixer('ai-sdk');
 const WRAPPED_TOOL_EXECUTE = Symbol('prefactor-ai-wrapped-tool-execute');
+const TOOL_CAPTURE_STATE_STORAGE = new AsyncLocalStorage<ToolCaptureState>();
 
 type PromptToolResult = {
   toolName: string;
   toolCallId?: string;
   input?: unknown;
   output: unknown;
+};
+
+type ToolCaptureState = {
+  executedToolNames: Set<string>;
+  executedToolCallIds: Set<string>;
+};
+
+type ToolExecute = (this: unknown, ...args: unknown[]) => unknown;
+type WrappedToolExecute = ToolExecute & { [WRAPPED_TOOL_EXECUTE]?: true };
+type ToolDefinition = {
+  description?: string;
+  execute?: ToolExecute;
+  name?: string;
+};
+type PromptMessage = {
+  content?: unknown;
+  role?: unknown;
+};
+type PromptPart = {
+  args?: unknown;
+  input?: unknown;
+  output?: unknown;
+  text?: unknown;
+  toolCallId?: unknown;
+  toolName?: unknown;
+  type?: unknown;
 };
 
 function toError(error: unknown): Error {
@@ -68,186 +96,221 @@ function markAgentDead(
   agentLifecycle.started = false;
 }
 
+function createToolCaptureState(): ToolCaptureState {
+  return {
+    executedToolNames: new Set<string>(),
+    executedToolCallIds: new Set<string>(),
+  };
+}
+
 function wrapToolExecute(
   tracer: Tracer,
   toolName: string,
-  // biome-ignore lint/suspicious/noExplicitAny: Tool execute signatures vary by provider/version
-  execute: (...args: any[]) => unknown
-  // biome-ignore lint/suspicious/noExplicitAny: Tool execute signatures vary by provider/version
-): (...args: any[]) => Promise<unknown> {
-  // biome-ignore lint/suspicious/noExplicitAny: Symbol metadata on function object
-  if ((execute as any)[WRAPPED_TOOL_EXECUTE]) {
-    return execute as (...args: unknown[]) => Promise<unknown>;
+  toolSpanTypes: Record<string, string> | undefined,
+  execute: ToolExecute
+): WrappedToolExecute {
+  const existingExecute = execute as WrappedToolExecute;
+  if (existingExecute[WRAPPED_TOOL_EXECUTE]) {
+    return existingExecute;
   }
 
-  // biome-ignore lint/suspicious/noExplicitAny: Tool execute signatures vary by provider/version
-  const wrapped = async function wrappedExecute(this: unknown, ...args: any[]): Promise<unknown> {
+  const wrapped: WrappedToolExecute = async function wrappedExecute(
+    this: unknown,
+    ...args: unknown[]
+  ): Promise<unknown> {
     const input = args[0] ?? {};
+    const toolCallId = extractToolCallId(args);
     const span = tracer.startSpan({
       name: 'ai:tool-call',
-      spanType: toAiSpanType(SpanType.TOOL),
-      inputs: {
-        'ai.tool.name': toolName,
+      spanType: resolveToolSpanType(toolName, toolSpanTypes),
+      inputs: createToolSpanInputs({
         toolName,
+        toolCallId,
         input,
-      },
+      }),
     });
 
     try {
       const output = await SpanContext.runAsync(span, () =>
         Promise.resolve(execute.apply(this, args))
       );
-      tracer.endSpan(span, { outputs: { output } });
+      const captureState = TOOL_CAPTURE_STATE_STORAGE.getStore();
+      captureState?.executedToolNames.add(toolName);
+      if (toolCallId) {
+        captureState?.executedToolCallIds.add(toolCallId);
+      }
+      tracer.endSpan(span, { outputs: createToolSpanOutputs(output) });
       return output;
     } catch (error) {
       const normalizedError = toError(error);
-      tracer.endSpan(span, { error: normalizedError });
+      tracer.endSpan(span, {
+        outputs: createToolSpanOutputs(undefined),
+        error: normalizedError,
+      });
       throw error;
     }
   };
 
-  // biome-ignore lint/suspicious/noExplicitAny: Symbol metadata on function object
-  (wrapped as any)[WRAPPED_TOOL_EXECUTE] = true;
+  wrapped[WRAPPED_TOOL_EXECUTE] = true;
   return wrapped;
 }
 
-// biome-ignore lint/suspicious/noExplicitAny: AI SDK call options are dynamic
-function wrapToolsInParams(params: any, tracer: Tracer): any {
-  if (!params?.tools || typeof params.tools !== 'object') {
+function wrapToolsInParams<T extends Record<string, unknown> & { tools?: unknown }>(
+  params: T,
+  tracer: Tracer,
+  toolSpanTypes?: Record<string, string>
+): T {
+  if (!('tools' in params)) {
     return params;
   }
 
   if (Array.isArray(params.tools)) {
-    params.tools = params.tools.map((tool: unknown, index: number) => {
-      if (!tool || typeof tool !== 'object') {
-        return tool;
-      }
-
-      const typedTool = tool as {
-        name?: string;
-        execute?: (...args: unknown[]) => unknown;
-      };
-
-      if (typeof typedTool.execute !== 'function') {
-        return tool;
-      }
-
-      const toolName = typedTool.name ?? `tool_${index}`;
-      return {
-        ...typedTool,
-        execute: wrapToolExecute(tracer, toolName, typedTool.execute),
-      };
-    });
+    params.tools = wrapToolArray(params.tools, tracer, toolSpanTypes);
     return params;
   }
 
-  const tools = params.tools as Record<string, unknown>;
-  for (const [toolName, tool] of Object.entries(tools)) {
-    if (!tool || typeof tool !== 'object') {
-      continue;
-    }
-
-    const typedTool = tool as {
-      execute?: (...args: unknown[]) => unknown;
-    };
-
-    if (typeof typedTool.execute !== 'function') {
-      continue;
-    }
-
-    tools[toolName] = {
-      ...typedTool,
-      execute: wrapToolExecute(tracer, toolName, typedTool.execute),
-    };
+  if (isRecord(params.tools)) {
+    params.tools = wrapToolMap(params.tools, tracer, toolSpanTypes);
   }
 
   return params;
 }
 
-// biome-ignore lint/suspicious/noExplicitAny: AI SDK call options are dynamic
-function hasExecutableToolsInParams(params: any): boolean {
-  if (Array.isArray(params?.tools)) {
-    return params.tools.some(
-      (tool: unknown) =>
-        typeof tool === 'object' &&
-        tool !== null &&
-        typeof (tool as { execute?: unknown }).execute === 'function'
-    );
-  }
+function wrapToolArray(
+  tools: unknown[],
+  tracer: Tracer,
+  toolSpanTypes?: Record<string, string>
+): unknown[] {
+  return tools.map((tool, index) => {
+    const typedTool = getToolDefinition(tool);
+    if (!typedTool?.execute) {
+      return tool;
+    }
 
-  if (params?.tools && typeof params.tools === 'object') {
-    return Object.values(params.tools as Record<string, unknown>).some(
-      (tool: unknown) =>
-        typeof tool === 'object' &&
-        tool !== null &&
-        typeof (tool as { execute?: unknown }).execute === 'function'
-    );
-  }
-
-  return false;
+    const toolName = typedTool.name ?? `tool_${index}`;
+    return {
+      ...typedTool,
+      execute: wrapToolExecute(tracer, toolName, toolSpanTypes, typedTool.execute),
+    };
+  });
 }
 
-function normalizeToolResultOutput(output: unknown): unknown {
-  if (
-    typeof output === 'object' &&
-    output !== null &&
-    (output as { type?: unknown }).type === 'text' &&
-    typeof (output as { value?: unknown }).value === 'string'
-  ) {
-    return (output as { value: string }).value;
+function wrapToolMap(
+  tools: Record<string, unknown>,
+  tracer: Tracer,
+  toolSpanTypes?: Record<string, string>
+): Record<string, unknown> {
+  for (const [toolName, tool] of Object.entries(tools)) {
+    const typedTool = getToolDefinition(tool);
+    if (!typedTool?.execute) {
+      continue;
+    }
+
+    tools[toolName] = {
+      ...typedTool,
+      execute: wrapToolExecute(tracer, toolName, toolSpanTypes, typedTool.execute),
+    };
   }
 
-  return output;
+  return tools;
 }
 
-// biome-ignore lint/suspicious/noExplicitAny: AI SDK prompt/message structures are dynamic
-function extractPromptToolResults(params: any): PromptToolResult[] {
-  const prompt = Array.isArray(params?.prompt) ? params.prompt : [];
+function getToolDefinition(tool: unknown): ToolDefinition | undefined {
+  if (!isRecord(tool)) {
+    return undefined;
+  }
+
+  return {
+    description: typeof tool.description === 'string' ? tool.description : undefined,
+    execute: typeof tool.execute === 'function' ? (tool.execute as ToolExecute) : undefined,
+    name: typeof tool.name === 'string' ? tool.name : undefined,
+  };
+}
+
+function extractToolCallId(args: unknown[]): string | undefined {
+  for (const arg of args.slice(0, 2)) {
+    if (!arg || typeof arg !== 'object') {
+      continue;
+    }
+
+    const candidate = arg as {
+      toolCallId?: unknown;
+      options?: { toolCallId?: unknown };
+    };
+    if (typeof candidate.toolCallId === 'string') {
+      return candidate.toolCallId;
+    }
+    if (typeof candidate.options?.toolCallId === 'string') {
+      return candidate.options.toolCallId;
+    }
+  }
+
+  return undefined;
+}
+
+function extractPromptToolResults(params: Record<string, unknown>): PromptToolResult[] {
+  const prompt = Array.isArray(params.prompt) ? (params.prompt as PromptMessage[]) : [];
   const toolCallInputs = new Map<string, unknown>();
   const results: PromptToolResult[] = [];
 
   for (const message of prompt) {
-    const content = Array.isArray(message?.content) ? message.content : [];
+    const content = Array.isArray(message.content) ? (message.content as PromptPart[]) : [];
 
-    if (message?.role === 'assistant') {
-      for (const part of content) {
-        if (
-          (part?.type === 'tool-call' || part?.type === 'tool') &&
-          typeof part?.toolCallId === 'string'
-        ) {
-          toolCallInputs.set(part.toolCallId, part.input ?? part.args);
-        }
-      }
+    if (message.role === 'assistant') {
+      collectAssistantToolInputs(content, toolCallInputs);
       continue;
     }
 
-    if (message?.role !== 'tool') {
+    if (message.role !== 'tool') {
       continue;
     }
 
-    for (const part of content) {
-      if (part?.type !== 'tool-result') {
-        continue;
-      }
-
-      const toolCallId = typeof part.toolCallId === 'string' ? part.toolCallId : undefined;
-      results.push({
-        toolName: part.toolName ?? 'unknown',
-        toolCallId,
-        input: toolCallId ? toolCallInputs.get(toolCallId) : undefined,
-        output: part.output,
-      });
-    }
+    appendPromptToolResults(content, toolCallInputs, results);
   }
 
   return results;
+}
+
+function collectAssistantToolInputs(
+  content: PromptPart[],
+  toolCallInputs: Map<string, unknown>
+): void {
+  for (const part of content) {
+    if (!isToolCallPart(part) || typeof part.toolCallId !== 'string') {
+      continue;
+    }
+
+    toolCallInputs.set(part.toolCallId, part.input ?? part.args);
+  }
+}
+
+function appendPromptToolResults(
+  content: PromptPart[],
+  toolCallInputs: Map<string, unknown>,
+  results: PromptToolResult[]
+): void {
+  for (const part of content) {
+    if (!isToolResultPart(part)) {
+      continue;
+    }
+
+    const toolCallId = typeof part.toolCallId === 'string' ? part.toolCallId : undefined;
+    results.push({
+      toolName: typeof part.toolName === 'string' ? part.toolName : 'unknown',
+      toolCallId,
+      input: toolCallId ? toolCallInputs.get(toolCallId) : undefined,
+      output: part.output,
+    });
+  }
 }
 
 function emitToolResultSpansFromPrompt(
   tracer: Tracer,
   span: Span,
   toolResults: PromptToolResult[],
-  seenToolCallIds: Set<string>
+  seenToolCallIds: Set<string>,
+  captureState: ToolCaptureState,
+  toolSpanTypes?: Record<string, string>
 ): void {
   if (toolResults.length === 0) {
     return;
@@ -255,6 +318,14 @@ function emitToolResultSpansFromPrompt(
 
   SpanContext.run(span, () => {
     for (const toolResult of toolResults) {
+      if (toolResult.toolCallId) {
+        if (captureState.executedToolCallIds.has(toolResult.toolCallId)) {
+          continue;
+        }
+      } else if (captureState.executedToolNames.has(toolResult.toolName)) {
+        continue;
+      }
+
       if (toolResult.toolCallId) {
         if (seenToolCallIds.has(toolResult.toolCallId)) {
           continue;
@@ -264,17 +335,16 @@ function emitToolResultSpansFromPrompt(
 
       const toolSpan = tracer.startSpan({
         name: 'ai:tool-call',
-        spanType: toAiSpanType(SpanType.TOOL),
-        inputs: {
-          'ai.tool.name': toolResult.toolName,
+        spanType: resolveToolSpanType(toolResult.toolName, toolSpanTypes),
+        inputs: createToolSpanInputs({
           toolName: toolResult.toolName,
-          ...(toolResult.toolCallId ? { toolCallId: toolResult.toolCallId } : {}),
-          ...(toolResult.input !== undefined ? { input: toolResult.input } : {}),
-        },
+          toolCallId: toolResult.toolCallId,
+          input: toolResult.input,
+        }),
       });
 
       tracer.endSpan(toolSpan, {
-        outputs: { output: normalizeToolResultOutput(toolResult.output) },
+        outputs: createToolSpanOutputs(toolResult.output),
       });
     }
   });
@@ -304,8 +374,7 @@ const MODEL_SETTINGS = [
  * @internal
  */
 function extractInputs(
-  // biome-ignore lint/suspicious/noExplicitAny: AI SDK params are dynamic
-  params: any,
+  params: Record<string, unknown>,
   config?: MiddlewareConfig
 ): Record<string, unknown> {
   const inputs: Record<string, unknown> = {};
@@ -322,27 +391,43 @@ function extractInputs(
     inputs['ai.prompt'] = params.prompt;
   }
 
-  // Capture tools if enabled
-  if (config?.captureTools !== false && params.tools) {
-    // AI SDK v4 uses an object map; normalize to names to avoid serializing tool functions.
-    if (Array.isArray(params.tools)) {
-      inputs['ai.tools'] = params.tools.map((tool: { name?: string; description?: string }) => ({
-        name: tool.name,
-        description: tool.description,
-      }));
-    } else if (typeof params.tools === 'object') {
-      inputs['ai.tools'] = Object.entries(
-        params.tools as Record<string, { description?: string } | undefined>
-      ).map(([name, tool]) => ({
-        name,
-        description: typeof tool?.description === 'string' ? tool.description : undefined,
-      }));
-    } else {
-      inputs['ai.tools'] = params.tools;
-    }
+  const serializedTools =
+    config?.captureTools === false ? undefined : serializeToolsForInputs(params.tools);
+  if (serializedTools !== undefined) {
+    inputs['ai.tools'] = serializedTools;
   }
 
   return inputs;
+}
+
+function serializeToolsForInputs(tools: unknown): unknown {
+  if (tools === undefined) {
+    return undefined;
+  }
+
+  if (Array.isArray(tools)) {
+    return tools.map((tool) => {
+      const typedTool = getToolDefinition(tool);
+      return typedTool
+        ? {
+            name: typedTool.name,
+            description: typedTool.description,
+          }
+        : tool;
+    });
+  }
+
+  if (isRecord(tools)) {
+    return Object.entries(tools).map(([name, tool]) => {
+      const typedTool = getToolDefinition(tool);
+      return {
+        name,
+        description: typedTool?.description,
+      };
+    });
+  }
+
+  return tools;
 }
 
 /**
@@ -354,8 +439,7 @@ function extractInputs(
  * @internal
  */
 function extractOutputs(
-  // biome-ignore lint/suspicious/noExplicitAny: AI SDK result structure is dynamic
-  result: any,
+  result: Record<string, unknown>,
   config?: MiddlewareConfig
 ): Record<string, unknown> {
   const outputs: Record<string, unknown> = {};
@@ -369,36 +453,56 @@ function extractOutputs(
 
   // Capture response content if enabled
   if (config?.captureContent !== false) {
-    if (result.text) {
-      outputs['ai.response.text'] = result.text;
-    }
     if (content) {
       outputs['ai.response.content'] = content;
-      const textParts = content
-        .filter(
-          (part: { type: string; text: string }) =>
-            part?.type === 'text' && typeof part.text === 'string'
-        )
-        .map((part: { text: string }) => part.text);
-      if (textParts.length > 0) {
-        outputs['ai.response.text'] = textParts.join('');
-      }
+    }
+
+    const responseText = extractResponseText(result, content);
+    if (responseText !== undefined) {
+      outputs['ai.response.text'] = responseText;
     }
   }
 
-  // Capture tool calls if enabled
-  if (config?.captureTools !== false) {
-    if (result.toolCalls) {
-      outputs['ai.response.toolCalls'] = result.toolCalls;
-    } else if (content) {
-      const toolCalls = content.filter((part: { type: string }) => part?.type === 'tool-call');
-      if (toolCalls.length > 0) {
-        outputs['ai.response.toolCalls'] = toolCalls;
-      }
-    }
+  const toolCalls =
+    config?.captureTools === false ? undefined : extractResponseToolCalls(result, content);
+  if (toolCalls !== undefined) {
+    outputs['ai.response.toolCalls'] = toolCalls;
   }
 
   return outputs;
+}
+
+function extractResponseText(
+  result: Record<string, unknown>,
+  content: unknown[] | undefined
+): string | undefined {
+  const contentText = content ? extractContentText(content) : undefined;
+  if (contentText !== undefined) {
+    return contentText;
+  }
+
+  return typeof result.text === 'string' ? result.text : undefined;
+}
+
+function extractContentText(content: unknown[]): string | undefined {
+  const textParts = content.filter(isTextContentPart).map((part) => part.text);
+  return textParts.length > 0 ? textParts.join('') : undefined;
+}
+
+function extractResponseToolCalls(
+  result: Record<string, unknown>,
+  content: unknown[] | undefined
+): unknown {
+  if (result.toolCalls !== undefined) {
+    return result.toolCalls;
+  }
+
+  if (!content) {
+    return undefined;
+  }
+
+  const toolCalls = content.filter(isToolCallPart);
+  return toolCalls.length > 0 ? toolCalls : undefined;
 }
 
 /**
@@ -408,39 +512,44 @@ function extractOutputs(
  * @returns TokenUsage object or undefined
  * @internal
  */
-function extractTokenUsage(
-  // biome-ignore lint/suspicious/noExplicitAny: AI SDK result structure varies by provider
-  result: any
-): TokenUsage | undefined {
-  if (!result.usage) {
+function extractTokenUsage(result: Record<string, unknown>): TokenUsage | undefined {
+  if (!isRecord(result.usage)) {
     return undefined;
   }
 
-  const usage = result.usage;
+  return extractStructuredTokenUsage(result.usage) ?? extractLegacyTokenUsage(result.usage);
+}
 
-  // Handle V3 usage format (inputTokens/outputTokens objects)
-  if (usage.inputTokens || usage.outputTokens) {
-    const promptTokens = usage.inputTokens?.total ?? 0;
-    const completionTokens = usage.outputTokens?.total ?? 0;
-    return {
-      promptTokens,
-      completionTokens,
-      totalTokens: promptTokens + completionTokens,
-    };
+function extractStructuredTokenUsage(usage: Record<string, unknown>): TokenUsage | undefined {
+  if (usage.inputTokens === undefined && usage.outputTokens === undefined) {
+    return undefined;
   }
 
-  // Handle V1 usage format (promptTokens/completionTokens)
-  if (usage.promptTokens !== undefined || usage.completionTokens !== undefined) {
-    const promptTokens = usage.promptTokens ?? 0;
-    const completionTokens = usage.completionTokens ?? 0;
-    return {
-      promptTokens,
-      completionTokens,
-      totalTokens: promptTokens + completionTokens,
-    };
+  const promptTokens = getNestedTokenTotal(usage.inputTokens);
+  const completionTokens = getNestedTokenTotal(usage.outputTokens);
+  return {
+    promptTokens,
+    completionTokens,
+    totalTokens: promptTokens + completionTokens,
+  };
+}
+
+function extractLegacyTokenUsage(usage: Record<string, unknown>): TokenUsage | undefined {
+  if (usage.promptTokens === undefined && usage.completionTokens === undefined) {
+    return undefined;
   }
 
-  return undefined;
+  const promptTokens = typeof usage.promptTokens === 'number' ? usage.promptTokens : 0;
+  const completionTokens = typeof usage.completionTokens === 'number' ? usage.completionTokens : 0;
+  return {
+    promptTokens,
+    completionTokens,
+    totalTokens: promptTokens + completionTokens,
+  };
+}
+
+function getNestedTokenTotal(value: unknown): number {
+  return isRecord(value) && typeof value.total === 'number' ? value.total : 0;
 }
 
 /**
@@ -456,17 +565,15 @@ function extractTokenUsage(
  */
 function createLlmSpan(
   tracer: Tracer,
-  // biome-ignore lint/suspicious/noExplicitAny: AI SDK model structure is dynamic
-  model: any,
-  // biome-ignore lint/suspicious/noExplicitAny: AI SDK params are dynamic
-  params: any,
+  model: Record<string, unknown>,
+  params: Record<string, unknown>,
   config?: MiddlewareConfig,
   parentSpan?: Span
 ): Span {
   const modelName = `${model.provider ?? 'unknown'}.${model.modelId ?? 'unknown'}`;
   const spanOptions = {
     name: 'ai:llm-call',
-    spanType: toAiSpanType(SpanType.LLM),
+    spanType: `ai-sdk:${SpanType.LLM}`,
     inputs: {
       'ai.model.name': modelName,
       'ai.model.id': model.modelId,
@@ -479,6 +586,22 @@ function createLlmSpan(
     return SpanContext.run(parentSpan, () => tracer.startSpan(spanOptions));
   }
   return tracer.startSpan(spanOptions);
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function isToolCallPart(part: unknown): part is PromptPart {
+  return isRecord(part) && (part.type === 'tool-call' || part.type === 'tool');
+}
+
+function isToolResultPart(part: unknown): part is PromptPart {
+  return isRecord(part) && part.type === 'tool-result';
+}
+
+function isTextContentPart(part: unknown): part is PromptPart & { text: string } {
+  return isRecord(part) && part.type === 'text' && typeof part.text === 'string';
 }
 
 /**
@@ -515,12 +638,14 @@ export function createPrefactorMiddleware(
     agentInfo?: Parameters<AgentInstanceManager['startInstance']>[0];
     agentLifecycle?: { started: boolean };
     deadTimeoutMs?: number;
+    toolSpanTypes?: Record<string, string>;
   }
 ): LanguageModelMiddleware {
   const agentManager = coreOptions?.agentManager;
   const agentInfo = coreOptions?.agentInfo;
   const agentLifecycle = coreOptions?.agentLifecycle ?? { started: false };
   const deadTimeoutMs = coreOptions?.deadTimeoutMs ?? AGENT_DEAD_TIMEOUT_MS;
+  const toolSpanTypes = coreOptions?.toolSpanTypes;
 
   function ensureAgentInstanceStarted(): void {
     if (!agentManager || agentLifecycle.started) {
@@ -533,7 +658,7 @@ export function createPrefactorMiddleware(
   return {
     specificationVersion: 'v3',
     transformParams: async ({ params }) =>
-      config?.captureTools === false ? params : wrapToolsInParams(params, tracer),
+      config?.captureTools === false ? params : wrapToolsInParams(params, tracer, toolSpanTypes),
     /**
      * Wraps non-streaming generation calls.
      */
@@ -544,23 +669,29 @@ export function createPrefactorMiddleware(
       const parentSpan = SpanContext.getCurrent();
       const span = createLlmSpan(tracer, model, params, config, parentSpan);
       const seenToolCallIds = new Set<string>();
-
-      if (config?.captureTools !== false && !hasExecutableToolsInParams(params)) {
-        emitToolResultSpansFromPrompt(
-          tracer,
-          span,
-          extractPromptToolResults(params),
-          seenToolCallIds
-        );
-      }
+      const captureState = createToolCaptureState();
 
       try {
         // Execute the generation within the LLM span context
         const result = await runWithTimeout(
-          () => SpanContext.runAsync(span, () => Promise.resolve(doGenerate())),
+          () =>
+            TOOL_CAPTURE_STATE_STORAGE.run(captureState, () =>
+              SpanContext.runAsync(span, () => Promise.resolve(doGenerate()))
+            ),
           deadTimeoutMs,
           'Agent did not respond within timeout duration and was marked as failed.'
         );
+
+        if (config?.captureTools !== false) {
+          emitToolResultSpansFromPrompt(
+            tracer,
+            span,
+            extractPromptToolResults(params),
+            seenToolCallIds,
+            captureState,
+            toolSpanTypes
+          );
+        }
 
         // End the span with outputs
         tracer.endSpan(span, {
@@ -588,23 +719,29 @@ export function createPrefactorMiddleware(
       const parentSpan = SpanContext.getCurrent();
       const span = createLlmSpan(tracer, model, params, config, parentSpan);
       const seenToolCallIds = new Set<string>();
-
-      if (config?.captureTools !== false && !hasExecutableToolsInParams(params)) {
-        emitToolResultSpansFromPrompt(
-          tracer,
-          span,
-          extractPromptToolResults(params),
-          seenToolCallIds
-        );
-      }
+      const captureState = createToolCaptureState();
 
       try {
         // Execute the stream within the span context
         const result = await runWithTimeout(
-          () => SpanContext.runAsync(span, () => Promise.resolve(doStream())),
+          () =>
+            TOOL_CAPTURE_STATE_STORAGE.run(captureState, () =>
+              SpanContext.runAsync(span, () => Promise.resolve(doStream()))
+            ),
           deadTimeoutMs,
           'Agent did not respond within timeout duration and was marked as failed.'
         );
+
+        if (config?.captureTools !== false) {
+          emitToolResultSpansFromPrompt(
+            tracer,
+            span,
+            extractPromptToolResults(params),
+            seenToolCallIds,
+            captureState,
+            toolSpanTypes
+          );
+        }
 
         // Wrap the stream to capture completion
         const wrappedStream = wrapStreamForCompletion(result.stream, span, tracer, config);
@@ -634,21 +771,18 @@ export function createPrefactorMiddleware(
  * @returns A wrapped stream that ends the span on completion
  * @internal
  */
-function wrapStreamForCompletion(
-  // biome-ignore lint/suspicious/noExplicitAny: Stream part types vary
-  stream: ReadableStream<any>,
+function wrapStreamForCompletion<T>(
+  stream: ReadableStream<T>,
   span: Span,
   tracer: Tracer,
   config?: MiddlewareConfig
-  // biome-ignore lint/suspicious/noExplicitAny: Stream part types vary
-): ReadableStream<any> {
+): ReadableStream<T> {
   const reader = stream.getReader();
   let finishReason: unknown | undefined;
   let usage: TokenUsage | undefined;
-  // biome-ignore lint/suspicious/noExplicitAny: Collecting stream chunks
-  const textChunks: any[] = [];
+  const textChunks: string[] = [];
 
-  return new ReadableStream({
+  return new ReadableStream<T>({
     async pull(controller) {
       try {
         const { done, value } = await reader.read();
@@ -675,24 +809,16 @@ function wrapStreamForCompletion(
         }
 
         // Capture stream parts for telemetry
-        const part = value;
+        const part = getStreamPart(value);
         if (part) {
-          // Capture text chunks
-          if (part.type === 'text-delta') {
-            const delta = part.delta ?? part.textDelta;
-            if (delta) {
-              textChunks.push(delta);
-            }
+          const delta = extractTextDelta(part);
+          if (delta !== undefined) {
+            textChunks.push(delta);
           }
 
-          // Capture finish reason
-          if (part.type === 'finish' && part.finishReason) {
-            finishReason = part.finishReason;
-          }
-
-          // Capture usage from finish part
-          if (part.type === 'finish' && part.usage) {
-            usage = extractTokenUsage({ usage: part.usage });
+          if (part.type === 'finish') {
+            finishReason = part.finishReason ?? finishReason;
+            usage = part.usage ? extractTokenUsage({ usage: part.usage }) : usage;
           }
         }
 
@@ -712,4 +838,20 @@ function wrapStreamForCompletion(
       reader.cancel();
     },
   });
+}
+
+function getStreamPart(value: unknown): Record<string, unknown> | undefined {
+  return isRecord(value) ? value : undefined;
+}
+
+function extractTextDelta(part: Record<string, unknown>): string | undefined {
+  if (part.type !== 'text-delta') {
+    return undefined;
+  }
+
+  if (typeof part.delta === 'string') {
+    return part.delta;
+  }
+
+  return typeof part.textDelta === 'string' ? part.textDelta : undefined;
 }

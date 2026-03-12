@@ -48,6 +48,15 @@ export interface PrefactorProvider {
    */
   shutdown?: () => void | Promise<void>;
   /**
+   * Normalizes a user- or provider-authored agent schema before core registers it.
+   *
+   * @param agentSchema - Authored agent schema configuration.
+   * @returns Normalized schema, or `undefined` to leave the input unchanged.
+   */
+  normalizeAgentSchema?: (
+    agentSchema: Record<string, unknown>
+  ) => Record<string, unknown> | undefined;
+  /**
    * Provides a default agent schema when a user does not supply one.
    *
    * @returns Agent schema object, or `undefined` when no default is available.
@@ -178,6 +187,21 @@ export function init(options: PrefactorOptions): PrefactorClient {
         agentSchema: providerSchema,
       },
     };
+  }
+
+  if (finalConfig.httpConfig?.agentSchema) {
+    const normalizedSchema = options.provider.normalizeAgentSchema?.(
+      finalConfig.httpConfig.agentSchema
+    );
+    if (normalizedSchema) {
+      finalConfig = {
+        ...finalConfig,
+        httpConfig: {
+          ...finalConfig.httpConfig,
+          agentSchema: normalizedSchema,
+        },
+      };
+    }
   }
 
   const core = createCore(finalConfig);

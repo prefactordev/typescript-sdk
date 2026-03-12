@@ -43,8 +43,18 @@
  * @packageDocumentation
  */
 
+// Initialization
+export { getTracer, init, shutdown, withSpan } from './init.js';
+export type { ManualSpanOptions } from './init.js';
+
 // Provider
 export { DEFAULT_AI_AGENT_SCHEMA, PrefactorAISDK } from './provider.js';
+export type { PrefactorAISDKOptions } from './provider.js';
 
 // Types
-export type { LanguageModelMiddleware, MiddlewareConfig } from './types.js';
+export type {
+  JsonSchema,
+  LanguageModelMiddleware,
+  MiddlewareConfig,
+  ToolSchemaConfig,
+} from './types.js';
