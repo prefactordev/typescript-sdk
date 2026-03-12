@@ -1,3 +1,4 @@
+import { spawn } from 'node:child_process';
 import type { Command } from 'commander';
 import { DEFAULT_BASE_URL, DEFAULT_PROFILE_NAME, ProfileManager } from '../profile-manager.js';
 
@@ -6,9 +7,23 @@ export function buildLoginUrl(baseUrl: string): string {
 }
 
 function openBrowserImpl(url: string): void {
-  const cmd =
-    process.platform === 'darwin' ? 'open' : process.platform === 'win32' ? 'start' : 'xdg-open';
-  Bun.spawn([cmd, url]); // fire-and-forget; errors silently ignored
+  let cmd: string;
+  let args: string[];
+
+  if (process.platform === 'darwin') {
+    cmd = 'open';
+    args = [url];
+  } else if (process.platform === 'win32') {
+    cmd = 'cmd';
+    args = ['/c', 'start', '', url];
+  } else {
+    cmd = 'xdg-open';
+    args = [url];
+  }
+
+  const child = spawn(cmd, args, { detached: true, stdio: 'ignore' });
+  child.on('error', () => {}); // fire-and-forget; ignore spawn errors
+  child.unref();
 }
 
 async function promptForTokenImpl(prompt: string): Promise<string> {
@@ -60,7 +75,7 @@ async function promptForTokenImpl(prompt: string): Promise<string> {
 }
 
 export function validateToken(token: string): void {
-  if (token.length === 0) {
+  if (token.trim().length === 0) {
     throw new Error('No API token provided. Please paste a valid token.');
   }
 }
