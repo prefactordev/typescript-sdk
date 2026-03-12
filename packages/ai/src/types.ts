@@ -29,6 +29,27 @@ export interface MiddlewareConfig {
 }
 
 /**
+ * JSON Schema fragment for a tool's structured input payload.
+ */
+export type JsonSchema = Record<string, unknown>;
+
+/**
+ * User-defined tool span schema configuration.
+ */
+export interface ToolSchemaConfig {
+  /**
+   * Tool-specific schema suffix to emit for this tool.
+   *
+   * Values are normalized under `ai-sdk:tool:*`, so `send-email` becomes
+   * `ai-sdk:tool:send-email`.
+   */
+  spanType: string;
+
+  /** JSON Schema describing the tool call input shape. */
+  inputSchema: JsonSchema;
+}
+
+/**
  * Data extracted from a generate or stream call.
  * Used internally for building span data.
  */

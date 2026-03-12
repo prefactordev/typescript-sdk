@@ -1,25 +1,18 @@
 import type {
   AgentInstanceManager,
+  Config,
   MiddlewareLike,
   PrefactorProvider,
   Tracer,
 } from '@prefactor/core';
 import { createPrefactorMiddleware } from './middleware.js';
+import {
+  DEFAULT_AI_AGENT_SCHEMA as DEFAULT_AI_AGENT_SCHEMA_BASE,
+  normalizeAgentSchema,
+} from './schema.js';
 import type { MiddlewareConfig } from './types.js';
 
-export const DEFAULT_AI_AGENT_SCHEMA = {
-  external_identifier: 'ai-sdk-schema',
-  span_schemas: {
-    'ai-sdk:agent': { type: 'object', additionalProperties: true },
-    'ai-sdk:llm': { type: 'object', additionalProperties: true },
-    'ai-sdk:tool': { type: 'object', additionalProperties: true },
-  },
-  span_result_schemas: {
-    'ai-sdk:agent': { type: 'object', additionalProperties: true },
-    'ai-sdk:llm': { type: 'object', additionalProperties: true },
-    'ai-sdk:tool': { type: 'object', additionalProperties: true },
-  },
-} as const;
+export const DEFAULT_AI_AGENT_SCHEMA = DEFAULT_AI_AGENT_SCHEMA_BASE;
 
 export interface PrefactorAISDKOptions {
   middleware?: MiddlewareConfig;
@@ -28,6 +21,7 @@ export interface PrefactorAISDKOptions {
 
 export class PrefactorAISDK implements PrefactorProvider {
   private readonly options: PrefactorAISDKOptions;
+  private toolSpanTypes: Record<string, string> | undefined;
 
   constructor(options: PrefactorAISDKOptions = {}) {
     this.options = options;
@@ -36,8 +30,7 @@ export class PrefactorAISDK implements PrefactorProvider {
   createMiddleware(
     tracer: Tracer,
     agentManager: AgentInstanceManager,
-    // biome-ignore lint/suspicious/noExplicitAny: Config shape varies by version
-    coreConfig: any
+    coreConfig: Config
   ): MiddlewareLike {
     const httpConfig = coreConfig.httpConfig;
     const agentInfo = httpConfig
@@ -56,7 +49,14 @@ export class PrefactorAISDK implements PrefactorProvider {
       agentInfo,
       agentLifecycle,
       deadTimeoutMs: 5 * 60 * 1000,
+      toolSpanTypes: this.toolSpanTypes,
     });
+  }
+
+  normalizeAgentSchema(agentSchema: Record<string, unknown>): Record<string, unknown> {
+    const normalizedSchema = normalizeAgentSchema(agentSchema);
+    this.toolSpanTypes = normalizedSchema.toolSpanTypes;
+    return normalizedSchema.agentSchema;
   }
 
   getDefaultAgentSchema(): Record<string, unknown> | undefined {
