@@ -53,6 +53,7 @@ describe('CLI profiles command', () => {
     const cli = createCli('1.0.0');
 
     expect(cli.commands.map((command) => command.name())).toEqual([
+      'login',
       'profiles',
       'accounts',
       'agents',

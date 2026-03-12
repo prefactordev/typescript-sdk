@@ -25,11 +25,13 @@ prefactor --help
 
 ## Quick Start
 
-1. Create a default profile:
+1. Authenticate with your Prefactor account:
 
 ```bash
-prefactor profiles add default --api-token <api-token>
+prefactor login
 ```
+
+This opens your browser to the Prefactor login page. After authenticating, copy your API token and paste it into the prompt. Your credentials are saved automatically to the `default` profile.
 
 2. Verify access:
 
@@ -64,6 +66,7 @@ Environment fallback is supported when no default profile is configured:
 
 ## Command Groups
 
+- `login`: authenticate and save credentials to the default profile
 - `profiles`: add, list, remove
 - `accounts`: list, retrieve, update
 - `environments`: list, retrieve, create, update, delete
