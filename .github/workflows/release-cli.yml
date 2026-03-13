@@ -62,11 +62,9 @@ jobs:
           files: dist/cli/*
       - name: Delete canary tag
         if: github.ref_type != 'tag'
-        run: |
-          git push origin :refs/tags/canary || true
-          git tag -d canary || true
+        run: gh api -X DELETE /repos/${{ github.repository }}/git/refs/tags/canary || true
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Create canary release
         if: github.ref_type != 'tag'
         uses: softprops/action-gh-release@v2
