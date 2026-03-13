@@ -1,4 +1,4 @@
-import type { JsonSchema } from './types.js';
+import type { JsonSchema } from '@prefactor/core';
 
 export const GENERIC_OBJECT_SCHEMA = {
   type: 'object',

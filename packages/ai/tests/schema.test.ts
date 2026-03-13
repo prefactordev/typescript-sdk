@@ -1,12 +1,19 @@
-import { describe, expect, test } from 'bun:test';
-import { buildToolSpanSchema, GENERIC_OBJECT_SCHEMA } from '../src/tool-span-contract.js';
+import { afterEach, describe, expect, spyOn, test } from 'bun:test';
 import {
   DEFAULT_AI_AGENT_SCHEMA,
   normalizeAgentSchema,
   resolveToolSpanType,
 } from '../src/schema.js';
+import { buildToolSpanSchema, GENERIC_OBJECT_SCHEMA } from '../src/tool-span-contract.js';
 
 describe('ai schema normalization', () => {
+  let warnSpy: ReturnType<typeof spyOn> | undefined;
+
+  afterEach(() => {
+    warnSpy?.mockRestore();
+    warnSpy = undefined;
+  });
+
   test('adds tool-specific span schemas and span type mappings', () => {
     const inputSchema = {
       type: 'object',
@@ -61,20 +68,52 @@ describe('ai schema normalization', () => {
     expect(resolveToolSpanType('unknown_tool', normalized.toolSpanTypes)).toBe('ai-sdk:tool');
   });
 
-  test('rejects tool schemas whose normalized span types collide', () => {
-    expect(() =>
-      normalizeAgentSchema({
-        toolSchemas: {
-          get_customer_profile: {
-            spanType: 'get-customer-profile',
-            inputSchema: { type: 'object' },
-          },
-          lookup_customer: {
-            spanType: 'ai-sdk:tool:get-customer-profile',
-            inputSchema: { type: 'object' },
-          },
+  test('warns and skips tool schemas whose normalized span types collide', () => {
+    warnSpy = spyOn(console, 'warn').mockImplementation(() => {});
+
+    const normalized = normalizeAgentSchema({
+      toolSchemas: {
+        get_customer_profile: {
+          spanType: 'get-customer-profile',
+          inputSchema: { type: 'object' },
         },
-      })
-    ).toThrow('conflicts with "get_customer_profile"');
+        lookup_customer: {
+          spanType: 'ai-sdk:tool:get-customer-profile',
+          inputSchema: { type: 'object' },
+        },
+      },
+    });
+
+    expect(normalized.toolSpanTypes).toEqual({
+      get_customer_profile: 'ai-sdk:tool:get-customer-profile',
+    });
+    expect(normalized.agentSchema).toEqual({
+      ...DEFAULT_AI_AGENT_SCHEMA,
+      span_schemas: {
+        ...DEFAULT_AI_AGENT_SCHEMA.span_schemas,
+        'ai-sdk:tool:get-customer-profile': buildToolSpanSchema({ type: 'object' }),
+      },
+      span_result_schemas: {
+        ...DEFAULT_AI_AGENT_SCHEMA.span_result_schemas,
+        'ai-sdk:tool:get-customer-profile': GENERIC_OBJECT_SCHEMA,
+      },
+    });
+    expect(warnSpy).toHaveBeenCalled();
+  });
+
+  test('warns and ignores invalid toolSchemas config without breaking normalization', () => {
+    warnSpy = spyOn(console, 'warn').mockImplementation(() => {});
+
+    const normalized = normalizeAgentSchema({
+      external_identifier: 'custom-schema',
+      toolSchemas: 'bad-config' as unknown as Record<string, unknown>,
+    });
+
+    expect(normalized.toolSpanTypes).toBeUndefined();
+    expect(normalized.agentSchema).toEqual({
+      ...DEFAULT_AI_AGENT_SCHEMA,
+      external_identifier: 'custom-schema',
+    });
+    expect(warnSpy).toHaveBeenCalled();
   });
 });

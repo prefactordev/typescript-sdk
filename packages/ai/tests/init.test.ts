@@ -1,8 +1,16 @@
 import { afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test';
-import { AgentInstanceManager, getClient, init as initCore, Tracer } from '@prefactor/core';
+import {
+  AgentInstanceManager,
+  getClient,
+  init as initCore,
+  type Span,
+  SpanStatus,
+  type SpanType,
+  Tracer,
+} from '@prefactor/core';
+import { init, shutdown, withSpan } from '../src/init.js';
 import { PrefactorAISDK } from '../src/provider.js';
 import { buildToolSpanSchema } from '../src/tool-span-contract.js';
-import { init, shutdown, withSpan } from '../src/init.js';
 
 const baseConfig = {
   transportType: 'http' as const,
@@ -12,6 +20,24 @@ const baseConfig = {
     agentIdentifier: '1.0.0',
   },
 };
+
+function createTestSpan(spanId: string, spanType: string): Span {
+  return {
+    spanId,
+    parentSpanId: null,
+    traceId: `trace-${spanId}`,
+    name: spanId,
+    spanType: spanType as SpanType,
+    startTime: Date.now(),
+    endTime: null,
+    status: SpanStatus.RUNNING,
+    inputs: {},
+    outputs: null,
+    tokenUsage: null,
+    error: null,
+    metadata: {},
+  };
+}
 
 describe('ai init schema registration', () => {
   const originalRegisterSchema = AgentInstanceManager.prototype.registerSchema;
@@ -218,5 +244,52 @@ describe('ai init schema registration', () => {
       startSpanSpy.mockRestore();
       endSpanSpy.mockRestore();
     }
+  });
+
+  test('core provider shutdown finishes started agent instances', async () => {
+    const provider = new PrefactorAISDK();
+    const tracer: Tracer = {
+      startSpan: (options) => createTestSpan(`span-${options.spanType}`, options.spanType),
+      endSpan: () => {},
+      close: async () => {},
+      startAgentInstance: () => {},
+      finishAgentInstance: () => {},
+    } as unknown as Tracer;
+
+    let finishCalls = 0;
+    const agentManager = {
+      registerSchema: () => {},
+      startInstance: () => {},
+      finishInstance: () => {
+        finishCalls += 1;
+      },
+    } as unknown as AgentInstanceManager;
+
+    const middleware = provider.createMiddleware(tracer, agentManager, {
+      transportType: 'http',
+      httpConfig: baseConfig.httpConfig,
+    }) as {
+      wrapGenerate?: (options: {
+        doGenerate: () => Promise<Record<string, unknown>>;
+        model: Record<string, unknown>;
+        params: Record<string, unknown>;
+      }) => Promise<Record<string, unknown>>;
+    };
+
+    await middleware.wrapGenerate?.({
+      doGenerate: async () => ({
+        finishReason: 'stop',
+        text: 'ok',
+      }),
+      model: {
+        provider: 'anthropic.messages',
+        modelId: 'claude-3-haiku-20240307',
+      },
+      params: {},
+    });
+
+    provider.shutdown();
+
+    expect(finishCalls).toBe(1);
   });
 });
