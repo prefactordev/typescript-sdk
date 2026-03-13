@@ -8,7 +8,7 @@
  * @packageDocumentation
  */
 
-import type { TokenUsage } from '@prefactor/core';
+import type { JsonSchema, TokenUsage, ToolSchemaConfig } from '@prefactor/core';
 
 /**
  * Configuration options for the Prefactor middleware.
@@ -85,3 +85,5 @@ export interface ToolCallInfo {
   /** Output from the tool (if available) */
   output?: unknown;
 }
+
+export type { JsonSchema, ToolSchemaConfig };

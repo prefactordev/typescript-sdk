@@ -48,4 +48,6 @@ docs/plans/
 
 # Prefactor CLI profile
 prefactor.json
+.agents/
+.desloppify/
 .claude/skills/desloppify/SKILL.md

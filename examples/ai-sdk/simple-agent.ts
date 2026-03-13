@@ -11,7 +11,7 @@
  */
 
 import { init } from '@prefactor/core';
-import { PrefactorAISDK, type LanguageModelMiddleware } from '@prefactor/ai';
+import { PrefactorAISDK } from '@prefactor/ai';
 import { generateText, wrapLanguageModel, tool, stepCountIs } from 'ai';
 import { anthropic } from '@ai-sdk/anthropic';
 import { z } from 'zod';
@@ -144,7 +144,7 @@ async function main() {
   // This is the key difference from the experimental_telemetry approach
   const model = wrapLanguageModel({
     model: anthropic('claude-3-haiku-20240307'),
-    middleware: prefactor.getMiddleware() as LanguageModelMiddleware,
+    middleware: prefactor.getMiddleware(),
   });
 
   console.log('Model wrapped with Prefactor middleware');

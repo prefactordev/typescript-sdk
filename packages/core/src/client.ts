@@ -29,7 +29,7 @@ export type MiddlewareLike = unknown;
 /**
  * Provider integration contract for Prefactor SDK clients.
  */
-export interface PrefactorProvider {
+export interface PrefactorProvider<TMiddleware = MiddlewareLike> {
   /**
    * Creates provider middleware bound to the core runtime services.
    *
@@ -38,15 +38,20 @@ export interface PrefactorProvider {
    * @param config - Resolved SDK configuration.
    * @returns Provider middleware consumed by upstream frameworks.
    */
-  createMiddleware(
-    tracer: Tracer,
-    agentManager: AgentInstanceManager,
-    config: Config
-  ): MiddlewareLike;
+  createMiddleware(tracer: Tracer, agentManager: AgentInstanceManager, config: Config): TMiddleware;
   /**
    * Optional provider-level cleanup hook invoked during client shutdown.
    */
   shutdown?: () => void | Promise<void>;
+  /**
+   * Normalizes a user- or provider-authored agent schema before core registers it.
+   *
+   * @param agentSchema - Authored agent schema configuration.
+   * @returns Normalized schema, or `undefined` to leave the input unchanged.
+   */
+  normalizeAgentSchema?: (
+    agentSchema: Record<string, unknown>
+  ) => Record<string, unknown> | undefined;
   /**
    * Provides a default agent schema when a user does not supply one.
    *
@@ -55,13 +60,13 @@ export interface PrefactorProvider {
   getDefaultAgentSchema?: () => Record<string, unknown> | undefined;
 }
 
-let prefactorClient: PrefactorClient | null = null;
+let prefactorClient: PrefactorClient<MiddlewareLike> | null = null;
 let prefactorInitKey: string | null = null;
 
-export class PrefactorClient {
+export class PrefactorClient<TMiddleware = MiddlewareLike> {
   private readonly core: CoreRuntime;
-  private readonly middleware: MiddlewareLike;
-  private readonly provider: PrefactorProvider;
+  private readonly middleware: TMiddleware;
+  private readonly provider: PrefactorProvider<TMiddleware>;
 
   /**
    * Creates a Prefactor client bound to a runtime and provider middleware.
@@ -70,7 +75,11 @@ export class PrefactorClient {
    * @param middleware - Provider middleware returned by the integration.
    * @param provider - Provider used to construct the client.
    */
-  constructor(core: CoreRuntime, middleware: MiddlewareLike, provider: PrefactorProvider) {
+  constructor(
+    core: CoreRuntime,
+    middleware: TMiddleware,
+    provider: PrefactorProvider<TMiddleware>
+  ) {
     this.core = core;
     this.middleware = middleware;
     this.provider = provider;
@@ -90,7 +99,7 @@ export class PrefactorClient {
    *
    * @returns Provider middleware object.
    */
-  getMiddleware(): MiddlewareLike {
+  getMiddleware(): TMiddleware {
     return this.middleware;
   }
 
@@ -135,9 +144,9 @@ export class PrefactorClient {
 /**
  * Options for initializing the global Prefactor client.
  */
-export interface PrefactorOptions {
+export interface PrefactorOptions<TMiddleware = MiddlewareLike> {
   /** Provider integration used to create middleware and defaults. */
-  provider: PrefactorProvider;
+  provider: PrefactorProvider<TMiddleware>;
   /** Optional HTTP configuration overrides for the runtime config. */
   httpConfig?: Config['httpConfig'];
 }
@@ -150,7 +159,9 @@ export interface PrefactorOptions {
  * @param options - Initialization options.
  * @returns Global Prefactor client instance.
  */
-export function init(options: PrefactorOptions): PrefactorClient {
+export function init<TMiddleware = MiddlewareLike>(
+  options: PrefactorOptions<TMiddleware>
+): PrefactorClient<TMiddleware> {
   const nextInitKey = buildInitKey(options);
 
   if (prefactorClient) {
@@ -161,7 +172,7 @@ export function init(options: PrefactorOptions): PrefactorClient {
       );
     }
 
-    return prefactorClient;
+    return prefactorClient as PrefactorClient<TMiddleware>;
   }
 
   configureLogging();
@@ -180,6 +191,21 @@ export function init(options: PrefactorOptions): PrefactorClient {
     };
   }
 
+  if (finalConfig.httpConfig?.agentSchema) {
+    const normalizedSchema = options.provider.normalizeAgentSchema?.(
+      finalConfig.httpConfig.agentSchema
+    );
+    if (normalizedSchema) {
+      finalConfig = {
+        ...finalConfig,
+        httpConfig: {
+          ...finalConfig.httpConfig,
+          agentSchema: normalizedSchema,
+        },
+      };
+    }
+  }
+
   const core = createCore(finalConfig);
 
   const httpConfig = finalConfig.httpConfig;
@@ -189,10 +215,10 @@ export function init(options: PrefactorOptions): PrefactorClient {
 
   const middleware = options.provider.createMiddleware(core.tracer, core.agentManager, finalConfig);
 
-  prefactorClient = new PrefactorClient(core, middleware, options.provider);
+  prefactorClient = new PrefactorClient<TMiddleware>(core, middleware, options.provider);
   prefactorInitKey = nextInitKey;
 
-  return prefactorClient;
+  return prefactorClient as PrefactorClient<TMiddleware>;
 }
 
 /**
@@ -200,8 +226,8 @@ export function init(options: PrefactorOptions): PrefactorClient {
  *
  * @returns Active global client or `null`.
  */
-export function getClient(): PrefactorClient | null {
-  return prefactorClient;
+export function getClient<TMiddleware = MiddlewareLike>(): PrefactorClient<TMiddleware> | null {
+  return prefactorClient as PrefactorClient<TMiddleware> | null;
 }
 
 function buildInitKey(options: PrefactorOptions): string {
