@@ -250,10 +250,15 @@ function extractToolCallId(args: unknown[]): string | undefined {
 
 function extractPromptToolResults(params: Record<string, unknown>): PromptToolResult[] {
   const prompt = Array.isArray(params.prompt) ? (params.prompt as PromptMessage[]) : [];
+  const trailingToolMessageStartIndex = findTrailingToolMessageStartIndex(prompt);
+  if (trailingToolMessageStartIndex === -1) {
+    return [];
+  }
+
   const toolCallInputs = new Map<string, unknown>();
   const results: PromptToolResult[] = [];
 
-  for (const message of prompt) {
+  for (const [index, message] of prompt.entries()) {
     const content = Array.isArray(message.content) ? (message.content as PromptPart[]) : [];
 
     if (message.role === 'assistant') {
@@ -261,7 +266,7 @@ function extractPromptToolResults(params: Record<string, unknown>): PromptToolRe
       continue;
     }
 
-    if (message.role !== 'tool') {
+    if (message.role !== 'tool' || index < trailingToolMessageStartIndex) {
       continue;
     }
 
@@ -269,6 +274,19 @@ function extractPromptToolResults(params: Record<string, unknown>): PromptToolRe
   }
 
   return results;
+}
+
+function findTrailingToolMessageStartIndex(prompt: PromptMessage[]): number {
+  if (prompt.length === 0 || prompt.at(-1)?.role !== 'tool') {
+    return -1;
+  }
+
+  let index = prompt.length - 1;
+  while (index >= 0 && prompt[index]?.role === 'tool') {
+    index -= 1;
+  }
+
+  return index + 1;
 }
 
 function collectAssistantToolInputs(

@@ -515,4 +515,235 @@ describe('ai middleware tool instrumentation', () => {
     const toolEnds = ended.filter((entry) => entry.span.spanType === `ai-sdk:${SpanType.TOOL}`);
     expect(toolEnds).toHaveLength(2);
   });
+
+  test('only emits prompt-derived tool spans for the newest trailing tool-result block', async () => {
+    const started: Array<{ spanType: string; inputs: Record<string, unknown> }> = [];
+
+    const tracer: Tracer = {
+      startSpan: (options) => {
+        started.push({ spanType: options.spanType, inputs: options.inputs });
+        return createSpan(`span-${started.length}`, options.spanType, options.inputs);
+      },
+      endSpan: () => {},
+      close: async () => {},
+      startAgentInstance: () => {},
+      finishAgentInstance: () => {},
+    } as unknown as Tracer;
+
+    const middleware = createPrefactorMiddleware(tracer, undefined, {
+      agentManager: agentManagerStub,
+      toolSpanTypes: {
+        get_customer_profile: 'ai-sdk:tool:get-customer-profile',
+        send_email: 'ai-sdk:tool:send-email',
+      },
+    }) as {
+      wrapGenerate?: (arg: unknown) => Promise<unknown>;
+    };
+
+    const baseResult = {
+      content: [{ type: 'text', text: 'done' }],
+      finishReason: 'stop',
+      usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+      warnings: [],
+    };
+
+    await middleware.wrapGenerate?.({
+      doGenerate: async () => baseResult,
+      params: {
+        prompt: [
+          {
+            role: 'user',
+            content: [{ type: 'text', text: 'start' }],
+          },
+        ],
+      },
+      model: { provider: 'test', modelId: 'test' },
+    });
+
+    await middleware.wrapGenerate?.({
+      doGenerate: async () => baseResult,
+      params: {
+        prompt: [
+          {
+            role: 'user',
+            content: [{ type: 'text', text: 'start' }],
+          },
+          {
+            role: 'assistant',
+            content: [
+              {
+                type: 'tool-call',
+                toolName: 'get_customer_profile',
+                toolCallId: 'call-1',
+                input: { customerId: 'cust_123' },
+              },
+            ],
+          },
+          {
+            role: 'tool',
+            content: [
+              {
+                type: 'tool-result',
+                toolName: 'get_customer_profile',
+                toolCallId: 'call-1',
+                output: { type: 'text', value: '{"id":"cust_123"}' },
+              },
+            ],
+          },
+        ],
+      },
+      model: { provider: 'test', modelId: 'test' },
+    });
+
+    await middleware.wrapGenerate?.({
+      doGenerate: async () => baseResult,
+      params: {
+        prompt: [
+          {
+            role: 'user',
+            content: [{ type: 'text', text: 'start' }],
+          },
+          {
+            role: 'assistant',
+            content: [
+              {
+                type: 'tool-call',
+                toolName: 'get_customer_profile',
+                toolCallId: 'call-1',
+                input: { customerId: 'cust_123' },
+              },
+            ],
+          },
+          {
+            role: 'tool',
+            content: [
+              {
+                type: 'tool-result',
+                toolName: 'get_customer_profile',
+                toolCallId: 'call-1',
+                output: { type: 'text', value: '{"id":"cust_123"}' },
+              },
+            ],
+          },
+          {
+            role: 'assistant',
+            content: [
+              {
+                type: 'tool-call',
+                toolName: 'send_email',
+                toolCallId: 'call-2',
+                input: { to: 'cust_123@example.com', subject: 'done' },
+              },
+            ],
+          },
+          {
+            role: 'tool',
+            content: [
+              {
+                type: 'tool-result',
+                toolName: 'send_email',
+                toolCallId: 'call-2',
+                output: { type: 'text', value: '{"accepted":true}' },
+              },
+            ],
+          },
+        ],
+      },
+      model: { provider: 'test', modelId: 'test' },
+    });
+
+    await middleware.wrapGenerate?.({
+      doGenerate: async () => baseResult,
+      params: {
+        prompt: [
+          {
+            role: 'user',
+            content: [{ type: 'text', text: 'start' }],
+          },
+          {
+            role: 'assistant',
+            content: [
+              {
+                type: 'tool-call',
+                toolName: 'get_customer_profile',
+                toolCallId: 'call-1',
+                input: { customerId: 'cust_123' },
+              },
+            ],
+          },
+          {
+            role: 'tool',
+            content: [
+              {
+                type: 'tool-result',
+                toolName: 'get_customer_profile',
+                toolCallId: 'call-1',
+                output: { type: 'text', value: '{"id":"cust_123"}' },
+              },
+            ],
+          },
+          {
+            role: 'assistant',
+            content: [
+              {
+                type: 'tool-call',
+                toolName: 'send_email',
+                toolCallId: 'call-2',
+                input: { to: 'cust_123@example.com', subject: 'done' },
+              },
+            ],
+          },
+          {
+            role: 'tool',
+            content: [
+              {
+                type: 'tool-result',
+                toolName: 'send_email',
+                toolCallId: 'call-2',
+                output: { type: 'text', value: '{"accepted":true}' },
+              },
+            ],
+          },
+          {
+            role: 'assistant',
+            content: [
+              {
+                type: 'tool-call',
+                toolName: 'get_current_date',
+                toolCallId: 'call-3',
+                input: {},
+              },
+            ],
+          },
+          {
+            role: 'tool',
+            content: [
+              {
+                type: 'tool-result',
+                toolName: 'get_current_date',
+                toolCallId: 'call-3',
+                output: { type: 'text', value: '2026-03-12' },
+              },
+            ],
+          },
+        ],
+      },
+      model: { provider: 'test', modelId: 'test' },
+    });
+
+    const toolStarts = started.filter((entry) => entry.spanType.startsWith('ai-sdk:tool'));
+    expect(toolStarts).toHaveLength(3);
+    expect(
+      toolStarts.filter((entry) => entry.spanType === 'ai-sdk:tool:get-customer-profile')
+    ).toHaveLength(1);
+    expect(toolStarts.filter((entry) => entry.spanType === 'ai-sdk:tool:send-email')).toHaveLength(
+      1
+    );
+    expect(toolStarts.filter((entry) => entry.spanType === 'ai-sdk:tool')).toHaveLength(1);
+    expect(toolStarts.map((entry) => entry.inputs.toolCallId)).toEqual([
+      'call-1',
+      'call-2',
+      'call-3',
+    ]);
+  });
 });
