@@ -12,7 +12,7 @@
 import { anthropic } from '@ai-sdk/anthropic';
 import { generateText, stepCountIs, tool, wrapLanguageModel } from 'ai';
 import { init } from '@prefactor/core';
-import { PrefactorAISDK, type LanguageModelMiddleware } from '@prefactor/ai';
+import { PrefactorAISDK } from '@prefactor/ai';
 import { z } from 'zod';
 
 const customSchema = {
@@ -145,23 +145,22 @@ async function main() {
   console.log('='.repeat(80));
   console.log();
 
-  let prefactor: ReturnType<typeof init> | undefined;
-  try {
-    prefactor = init({
-      provider: new PrefactorAISDK(),
-      httpConfig: {
-        apiUrl: PREFACTOR_API_URL,
-        apiToken: PREFACTOR_API_TOKEN,
-        agentId: PREFACTOR_AGENT_ID,
-        agentIdentifier: '1.0.0-schema',
-        agentName: 'AI SDK Custom Schema Demo',
-        agentSchema: customSchema,
-      },
-    });
+  const prefactor = init({
+    provider: new PrefactorAISDK(),
+    httpConfig: {
+      apiUrl: PREFACTOR_API_URL,
+      apiToken: PREFACTOR_API_TOKEN,
+      agentId: PREFACTOR_AGENT_ID,
+      agentIdentifier: '1.0.0-schema',
+      agentName: 'AI SDK Custom Schema Demo',
+      agentSchema: customSchema,
+    },
+  });
 
+  try {
     const model = wrapLanguageModel({
       model: anthropic('claude-3-haiku-20240307'),
-      middleware: prefactor.getMiddleware() as LanguageModelMiddleware,
+      middleware: prefactor.getMiddleware(),
     });
 
     const getTodayDateTool = tool({

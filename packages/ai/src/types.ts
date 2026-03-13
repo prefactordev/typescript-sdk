@@ -8,7 +8,7 @@
  * @packageDocumentation
  */
 
-import type { TokenUsage } from '@prefactor/core';
+import type { JsonSchema, TokenUsage, ToolSchemaConfig } from '@prefactor/core';
 
 /**
  * Configuration options for the Prefactor middleware.
@@ -26,27 +26,6 @@ export interface MiddlewareConfig {
    * @default true
    */
   captureTools?: boolean;
-}
-
-/**
- * JSON Schema fragment for a tool's structured input payload.
- */
-export type JsonSchema = Record<string, unknown>;
-
-/**
- * User-defined tool span schema configuration.
- */
-export interface ToolSchemaConfig {
-  /**
-   * Tool-specific schema suffix to emit for this tool.
-   *
-   * Values are normalized under `ai-sdk:tool:*`, so `send-email` becomes
-   * `ai-sdk:tool:send-email`.
-   */
-  spanType: string;
-
-  /** JSON Schema describing the tool call input shape. */
-  inputSchema: JsonSchema;
 }
 
 /**
@@ -106,3 +85,5 @@ export interface ToolCallInfo {
   /** Output from the tool (if available) */
   output?: unknown;
 }
+
+export type { JsonSchema, ToolSchemaConfig };

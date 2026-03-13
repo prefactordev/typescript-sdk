@@ -1,16 +1,10 @@
-import type {
-  AgentInstanceManager,
-  Config,
-  MiddlewareLike,
-  PrefactorProvider,
-  Tracer,
-} from '@prefactor/core';
+import type { AgentInstanceManager, Config, PrefactorProvider, Tracer } from '@prefactor/core';
 import { createPrefactorMiddleware } from './middleware.js';
 import {
   DEFAULT_AI_AGENT_SCHEMA as DEFAULT_AI_AGENT_SCHEMA_BASE,
   normalizeAgentSchema,
 } from './schema.js';
-import type { MiddlewareConfig } from './types.js';
+import type { LanguageModelMiddleware, MiddlewareConfig } from './types.js';
 
 export const DEFAULT_AI_AGENT_SCHEMA = DEFAULT_AI_AGENT_SCHEMA_BASE;
 
@@ -19,9 +13,11 @@ export interface PrefactorAISDKOptions {
   agentSchema?: Record<string, unknown>;
 }
 
-export class PrefactorAISDK implements PrefactorProvider {
+export class PrefactorAISDK implements PrefactorProvider<LanguageModelMiddleware> {
   private readonly options: PrefactorAISDKOptions;
   private toolSpanTypes: Record<string, string> | undefined;
+  private agentManager: AgentInstanceManager | null = null;
+  private agentLifecycle: { started: boolean } | null = null;
 
   constructor(options: PrefactorAISDKOptions = {}) {
     this.options = options;
@@ -31,7 +27,8 @@ export class PrefactorAISDK implements PrefactorProvider {
     tracer: Tracer,
     agentManager: AgentInstanceManager,
     coreConfig: Config
-  ): MiddlewareLike {
+  ): LanguageModelMiddleware {
+    this.agentManager = agentManager;
     const httpConfig = coreConfig.httpConfig;
     const agentInfo = httpConfig
       ? {
@@ -43,6 +40,7 @@ export class PrefactorAISDK implements PrefactorProvider {
       : undefined;
 
     const agentLifecycle = { started: false };
+    this.agentLifecycle = agentLifecycle;
 
     return createPrefactorMiddleware(tracer, this.options.middleware, {
       agentManager,
@@ -51,6 +49,16 @@ export class PrefactorAISDK implements PrefactorProvider {
       deadTimeoutMs: 5 * 60 * 1000,
       toolSpanTypes: this.toolSpanTypes,
     });
+  }
+
+  shutdown(): void {
+    if (this.agentLifecycle?.started) {
+      this.agentManager?.finishInstance();
+      this.agentLifecycle.started = false;
+    }
+
+    this.agentManager = null;
+    this.agentLifecycle = null;
   }
 
   normalizeAgentSchema(agentSchema: Record<string, unknown>): Record<string, unknown> {
