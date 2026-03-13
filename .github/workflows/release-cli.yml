@@ -53,6 +53,9 @@ jobs:
           - os: macos-latest
             artifact: prefactor-bun-darwin-arm64
             bin: prefactor-macos-arm64
+          - os: macos-13
+            artifact: prefactor-bun-darwin-x64
+            bin: prefactor-macos-x64
           - os: windows-latest
             artifact: prefactor-bun-windows-x64
             bin: prefactor-windows-x64.exe
