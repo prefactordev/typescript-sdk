@@ -49,6 +49,5 @@ docs/plans/
 # Prefactor CLI profile
 prefactor.json
 .agents/
-.deslopify/
 .desloppify/
 .claude/skills/desloppify/SKILL.md
