@@ -1,0 +1,115 @@
+name: Release CLI Binaries
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - target: bun-linux-x64
+            outfile: prefactor-linux-x64
+          - target: bun-linux-arm64
+            outfile: prefactor-linux-arm64
+          - target: bun-darwin-x64
+            outfile: prefactor-macos-x64
+          - target: bun-darwin-arm64
+            outfile: prefactor-macos-arm64
+          - target: bun-windows-x64
+            outfile: prefactor-windows-x64.exe
+          - target: bun-windows-arm64
+            outfile: prefactor-windows-arm64.exe
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+      - run: bun run build
+      - run: |
+          bun build \
+            --compile \
+            --target=${{ matrix.target }} \
+            --minify \
+            packages/cli/src/bin/cli.ts \
+            --outfile dist/cli/${{ matrix.outfile }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: prefactor-${{ matrix.target }}
+          path: dist/cli/${{ matrix.outfile }}
+
+  smoke-test:
+    needs: build
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            artifact: prefactor-bun-linux-x64
+            bin: prefactor-linux-x64
+          - os: ubuntu-24.04-arm
+            artifact: prefactor-bun-linux-arm64
+            bin: prefactor-linux-arm64
+          - os: macos-latest
+            artifact: prefactor-bun-darwin-arm64
+            bin: prefactor-macos-arm64
+          - os: macos-15-intel
+            artifact: prefactor-bun-darwin-x64
+            bin: prefactor-macos-x64
+          - os: windows-latest
+            artifact: prefactor-bun-windows-x64
+            bin: prefactor-windows-x64.exe
+          - os: windows-11-arm
+            artifact: prefactor-bun-windows-arm64
+            bin: prefactor-windows-arm64.exe
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+      - name: Run smoke test (unix)
+        if: runner.os != 'Windows'
+        run: |
+          chmod +x ${{ matrix.bin }}
+          ./${{ matrix.bin }} --version
+      - name: Run smoke test (windows)
+        if: runner.os == 'Windows'
+        run: .\${{ matrix.bin }} --version
+
+  release:
+    runs-on: ubuntu-latest
+    needs: [build, smoke-test]
+    concurrency:
+      group: ${{ github.ref_type != 'tag' && format('{0}-canary', github.repository) || format('{0}-{1}', github.workflow, github.ref) }}
+      cancel-in-progress: ${{ github.ref_type != 'tag' }}
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist/cli
+          merge-multiple: true
+      - name: Create versioned release
+        if: github.ref_type == 'tag'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          prerelease: false
+          files: dist/cli/*
+      - name: Delete canary tag
+        if: github.ref_type != 'tag'
+        run: gh api -X DELETE /repos/${{ github.repository }}/git/refs/tags/canary || true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Create canary release
+        if: github.ref_type != 'tag'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: canary
+          target_commitish: ${{ github.sha }}
+          prerelease: true
+          files: dist/cli/*
