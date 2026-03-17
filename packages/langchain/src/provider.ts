@@ -1,9 +1,4 @@
-import type {
-  AgentInstanceManager,
-  Config,
-  PrefactorProvider,
-  Tracer,
-} from '@prefactor/core';
+import type { AgentInstanceManager, Config, PrefactorProvider, Tracer } from '@prefactor/core';
 import { type AgentMiddleware, createMiddleware } from 'langchain';
 import { PrefactorMiddleware } from './middleware.js';
 import {
