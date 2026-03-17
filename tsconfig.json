@@ -4,6 +4,7 @@
     { "path": "./packages/core" },
     { "path": "./packages/cli" },
     { "path": "./packages/ai" },
+    { "path": "./packages/claude" },
     { "path": "./packages/langchain" },
     { "path": "./packages/openclaw" },
   ],
