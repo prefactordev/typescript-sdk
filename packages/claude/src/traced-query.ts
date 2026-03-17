@@ -88,34 +88,25 @@ function wrapQuery(
     config
   );
 
-  // Preserve Query interface methods by proxying them through
-  const wrapped = generator as Query;
-  wrapped.interrupt = stream.interrupt.bind(stream);
-  wrapped.close = stream.close.bind(stream);
-
-  // Proxy additional Query methods if they exist
-  if ('rewindFiles' in stream) {
-    // biome-ignore lint/suspicious/noExplicitAny: proxying dynamic Query methods
-    (wrapped as any).rewindFiles = (stream as any).rewindFiles.bind(stream);
-  }
-  if ('setPermissionMode' in stream) {
-    // biome-ignore lint/suspicious/noExplicitAny: proxying dynamic Query methods
-    (wrapped as any).setPermissionMode = (stream as any).setPermissionMode.bind(stream);
-  }
-  if ('setModel' in stream) {
-    // biome-ignore lint/suspicious/noExplicitAny: proxying dynamic Query methods
-    (wrapped as any).setModel = (stream as any).setModel.bind(stream);
-  }
-  if ('mcpServerStatus' in stream) {
-    // biome-ignore lint/suspicious/noExplicitAny: proxying dynamic Query methods
-    (wrapped as any).mcpServerStatus = (stream as any).mcpServerStatus.bind(stream);
-  }
-  if ('streamInput' in stream) {
-    // biome-ignore lint/suspicious/noExplicitAny: proxying dynamic Query methods
-    (wrapped as any).streamInput = (stream as any).streamInput.bind(stream);
-  }
-
-  return wrapped;
+  // Use a Proxy to forward all property accesses to the underlying stream,
+  // except for the async iterator protocol which comes from our tapStream generator.
+  return new Proxy(stream, {
+    get(target, prop, receiver) {
+      // Async iterator protocol comes from our instrumented generator
+      if (prop === Symbol.asyncIterator) {
+        return () => generator;
+      }
+      // next/return/throw come from our generator to drive iteration
+      if (prop === 'next' || prop === 'return' || prop === 'throw') {
+        const genMethod = generator[prop as keyof AsyncGenerator];
+        return typeof genMethod === 'function' ? genMethod.bind(generator) : genMethod;
+      }
+      // Everything else (interrupt, close, setModel, accountInfo, etc.)
+      // delegates to the underlying stream
+      const value = Reflect.get(target, prop, receiver);
+      return typeof value === 'function' ? value.bind(target) : value;
+    },
+  });
 }
 
 async function* tapStream(
@@ -315,3 +306,6 @@ function handleResultMessage(
     agentLifecycle.started = false;
   }
 }
+
+/** @internal Exported for testing only */
+export const wrapQueryForTest = wrapQuery;
