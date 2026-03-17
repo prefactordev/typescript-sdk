@@ -226,9 +226,9 @@ export function init<TMiddleware = MiddlewareLike>(
  *
  * @returns Active global client or `null`.
  */
-export function getClient<TMiddleware = MiddlewareLike>(): PrefactorClient<TMiddleware> | null {
-  return prefactorClient as PrefactorClient<TMiddleware> | null;
-}
+ export function getClient(): PrefactorClient<MiddlewareLike> | null {
+   return prefactorClient
+ }
 
 function buildInitKey(options: PrefactorOptions): string {
   const providerType = options.provider.constructor?.name ?? 'anonymous-provider';

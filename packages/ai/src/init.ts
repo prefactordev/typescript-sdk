@@ -132,6 +132,10 @@ export function init(
   config?: Partial<Config>,
   middlewareConfig?: MiddlewareConfig
 ): ReturnType<typeof createPrefactorMiddleware> {
+  if (globalMiddleware !== null) {
+    return globalMiddleware;
+  }
+
   configureLogging();
   const preparedConfig = applyDefaultHttpConfig(config);
   const { config: finalConfig, toolSpanTypes } = normalizeConfiguredAgentSchema(
@@ -139,11 +143,6 @@ export function init(
   );
 
   logger.info('Initializing Prefactor AI Middleware', { transport: finalConfig.transportType });
-
-  // Return existing middleware if already initialized
-  if (globalMiddleware !== null) {
-    return globalMiddleware;
-  }
 
   const core = createCore(finalConfig);
   globalCore = core;
