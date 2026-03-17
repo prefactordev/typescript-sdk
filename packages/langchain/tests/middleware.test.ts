@@ -180,6 +180,22 @@ describe('PrefactorMiddleware', () => {
     expect(transport.finishedInstances).toBe(1);
   });
 
+  test('preserves scalar strings in tool response content without coercion', async () => {
+    const transport = new CaptureTransport();
+    const tracer = new Tracer(transport);
+    const agentManager = new AgentInstanceManager(transport, {});
+    agentManager.registerSchema({ type: 'object' });
+    const middleware = new PrefactorMiddleware(tracer, agentManager);
+
+    await middleware.wrapToolCall(
+      { name: 'lookup', input: { key: 'count' } },
+      async () => ({ content: '42' })
+    );
+
+    const toolSpan = transport.spans.find((span) => span.spanType === 'langchain:tool');
+    expect(toolSpan?.outputs).toEqual({ output: '42' });
+  });
+
   test('uses one agent instance across multiple runs and finishes on shutdown', async () => {
     const transport = new CaptureTransport();
     const tracer = new Tracer(transport);

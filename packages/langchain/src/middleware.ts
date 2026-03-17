@@ -296,7 +296,11 @@ export class PrefactorMiddleware {
     }
 
     try {
-      return JSON.parse(content) as unknown;
+      const parsed = JSON.parse(content) as unknown;
+      if (typeof parsed === 'object' && parsed !== null) {
+        return parsed;
+      }
+      return content;
     } catch {
       return content;
     }
