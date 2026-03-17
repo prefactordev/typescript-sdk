@@ -187,10 +187,9 @@ describe('PrefactorMiddleware', () => {
     agentManager.registerSchema({ type: 'object' });
     const middleware = new PrefactorMiddleware(tracer, agentManager);
 
-    await middleware.wrapToolCall(
-      { name: 'lookup', input: { key: 'count' } },
-      async () => ({ content: '42' })
-    );
+    await middleware.wrapToolCall({ name: 'lookup', input: { key: 'count' } }, async () => ({
+      content: '42',
+    }));
 
     const toolSpan = transport.spans.find((span) => span.spanType === 'langchain:tool');
     expect(toolSpan?.outputs).toEqual({ output: '42' });

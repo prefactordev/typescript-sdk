@@ -91,7 +91,7 @@ export function init(config?: Partial<Config>): AgentMiddleware {
   if (globalMiddleware !== null) {
     return globalMiddleware;
   }
-  
+
   configureLogging();
   const preparedConfig = applyDefaultHttpConfig(config);
   const { config: finalConfig, toolSpanTypes } = normalizeConfiguredAgentSchema(
