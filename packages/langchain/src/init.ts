@@ -88,15 +88,15 @@ export type ManualSpanOptions = {
  * ```
  */
 export function init(config?: Partial<Config>): AgentMiddleware {
+  if (globalMiddleware !== null) {
+    return globalMiddleware;
+  }
+  
   configureLogging();
   const preparedConfig = applyDefaultHttpConfig(config);
   const { config: finalConfig, toolSpanTypes } = normalizeConfiguredAgentSchema(
     createConfig(preparedConfig)
   );
-
-  if (globalMiddleware !== null) {
-    return globalMiddleware;
-  }
 
   const core = createCore(finalConfig);
   globalCore = core;
