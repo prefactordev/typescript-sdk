@@ -21,23 +21,10 @@ import {
   withSpan as withCoreSpan,
 } from '@prefactor/core';
 import { createPrefactorMiddleware } from './middleware.js';
+import { DEFAULT_AI_AGENT_SCHEMA, normalizeAgentSchema } from './schema.js';
 import type { MiddlewareConfig } from './types.js';
 
 const logger = getLogger('ai-init');
-
-const DEFAULT_AI_AGENT_SCHEMA = {
-  external_identifier: 'ai-sdk-schema',
-  span_schemas: {
-    'ai-sdk:agent': { type: 'object', additionalProperties: true },
-    'ai-sdk:llm': { type: 'object', additionalProperties: true },
-    'ai-sdk:tool': { type: 'object', additionalProperties: true },
-  },
-  span_result_schemas: {
-    'ai-sdk:agent': { type: 'object', additionalProperties: true },
-    'ai-sdk:llm': { type: 'object', additionalProperties: true },
-    'ai-sdk:tool': { type: 'object', additionalProperties: true },
-  },
-} as const;
 
 /** Global Prefactor tracer instance. */
 let globalTracer: Tracer | null = null;
@@ -145,52 +132,17 @@ export function init(
   config?: Partial<Config>,
   middlewareConfig?: MiddlewareConfig
 ): ReturnType<typeof createPrefactorMiddleware> {
-  configureLogging();
-
-  // Build httpConfig from environment if not provided but HTTP transport is requested
-  let configWithHttp = config;
-  const transportType = config?.transportType ?? 'http';
-
-  if (transportType === 'http' && !config?.httpConfig) {
-    const apiUrl = process.env.PREFACTOR_API_URL;
-    const apiToken = process.env.PREFACTOR_API_TOKEN;
-
-    if (!apiUrl || !apiToken) {
-      throw new Error(
-        'HTTP transport requires PREFACTOR_API_URL and PREFACTOR_API_TOKEN environment variables, ' +
-          'or httpConfig to be provided in configuration'
-      );
-    }
-
-    configWithHttp = {
-      ...config,
-      transportType: 'http',
-      httpConfig: {
-        apiUrl,
-        apiToken,
-        agentId: process.env.PREFACTOR_AGENT_ID,
-        agentName: process.env.PREFACTOR_AGENT_NAME,
-        agentIdentifier: process.env.PREFACTOR_AGENT_IDENTIFIER || '1.0.0',
-        agentSchema: DEFAULT_AI_AGENT_SCHEMA,
-      },
-    };
-  } else if (transportType === 'http' && config?.httpConfig && !config.httpConfig.agentSchema) {
-    configWithHttp = {
-      ...config,
-      httpConfig: {
-        ...config.httpConfig,
-        agentSchema: DEFAULT_AI_AGENT_SCHEMA,
-      },
-    };
-  }
-
-  const finalConfig = createConfig(configWithHttp);
-  logger.info('Initializing Prefactor AI Middleware', { transport: finalConfig.transportType });
-
-  // Return existing middleware if already initialized
   if (globalMiddleware !== null) {
     return globalMiddleware;
   }
+
+  configureLogging();
+  const preparedConfig = applyDefaultHttpConfig(config);
+  const { config: finalConfig, toolSpanTypes } = normalizeConfiguredAgentSchema(
+    createConfig(preparedConfig)
+  );
+
+  logger.info('Initializing Prefactor AI Middleware', { transport: finalConfig.transportType });
 
   const core = createCore(finalConfig);
   globalCore = core;
@@ -216,6 +168,7 @@ export function init(
     agentInfo,
     agentManager: core.agentManager,
     agentLifecycle,
+    toolSpanTypes,
   });
 
   return globalMiddleware;
@@ -255,10 +208,7 @@ export function getTracer(): Tracer {
  * @param fn - Function to execute in span context.
  * @returns Result from `fn`.
  */
-export async function withSpan<T>(
-  options: ManualSpanOptions,
-  fn: () => Promise<T> | T
-): Promise<T> {
+export function withSpan<T>(options: ManualSpanOptions, fn: () => Promise<T> | T): Promise<T> {
   return withCoreSpan(options, fn);
 }
 
@@ -267,6 +217,75 @@ export { shutdownCore as shutdown };
 // Automatic shutdown on process exit
 process.on('beforeExit', () => {
   shutdownCore().catch((error) => {
-    console.error('Error during Prefactor AI Middleware shutdown:', error);
+    logger.error('Error during Prefactor AI Middleware shutdown:', error);
   });
 });
+
+function applyDefaultHttpConfig(config?: Partial<Config>): Partial<Config> | undefined {
+  const transportType = config?.transportType ?? 'http';
+  if (transportType !== 'http') {
+    return config;
+  }
+
+  if (!config?.httpConfig) {
+    return buildHttpConfigFromEnvironment(config);
+  }
+
+  if (config.httpConfig.agentSchema) {
+    return config;
+  }
+
+  return {
+    ...config,
+    httpConfig: {
+      ...config.httpConfig,
+      agentSchema: DEFAULT_AI_AGENT_SCHEMA,
+    },
+  };
+}
+
+function buildHttpConfigFromEnvironment(config?: Partial<Config>): Partial<Config> {
+  const apiUrl = process.env.PREFACTOR_API_URL;
+  const apiToken = process.env.PREFACTOR_API_TOKEN;
+
+  if (!apiUrl || !apiToken) {
+    throw new Error(
+      'HTTP transport requires PREFACTOR_API_URL and PREFACTOR_API_TOKEN environment variables, ' +
+        'or httpConfig to be provided in configuration'
+    );
+  }
+
+  return {
+    ...config,
+    transportType: 'http',
+    httpConfig: {
+      apiUrl,
+      apiToken,
+      agentId: process.env.PREFACTOR_AGENT_ID,
+      agentName: process.env.PREFACTOR_AGENT_NAME,
+      agentIdentifier: process.env.PREFACTOR_AGENT_IDENTIFIER || '1.0.0',
+      agentSchema: DEFAULT_AI_AGENT_SCHEMA,
+    },
+  };
+}
+
+function normalizeConfiguredAgentSchema(config: Config): {
+  config: Config;
+  toolSpanTypes?: Record<string, string>;
+} {
+  if (!config.httpConfig?.agentSchema) {
+    return { config };
+  }
+
+  const normalizedSchema = normalizeAgentSchema(config.httpConfig.agentSchema);
+  return {
+    config: {
+      ...config,
+      httpConfig: {
+        ...config.httpConfig,
+        agentSchema: normalizedSchema.agentSchema,
+      },
+    },
+    toolSpanTypes: normalizedSchema.toolSpanTypes,
+  };
+}

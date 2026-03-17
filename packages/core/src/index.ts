@@ -75,6 +75,12 @@ export {
 } from './config.js';
 export { type CoreRuntime, createCore } from './create-core.js';
 export { registerShutdownHandler, shutdown } from './lifecycle.js';
+export {
+  type JsonSchema,
+  normalizeAgentToolSchemas,
+  resolveMappedSpanType,
+  type ToolSchemaConfig,
+} from './tool-schema.js';
 export { SpanContext } from './tracing/context.js';
 export {
   createSpanTypePrefixer,
