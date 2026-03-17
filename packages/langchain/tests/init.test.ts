@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test';
-import { AgentInstanceManager, Tracer } from '@prefactor/core';
+import { AgentInstanceManager, getClient, init as initCore, Tracer } from '@prefactor/core';
 import { init, shutdown, withSpan } from '../src/init.js';
+import { PrefactorLangChain } from '../src/provider.js';
+import { buildToolSpanSchema } from '../src/tool-span-contract.js';
 
 const baseConfig = {
   transportType: 'http' as const,
@@ -27,9 +29,10 @@ describe('langchain init schema registration', () => {
   afterEach(async () => {
     AgentInstanceManager.prototype.registerSchema = originalRegisterSchema;
     await shutdown();
+    await getClient()?.shutdown();
   });
 
-  test('registers provided agent schema when configured', () => {
+  test('merges provided agent schema with the default LangChain schema', () => {
     const customSchema = { type: 'object', title: 'Custom' };
 
     init({
@@ -37,7 +40,24 @@ describe('langchain init schema registration', () => {
       httpConfig: { ...baseConfig.httpConfig, agentSchema: customSchema },
     });
 
-    expect(registeredSchemas).toEqual([customSchema]);
+    expect(registeredSchemas).toEqual([
+      {
+        external_identifier: 'langchain-schema',
+        span_schemas: {
+          'langchain:agent': { type: 'object', additionalProperties: true },
+          'langchain:llm': { type: 'object', additionalProperties: true },
+          'langchain:tool': { type: 'object', additionalProperties: true },
+          'langchain:chain': { type: 'object', additionalProperties: true },
+        },
+        span_result_schemas: {
+          'langchain:agent': { type: 'object', additionalProperties: true },
+          'langchain:llm': { type: 'object', additionalProperties: true },
+          'langchain:tool': { type: 'object', additionalProperties: true },
+          'langchain:chain': { type: 'object', additionalProperties: true },
+        },
+        ...customSchema,
+      },
+    ]);
   });
 
   test('registers default schema when schema is not configured', () => {
@@ -62,6 +82,103 @@ describe('langchain init schema registration', () => {
     init(baseConfig);
 
     expect(registeredSchemas).toHaveLength(1);
+  });
+
+  test('compiles toolSchemas into registered schemas for the core provider path', () => {
+    initCore({
+      provider: new PrefactorLangChain(),
+      httpConfig: {
+        ...baseConfig.httpConfig,
+        agentIdentifier: '1.0.1',
+        agentSchema: {
+          external_identifier: 'langchain-tool-schema-test-v1',
+          span_schemas: {},
+          span_result_schemas: {},
+          toolSchemas: {
+            get_customer_profile: {
+              spanType: 'get-customer-profile',
+              inputSchema: {
+                type: 'object',
+                properties: {
+                  customerId: { type: 'string' },
+                },
+                required: ['customerId'],
+              },
+            },
+          },
+        },
+      },
+    });
+
+    expect(registeredSchemas).toHaveLength(1);
+    const schema = registeredSchemas[0] as {
+      span_schemas: Record<string, unknown>;
+      span_result_schemas: Record<string, unknown>;
+      toolSchemas?: unknown;
+    };
+    expect(schema.toolSchemas).toBeUndefined();
+    expect(schema.span_schemas['langchain:tool:get-customer-profile']).toEqual(
+      buildToolSpanSchema({
+        type: 'object',
+        properties: {
+          customerId: { type: 'string' },
+        },
+        required: ['customerId'],
+      })
+    );
+    expect(schema.span_result_schemas['langchain:tool:get-customer-profile']).toEqual({
+      type: 'object',
+      additionalProperties: true,
+    });
+  });
+
+  test('compiles toolSchemas into registered schemas for package init', () => {
+    init({
+      ...baseConfig,
+      httpConfig: {
+        ...baseConfig.httpConfig,
+        agentIdentifier: '1.0.2',
+        agentSchema: {
+          external_identifier: 'langchain-tool-schema-test-v2',
+          span_schemas: {},
+          span_result_schemas: {},
+          toolSchemas: {
+            send_email: {
+              spanType: 'send-email',
+              inputSchema: {
+                type: 'object',
+                properties: {
+                  to: { type: 'string' },
+                  subject: { type: 'string' },
+                },
+                required: ['to', 'subject'],
+              },
+            },
+          },
+        },
+      },
+    });
+
+    const schema = registeredSchemas[0] as {
+      span_schemas: Record<string, unknown>;
+      span_result_schemas: Record<string, unknown>;
+      toolSchemas?: unknown;
+    };
+    expect(schema.toolSchemas).toBeUndefined();
+    expect(schema.span_schemas['langchain:tool:send-email']).toEqual(
+      buildToolSpanSchema({
+        type: 'object',
+        properties: {
+          to: { type: 'string' },
+          subject: { type: 'string' },
+        },
+        required: ['to', 'subject'],
+      })
+    );
+    expect(schema.span_result_schemas['langchain:tool:send-email']).toEqual({
+      type: 'object',
+      additionalProperties: true,
+    });
   });
 
   test('supports manual spans for custom workflow instrumentation', async () => {
