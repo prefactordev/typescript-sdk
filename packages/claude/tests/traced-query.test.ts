@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, test } from 'bun:test';
 import type { HookCallback, HookCallbackMatcher, HookEvent } from '@anthropic-ai/claude-agent-sdk';
 import { type Span, SpanStatus, type Tracer } from '@prefactor/core';
 import { createInstrumentationHooks, finalizeAgentSpan, mergeHooks } from '../src/hooks.js';
-import { wrapQueryForTest } from '../src/traced-query.js';
+import { handleMessageForTest, wrapQueryForTest } from '../src/traced-query.js';
 import type { ClaudeMiddlewareConfig, TracedQueryState } from '../src/types.js';
 
 // ---------------------------------------------------------------------------
@@ -67,6 +67,7 @@ function createMockTracer() {
 function createState(): TracedQueryState {
   return {
     currentLlmSpan: null,
+    currentLlmOutputs: {},
     agentSpan: null,
     agentSpanFinished: false,
     toolSpanMap: new Map(),
@@ -410,5 +411,108 @@ describe('wrapQuery proxy', () => {
     // biome-ignore lint/suspicious/noExplicitAny: testing dynamic proxy access
     await (wrapped as any).accountInfo();
     expect(calls).toEqual(['accountInfo']);
+  });
+});
+
+describe('handleAssistantMessage captureContent', () => {
+  test('stores assistant content as LLM span outputs when captureContent is enabled', () => {
+    const mock = createMockTracer();
+    const state = createState();
+    state.agentSpan = createSpan('claude:agent', {}, 'claude:session');
+
+    // biome-ignore lint/suspicious/noExplicitAny: test mock
+    const agentManager = { startInstance: () => {}, finishInstance: () => {} } as any;
+
+    handleMessageForTest(
+      { type: 'assistant', message: { content: [{ type: 'text', text: 'Hello world' }] } },
+      mock.tracer,
+      agentManager,
+      undefined,
+      undefined,
+      state,
+      { captureContent: true }
+    );
+
+    expect(state.currentLlmSpan).not.toBeNull();
+
+    handleMessageForTest(
+      { type: 'assistant', message: { content: [{ type: 'text', text: 'Second turn' }] } },
+      mock.tracer,
+      agentManager,
+      undefined,
+      undefined,
+      state,
+      { captureContent: true }
+    );
+
+    expect(mock.ended).toHaveLength(1);
+    expect(mock.ended[0].outputs).toEqual({
+      'claude.response.content': [{ type: 'text', text: 'Hello world' }],
+    });
+  });
+
+  test('does not capture content when captureContent is false', () => {
+    const mock = createMockTracer();
+    const state = createState();
+    state.agentSpan = createSpan('claude:agent', {}, 'claude:session');
+
+    // biome-ignore lint/suspicious/noExplicitAny: test mock
+    const agentManager = { startInstance: () => {}, finishInstance: () => {} } as any;
+
+    handleMessageForTest(
+      { type: 'assistant', message: { content: [{ type: 'text', text: 'Secret' }] } },
+      mock.tracer,
+      agentManager,
+      undefined,
+      undefined,
+      state,
+      { captureContent: false }
+    );
+
+    handleMessageForTest(
+      { type: 'assistant', message: { content: [{ type: 'text', text: 'Also secret' }] } },
+      mock.tracer,
+      agentManager,
+      undefined,
+      undefined,
+      state,
+      { captureContent: false }
+    );
+
+    expect(mock.ended).toHaveLength(1);
+    expect(mock.ended[0].outputs).toEqual({});
+  });
+
+  test('result message ends LLM span with captured outputs', () => {
+    const mock = createMockTracer();
+    const state = createState();
+    state.agentSpan = createSpan('claude:agent', {}, 'claude:session');
+
+    // biome-ignore lint/suspicious/noExplicitAny: test mock
+    const agentManager = { startInstance: () => {}, finishInstance: () => {} } as any;
+
+    handleMessageForTest(
+      { type: 'assistant', message: { content: [{ type: 'text', text: 'Final answer' }] } },
+      mock.tracer,
+      agentManager,
+      undefined,
+      undefined,
+      state,
+      { captureContent: true }
+    );
+
+    handleMessageForTest(
+      { type: 'result', result: 'done', subtype: 'end_turn', is_error: false },
+      mock.tracer,
+      agentManager,
+      undefined,
+      undefined,
+      state,
+      { captureContent: true }
+    );
+
+    expect(mock.ended[0].outputs).toEqual({
+      'claude.response.content': [{ type: 'text', text: 'Final answer' }],
+    });
   });
 });

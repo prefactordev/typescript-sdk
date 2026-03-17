@@ -35,6 +35,7 @@ export function createTracedQuery(
 
     const state: TracedQueryState = {
       currentLlmSpan: null,
+      currentLlmOutputs: {},
       agentSpan: null,
       agentSpanFinished: false,
       toolSpanMap: new Map(),
@@ -133,12 +134,13 @@ async function* tapStream(
     if (state.currentLlmSpan) {
       try {
         tracer.endSpan(state.currentLlmSpan, {
-          outputs: { 'claude.finishReason': 'interrupted' },
+          outputs: { ...state.currentLlmOutputs, 'claude.finishReason': 'interrupted' },
         });
       } catch (error) {
         logger.warn('Error ending LLM span in finally', error);
       }
       state.currentLlmSpan = null;
+      state.currentLlmOutputs = {};
     }
 
     // End any remaining tool spans
@@ -231,17 +233,19 @@ function handleAssistantMessage(
   state: TracedQueryState,
   config?: ClaudeMiddlewareConfig
 ): void {
-  // End previous LLM span if exists
+  // End previous LLM span if exists, passing stored outputs
   if (state.currentLlmSpan) {
-    tracer.endSpan(state.currentLlmSpan, {});
+    tracer.endSpan(state.currentLlmSpan, { outputs: state.currentLlmOutputs });
     state.currentLlmSpan = null;
+    state.currentLlmOutputs = {};
   }
 
-  // Start new LLM span as child of agent span
+  // Build outputs for this new LLM turn
   const outputs: Record<string, unknown> = {};
   if (config?.captureContent !== false && msg.message?.content) {
     outputs['claude.response.content'] = msg.message.content;
   }
+  state.currentLlmOutputs = outputs;
 
   const parentSpan = state.agentSpan;
   state.currentLlmSpan = parentSpan
@@ -267,10 +271,11 @@ function handleResultMessage(
   agentLifecycle: { started: boolean } | undefined,
   state: TracedQueryState
 ): void {
-  // End final LLM span
+  // End final LLM span with stored outputs
   if (state.currentLlmSpan) {
-    tracer.endSpan(state.currentLlmSpan, {});
+    tracer.endSpan(state.currentLlmSpan, { outputs: state.currentLlmOutputs });
     state.currentLlmSpan = null;
+    state.currentLlmOutputs = {};
   }
 
   // Extract usage
@@ -309,3 +314,6 @@ function handleResultMessage(
 
 /** @internal Exported for testing only */
 export const wrapQueryForTest = wrapQuery;
+
+/** @internal Exported for testing only */
+export const handleMessageForTest = handleMessage;

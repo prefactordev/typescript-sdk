@@ -33,6 +33,7 @@ export interface ClaudeMiddleware {
  */
 export interface TracedQueryState {
   currentLlmSpan: Span | null;
+  currentLlmOutputs: Record<string, unknown>;
   agentSpan: Span | null;
   agentSpanFinished: boolean;
   toolSpanMap: Map<string, Span>;
