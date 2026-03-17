@@ -12,24 +12,9 @@ import {
 } from '@prefactor/core';
 import { type AgentMiddleware, createMiddleware } from 'langchain';
 import { PrefactorMiddleware } from './middleware.js';
+import { DEFAULT_LANGCHAIN_AGENT_SCHEMA, normalizeAgentSchema } from './schema.js';
 
 const logger = getLogger('init');
-
-const DEFAULT_LANGCHAIN_AGENT_SCHEMA = {
-  external_identifier: 'langchain-schema',
-  span_schemas: {
-    'langchain:agent': { type: 'object', additionalProperties: true },
-    'langchain:llm': { type: 'object', additionalProperties: true },
-    'langchain:tool': { type: 'object', additionalProperties: true },
-    'langchain:chain': { type: 'object', additionalProperties: true },
-  },
-  span_result_schemas: {
-    'langchain:agent': { type: 'object', additionalProperties: true },
-    'langchain:llm': { type: 'object', additionalProperties: true },
-    'langchain:tool': { type: 'object', additionalProperties: true },
-    'langchain:chain': { type: 'object', additionalProperties: true },
-  },
-} as const;
 
 let globalCore: CoreRuntime | null = null;
 let globalTracer: Tracer | null = null;
@@ -104,44 +89,10 @@ export type ManualSpanOptions = {
  */
 export function init(config?: Partial<Config>): AgentMiddleware {
   configureLogging();
-
-  let configWithHttp = config;
-  const transportType = config?.transportType ?? 'http';
-
-  if (transportType === 'http' && !config?.httpConfig) {
-    const apiUrl = process.env.PREFACTOR_API_URL;
-    const apiToken = process.env.PREFACTOR_API_TOKEN;
-
-    if (!apiUrl || !apiToken) {
-      throw new Error(
-        'HTTP transport requires PREFACTOR_API_URL and PREFACTOR_API_TOKEN environment variables, ' +
-          'or httpConfig to be provided in configuration'
-      );
-    }
-
-    configWithHttp = {
-      ...config,
-      transportType: 'http',
-      httpConfig: {
-        apiUrl,
-        apiToken,
-        agentId: process.env.PREFACTOR_AGENT_ID,
-        agentName: process.env.PREFACTOR_AGENT_NAME,
-        agentIdentifier: process.env.PREFACTOR_AGENT_IDENTIFIER || '1.0.0',
-        agentSchema: DEFAULT_LANGCHAIN_AGENT_SCHEMA,
-      },
-    };
-  } else if (transportType === 'http' && config?.httpConfig && !config.httpConfig.agentSchema) {
-    configWithHttp = {
-      ...config,
-      httpConfig: {
-        ...config.httpConfig,
-        agentSchema: DEFAULT_LANGCHAIN_AGENT_SCHEMA,
-      },
-    };
-  }
-
-  const finalConfig = createConfig(configWithHttp);
+  const preparedConfig = applyDefaultHttpConfig(config);
+  const { config: finalConfig, toolSpanTypes } = normalizeConfiguredAgentSchema(
+    createConfig(preparedConfig)
+  );
 
   if (globalMiddleware !== null) {
     return globalMiddleware;
@@ -165,7 +116,12 @@ export function init(config?: Partial<Config>): AgentMiddleware {
       }
     : undefined;
 
-  const prefactorMiddleware = new PrefactorMiddleware(core.tracer, core.agentManager, agentInfo);
+  const prefactorMiddleware = new PrefactorMiddleware(
+    core.tracer,
+    core.agentManager,
+    agentInfo,
+    toolSpanTypes
+  );
 
   const middleware = createMiddleware({
     name: 'prefactor',
@@ -238,6 +194,75 @@ export { shutdownCore as shutdown };
 // Automatic shutdown on process exit
 process.on('beforeExit', () => {
   shutdownCore().catch((error) => {
-    console.error('Error during Prefactor SDK shutdown:', error);
+    logger.error('Error during Prefactor SDK shutdown:', error);
   });
 });
+
+function applyDefaultHttpConfig(config?: Partial<Config>): Partial<Config> | undefined {
+  const transportType = config?.transportType ?? 'http';
+  if (transportType !== 'http') {
+    return config;
+  }
+
+  if (!config?.httpConfig) {
+    return buildHttpConfigFromEnvironment(config);
+  }
+
+  if (config.httpConfig.agentSchema) {
+    return config;
+  }
+
+  return {
+    ...config,
+    httpConfig: {
+      ...config.httpConfig,
+      agentSchema: DEFAULT_LANGCHAIN_AGENT_SCHEMA,
+    },
+  };
+}
+
+function buildHttpConfigFromEnvironment(config?: Partial<Config>): Partial<Config> {
+  const apiUrl = process.env.PREFACTOR_API_URL;
+  const apiToken = process.env.PREFACTOR_API_TOKEN;
+
+  if (!apiUrl || !apiToken) {
+    throw new Error(
+      'HTTP transport requires PREFACTOR_API_URL and PREFACTOR_API_TOKEN environment variables, ' +
+        'or httpConfig to be provided in configuration'
+    );
+  }
+
+  return {
+    ...config,
+    transportType: 'http',
+    httpConfig: {
+      apiUrl,
+      apiToken,
+      agentId: process.env.PREFACTOR_AGENT_ID,
+      agentName: process.env.PREFACTOR_AGENT_NAME,
+      agentIdentifier: process.env.PREFACTOR_AGENT_IDENTIFIER || '1.0.0',
+      agentSchema: DEFAULT_LANGCHAIN_AGENT_SCHEMA,
+    },
+  };
+}
+
+function normalizeConfiguredAgentSchema(config: Config): {
+  config: Config;
+  toolSpanTypes?: Record<string, string>;
+} {
+  if (!config.httpConfig?.agentSchema) {
+    return { config };
+  }
+
+  const normalizedSchema = normalizeAgentSchema(config.httpConfig.agentSchema);
+  return {
+    config: {
+      ...config,
+      httpConfig: {
+        ...config.httpConfig,
+        agentSchema: normalizedSchema.agentSchema,
+      },
+    },
+    toolSpanTypes: normalizedSchema.toolSpanTypes,
+  };
+}

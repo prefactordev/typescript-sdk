@@ -1,35 +1,26 @@
 import type {
   AgentInstanceManager,
-  MiddlewareLike,
+  Config,
   PrefactorProvider,
   Tracer,
 } from '@prefactor/core';
-import { createMiddleware } from 'langchain';
+import { type AgentMiddleware, createMiddleware } from 'langchain';
 import { PrefactorMiddleware } from './middleware.js';
+import {
+  DEFAULT_LANGCHAIN_AGENT_SCHEMA as DEFAULT_LANGCHAIN_AGENT_SCHEMA_BASE,
+  normalizeAgentSchema,
+} from './schema.js';
 
-export const DEFAULT_LANGCHAIN_AGENT_SCHEMA = {
-  external_identifier: 'langchain-schema',
-  span_schemas: {
-    'langchain:agent': { type: 'object', additionalProperties: true },
-    'langchain:llm': { type: 'object', additionalProperties: true },
-    'langchain:tool': { type: 'object', additionalProperties: true },
-    'langchain:chain': { type: 'object', additionalProperties: true },
-  },
-  span_result_schemas: {
-    'langchain:agent': { type: 'object', additionalProperties: true },
-    'langchain:llm': { type: 'object', additionalProperties: true },
-    'langchain:tool': { type: 'object', additionalProperties: true },
-    'langchain:chain': { type: 'object', additionalProperties: true },
-  },
-} as const;
+export const DEFAULT_LANGCHAIN_AGENT_SCHEMA = DEFAULT_LANGCHAIN_AGENT_SCHEMA_BASE;
 
 export interface PrefactorLangChainOptions {
   agentSchema?: Record<string, unknown>;
 }
 
-export class PrefactorLangChain implements PrefactorProvider {
+export class PrefactorLangChain implements PrefactorProvider<AgentMiddleware> {
   private readonly options: PrefactorLangChainOptions;
   private middleware: PrefactorMiddleware | null = null;
+  private toolSpanTypes: Record<string, string> | undefined;
 
   constructor(options: PrefactorLangChainOptions = {}) {
     this.options = options;
@@ -38,9 +29,8 @@ export class PrefactorLangChain implements PrefactorProvider {
   createMiddleware(
     tracer: Tracer,
     agentManager: AgentInstanceManager,
-    // biome-ignore lint/suspicious/noExplicitAny: Config shape varies by version
-    coreConfig: any
-  ): MiddlewareLike {
+    coreConfig: Config
+  ): AgentMiddleware {
     const httpConfig = coreConfig.httpConfig;
     const agentInfo = httpConfig
       ? {
@@ -51,7 +41,7 @@ export class PrefactorLangChain implements PrefactorProvider {
         }
       : undefined;
 
-    this.middleware = new PrefactorMiddleware(tracer, agentManager, agentInfo);
+    this.middleware = new PrefactorMiddleware(tracer, agentManager, agentInfo, this.toolSpanTypes);
     const middleware = this.middleware;
 
     return createMiddleware({
@@ -78,6 +68,12 @@ export class PrefactorLangChain implements PrefactorProvider {
   shutdown(): void {
     this.middleware?.shutdown();
     this.middleware = null;
+  }
+
+  normalizeAgentSchema(agentSchema: Record<string, unknown>): Record<string, unknown> {
+    const normalizedSchema = normalizeAgentSchema(agentSchema);
+    this.toolSpanTypes = normalizedSchema.toolSpanTypes;
+    return normalizedSchema.agentSchema;
   }
 
   getDefaultAgentSchema(): Record<string, unknown> | undefined {
