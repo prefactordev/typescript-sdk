@@ -38,5 +38,7 @@
 
 // Re-export middleware type
 export type { AgentMiddleware } from 'langchain';
+export type { PrefactorLangChainOptions } from './provider.js';
 // Provider
 export { DEFAULT_LANGCHAIN_AGENT_SCHEMA, PrefactorLangChain } from './provider.js';
+export type { JsonSchema, ToolSchemaConfig } from './types.js';
