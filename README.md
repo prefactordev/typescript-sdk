@@ -382,7 +382,7 @@ const config: Config = {
 See the `examples/` directory for complete examples:
 
 - [`examples/basic.ts`](./examples/basic.ts) - Simple LangChain.js agent example
-- [`examples/langchain/simple-agent.ts`](./examples/langchain/simple-agent.ts) - Full working example with Anthropic Claude
+- [`examples/langchain/simple-agent.ts`](./examples/langchain/simple-agent.ts) - Full working example with LangChain
 - [`examples/ai-sdk/simple-agent.ts`](./examples/ai-sdk/simple-agent.ts) - Vercel AI SDK example with tools
 
 ## Skills
