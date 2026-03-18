@@ -8,6 +8,8 @@ import {
   type Tracer,
 } from '@prefactor/core';
 import { extractTokenUsage } from './metadata-extractor.js';
+import { resolveToolSpanType } from './schema.js';
+import { createToolSpanInputs, createToolSpanOutputs } from './tool-span-contract.js';
 
 const toLangchainSpanType = createSpanTypePrefixer('langchain');
 const logger = getLogger('middleware');
@@ -43,7 +45,8 @@ export class PrefactorMiddleware {
   constructor(
     private tracer: Tracer,
     private agentManager: AgentInstanceManager,
-    private agentInfo?: Parameters<AgentInstanceManager['startInstance']>[0]
+    private agentInfo?: Parameters<AgentInstanceManager['startInstance']>[0],
+    private toolSpanTypes?: Record<string, string>
   ) {}
 
   /**
@@ -120,22 +123,25 @@ export class PrefactorMiddleware {
     const toolName = this.extractToolName(request);
     const span = this.tracer.startSpan({
       name: 'langchain:tool-call',
-      spanType: toLangchainSpanType(SpanType.TOOL),
-      inputs: {
-        ...this.extractToolInputs(request),
-        'langchain.tool.name': toolName,
-      },
+      spanType: resolveToolSpanType(toolName, this.toolSpanTypes),
+      inputs: createToolSpanInputs({
+        toolName,
+        input: this.extractToolInput(request),
+      }),
     });
 
     try {
       const response = await SpanContext.runAsync(span, () => handler(request));
 
       this.tracer.endSpan(span, {
-        outputs: this.extractToolOutputs(response),
+        outputs: createToolSpanOutputs(this.extractToolOutput(response)),
       });
       return response;
     } catch (error) {
-      this.tracer.endSpan(span, { error: error as Error });
+      this.tracer.endSpan(span, {
+        outputs: createToolSpanOutputs(undefined),
+        error: error as Error,
+      });
       throw error;
     }
   }
@@ -164,8 +170,45 @@ export class PrefactorMiddleware {
         return modelObject.modelName;
       }
 
+      if (typeof modelObject.model === 'string') {
+        return modelObject.model;
+      }
+
       if (typeof modelObject.name === 'string') {
         return modelObject.name;
+      }
+
+      const defaultConfig = modelObject.defaultConfig as { model?: unknown } | undefined;
+      if (typeof defaultConfig?.model === 'string') {
+        return defaultConfig.model;
+      }
+
+      const internalDefaultConfig = modelObject._defaultConfig as { model?: unknown } | undefined;
+      if (typeof internalDefaultConfig?.model === 'string') {
+        return internalDefaultConfig.model;
+      }
+
+      if (modelObject._modelInstanceCache instanceof Map) {
+        for (const instance of modelObject._modelInstanceCache.values()) {
+          if (!instance || typeof instance !== 'object') {
+            continue;
+          }
+
+          const typedInstance = instance as {
+            model?: unknown;
+            modelName?: unknown;
+            name?: unknown;
+          };
+          if (typeof typedInstance.modelName === 'string') {
+            return typedInstance.modelName;
+          }
+          if (typeof typedInstance.model === 'string') {
+            return typedInstance.model;
+          }
+          if (typeof typedInstance.name === 'string') {
+            return typedInstance.name;
+          }
+        }
       }
     }
 
@@ -195,23 +238,72 @@ export class PrefactorMiddleware {
    */
   // biome-ignore lint/suspicious/noExplicitAny: LangChain request structure is dynamic
   private extractToolName(request: any): string {
-    return request?.name ?? request?.tool ?? 'unknown';
+    if (typeof request?.toolCall?.name === 'string') {
+      return request.toolCall.name;
+    }
+
+    if (typeof request?.tool?.name === 'string') {
+      return request.tool.name;
+    }
+
+    if (typeof request?.name === 'string') {
+      return request.name;
+    }
+
+    if (typeof request?.tool === 'string') {
+      return request.tool;
+    }
+
+    return 'unknown';
   }
 
   /**
    * Extract tool inputs from request
    */
   // biome-ignore lint/suspicious/noExplicitAny: LangChain request structure is dynamic
-  private extractToolInputs(request: any): Record<string, unknown> {
-    return { input: request?.input ?? request?.args ?? {} };
+  private extractToolInput(request: any): unknown {
+    if (request?.toolCall?.args !== undefined) {
+      return request.toolCall.args;
+    }
+
+    if (request?.input !== undefined) {
+      return request.input;
+    }
+
+    return request?.args;
   }
 
   /**
    * Extract tool outputs from response
    */
   // biome-ignore lint/suspicious/noExplicitAny: LangChain response structure is dynamic
-  private extractToolOutputs(response: any): Record<string, unknown> {
-    return { output: response?.output ?? response };
+  private extractToolOutput(response: any): unknown {
+    if (response?.output !== undefined) {
+      return response.output;
+    }
+
+    const content = response?.content ?? response?.kwargs?.content;
+    if (content !== undefined) {
+      return this.normalizeToolResponseContent(content);
+    }
+
+    return response;
+  }
+
+  private normalizeToolResponseContent(content: unknown): unknown {
+    if (typeof content !== 'string') {
+      return content;
+    }
+
+    try {
+      const parsed = JSON.parse(content) as unknown;
+      if (typeof parsed === 'object' && parsed !== null) {
+        return parsed;
+      }
+      return content;
+    } catch {
+      return content;
+    }
   }
 
   private ensureAgentInstanceStarted(): void {

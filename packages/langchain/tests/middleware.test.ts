@@ -98,6 +98,69 @@ describe('PrefactorMiddleware', () => {
     expect(toolSpan?.name).toBe('langchain:tool-call');
   });
 
+  test('uses configured tool span types for wrapped tools', async () => {
+    const transport = new CaptureTransport();
+    const tracer = new Tracer(transport);
+    const agentManager = new AgentInstanceManager(transport, {});
+    agentManager.registerSchema({ type: 'object' });
+    const middleware = new PrefactorMiddleware(tracer, agentManager, undefined, {
+      get_customer_profile: 'langchain:tool:get-customer-profile',
+    });
+
+    await middleware.wrapToolCall(
+      {
+        toolCall: {
+          name: 'get_customer_profile',
+          args: { customerId: 'cust_123' },
+        },
+        tool: {
+          name: 'get_customer_profile',
+        },
+      },
+      async () => ({
+        content: '{"id":"cust_123"}',
+      })
+    );
+
+    const toolSpan = transport.spans.find(
+      (span) => span.spanType === 'langchain:tool:get-customer-profile'
+    );
+
+    expect(toolSpan?.spanType).toBe('langchain:tool:get-customer-profile');
+    expect(toolSpan?.inputs).toEqual({
+      'langchain.tool.name': 'get_customer_profile',
+      toolName: 'get_customer_profile',
+      input: { customerId: 'cust_123' },
+    });
+    expect(toolSpan?.outputs).toEqual({ output: { id: 'cust_123' } });
+    expect(transport.spans.some((span) => span.spanType === 'langchain:tool')).toBe(false);
+  });
+
+  test('normalizes failed tool outputs to null for schema compatibility', async () => {
+    const transport = new CaptureTransport();
+    const tracer = new Tracer(transport);
+    const agentManager = new AgentInstanceManager(transport, {});
+    agentManager.registerSchema({ type: 'object' });
+    const middleware = new PrefactorMiddleware(tracer, agentManager);
+
+    await expect(
+      middleware.wrapToolCall(
+        {
+          name: 'send_email',
+          input: { to: 'taylor@example.com' },
+        },
+        async () => {
+          throw new Error('boom');
+        }
+      )
+    ).rejects.toThrow('boom');
+
+    const toolSpan = transport.spans.find((span) => span.spanType === 'langchain:tool');
+
+    expect(toolSpan?.outputs).toEqual({ output: null });
+    expect(toolSpan?.error?.message).toBe('boom');
+  });
+
   test('starts and finishes agent instance even when before/after hooks are skipped', async () => {
     const transport = new CaptureTransport();
     const tracer = new Tracer(transport);
@@ -115,6 +178,21 @@ describe('PrefactorMiddleware', () => {
     middleware.shutdown();
 
     expect(transport.finishedInstances).toBe(1);
+  });
+
+  test('preserves scalar strings in tool response content without coercion', async () => {
+    const transport = new CaptureTransport();
+    const tracer = new Tracer(transport);
+    const agentManager = new AgentInstanceManager(transport, {});
+    agentManager.registerSchema({ type: 'object' });
+    const middleware = new PrefactorMiddleware(tracer, agentManager);
+
+    await middleware.wrapToolCall({ name: 'lookup', input: { key: 'count' } }, async () => ({
+      content: '42',
+    }));
+
+    const toolSpan = transport.spans.find((span) => span.spanType === 'langchain:tool');
+    expect(toolSpan?.outputs).toEqual({ output: '42' });
   });
 
   test('uses one agent instance across multiple runs and finishes on shutdown', async () => {

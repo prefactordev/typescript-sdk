@@ -140,7 +140,7 @@ This file guides coding agents working in this repo.
 
 ## Examples and scripts
 - Run basic example: `bun examples/basic.ts`.
-- Run Anthropic example: `bun examples/anthropic-agent/simple-agent.ts`.
+- Run LangChain example: `bun examples/langchain/simple-agent.ts`.
 - Run AI SDK example: `bun examples/ai-sdk/simple-agent.ts`.
 
 ## Docs and comments

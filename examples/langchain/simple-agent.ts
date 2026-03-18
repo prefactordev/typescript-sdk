@@ -13,7 +13,7 @@
 import { createAgent, tool } from 'langchain';
 import { z } from 'zod';
 import { init } from '@prefactor/core';
-import { PrefactorLangChain, type AgentMiddleware } from '@prefactor/langchain';
+import { PrefactorLangChain } from '@prefactor/langchain';
 
 function safeEval(expr: string): number {
   const cleaned = expr.replace(/[^0-9+\-*/.()% ]/g, '').trim();
@@ -112,19 +112,36 @@ async function main() {
   console.log('='.repeat(80));
   console.log();
 
-  let prefactor: ReturnType<typeof init> | undefined;
+  const prefactor = init({
+    provider: new PrefactorLangChain(),
+    httpConfig: {
+      apiUrl: process.env.PREFACTOR_API_URL || 'http://localhost:8000',
+      apiToken: process.env.PREFACTOR_API_TOKEN || 'dev-token',
+      agentId: process.env.PREFACTOR_AGENT_ID,
+      agentIdentifier: 'langchain-v1',
+      agentSchema: {
+        external_identifier: 'langchain-tool-schema-example-v1',
+        span_schemas: {},
+        span_result_schemas: {},
+        toolSchemas: {
+          calculator: {
+            spanType: 'calculator',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                expression: { type: 'string' },
+              },
+              required: ['expression'],
+            },
+          },
+        },
+      },
+    },
+  });
+
   try {
     // Initialize Prefactor SDK
     console.log('Initializing Prefactor SDK...');
-    prefactor = init({
-      provider: new PrefactorLangChain(),
-      httpConfig: {
-        apiUrl: process.env.PREFACTOR_API_URL || 'http://localhost:8000',
-        apiToken: process.env.PREFACTOR_API_TOKEN || 'dev-token',
-        agentId: process.env.PREFACTOR_AGENT_ID,
-        agentIdentifier: 'langchain-v1',
-      },
-    });
     console.log('Prefactor middleware initialized');
     console.log();
 
@@ -144,7 +161,7 @@ async function main() {
           model: 'claude-3-haiku-20240307',
           tools,
           systemPrompt: 'You are a helpful assistant. Use the available tools to answer questions.',
-          middleware: [prefactor!.getMiddleware() as AgentMiddleware],
+          middleware: [prefactor.getMiddleware()],
         });
         console.log('Agent created with Prefactor tracing');
         console.log();

@@ -61,6 +61,8 @@ await prefactor.shutdown();
 import {
   PrefactorLangChain,
   DEFAULT_LANGCHAIN_AGENT_SCHEMA,
+  type JsonSchema,
+  type ToolSchemaConfig,
 } from '@prefactor/langchain';
 ```
 
@@ -100,6 +102,43 @@ const prefactor = init({
     agentIdentifier: '1.0.0',
     agentName: 'My Agent',
     agentDescription: 'An agent description',
+  },
+});
+```
+
+## Tool Schemas
+
+Use `toolSchemas` on `agentSchema` to register per-tool span schemas while continuing to emit the
+default `langchain:*` spans.
+
+```typescript
+import { init } from '@prefactor/core';
+import { PrefactorLangChain } from '@prefactor/langchain';
+
+const prefactor = init({
+  provider: new PrefactorLangChain(),
+  httpConfig: {
+    apiUrl: process.env.PREFACTOR_API_URL!,
+    apiToken: process.env.PREFACTOR_API_TOKEN!,
+    agentIdentifier: 'support-bot-v1',
+    agentSchema: {
+      external_identifier: 'support-bot-schema-v1',
+      span_schemas: {},
+      span_result_schemas: {},
+      toolSchemas: {
+        send_email: {
+          spanType: 'send-email',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              to: { type: 'string', format: 'email' },
+              subject: { type: 'string' },
+            },
+            required: ['to', 'subject'],
+          },
+        },
+      },
+    },
   },
 });
 ```

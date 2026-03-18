@@ -65,7 +65,7 @@
     },
     "packages/langchain": {
       "name": "@prefactor/langchain",
-      "version": "0.3.0",
+      "version": "0.3.1",
       "dependencies": {
         "@prefactor/pfid": "^0.1.0",
       },
