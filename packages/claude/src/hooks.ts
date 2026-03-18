@@ -191,9 +191,10 @@ export function finalizeAgentSpan(
   state: TracedQueryState,
   tracer: Tracer,
   outputs?: Record<string, unknown>,
-  tokenUsage?: { promptTokens: number; completionTokens: number; totalTokens: number }
+  tokenUsage?: { promptTokens: number; completionTokens: number; totalTokens: number },
+  error?: Error
 ): void {
   if (state.agentSpanFinished || !state.agentSpan) return;
   state.agentSpanFinished = true;
-  tracer.endSpan(state.agentSpan, { outputs, tokenUsage });
+  tracer.endSpan(state.agentSpan, { outputs, tokenUsage, error });
 }

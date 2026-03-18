@@ -289,6 +289,20 @@ describe('finalizeAgentSpan', () => {
 
     expect(mock.ended).toHaveLength(0);
   });
+
+  test('sets error when error is provided', () => {
+    const mock = createMockTracer();
+    const state = createState();
+    state.agentSpan = createSpan('claude:agent', {}, 'claude:session');
+
+    const error = new Error('error_max_turns');
+    finalizeAgentSpan(state, mock.tracer, { result: 'failed', is_error: true }, undefined, error);
+
+    expect(state.agentSpanFinished).toBe(true);
+    expect(mock.ended).toHaveLength(1);
+    expect(mock.ended[0].error).toBeInstanceOf(Error);
+    expect(mock.ended[0].error?.message).toBe('error_max_turns');
+  });
 });
 
 describe('mergeHooks', () => {
@@ -514,5 +528,66 @@ describe('handleAssistantMessage captureContent', () => {
     expect(mock.ended[0].outputs).toEqual({
       'claude.response.content': [{ type: 'text', text: 'Final answer' }],
     });
+  });
+});
+
+describe('handleResultMessage error results', () => {
+  test('marks agent span as error when is_error is true', () => {
+    const mock = createMockTracer();
+    const state = createState();
+    state.agentSpan = createSpan('claude:agent', {}, 'claude:session');
+
+    // biome-ignore lint/suspicious/noExplicitAny: test mock
+    const agentManager = { startInstance: () => {}, finishInstance: () => {} } as any;
+
+    handleMessageForTest(
+      {
+        type: 'result',
+        result: 'Hit max turns',
+        subtype: 'error_max_turns',
+        is_error: true,
+        num_turns: 10,
+      },
+      mock.tracer,
+      agentManager,
+      undefined,
+      undefined,
+      state,
+      undefined
+    );
+
+    const agentEnd = mock.ended.find((e) => e.span.spanType === 'claude:agent');
+    expect(agentEnd).toBeDefined();
+    expect(agentEnd?.error).toBeInstanceOf(Error);
+    expect(agentEnd?.error?.message).toBe('error_max_turns');
+    expect(agentEnd?.outputs?.is_error).toBe(true);
+  });
+
+  test('does not set error when is_error is false', () => {
+    const mock = createMockTracer();
+    const state = createState();
+    state.agentSpan = createSpan('claude:agent', {}, 'claude:session');
+
+    // biome-ignore lint/suspicious/noExplicitAny: test mock
+    const agentManager = { startInstance: () => {}, finishInstance: () => {} } as any;
+
+    handleMessageForTest(
+      {
+        type: 'result',
+        result: 'Success',
+        subtype: 'end_turn',
+        is_error: false,
+      },
+      mock.tracer,
+      agentManager,
+      undefined,
+      undefined,
+      state,
+      undefined
+    );
+
+    const agentEnd = mock.ended.find((e) => e.span.spanType === 'claude:agent');
+    expect(agentEnd).toBeDefined();
+    expect(agentEnd?.error).toBeUndefined();
   });
 });

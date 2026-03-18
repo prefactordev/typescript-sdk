@@ -290,7 +290,8 @@ function handleResultMessage(
         }
       : undefined;
 
-  // Finalize agent span
+  // Finalize agent span — mark as error if the result is an error
+  const agentError = msg.is_error ? new Error(msg.subtype ?? 'Agent error') : undefined;
   finalizeAgentSpan(
     state,
     tracer,
@@ -302,7 +303,8 @@ function handleResultMessage(
       total_cost_usd: msg.total_cost_usd,
       is_error: msg.is_error,
     },
-    tokenUsage
+    tokenUsage,
+    agentError
   );
 
   // Finish agent instance
