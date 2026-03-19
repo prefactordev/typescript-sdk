@@ -11,11 +11,12 @@
  * ## Quick start
  *
  * ```ts
+ * import { query } from '@anthropic-ai/claude-agent-sdk';
  * import { init } from '@prefactor/core';
  * import { PrefactorClaude } from '@prefactor/claude';
  *
  * const prefactor = init({
- *   provider: new PrefactorClaude(),
+ *   provider: new PrefactorClaude({ query }),
  *   httpConfig: {
  *     apiUrl: 'https://app.prefactorai.com',
  *     apiToken: process.env.PREFACTOR_API_TOKEN!,
@@ -48,6 +49,7 @@ export { DEFAULT_CLAUDE_AGENT_SCHEMA, PrefactorClaude } from './provider.js';
 export type {
   ClaudeMiddleware,
   ClaudeMiddlewareConfig,
+  ClaudeQuery,
   JsonSchema,
   ToolSchemaConfig,
 } from './types.js';
