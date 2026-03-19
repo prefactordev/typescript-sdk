@@ -1,35 +1,70 @@
-import { type Query, query, type SDKMessage } from '@anthropic-ai/claude-agent-sdk';
-import {
-  type AgentInstanceManager,
-  type Config,
-  getLogger,
-  SpanContext,
-  type Tracer,
-} from '@prefactor/core';
+import type { Query, SDKMessage } from '@anthropic-ai/claude-agent-sdk';
+import type { AgentInstanceManager, Span, StartSpanOptions, Tracer } from '@prefactor/core';
+import { getLogger, SpanContext } from '@prefactor/core';
 import { createInstrumentationHooks, finalizeAgentSpan, mergeHooks } from './hooks.js';
-import type { ClaudeMiddleware, ClaudeMiddlewareConfig, TracedQueryState } from './types.js';
+import type {
+  ClaudeAgentInfo,
+  ClaudeMiddleware,
+  ClaudeMiddlewareConfig,
+  ClaudeQuery,
+  ClaudeRuntimeController,
+  TracedQueryState,
+} from './types.js';
 
 const logger = getLogger('claude');
 
+type ClaudeSystemInitMessage = {
+  type: 'system';
+  subtype: 'init';
+  session_id: string;
+  model: string;
+};
+
+type ClaudeAssistantMessage = {
+  type: 'assistant';
+  event?: unknown;
+  message?: {
+    content?: unknown;
+  };
+};
+
+type ClaudeResultUsage = {
+  input_tokens?: number;
+  output_tokens?: number;
+};
+
+type ClaudeResultMessage = {
+  type: 'result';
+  usage?: ClaudeResultUsage;
+  result?: unknown;
+  subtype?: string;
+  stop_reason?: unknown;
+  num_turns?: unknown;
+  total_cost_usd?: unknown;
+  is_error?: boolean;
+};
+
+function startSpanWithParent(
+  tracer: Tracer,
+  parentSpan: Span | null,
+  options: StartSpanOptions
+): Span {
+  return parentSpan
+    ? SpanContext.run(parentSpan, () => tracer.startSpan(options))
+    : tracer.startSpan(options);
+}
+
 export function createTracedQuery(
+  queryFn: ClaudeQuery,
   tracer: Tracer,
   agentManager: AgentInstanceManager,
-  config: Config,
+  agentInfo: ClaudeAgentInfo | undefined,
+  runtimeController: ClaudeRuntimeController,
   middlewareConfig?: ClaudeMiddlewareConfig,
-  toolSpanTypes?: Record<string, string>,
-  agentLifecycle?: { started: boolean }
+  toolSpanTypes?: Record<string, string>
 ): ClaudeMiddleware {
-  const httpConfig = config.httpConfig;
-  const agentInfo = httpConfig
-    ? {
-        agentId: httpConfig.agentId,
-        agentIdentifier: httpConfig.agentIdentifier,
-        agentName: httpConfig.agentName,
-        agentDescription: httpConfig.agentDescription,
-      }
-    : undefined;
-
-  function tracedQuery(...args: Parameters<typeof query>): Query {
+  function tracedQuery(...args: Parameters<ClaudeQuery>): Query {
+    const runToken = runtimeController.claimRun();
     const [params] = args;
     const { prompt, options } = params;
 
@@ -54,75 +89,158 @@ export function createTracedQuery(
       hooks: mergeHooks(instrumentationHooks, options?.hooks),
     };
 
-    const stream = query({ prompt, options: mergedOptions });
+    try {
+      const stream = queryFn({ prompt, options: mergedOptions });
+      const cleanupRun = createRunCleanup(
+        tracer,
+        agentManager,
+        runtimeController,
+        runToken,
+        state
+      );
+      const generator = tapStream(
+        stream,
+        tracer,
+        agentManager,
+        agentInfo,
+        runtimeController,
+        runToken,
+        state,
+        cleanupRun,
+        middlewareConfig
+      );
 
-    return wrapQuery(
-      stream,
-      tracer,
-      agentManager,
-      agentInfo,
-      agentLifecycle,
-      state,
-      middlewareConfig
-    );
+      return decorateQueryStream(stream, generator, cleanupRun);
+    } catch (error) {
+      runtimeController.releaseRun(runToken);
+      throw error;
+    }
   }
 
   return { tracedQuery: tracedQuery as ClaudeMiddleware['tracedQuery'] };
 }
 
-function wrapQuery(
-  stream: Query,
-  tracer: Tracer,
-  agentManager: AgentInstanceManager,
-  agentInfo: Parameters<AgentInstanceManager['startInstance']>[0] | undefined,
-  agentLifecycle: { started: boolean } | undefined,
-  state: TracedQueryState,
-  config?: ClaudeMiddlewareConfig
-): Query {
-  const generator = tapStream(
-    stream,
-    tracer,
-    agentManager,
-    agentInfo,
-    agentLifecycle,
-    state,
-    config
-  );
+export function createClaudeRuntimeController(): ClaudeRuntimeController {
+  let activeRun: { token: symbol; agentInstanceStarted: boolean } | null = null;
 
-  // Use a Proxy to forward all property accesses to the underlying stream,
-  // except for the async iterator protocol which comes from our tapStream generator.
-  return new Proxy(stream, {
-    get(target, prop, receiver) {
-      // Async iterator protocol comes from our instrumented generator
-      if (prop === Symbol.asyncIterator) {
-        return () => generator;
+  return {
+    claimRun(): symbol {
+      if (activeRun) {
+        throw new Error(
+          'Prefactor Claude only supports one active tracedQuery() per middleware instance.'
+        );
       }
-      // next/return/throw come from our generator to drive iteration
-      if (prop === 'next' || prop === 'return' || prop === 'throw') {
-        const genMethod = generator[prop as keyof AsyncGenerator];
-        return typeof genMethod === 'function' ? genMethod.bind(generator) : genMethod;
-      }
-      // Everything else (interrupt, close, setModel, accountInfo, etc.)
-      // delegates to the underlying stream
-      const value = Reflect.get(target, prop, receiver);
-      return typeof value === 'function' ? value.bind(target) : value;
+
+      const token = Symbol('prefactor-claude-run');
+      activeRun = { token, agentInstanceStarted: false };
+      return token;
     },
-  });
+
+    startAgentInstance(
+      token: symbol,
+      agentManager: AgentInstanceManager,
+      agentInfo?: ClaudeAgentInfo
+    ): void {
+      if (!activeRun || activeRun.token !== token || activeRun.agentInstanceStarted) {
+        return;
+      }
+
+      agentManager.startInstance(agentInfo);
+      activeRun.agentInstanceStarted = true;
+    },
+
+    finishAgentInstance(token: symbol, agentManager: AgentInstanceManager): void {
+      if (!activeRun || activeRun.token !== token || !activeRun.agentInstanceStarted) {
+        return;
+      }
+
+      agentManager.finishInstance();
+      activeRun.agentInstanceStarted = false;
+    },
+
+    releaseRun(token: symbol): void {
+      if (activeRun?.token === token) {
+        activeRun = null;
+      }
+    },
+
+    shutdown(agentManager?: AgentInstanceManager | null): void {
+      if (activeRun?.agentInstanceStarted && agentManager) {
+        agentManager.finishInstance();
+      }
+
+      activeRun = null;
+    },
+  };
+}
+
+function decorateQueryStream(
+  stream: Query,
+  generator: AsyncGenerator<SDKMessage, void>,
+  cleanupRun: () => void
+): Query {
+  return {
+    [Symbol.asyncIterator]: () => generator,
+    next: generator.next.bind(generator),
+    return: async (value?: void) => {
+      try {
+        return await generator.return(value);
+      } finally {
+        cleanupRun();
+      }
+    },
+    throw: async (error?: unknown) => {
+      try {
+        return await generator.throw(error);
+      } finally {
+        cleanupRun();
+      }
+    },
+    interrupt: stream.interrupt.bind(stream),
+    setPermissionMode: stream.setPermissionMode.bind(stream),
+    setModel: stream.setModel.bind(stream),
+    setMaxThinkingTokens: stream.setMaxThinkingTokens.bind(stream),
+    applyFlagSettings: stream.applyFlagSettings.bind(stream),
+    initializationResult: stream.initializationResult.bind(stream),
+    supportedCommands: stream.supportedCommands.bind(stream),
+    supportedModels: stream.supportedModels.bind(stream),
+    supportedAgents: stream.supportedAgents.bind(stream),
+    mcpServerStatus: stream.mcpServerStatus.bind(stream),
+    accountInfo: stream.accountInfo.bind(stream),
+    rewindFiles: stream.rewindFiles.bind(stream),
+    reconnectMcpServer: stream.reconnectMcpServer.bind(stream),
+    toggleMcpServer: stream.toggleMcpServer.bind(stream),
+    setMcpServers: stream.setMcpServers.bind(stream),
+    streamInput: stream.streamInput.bind(stream),
+    stopTask: stream.stopTask.bind(stream),
+    close: stream.close.bind(stream),
+  };
 }
 
 async function* tapStream(
   stream: Query,
   tracer: Tracer,
   agentManager: AgentInstanceManager,
-  agentInfo: Parameters<AgentInstanceManager['startInstance']>[0] | undefined,
-  agentLifecycle: { started: boolean } | undefined,
+  agentInfo: ClaudeAgentInfo | undefined,
+  runtimeController: ClaudeRuntimeController,
+  runToken: symbol,
   state: TracedQueryState,
+  cleanupRun: () => void,
   config?: ClaudeMiddlewareConfig
 ): AsyncGenerator<SDKMessage, void> {
   try {
     for await (const message of stream) {
       try {
-        handleMessage(message, tracer, agentManager, agentInfo, agentLifecycle, state, config);
+        handleMessage(
+          message,
+          tracer,
+          agentManager,
+          agentInfo,
+          runtimeController,
+          runToken,
+          state,
+          config
+        );
       } catch (error) {
         logger.warn('Error processing message for tracing', error);
       }
@@ -163,14 +281,7 @@ async function* tapStream(
     }
     state.subagentSpanMap.clear();
 
-    // Finalize agent span if not already done
-    try {
-      finalizeAgentSpan(state, tracer, {
-        'claude.finishReason': 'interrupted',
-      });
-    } catch (error) {
-      logger.warn('Error finalizing agent span in finally', error);
-    }
+    cleanupRun();
   }
 }
 
@@ -178,43 +289,55 @@ function handleMessage(
   message: SDKMessage,
   tracer: Tracer,
   agentManager: AgentInstanceManager,
-  agentInfo: Parameters<AgentInstanceManager['startInstance']>[0] | undefined,
-  agentLifecycle: { started: boolean } | undefined,
+  agentInfo: ClaudeAgentInfo | undefined,
+  runtimeController: ClaudeRuntimeController,
+  runToken: symbol,
   state: TracedQueryState,
   config?: ClaudeMiddlewareConfig
 ): void {
-  // biome-ignore lint/suspicious/noExplicitAny: SDK message types are a wide union
-  const msg = message as any;
+  const messageInfo = message as { type?: string; subtype?: string; event?: unknown };
 
-  if (msg.type === 'system' && msg.subtype === 'init') {
-    handleSystemInit(msg, tracer, agentManager, agentInfo, agentLifecycle, state);
+  if (messageInfo.type === 'system' && messageInfo.subtype === 'init') {
+    handleSystemInit(
+      message as ClaudeSystemInitMessage,
+      tracer,
+      agentManager,
+      agentInfo,
+      runtimeController,
+      runToken,
+      state
+    );
     return;
   }
 
-  if (msg.type === 'assistant' && !('event' in msg)) {
-    handleAssistantMessage(msg, tracer, state, config);
+  if (messageInfo.type === 'assistant' && messageInfo.event === undefined) {
+    handleAssistantMessage(message as ClaudeAssistantMessage, tracer, state, config);
     return;
   }
 
-  if (msg.type === 'result') {
-    handleResultMessage(msg, tracer, agentManager, agentLifecycle, state);
+  if (messageInfo.type === 'result') {
+    handleResultMessage(
+      message as ClaudeResultMessage,
+      tracer,
+      agentManager,
+      runtimeController,
+      runToken,
+      state
+    );
     return;
   }
 }
 
 function handleSystemInit(
-  // biome-ignore lint/suspicious/noExplicitAny: SDK message types are dynamic
-  msg: any,
+  msg: ClaudeSystemInitMessage,
   tracer: Tracer,
   agentManager: AgentInstanceManager,
-  agentInfo: Parameters<AgentInstanceManager['startInstance']>[0] | undefined,
-  agentLifecycle: { started: boolean } | undefined,
+  agentInfo: ClaudeAgentInfo | undefined,
+  runtimeController: ClaudeRuntimeController,
+  runToken: symbol,
   state: TracedQueryState
 ): void {
-  if (agentLifecycle && !agentLifecycle.started) {
-    agentManager.startInstance(agentInfo);
-    agentLifecycle.started = true;
-  }
+  runtimeController.startAgentInstance(runToken, agentManager, agentInfo);
 
   state.agentSpan = tracer.startSpan({
     name: 'claude:session',
@@ -227,8 +350,7 @@ function handleSystemInit(
 }
 
 function handleAssistantMessage(
-  // biome-ignore lint/suspicious/noExplicitAny: SDK message types are dynamic
-  msg: any,
+  msg: ClaudeAssistantMessage,
   tracer: Tracer,
   state: TracedQueryState,
   config?: ClaudeMiddlewareConfig
@@ -247,28 +369,19 @@ function handleAssistantMessage(
   }
   state.currentLlmOutputs = outputs;
 
-  const parentSpan = state.agentSpan;
-  state.currentLlmSpan = parentSpan
-    ? SpanContext.run(parentSpan, () =>
-        tracer.startSpan({
-          name: 'claude:llm-turn',
-          spanType: 'claude:llm',
-          inputs: {},
-        })
-      )
-    : tracer.startSpan({
-        name: 'claude:llm-turn',
-        spanType: 'claude:llm',
-        inputs: {},
-      });
+  state.currentLlmSpan = startSpanWithParent(tracer, state.agentSpan, {
+    name: 'claude:llm-turn',
+    spanType: 'claude:llm',
+    inputs: {},
+  });
 }
 
 function handleResultMessage(
-  // biome-ignore lint/suspicious/noExplicitAny: SDK message types are dynamic
-  msg: any,
+  msg: ClaudeResultMessage,
   tracer: Tracer,
   agentManager: AgentInstanceManager,
-  agentLifecycle: { started: boolean } | undefined,
+  runtimeController: ClaudeRuntimeController,
+  runToken: symbol,
   state: TracedQueryState
 ): void {
   // End final LLM span with stored outputs
@@ -307,15 +420,33 @@ function handleResultMessage(
     agentError
   );
 
-  // Finish agent instance
-  if (agentLifecycle?.started) {
-    agentManager.finishInstance();
-    agentLifecycle.started = false;
-  }
+  runtimeController.finishAgentInstance(runToken, agentManager);
 }
 
-/** @internal Exported for testing only */
-export const wrapQueryForTest = wrapQuery;
+function createRunCleanup(
+  tracer: Tracer,
+  agentManager: AgentInstanceManager,
+  runtimeController: ClaudeRuntimeController,
+  runToken: symbol,
+  state: TracedQueryState
+): () => void {
+  let cleanedUp = false;
 
-/** @internal Exported for testing only */
-export const handleMessageForTest = handleMessage;
+  return () => {
+    if (cleanedUp) {
+      return;
+    }
+    cleanedUp = true;
+
+    try {
+      finalizeAgentSpan(state, tracer, {
+        'claude.finishReason': 'interrupted',
+      });
+    } catch (error) {
+      logger.warn('Error finalizing agent span during cleanup', error);
+    }
+
+    runtimeController.finishAgentInstance(runToken, agentManager);
+    runtimeController.releaseRun(runToken);
+  };
+}

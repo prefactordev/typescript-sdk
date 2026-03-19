@@ -6,6 +6,8 @@ interface NormalizedClaudeSchemaData {
   toolSpanTypes?: Record<string, string>;
 }
 
+const toolSpanTypesBySchema = new WeakMap<Record<string, unknown>, Record<string, string>>();
+
 export const DEFAULT_CLAUDE_AGENT_SCHEMA = {
   external_identifier: 'claude-schema',
   span_schemas: {
@@ -30,10 +32,25 @@ export function normalizeAgentSchema(
     providerName: 'claude',
   });
 
+  const normalizedAgentSchema = buildAgentSchema(normalizedToolSchemas);
+  if (normalizedToolSchemas.toolSpanTypes) {
+    toolSpanTypesBySchema.set(normalizedAgentSchema, normalizedToolSchemas.toolSpanTypes);
+  }
+
   return {
-    agentSchema: buildAgentSchema(normalizedToolSchemas),
+    agentSchema: normalizedAgentSchema,
     toolSpanTypes: normalizedToolSchemas.toolSpanTypes,
   };
+}
+
+export function getToolSpanTypesForAgentSchema(
+  agentSchema: Record<string, unknown> | undefined
+): Record<string, string> | undefined {
+  if (!agentSchema) {
+    return undefined;
+  }
+
+  return toolSpanTypesBySchema.get(agentSchema);
 }
 
 export function resolveToolSpanType(

@@ -1,5 +1,8 @@
 import type { Query } from '@anthropic-ai/claude-agent-sdk';
+import type { AgentInstanceManager, AgentInstanceOptions } from '@prefactor/core';
 import type { JsonSchema, Span, ToolSchemaConfig } from '@prefactor/core';
+
+export type ClaudeQuery = typeof import('@anthropic-ai/claude-agent-sdk').query;
 
 /**
  * Configuration options for the Prefactor Claude middleware.
@@ -23,9 +26,21 @@ export interface ClaudeMiddlewareConfig {
  * Middleware returned by PrefactorClaude.createMiddleware().
  */
 export interface ClaudeMiddleware {
-  tracedQuery: (
-    ...args: Parameters<typeof import('@anthropic-ai/claude-agent-sdk').query>
-  ) => Query;
+  tracedQuery: (...args: Parameters<ClaudeQuery>) => Query;
+}
+
+export interface ClaudeAgentInfo extends AgentInstanceOptions {}
+
+export interface ClaudeRuntimeController {
+  claimRun(): symbol;
+  startAgentInstance(
+    token: symbol,
+    agentManager: AgentInstanceManager,
+    agentInfo?: ClaudeAgentInfo
+  ): void;
+  finishAgentInstance(token: symbol, agentManager: AgentInstanceManager): void;
+  releaseRun(token: symbol): void;
+  shutdown(agentManager?: AgentInstanceManager | null): void;
 }
 
 /**

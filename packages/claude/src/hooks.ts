@@ -1,5 +1,5 @@
 import type { HookCallback, HookCallbackMatcher, HookEvent } from '@anthropic-ai/claude-agent-sdk';
-import { getLogger, SpanContext, type Tracer } from '@prefactor/core';
+import { getLogger, SpanContext, type Span, type StartSpanOptions, type Tracer } from '@prefactor/core';
 import { resolveToolSpanType } from './schema.js';
 import { createToolSpanInputs, createToolSpanOutputs } from './tool-span-contract.js';
 import type { ClaudeMiddlewareConfig, TracedQueryState } from './types.js';
@@ -7,8 +7,28 @@ import type { ClaudeMiddlewareConfig, TracedQueryState } from './types.js';
 const logger = getLogger('claude');
 
 type HooksMap = Partial<Record<HookEvent, HookCallbackMatcher[]>>;
+type ToolHookInput = {
+  tool_name: string;
+  tool_input?: unknown;
+  tool_response?: unknown;
+};
+type SubagentHookInput = {
+  agent_id: string;
+  agent_type?: string;
+  agent_transcript_path?: string;
+};
 
 const POST_EVENTS = new Set<HookEvent>(['PostToolUse', 'PostToolUseFailure']);
+
+function startSpanWithParent(
+  tracer: Tracer,
+  parentSpan: Span | null,
+  options: StartSpanOptions
+): Span {
+  return parentSpan
+    ? SpanContext.run(parentSpan, () => tracer.startSpan(options))
+    : tracer.startSpan(options);
+}
 
 export function createInstrumentationHooks(
   tracer: Tracer,
@@ -18,9 +38,8 @@ export function createInstrumentationHooks(
 ): HooksMap {
   const preToolUse: HookCallback = async (input, toolUseID) => {
     try {
-      // biome-ignore lint/suspicious/noExplicitAny: hook input payloads are dynamic
-      const hookInput = input as any;
-      const toolName = hookInput.tool_name as string;
+      const hookInput = input as ToolHookInput;
+      const toolName = hookInput.tool_name;
       const toolInput = hookInput.tool_input;
 
       const spanType = resolveToolSpanType(toolName, toolSpanTypes);
@@ -33,12 +52,11 @@ export function createInstrumentationHooks(
             })
           : createToolSpanInputs({ toolName, toolUseId: toolUseID });
 
-      const parentSpan = state.currentLlmSpan ?? state.agentSpan;
-      const span = parentSpan
-        ? SpanContext.run(parentSpan, () =>
-            tracer.startSpan({ name: 'claude:tool-call', spanType, inputs })
-          )
-        : tracer.startSpan({ name: 'claude:tool-call', spanType, inputs });
+      const span = startSpanWithParent(tracer, state.currentLlmSpan ?? state.agentSpan, {
+        name: 'claude:tool-call',
+        spanType,
+        inputs,
+      });
 
       if (toolUseID) {
         state.toolSpanMap.set(toolUseID, span);
@@ -60,8 +78,7 @@ export function createInstrumentationHooks(
       }
       state.toolSpanMap.delete(toolUseID);
 
-      // biome-ignore lint/suspicious/noExplicitAny: hook input payloads are dynamic
-      const hookInput = input as any;
+      const hookInput = input as ToolHookInput;
       const toolResponse = hookInput.tool_response;
 
       const outputs = config?.captureTools !== false ? createToolSpanOutputs(toolResponse) : {};
@@ -90,25 +107,15 @@ export function createInstrumentationHooks(
 
   const subagentStart: HookCallback = async (input) => {
     try {
-      // biome-ignore lint/suspicious/noExplicitAny: hook input payloads are dynamic
-      const hookInput = input as any;
-      const agentId = hookInput.agent_id as string;
-      const agentType = hookInput.agent_type as string | undefined;
+      const hookInput = input as SubagentHookInput;
+      const agentId = hookInput.agent_id;
+      const agentType = hookInput.agent_type;
 
-      const parentSpan = state.currentLlmSpan ?? state.agentSpan;
-      const span = parentSpan
-        ? SpanContext.run(parentSpan, () =>
-            tracer.startSpan({
-              name: 'claude:subagent',
-              spanType: 'claude:subagent',
-              inputs: { agent_id: agentId, agent_type: agentType },
-            })
-          )
-        : tracer.startSpan({
-            name: 'claude:subagent',
-            spanType: 'claude:subagent',
-            inputs: { agent_id: agentId, agent_type: agentType },
-          });
+      const span = startSpanWithParent(tracer, state.currentLlmSpan ?? state.agentSpan, {
+        name: 'claude:subagent',
+        spanType: 'claude:subagent',
+        inputs: { agent_id: agentId, agent_type: agentType },
+      });
 
       state.subagentSpanMap.set(agentId, span);
     } catch (error) {
@@ -120,9 +127,8 @@ export function createInstrumentationHooks(
 
   const subagentStop: HookCallback = async (input) => {
     try {
-      // biome-ignore lint/suspicious/noExplicitAny: hook input payloads are dynamic
-      const hookInput = input as any;
-      const agentId = hookInput.agent_id as string;
+      const hookInput = input as SubagentHookInput;
+      const agentId = hookInput.agent_id;
       const span = state.subagentSpanMap.get(agentId);
       if (!span) {
         logger.warn(`SubagentStop: no span found for agent_id ${agentId}`);

@@ -1,25 +1,32 @@
 import type { AgentInstanceManager, Config, PrefactorProvider, Tracer } from '@prefactor/core';
 import {
   DEFAULT_CLAUDE_AGENT_SCHEMA as DEFAULT_CLAUDE_AGENT_SCHEMA_BASE,
+  getToolSpanTypesForAgentSchema,
   normalizeAgentSchema,
 } from './schema.js';
-import { createTracedQuery } from './traced-query.js';
-import type { ClaudeMiddleware, ClaudeMiddlewareConfig } from './types.js';
+import { createClaudeRuntimeController, createTracedQuery } from './traced-query.js';
+import type {
+  ClaudeAgentInfo,
+  ClaudeMiddleware,
+  ClaudeMiddlewareConfig,
+  ClaudeQuery,
+  ClaudeRuntimeController,
+} from './types.js';
 
 export const DEFAULT_CLAUDE_AGENT_SCHEMA = DEFAULT_CLAUDE_AGENT_SCHEMA_BASE;
 
 export interface PrefactorClaudeOptions {
+  query: ClaudeQuery;
   middleware?: ClaudeMiddlewareConfig;
   agentSchema?: Record<string, unknown>;
 }
 
 export class PrefactorClaude implements PrefactorProvider<ClaudeMiddleware> {
   private readonly options: PrefactorClaudeOptions;
-  private toolSpanTypes: Record<string, string> | undefined;
   private agentManager: AgentInstanceManager | null = null;
-  private agentLifecycle: { started: boolean } | null = null;
+  private runtimeController: ClaudeRuntimeController | null = null;
 
-  constructor(options: PrefactorClaudeOptions = {}) {
+  constructor(options: PrefactorClaudeOptions) {
     this.options = options;
   }
 
@@ -29,37 +36,45 @@ export class PrefactorClaude implements PrefactorProvider<ClaudeMiddleware> {
     coreConfig: Config
   ): ClaudeMiddleware {
     this.agentManager = agentManager;
-
-    const agentLifecycle = { started: false };
-    this.agentLifecycle = agentLifecycle;
+    const runtimeController = createClaudeRuntimeController();
+    this.runtimeController = runtimeController;
 
     return createTracedQuery(
+      this.options.query,
       tracer,
       agentManager,
-      coreConfig,
+      toClaudeAgentInfo(coreConfig),
+      runtimeController,
       this.options.middleware,
-      this.toolSpanTypes,
-      agentLifecycle
+      getToolSpanTypesForAgentSchema(coreConfig.httpConfig?.agentSchema)
     );
   }
 
   shutdown(): void {
-    if (this.agentLifecycle?.started) {
-      this.agentManager?.finishInstance();
-      this.agentLifecycle.started = false;
-    }
-
+    this.runtimeController?.shutdown(this.agentManager);
     this.agentManager = null;
-    this.agentLifecycle = null;
+    this.runtimeController = null;
   }
 
   normalizeAgentSchema(agentSchema: Record<string, unknown>): Record<string, unknown> {
-    const normalizedSchema = normalizeAgentSchema(agentSchema);
-    this.toolSpanTypes = normalizedSchema.toolSpanTypes;
-    return normalizedSchema.agentSchema;
+    return normalizeAgentSchema(agentSchema).agentSchema;
   }
 
   getDefaultAgentSchema(): Record<string, unknown> | undefined {
     return this.options.agentSchema ?? DEFAULT_CLAUDE_AGENT_SCHEMA;
   }
+}
+
+function toClaudeAgentInfo(config: Config): ClaudeAgentInfo | undefined {
+  const httpConfig = config.httpConfig;
+  if (!httpConfig) {
+    return undefined;
+  }
+
+  return {
+    agentId: httpConfig.agentId,
+    agentIdentifier: httpConfig.agentIdentifier,
+    agentName: httpConfig.agentName,
+    agentDescription: httpConfig.agentDescription,
+  };
 }
