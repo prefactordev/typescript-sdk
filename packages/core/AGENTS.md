@@ -73,6 +73,11 @@ Provider integrations must use explicit tracer injection, NOT global state.
 
 When working with packages that depend on core, refer to the relevent AGENTS.md for that package first.
 
+## Testing guidance
+- Focus tests on lifecycle behavior, correctness of side effects, and data validity.
+- Do not write tests for behavior guaranteed by the type system.
+- Use mock transports where appropriate, especially for tracing behavior.
+
 ## Never do
 - Do not add speculative span types.
 - Do not rely on global state in provider integrations.
