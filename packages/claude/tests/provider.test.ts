@@ -1,20 +1,23 @@
 import { describe, expect, test } from 'bun:test';
+import type { Query } from '@anthropic-ai/claude-agent-sdk';
 import { DEFAULT_CLAUDE_AGENT_SCHEMA, PrefactorClaude } from '../src/index.js';
 
 describe('PrefactorClaude', () => {
+  const mockQuery = (() => ({}) as Query) as typeof import('@anthropic-ai/claude-agent-sdk').query;
+
   test('getDefaultAgentSchema returns DEFAULT_CLAUDE_AGENT_SCHEMA', () => {
-    const provider = new PrefactorClaude();
+    const provider = new PrefactorClaude({ query: mockQuery });
     expect(provider.getDefaultAgentSchema()).toEqual(DEFAULT_CLAUDE_AGENT_SCHEMA);
   });
 
   test('getDefaultAgentSchema returns custom schema when provided', () => {
     const custom = { external_identifier: 'custom' };
-    const provider = new PrefactorClaude({ agentSchema: custom });
+    const provider = new PrefactorClaude({ query: mockQuery, agentSchema: custom });
     expect(provider.getDefaultAgentSchema()).toEqual(custom);
   });
 
   test('normalizeAgentSchema extracts tool span types', () => {
-    const provider = new PrefactorClaude();
+    const provider = new PrefactorClaude({ query: mockQuery });
     const schema = {
       ...DEFAULT_CLAUDE_AGENT_SCHEMA,
       toolSchemas: {
@@ -36,7 +39,7 @@ describe('PrefactorClaude', () => {
   });
 
   test('createMiddleware returns object with tracedQuery', () => {
-    const provider = new PrefactorClaude();
+    const provider = new PrefactorClaude({ query: mockQuery });
 
     const mockTracer = {
       startSpan: () => ({}),
@@ -71,8 +74,108 @@ describe('PrefactorClaude', () => {
     expect(typeof middleware.tracedQuery).toBe('function');
   });
 
+  test('createMiddleware resolves tool span types from normalized config schema', async () => {
+    const queryCalls: Array<Parameters<typeof mockQuery>[0]> = [];
+    const queryFn = ((params) => {
+      queryCalls.push(params);
+      return {
+        [Symbol.asyncIterator]: async function* () {
+          yield {
+            type: 'system',
+            subtype: 'init',
+            session_id: 'session-1',
+            model: 'claude-sonnet',
+          };
+          yield {
+            type: 'result',
+            result: 'done',
+            subtype: 'end_turn',
+            is_error: false,
+          };
+        },
+        next: async () => ({ done: true, value: undefined }),
+        return: async () => ({ done: true, value: undefined }),
+        throw: async (error?: unknown) => {
+          throw error;
+        },
+        interrupt: async () => {},
+        setPermissionMode: async () => {},
+        setModel: async () => {},
+        setMaxThinkingTokens: async () => {},
+        applyFlagSettings: async () => {},
+        initializationResult: async () => ({}) as never,
+        supportedCommands: async () => [],
+        supportedModels: async () => [],
+        supportedAgents: async () => [],
+        mcpServerStatus: async () => [],
+        accountInfo: async () => ({}) as never,
+        rewindFiles: async () => ({ canRewind: false }),
+        reconnectMcpServer: async () => {},
+        toggleMcpServer: async () => {},
+        setMcpServers: async () => ({ added: [], removed: [], errors: [] }),
+        streamInput: async () => {},
+        stopTask: async () => {},
+        close: () => {},
+      } as Query;
+    }) as typeof mockQuery;
+
+    const provider = new PrefactorClaude({ query: queryFn });
+    const schemaA = provider.normalizeAgentSchema({
+      ...DEFAULT_CLAUDE_AGENT_SCHEMA,
+      toolSchemas: {
+        Read: {
+          spanType: 'claude:tool:read',
+          inputSchema: { type: 'object' },
+        },
+      },
+    });
+    provider.normalizeAgentSchema({
+      ...DEFAULT_CLAUDE_AGENT_SCHEMA,
+      toolSchemas: {
+        Bash: {
+          spanType: 'claude:tool:bash',
+          inputSchema: { type: 'object' },
+        },
+      },
+    });
+
+    const mockTracer = {
+      startSpan: () => ({}),
+      endSpan: () => {},
+      close: async () => {},
+      startAgentInstance: () => {},
+      finishAgentInstance: () => {},
+    };
+
+    const mockAgentManager = {
+      startInstance: () => {},
+      finishInstance: () => {},
+    };
+
+    const middleware = provider.createMiddleware(
+      mockTracer as never,
+      mockAgentManager as never,
+      {
+        httpConfig: {
+          apiUrl: 'http://localhost',
+          apiToken: 'test',
+          agentIdentifier: 'claude-test',
+          agentSchema: schemaA,
+        },
+      } as never
+    );
+
+    for await (const _message of middleware.tracedQuery({ prompt: 'test' })) {
+      break;
+    }
+
+    const hooks = queryCalls[0]?.options?.hooks;
+    const preToolUse = hooks?.PreToolUse?.[0]?.hooks?.[0];
+    expect(preToolUse).toBeDefined();
+  });
+
   test('shutdown is safe to call multiple times', () => {
-    const provider = new PrefactorClaude();
+    const provider = new PrefactorClaude({ query: mockQuery });
     // Should not throw
     provider.shutdown();
     provider.shutdown();
