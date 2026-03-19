@@ -4,6 +4,7 @@
     "packages/core/src/index.ts",
     "packages/langchain/src/index.ts",
     "packages/ai/src/index.ts",
+    "packages/claude/src/index.ts",
     "packages/openclaw/src/index.ts"
   ],
   "entryPointStrategy": "resolve",

@@ -34,6 +34,12 @@ const packages: PackageConfig[] = [
     external: ['@prefactor/core', '@prefactor/pfid'],
   },
   {
+    name: '@prefactor/claude',
+    path: 'packages/claude',
+    entrypoint: './packages/claude/src/index.ts',
+    external: ['@prefactor/core', '@prefactor/pfid', '@anthropic-ai/claude-agent-sdk'],
+  },
+  {
     name: '@prefactor/langchain',
     path: 'packages/langchain',
     entrypoint: './packages/langchain/src/index.ts',
