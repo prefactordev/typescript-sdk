@@ -76,3 +76,4 @@ Always use Provider pattern.
 - Do not change public exports from `src/index.ts` casually.
 - Do not change span naming semantics without a deliberate migration path.
 - Do not add multi-instance support.
+- Never use `additionalProperties: false` to block additional data - allow unknown fields to pass through.

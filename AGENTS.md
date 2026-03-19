@@ -193,3 +193,6 @@ Do not consider work complete until all applicable items below are true:
 - Do not commit changes unless explicitly asked.
 - Do not publish packages, even if requested.
 - Do not add speculative abstractions, future-only hooks, or placeholder implementations unless explicitly requested.
+
+## Versioning
+When bumping versions, always check the lockfile and verify dependency changes are intentional. Run a full build after version bumps to ensure the change is correct.

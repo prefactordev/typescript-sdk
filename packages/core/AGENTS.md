@@ -78,3 +78,4 @@ When working with packages that depend on core, refer to the relevent AGENTS.md 
 - Do not rely on global state in provider integrations.
 - Do not duplicate core logic in adapter packages.
 - Do not change span type semantics without migration path.
+- Never use `additionalProperties: false` to block additional data - allow unknown fields to pass through.

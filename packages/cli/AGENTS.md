@@ -72,3 +72,7 @@ Examples:
 - Do not add caching, batch operations, or domain logic without explicit requirement.
 - Do not make clients anything other than thin wrappers.
 - Do not change public exports from `src/index.ts` casually.
+- Never use `additionalProperties: false` to block additional data - allow unknown fields to pass through.
+
+## Known issues
+- CLI `instance` command does not return actual span count - use `agent_spans` command instead.

@@ -66,3 +66,4 @@ Rules:
 - Do not move shared tracing logic out of core into this package.
 - Do not change span naming semantics without a reason and let the user know.
 - Never bump the major version. For large refactors, changes, etc bump the minor version instead and for all other changes bump the patch version.
+- Never use `additionalProperties: false` to block additional data - allow unknown fields to pass through.
