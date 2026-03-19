@@ -96,21 +96,26 @@ describe('tool-span-contract', () => {
           additionalProperties: false,
         },
         outputs: {
-          type: 'object',
-          properties: {
-            output: {
-              anyOf: [
-                { type: 'null' },
-                { type: 'string' },
-                { type: 'number' },
-                { type: 'boolean' },
-                { type: 'object', additionalProperties: true },
-                { type: 'array' },
-              ],
+          anyOf: [
+            { type: 'null' },
+            {
+              type: 'object',
+              properties: {
+                output: {
+                  anyOf: [
+                    { type: 'null' },
+                    { type: 'string' },
+                    { type: 'number' },
+                    { type: 'boolean' },
+                    { type: 'object', additionalProperties: true },
+                    { type: 'array' },
+                  ],
+                },
+              },
+              required: ['output'],
+              additionalProperties: false,
             },
-          },
-          required: ['output'],
-          additionalProperties: false,
+          ],
         },
         metadata: { type: 'object', additionalProperties: true },
         token_usage: {
@@ -134,18 +139,68 @@ describe('tool-span-contract', () => {
             {
               type: 'object',
               properties: {
-                type: { type: 'string' },
+                error_type: { type: 'string' },
                 message: { type: 'string' },
                 stacktrace: { type: 'string' },
               },
-              required: ['type', 'message', 'stacktrace'],
+              required: ['error_type', 'message', 'stacktrace'],
               additionalProperties: false,
             },
           ],
         },
       },
-      required: ['span_id', 'trace_id', 'name', 'status', 'inputs', 'outputs', 'metadata'],
+      required: ['span_id', 'trace_id', 'name', 'status', 'inputs', 'metadata'],
       additionalProperties: false,
+    });
+  });
+
+  test('buildToolSpanSchema allows null outputs for interrupted or failed tool spans', () => {
+    const schema = buildToolSpanSchema({ type: 'object' });
+
+    // biome-ignore lint/suspicious/noExplicitAny: testing generated schema shape
+    expect((schema as any).properties.outputs).toEqual({
+      anyOf: [
+        { type: 'null' },
+        {
+          type: 'object',
+          properties: {
+            output: {
+              anyOf: [
+                { type: 'null' },
+                { type: 'string' },
+                { type: 'number' },
+                { type: 'boolean' },
+                { type: 'object', additionalProperties: true },
+                { type: 'array' },
+              ],
+            },
+          },
+          required: ['output'],
+          additionalProperties: false,
+        },
+      ],
+    });
+  });
+
+  test('buildToolSpanSchema uses error_type to match emitted error payloads', () => {
+    const schema = buildToolSpanSchema({ type: 'object' });
+
+    // biome-ignore lint/suspicious/noExplicitAny: testing generated schema shape
+    const errorSchema = (schema as any).properties.error;
+    expect(errorSchema).toEqual({
+      anyOf: [
+        { type: 'null' },
+        {
+          type: 'object',
+          properties: {
+            error_type: { type: 'string' },
+            message: { type: 'string' },
+            stacktrace: { type: 'string' },
+          },
+          required: ['error_type', 'message', 'stacktrace'],
+          additionalProperties: false,
+        },
+      ],
     });
   });
 });

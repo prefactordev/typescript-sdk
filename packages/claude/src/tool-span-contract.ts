@@ -38,11 +38,11 @@ const ERROR_SCHEMA = {
     {
       type: 'object',
       properties: {
-        type: { type: 'string' },
+        error_type: { type: 'string' },
         message: { type: 'string' },
         stacktrace: { type: 'string' },
       },
-      required: ['type', 'message', 'stacktrace'],
+      required: ['error_type', 'message', 'stacktrace'],
       additionalProperties: false,
     },
   ],
@@ -124,18 +124,23 @@ export function buildToolSpanSchema(inputSchema: JsonSchema): JsonSchema {
         additionalProperties: false,
       },
       outputs: {
-        type: 'object',
-        properties: {
-          output: NORMALIZED_TOOL_OUTPUT_SCHEMA,
-        },
-        required: ['output'],
-        additionalProperties: false,
+        anyOf: [
+          { type: 'null' },
+          {
+            type: 'object',
+            properties: {
+              output: NORMALIZED_TOOL_OUTPUT_SCHEMA,
+            },
+            required: ['output'],
+            additionalProperties: false,
+          },
+        ],
       },
       metadata: GENERIC_OBJECT_SCHEMA,
       token_usage: TOKEN_USAGE_SCHEMA,
       error: ERROR_SCHEMA,
     },
-    required: ['span_id', 'trace_id', 'name', 'status', 'inputs', 'outputs', 'metadata'],
+    required: ['span_id', 'trace_id', 'name', 'status', 'inputs', 'metadata'],
     additionalProperties: false,
   };
 }
