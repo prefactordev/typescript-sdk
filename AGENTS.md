@@ -189,6 +189,9 @@ Do not consider work complete until all applicable items below are true:
 - Relevant test targets pass.
 - Public API docs or README updates were made if public usage changed.
 
+## Desloppify after major changes
+After completing a significant change, run `desloppify` to check for technical debt introduced by your changes specifically. Report back only issues that were brought in by this change, not pre-existing issues in the codebase. Ground all observations to the diff of what was modified.
+
 ## Never do
 - Do not commit changes unless explicitly asked.
 - Do not publish packages, even if requested.
