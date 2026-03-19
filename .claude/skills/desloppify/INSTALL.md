@@ -1,5 +1,5 @@
 # Installing the desloppify skill
-Use this when the user machine doesnt contain the desloppify cli.
+Use this when the user machine does not contain the desloppify CLI.
 
 pip install --upgrade "desloppify[full]"
 desloppify update-skill claude    # installs the full workflow guide — pick yours: claude, cursor, codex, copilot, droid, windsurf, gemini
