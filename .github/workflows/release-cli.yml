@@ -3,9 +3,7 @@ name: Release CLI Binaries
 on:
   push:
     branches: [main]
-    tags: ['v*']
-  pull_request:
-    branches: [main]
+    tags: ["v*"]
 
 jobs:
   build:
