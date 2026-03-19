@@ -24,9 +24,11 @@ const { tracedQuery } = prefactor.getMiddleware();
 ## Behavior
 
 - `query` must be provided to `PrefactorClaude`.
+- Custom agent schemas should be passed via `httpConfig.agentSchema`, not the provider constructor.
+- Claude always captures assistant content and tool payloads using the package defaults.
 - A middleware instance supports only one active `tracedQuery()` at a time.
 - Overlapping `tracedQuery()` calls fail fast with an error instead of sharing runtime state unsafely.
-- Tool-specific span types are resolved from the normalized schema attached to the active Claude config.
+- Tool-specific span types are resolved from normalized `httpConfig.agentSchema.toolSchemas`.
 
 ## Verification
 

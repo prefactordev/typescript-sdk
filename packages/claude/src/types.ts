@@ -10,24 +10,6 @@ import type {
 export type ClaudeQuery = typeof import('@anthropic-ai/claude-agent-sdk').query;
 
 /**
- * Configuration options for the Prefactor Claude middleware.
- */
-export interface ClaudeMiddlewareConfig {
-  /**
-   * Whether to capture assistant message content in LLM spans.
-   * Set to false to reduce data volume or for privacy reasons.
-   * @default true
-   */
-  captureContent?: boolean;
-
-  /**
-   * Whether to capture tool inputs/outputs.
-   * @default true
-   */
-  captureTools?: boolean;
-}
-
-/**
  * Middleware returned by PrefactorClaude.createMiddleware().
  */
 export interface ClaudeMiddleware {

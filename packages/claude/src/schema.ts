@@ -6,8 +6,6 @@ interface NormalizedClaudeSchemaData {
   toolSpanTypes?: Record<string, string>;
 }
 
-const toolSpanTypesBySchema = new WeakMap<Record<string, unknown>, Record<string, string>>();
-
 export const DEFAULT_CLAUDE_AGENT_SCHEMA = {
   external_identifier: 'claude-schema',
   span_schemas: {
@@ -29,10 +27,7 @@ export const DEFAULT_CLAUDE_AGENT_SCHEMA = {
  *
  * Tool schema normalization is delegated to core, then the resulting tool span
  * schemas are merged into Claude's default `span_schemas` and
- * `span_result_schemas`. The internal cache that backs
- * `getToolSpanTypesForAgentSchema` is keyed by the normalized agent schema
- * object identity, not by structural equality, so equivalent-looking objects
- * only share cached data when they are the exact same object reference.
+ * `span_result_schemas`.
  *
  * @param agentSchema - Optional raw agent schema provided by the caller.
  * @returns The normalized agent schema plus any extracted tool-to-span-type mapping.
@@ -46,34 +41,11 @@ export function normalizeAgentSchema(
   });
 
   const normalizedAgentSchema = buildAgentSchema(normalizedToolSchemas);
-  if (normalizedToolSchemas.toolSpanTypes) {
-    toolSpanTypesBySchema.set(normalizedAgentSchema, normalizedToolSchemas.toolSpanTypes);
-  }
 
   return {
     agentSchema: normalizedAgentSchema,
     toolSpanTypes: normalizedToolSchemas.toolSpanTypes,
   };
-}
-
-/**
- * Retrieve the cached tool span type mapping for a normalized agent schema.
- *
- * Lookups use object identity via a `WeakMap`, not structural equality, so
- * callers must pass the same normalized schema object returned by
- * `normalizeAgentSchema` to get a cache hit.
- *
- * @param agentSchema - Normalized agent schema object to query.
- * @returns The cached tool-to-span-type mapping, if one was stored for this exact object.
- */
-export function getToolSpanTypesForAgentSchema(
-  agentSchema: Record<string, unknown> | undefined
-): Record<string, string> | undefined {
-  if (!agentSchema) {
-    return undefined;
-  }
-
-  return toolSpanTypesBySchema.get(agentSchema);
 }
 
 export function resolveToolSpanType(

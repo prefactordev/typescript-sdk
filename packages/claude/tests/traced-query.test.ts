@@ -254,30 +254,6 @@ describe('hooks', () => {
     expect(mock.ended[0].outputs).toEqual({ output: 'file contents here' });
   });
 
-  test('captureTools=false omits tool payloads', async () => {
-    const hooks = createInstrumentationHooks(mock.tracer, undefined, state, {
-      captureTools: false,
-    });
-
-    await getHook(hooks, 'PreToolUse')(
-      { tool_name: 'Read', tool_input: { file_path: '/secret.ts' } },
-      'tool-use-5',
-      { signal }
-    );
-    await getHook(hooks, 'PostToolUse')(
-      { tool_name: 'Read', tool_response: 'secret data' },
-      'tool-use-5',
-      { signal }
-    );
-
-    expect(mock.started[0]?.inputs).toEqual({
-      'claude.tool.name': 'Read',
-      toolName: 'Read',
-      toolUseId: 'tool-use-5',
-    });
-    expect(mock.ended[0]?.outputs).toEqual({});
-  });
-
   test('Stop ends in-flight tool and subagent spans and clears the maps', async () => {
     const hooks = createInstrumentationHooks(mock.tracer, undefined, state);
     state.agentSpan = createSpan('claude:agent', {}, 'claude:session');
@@ -542,45 +518,63 @@ describe('createTracedQuery', () => {
         createSequenceQueryStream([
           {
             type: 'assistant',
-            message: { content: [{ type: 'text', text: 'Final answer' }] },
+            message: { content: [{ type: 'text', text: 'Final answer', formatter: () => 'x' }] },
           } as SDKMessage,
           { type: 'result', result: 'done', subtype: 'end_turn', is_error: false } as SDKMessage,
         ])) as ClaudeQuery,
       mock.tracer,
       { startInstance: () => {}, finishInstance: () => {} } as never,
       { agentIdentifier: 'claude-test' },
-      createClaudeRuntimeController(),
-      { captureContent: true }
+      createClaudeRuntimeController()
     );
 
     await collectMessages(middleware.tracedQuery({ prompt: 'test' }));
 
     expect(mock.ended[0]?.outputs).toEqual({
-      'claude.response.content': [{ type: 'text', text: 'Final answer' }],
+      'claude.response.content': [
+        { type: 'text', text: 'Final answer', formatter: expect.any(String) },
+      ],
     });
   });
 
-  test('does not capture assistant content when captureContent is false', async () => {
+  test('serializes result payload fields before ending the agent span', async () => {
     const mock = createMockTracer();
     const middleware = createTracedQuery(
       (() =>
         createSequenceQueryStream([
           {
-            type: 'assistant',
-            message: { content: [{ type: 'text', text: 'Secret' }] },
+            type: 'system',
+            subtype: 'init',
+            session_id: 'session-1',
+            model: 'claude-sonnet',
           } as SDKMessage,
-          { type: 'result', result: 'done', subtype: 'end_turn', is_error: false } as SDKMessage,
+          {
+            type: 'result',
+            result: { cost: 1n },
+            stop_reason: { detail: () => 'done' },
+            num_turns: 2n,
+            total_cost_usd: 1.25,
+            subtype: 'end_turn',
+            is_error: false,
+          } as SDKMessage,
         ])) as ClaudeQuery,
       mock.tracer,
       { startInstance: () => {}, finishInstance: () => {} } as never,
       { agentIdentifier: 'claude-test' },
-      createClaudeRuntimeController(),
-      { captureContent: false }
+      createClaudeRuntimeController()
     );
 
     await collectMessages(middleware.tracedQuery({ prompt: 'test' }));
 
-    expect(mock.ended[0]?.outputs).toEqual({});
+    const agentEnd = mock.ended.find((entry) => entry.span.spanType === 'claude:agent');
+    expect(agentEnd?.outputs).toEqual({
+      result: { cost: '1' },
+      subtype: 'end_turn',
+      stop_reason: { detail: expect.any(String) },
+      num_turns: '2',
+      total_cost_usd: 1.25,
+      is_error: false,
+    });
   });
 
   test('marks agent result spans as errors when the result reports an error', async () => {

@@ -1,11 +1,11 @@
 import type { Query, SDKMessage } from '@anthropic-ai/claude-agent-sdk';
-import type { AgentInstanceManager, Span, StartSpanOptions, Tracer } from '@prefactor/core';
-import { getLogger, SpanContext } from '@prefactor/core';
+import type { AgentInstanceManager, Tracer } from '@prefactor/core';
+import { getLogger, serializeValue } from '@prefactor/core';
 import { createInstrumentationHooks, finalizeAgentSpan, mergeHooks } from './hooks.js';
+import { startSpanWithParent } from './span-utils.js';
 import type {
   ClaudeAgentInfo,
   ClaudeMiddleware,
-  ClaudeMiddlewareConfig,
   ClaudeQuery,
   ClaudeRuntimeController,
   TracedQueryState,
@@ -44,23 +44,12 @@ type ClaudeResultMessage = {
   is_error?: boolean;
 };
 
-function startSpanWithParent(
-  tracer: Tracer,
-  parentSpan: Span | null,
-  options: StartSpanOptions
-): Span {
-  return parentSpan
-    ? SpanContext.run(parentSpan, () => tracer.startSpan(options))
-    : tracer.startSpan(options);
-}
-
 export function createTracedQuery(
   queryFn: ClaudeQuery,
   tracer: Tracer,
   agentManager: AgentInstanceManager,
   agentInfo: ClaudeAgentInfo | undefined,
   runtimeController: ClaudeRuntimeController,
-  middlewareConfig?: ClaudeMiddlewareConfig,
   toolSpanTypes?: Record<string, string>
 ): ClaudeMiddleware {
   function tracedQuery(...args: Parameters<ClaudeQuery>): Query {
@@ -77,12 +66,7 @@ export function createTracedQuery(
       subagentSpanMap: new Map(),
     };
 
-    const instrumentationHooks = createInstrumentationHooks(
-      tracer,
-      toolSpanTypes,
-      state,
-      middlewareConfig
-    );
+    const instrumentationHooks = createInstrumentationHooks(tracer, toolSpanTypes, state);
 
     const mergedOptions = {
       ...options,
@@ -100,8 +84,7 @@ export function createTracedQuery(
         runtimeController,
         runToken,
         state,
-        cleanupRun,
-        middlewareConfig
+        cleanupRun
       );
 
       return decorateQueryStream(stream, generator, cleanupRun);
@@ -219,8 +202,7 @@ async function* tapStream(
   runtimeController: ClaudeRuntimeController,
   runToken: symbol,
   state: TracedQueryState,
-  cleanupRun: () => void,
-  config?: ClaudeMiddlewareConfig
+  cleanupRun: () => void
 ): AsyncGenerator<SDKMessage, void> {
   try {
     for await (const message of stream) {
@@ -232,8 +214,7 @@ async function* tapStream(
           agentInfo,
           runtimeController,
           runToken,
-          state,
-          config
+          state
         );
       } catch (error) {
         logger.warn('Error processing message for tracing', error);
@@ -286,8 +267,7 @@ function handleMessage(
   agentInfo: ClaudeAgentInfo | undefined,
   runtimeController: ClaudeRuntimeController,
   runToken: symbol,
-  state: TracedQueryState,
-  config?: ClaudeMiddlewareConfig
+  state: TracedQueryState
 ): void {
   const messageInfo = message as { type?: string; subtype?: string; event?: unknown };
 
@@ -305,7 +285,7 @@ function handleMessage(
   }
 
   if (messageInfo.type === 'assistant' && messageInfo.event === undefined) {
-    handleAssistantMessage(message as ClaudeAssistantMessage, tracer, state, config);
+    handleAssistantMessage(message as ClaudeAssistantMessage, tracer, state);
     return;
   }
 
@@ -346,8 +326,7 @@ function handleSystemInit(
 function handleAssistantMessage(
   msg: ClaudeAssistantMessage,
   tracer: Tracer,
-  state: TracedQueryState,
-  config?: ClaudeMiddlewareConfig
+  state: TracedQueryState
 ): void {
   // End previous LLM span if exists, passing stored outputs
   if (state.currentLlmSpan) {
@@ -358,8 +337,8 @@ function handleAssistantMessage(
 
   // Build outputs for this new LLM turn
   const outputs: Record<string, unknown> = {};
-  if (config?.captureContent !== false && msg.message?.content) {
-    outputs['claude.response.content'] = msg.message.content;
+  if (msg.message?.content) {
+    outputs['claude.response.content'] = serializeValue(msg.message.content);
   }
   state.currentLlmOutputs = outputs;
 
@@ -403,11 +382,11 @@ function handleResultMessage(
     state,
     tracer,
     {
-      result: msg.result,
+      result: serializeValue(msg.result),
       subtype: msg.subtype,
-      stop_reason: msg.stop_reason,
-      num_turns: msg.num_turns,
-      total_cost_usd: msg.total_cost_usd,
+      stop_reason: serializeValue(msg.stop_reason),
+      num_turns: serializeValue(msg.num_turns),
+      total_cost_usd: serializeValue(msg.total_cost_usd),
       is_error: msg.is_error,
     },
     tokenUsage,

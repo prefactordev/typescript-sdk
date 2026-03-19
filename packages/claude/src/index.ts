@@ -48,7 +48,6 @@ export { DEFAULT_CLAUDE_AGENT_SCHEMA, PrefactorClaude } from './provider.js';
 // Types
 export type {
   ClaudeMiddleware,
-  ClaudeMiddlewareConfig,
   ClaudeQuery,
   JsonSchema,
   ToolSchemaConfig,

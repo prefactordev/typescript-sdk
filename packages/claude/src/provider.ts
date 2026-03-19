@@ -1,29 +1,22 @@
 import type { AgentInstanceManager, Config, PrefactorProvider, Tracer } from '@prefactor/core';
 import {
   DEFAULT_CLAUDE_AGENT_SCHEMA as DEFAULT_CLAUDE_AGENT_SCHEMA_BASE,
-  getToolSpanTypesForAgentSchema,
   normalizeAgentSchema,
 } from './schema.js';
 import { createClaudeRuntimeController, createTracedQuery } from './traced-query.js';
-import type {
-  ClaudeAgentInfo,
-  ClaudeMiddleware,
-  ClaudeMiddlewareConfig,
-  ClaudeQuery,
-  ClaudeRuntimeController,
-} from './types.js';
+import type { ClaudeAgentInfo, ClaudeMiddleware, ClaudeQuery, ClaudeRuntimeController } from './types.js';
 
 export const DEFAULT_CLAUDE_AGENT_SCHEMA = DEFAULT_CLAUDE_AGENT_SCHEMA_BASE;
 
 export interface PrefactorClaudeOptions {
   query: ClaudeQuery;
-  middleware?: ClaudeMiddlewareConfig;
 }
 
 export class PrefactorClaude implements PrefactorProvider<ClaudeMiddleware> {
   private readonly options: PrefactorClaudeOptions;
   private agentManager: AgentInstanceManager | null = null;
   private runtimeController: ClaudeRuntimeController | null = null;
+  private toolSpanTypes: Record<string, string> | undefined;
 
   constructor(options: PrefactorClaudeOptions) {
     this.options = options;
@@ -44,8 +37,7 @@ export class PrefactorClaude implements PrefactorProvider<ClaudeMiddleware> {
       agentManager,
       toClaudeAgentInfo(coreConfig),
       runtimeController,
-      this.options.middleware,
-      getToolSpanTypesForAgentSchema(coreConfig.httpConfig?.agentSchema)
+      this.toolSpanTypes
     );
   }
 
@@ -56,7 +48,9 @@ export class PrefactorClaude implements PrefactorProvider<ClaudeMiddleware> {
   }
 
   normalizeAgentSchema(agentSchema: Record<string, unknown>): Record<string, unknown> {
-    return normalizeAgentSchema(agentSchema).agentSchema;
+    const normalizedSchema = normalizeAgentSchema(agentSchema);
+    this.toolSpanTypes = normalizedSchema.toolSpanTypes;
+    return normalizedSchema.agentSchema;
   }
 
   getDefaultAgentSchema(): Record<string, unknown> | undefined {

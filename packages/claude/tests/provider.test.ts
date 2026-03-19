@@ -70,6 +70,7 @@ describe('PrefactorClaude', () => {
 
   test('createMiddleware resolves tool span types from normalized config schema', async () => {
     const queryCalls: Array<Parameters<typeof mockQuery>[0]> = [];
+    const startedSpans: Array<{ spanType: string; inputs: Record<string, unknown> }> = [];
     const queryFn = ((params) => {
       queryCalls.push(params);
       return {
@@ -123,18 +124,12 @@ describe('PrefactorClaude', () => {
         },
       },
     });
-    provider.normalizeAgentSchema({
-      ...DEFAULT_CLAUDE_AGENT_SCHEMA,
-      toolSchemas: {
-        Bash: {
-          spanType: 'claude:tool:bash',
-          inputSchema: { type: 'object' },
-        },
-      },
-    });
 
     const mockTracer = {
-      startSpan: () => ({}),
+      startSpan: (options: { spanType: string; inputs: Record<string, unknown> }) => {
+        startedSpans.push({ spanType: options.spanType, inputs: options.inputs });
+        return {};
+      },
       endSpan: () => {},
       close: async () => {},
       startAgentInstance: () => {},
@@ -146,6 +141,8 @@ describe('PrefactorClaude', () => {
       finishInstance: () => {},
     };
 
+    const clonedSchema = JSON.parse(JSON.stringify(schemaA)) as typeof schemaA;
+
     const middleware = provider.createMiddleware(
       mockTracer as never,
       mockAgentManager as never,
@@ -154,7 +151,7 @@ describe('PrefactorClaude', () => {
           apiUrl: 'http://localhost',
           apiToken: 'test',
           agentIdentifier: 'claude-test',
-          agentSchema: schemaA,
+          agentSchema: clonedSchema,
         },
       } as never
     );
@@ -166,6 +163,18 @@ describe('PrefactorClaude', () => {
     const hooks = queryCalls[0]?.options?.hooks;
     const preToolUse = hooks?.PreToolUse?.[0]?.hooks?.[0];
     expect(preToolUse).toBeDefined();
+    await preToolUse?.({ tool_name: 'Read', tool_input: { file_path: '/tmp/foo.ts' } }, 'tool-1', {
+      signal: new AbortController().signal,
+    });
+    expect(startedSpans).toContainEqual({
+      spanType: 'claude:tool:read',
+      inputs: {
+        'claude.tool.name': 'Read',
+        toolName: 'Read',
+        toolUseId: 'tool-1',
+        input: { file_path: '/tmp/foo.ts' },
+      },
+    });
   });
 
   test('shutdown is safe to call multiple times', () => {

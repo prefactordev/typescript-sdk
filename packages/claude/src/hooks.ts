@@ -1,14 +1,9 @@
 import type { HookCallback, HookCallbackMatcher, HookEvent } from '@anthropic-ai/claude-agent-sdk';
-import {
-  getLogger,
-  type Span,
-  SpanContext,
-  type StartSpanOptions,
-  type Tracer,
-} from '@prefactor/core';
+import { getLogger, type Span, type Tracer } from '@prefactor/core';
 import { resolveToolSpanType } from './schema.js';
+import { startSpanWithParent } from './span-utils.js';
 import { createToolSpanInputs, createToolSpanOutputs } from './tool-span-contract.js';
-import type { ClaudeMiddlewareConfig, TracedQueryState } from './types.js';
+import type { TracedQueryState } from './types.js';
 
 const logger = getLogger('claude');
 
@@ -25,16 +20,6 @@ type SubagentHookInput = {
 };
 
 const POST_EVENTS = new Set<HookEvent>(['PostToolUse', 'PostToolUseFailure']);
-
-function startSpanWithParent(
-  tracer: Tracer,
-  parentSpan: Span | null,
-  options: StartSpanOptions
-): Span {
-  return parentSpan
-    ? SpanContext.run(parentSpan, () => tracer.startSpan(options))
-    : tracer.startSpan(options);
-}
 
 function endInFlightSpans(
   tracer: Tracer,
@@ -55,8 +40,7 @@ function endInFlightSpans(
 export function createInstrumentationHooks(
   tracer: Tracer,
   toolSpanTypes: Record<string, string> | undefined,
-  state: TracedQueryState,
-  config?: ClaudeMiddlewareConfig
+  state: TracedQueryState
 ): HooksMap {
   const preToolUse: HookCallback = async (input, toolUseID) => {
     try {
@@ -65,14 +49,11 @@ export function createInstrumentationHooks(
       const toolInput = hookInput.tool_input;
 
       const spanType = resolveToolSpanType(toolName, toolSpanTypes);
-      const inputs =
-        config?.captureTools !== false
-          ? createToolSpanInputs({
-              toolName,
-              toolUseId: toolUseID,
-              input: toolInput,
-            })
-          : createToolSpanInputs({ toolName, toolUseId: toolUseID });
+      const inputs = createToolSpanInputs({
+        toolName,
+        toolUseId: toolUseID,
+        input: toolInput,
+      });
 
       const span = startSpanWithParent(tracer, state.currentLlmSpan ?? state.agentSpan, {
         name: 'claude:tool-call',
@@ -103,7 +84,7 @@ export function createInstrumentationHooks(
       const hookInput = input as ToolHookInput;
       const toolResponse = hookInput.tool_response;
 
-      const outputs = config?.captureTools !== false ? createToolSpanOutputs(toolResponse) : {};
+      const outputs = createToolSpanOutputs(toolResponse);
       tracer.endSpan(span, { outputs });
     } catch (error) {
       logger.warn('PostToolUse hook error', error);
