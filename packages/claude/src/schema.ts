@@ -24,6 +24,19 @@ export const DEFAULT_CLAUDE_AGENT_SCHEMA = {
   },
 } as const satisfies Record<string, unknown>;
 
+/**
+ * Normalize a Claude agent schema and attach any provider-specific tool span metadata.
+ *
+ * Tool schema normalization is delegated to core, then the resulting tool span
+ * schemas are merged into Claude's default `span_schemas` and
+ * `span_result_schemas`. The internal cache that backs
+ * `getToolSpanTypesForAgentSchema` is keyed by the normalized agent schema
+ * object identity, not by structural equality, so equivalent-looking objects
+ * only share cached data when they are the exact same object reference.
+ *
+ * @param agentSchema - Optional raw agent schema provided by the caller.
+ * @returns The normalized agent schema plus any extracted tool-to-span-type mapping.
+ */
 export function normalizeAgentSchema(
   agentSchema: Record<string, unknown> | undefined
 ): NormalizedClaudeSchemaData {
@@ -43,6 +56,16 @@ export function normalizeAgentSchema(
   };
 }
 
+/**
+ * Retrieve the cached tool span type mapping for a normalized agent schema.
+ *
+ * Lookups use object identity via a `WeakMap`, not structural equality, so
+ * callers must pass the same normalized schema object returned by
+ * `normalizeAgentSchema` to get a cache hit.
+ *
+ * @param agentSchema - Normalized agent schema object to query.
+ * @returns The cached tool-to-span-type mapping, if one was stored for this exact object.
+ */
 export function getToolSpanTypesForAgentSchema(
   agentSchema: Record<string, unknown> | undefined
 ): Record<string, string> | undefined {

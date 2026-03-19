@@ -121,6 +121,31 @@ describe('normalizeAgentSchema', () => {
     expect(spanSchemas).toHaveProperty('claude:subagent');
     expect(spanSchemas).toHaveProperty('claude:tool:read');
   });
+
+  test('rejects duplicate normalized tool span types', () => {
+    const schema = {
+      ...DEFAULT_CLAUDE_AGENT_SCHEMA,
+      toolSchemas: {
+        Read: {
+          spanType: 'claude:tool:shared',
+          inputSchema: { type: 'object' },
+        },
+        Edit: {
+          spanType: 'shared',
+          inputSchema: { type: 'object' },
+        },
+      },
+    };
+
+    const result = normalizeAgentSchema(schema);
+
+    expect(result.toolSpanTypes).toEqual({
+      Read: 'claude:tool:shared',
+    });
+    // biome-ignore lint/suspicious/noExplicitAny: testing dynamic schema structure
+    const spanSchemas = (result.agentSchema as any).span_schemas;
+    expect(spanSchemas).toHaveProperty('claude:tool:shared');
+  });
 });
 
 describe('resolveToolSpanType', () => {
