@@ -183,4 +183,23 @@ describe('PrefactorClaude', () => {
     provider.shutdown();
     provider.shutdown();
   });
+
+  test('shutdown swallows runtimeController.shutdown errors and clears internal refs', () => {
+    const provider = new PrefactorClaude({ query: mockQuery });
+
+    // biome-ignore lint/suspicious/noExplicitAny: exercising private shutdown cleanup path
+    (provider as any).agentManager = { finishInstance: () => {} };
+    // biome-ignore lint/suspicious/noExplicitAny: exercising private shutdown cleanup path
+    (provider as any).runtimeController = {
+      shutdown: () => {
+        throw new Error('finish failed');
+      },
+    };
+
+    expect(() => provider.shutdown()).not.toThrow();
+    // biome-ignore lint/suspicious/noExplicitAny: verifying private refs are always cleared
+    expect((provider as any).agentManager).toBeNull();
+    // biome-ignore lint/suspicious/noExplicitAny: verifying private refs are always cleared
+    expect((provider as any).runtimeController).toBeNull();
+  });
 });

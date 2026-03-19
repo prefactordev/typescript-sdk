@@ -207,15 +207,7 @@ async function* tapStream(
   try {
     for await (const message of stream) {
       try {
-        handleMessage(
-          message,
-          tracer,
-          agentManager,
-          agentInfo,
-          runtimeController,
-          runToken,
-          state
-        );
+        handleMessage(message, tracer, agentManager, agentInfo, runtimeController, runToken, state);
       } catch (error) {
         logger.warn('Error processing message for tracing', error);
       }

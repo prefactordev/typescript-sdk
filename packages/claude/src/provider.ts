@@ -1,12 +1,24 @@
-import type { AgentInstanceManager, Config, PrefactorProvider, Tracer } from '@prefactor/core';
+import {
+  getLogger,
+  type AgentInstanceManager,
+  type Config,
+  type PrefactorProvider,
+  type Tracer,
+} from '@prefactor/core';
 import {
   DEFAULT_CLAUDE_AGENT_SCHEMA as DEFAULT_CLAUDE_AGENT_SCHEMA_BASE,
   normalizeAgentSchema,
 } from './schema.js';
 import { createClaudeRuntimeController, createTracedQuery } from './traced-query.js';
-import type { ClaudeAgentInfo, ClaudeMiddleware, ClaudeQuery, ClaudeRuntimeController } from './types.js';
+import type {
+  ClaudeAgentInfo,
+  ClaudeMiddleware,
+  ClaudeQuery,
+  ClaudeRuntimeController,
+} from './types.js';
 
 export const DEFAULT_CLAUDE_AGENT_SCHEMA = DEFAULT_CLAUDE_AGENT_SCHEMA_BASE;
+const logger = getLogger('claude');
 
 export interface PrefactorClaudeOptions {
   query: ClaudeQuery;
@@ -42,9 +54,14 @@ export class PrefactorClaude implements PrefactorProvider<ClaudeMiddleware> {
   }
 
   shutdown(): void {
-    this.runtimeController?.shutdown(this.agentManager);
-    this.agentManager = null;
-    this.runtimeController = null;
+    try {
+      this.runtimeController?.shutdown(this.agentManager);
+    } catch (error) {
+      logShutdownError(error);
+    } finally {
+      this.agentManager = null;
+      this.runtimeController = null;
+    }
   }
 
   normalizeAgentSchema(agentSchema: Record<string, unknown>): Record<string, unknown> {
@@ -70,4 +87,12 @@ function toClaudeAgentInfo(config: Config): ClaudeAgentInfo | undefined {
     agentName: httpConfig.agentName,
     agentDescription: httpConfig.agentDescription,
   };
+}
+
+function logShutdownError(error: unknown): void {
+  try {
+    logger.warn('PrefactorClaude.shutdown() failed during runtimeController.shutdown(...)', error);
+  } catch {
+    // Logging must never turn shutdown cleanup into a user-visible failure.
+  }
 }
