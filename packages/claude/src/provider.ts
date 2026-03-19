@@ -18,7 +18,6 @@ export const DEFAULT_CLAUDE_AGENT_SCHEMA = DEFAULT_CLAUDE_AGENT_SCHEMA_BASE;
 export interface PrefactorClaudeOptions {
   query: ClaudeQuery;
   middleware?: ClaudeMiddlewareConfig;
-  agentSchema?: Record<string, unknown>;
 }
 
 export class PrefactorClaude implements PrefactorProvider<ClaudeMiddleware> {
@@ -61,7 +60,7 @@ export class PrefactorClaude implements PrefactorProvider<ClaudeMiddleware> {
   }
 
   getDefaultAgentSchema(): Record<string, unknown> | undefined {
-    return this.options.agentSchema ?? DEFAULT_CLAUDE_AGENT_SCHEMA;
+    return DEFAULT_CLAUDE_AGENT_SCHEMA;
   }
 }
 

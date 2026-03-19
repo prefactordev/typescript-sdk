@@ -10,12 +10,6 @@ describe('PrefactorClaude', () => {
     expect(provider.getDefaultAgentSchema()).toEqual(DEFAULT_CLAUDE_AGENT_SCHEMA);
   });
 
-  test('getDefaultAgentSchema returns custom schema when provided', () => {
-    const custom = { external_identifier: 'custom' };
-    const provider = new PrefactorClaude({ query: mockQuery, agentSchema: custom });
-    expect(provider.getDefaultAgentSchema()).toEqual(custom);
-  });
-
   test('normalizeAgentSchema extracts tool span types', () => {
     const provider = new PrefactorClaude({ query: mockQuery });
     const schema = {

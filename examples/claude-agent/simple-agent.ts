@@ -246,7 +246,7 @@ async function main() {
   }
 
   const prefactor = init({
-    provider: new PrefactorClaude({ query, agentSchema }),
+    provider: new PrefactorClaude({ query }),
     httpConfig: {
       apiUrl: process.env.PREFACTOR_API_URL || "http://localhost:8000",
       apiToken: process.env.PREFACTOR_API_TOKEN || "dev-token",
