@@ -1,5 +1,11 @@
 import type { HookCallback, HookCallbackMatcher, HookEvent } from '@anthropic-ai/claude-agent-sdk';
-import { getLogger, SpanContext, type Span, type StartSpanOptions, type Tracer } from '@prefactor/core';
+import {
+  getLogger,
+  SpanContext,
+  type Span,
+  type StartSpanOptions,
+  type Tracer,
+} from '@prefactor/core';
 import { resolveToolSpanType } from './schema.js';
 import { createToolSpanInputs, createToolSpanOutputs } from './tool-span-contract.js';
 import type { ClaudeMiddlewareConfig, TracedQueryState } from './types.js';

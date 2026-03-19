@@ -91,13 +91,7 @@ export function createTracedQuery(
 
     try {
       const stream = queryFn({ prompt, options: mergedOptions });
-      const cleanupRun = createRunCleanup(
-        tracer,
-        agentManager,
-        runtimeController,
-        runToken,
-        state
-      );
+      const cleanupRun = createRunCleanup(tracer, agentManager, runtimeController, runToken, state);
       const generator = tapStream(
         stream,
         tracer,
