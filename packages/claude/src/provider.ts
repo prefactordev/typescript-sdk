@@ -1,7 +1,7 @@
 import {
-  getLogger,
   type AgentInstanceManager,
   type Config,
+  getLogger,
   type PrefactorProvider,
   type Tracer,
 } from '@prefactor/core';
