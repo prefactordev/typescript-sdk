@@ -71,7 +71,7 @@ Provider integrations must use explicit tracer injection, NOT global state.
 - If changing transport behavior, verify it works for all adapters.
 - If adding configuration, use Zod with environment variable fallbacks.
 
-When working with packages that depend on core, refer to the relevent AGENTS.md for that package first.
+When working with packages that depend on core, refer to the relevant AGENTS.md for that package first.
 
 ## Testing guidance
 - Focus tests on lifecycle behavior, correctness of side effects, and data validity.
