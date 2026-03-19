@@ -190,7 +190,7 @@ Do not consider work complete until all applicable items below are true:
 - Public API docs or README updates were made if public usage changed.
 
 ## Desloppify after major changes
-After completing a significant change, run the `desloppify` skill to check for technical debt introduced by your changes specifically. Report back only issues that were brought in by this change, not pre-existing issues in the codebase. Ground all observations to the diff of what was modified in this branch - both commited and uncommited.
+After completing a significant change, run the `desloppify` skill to check for technical debt introduced by your changes specifically. Report back only issues that were brought in by this change, not pre-existing issues in the codebase. Ground all observations to the diff of what was modified in this branch - both committed and uncommitted.
 
 If the user doesn't have the desloppify cli installed, refer to the `INSTALL.md` for the desloppify skill.
 
