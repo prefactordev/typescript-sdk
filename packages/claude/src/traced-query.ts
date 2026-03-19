@@ -176,7 +176,7 @@ function decorateQueryStream(
   return {
     [Symbol.asyncIterator]: () => generator,
     next: generator.next.bind(generator),
-    return: async (value?: void) => {
+    return: async (value?: undefined) => {
       try {
         return await generator.return(value);
       } finally {

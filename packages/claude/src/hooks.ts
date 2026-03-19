@@ -1,8 +1,8 @@
 import type { HookCallback, HookCallbackMatcher, HookEvent } from '@anthropic-ai/claude-agent-sdk';
 import {
   getLogger,
-  SpanContext,
   type Span,
+  SpanContext,
   type StartSpanOptions,
   type Tracer,
 } from '@prefactor/core';

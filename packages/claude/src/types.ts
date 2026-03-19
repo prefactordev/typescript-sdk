@@ -1,6 +1,11 @@
 import type { Query } from '@anthropic-ai/claude-agent-sdk';
-import type { AgentInstanceManager, AgentInstanceOptions } from '@prefactor/core';
-import type { JsonSchema, Span, ToolSchemaConfig } from '@prefactor/core';
+import type {
+  AgentInstanceManager,
+  AgentInstanceOptions,
+  JsonSchema,
+  Span,
+  ToolSchemaConfig,
+} from '@prefactor/core';
 
 export type ClaudeQuery = typeof import('@anthropic-ai/claude-agent-sdk').query;
 

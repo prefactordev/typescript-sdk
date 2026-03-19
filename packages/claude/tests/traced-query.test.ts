@@ -9,7 +9,7 @@ import type {
 import { type Span, SpanStatus, type Tracer } from '@prefactor/core';
 import { createInstrumentationHooks, finalizeAgentSpan, mergeHooks } from '../src/hooks.js';
 import { createClaudeRuntimeController, createTracedQuery } from '../src/traced-query.js';
-import type { ClaudeMiddlewareConfig, ClaudeQuery, TracedQueryState } from '../src/types.js';
+import type { ClaudeQuery, TracedQueryState } from '../src/types.js';
 
 type HooksMap = Partial<Record<HookEvent, HookCallbackMatcher[]>>;
 
