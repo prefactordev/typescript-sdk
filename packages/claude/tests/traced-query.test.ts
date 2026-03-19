@@ -277,6 +277,31 @@ describe('hooks', () => {
     });
     expect(mock.ended[0]?.outputs).toEqual({});
   });
+
+  test('Stop ends in-flight tool and subagent spans and clears the maps', async () => {
+    const hooks = createInstrumentationHooks(mock.tracer, undefined, state);
+    state.agentSpan = createSpan('claude:agent', {}, 'claude:session');
+
+    await getHook(hooks, 'PreToolUse')(
+      { tool_name: 'Read', tool_input: { file_path: '/foo.ts' } },
+      'tool-use-1',
+      { signal }
+    );
+    await getHook(hooks, 'SubagentStart')(
+      { agent_id: 'subagent-1', agent_type: 'reviewer' },
+      undefined,
+      { signal }
+    );
+
+    await getHook(hooks, 'Stop')({}, undefined, { signal });
+
+    expect(state.agentSpanFinished).toBe(true);
+    expect(state.toolSpanMap.size).toBe(0);
+    expect(state.subagentSpanMap.size).toBe(0);
+    expect(mock.ended).toHaveLength(3);
+    expect(mock.ended[1]?.error?.message).toBe('Agent stopped before span completed');
+    expect(mock.ended[2]?.error?.message).toBe('Agent stopped before span completed');
+  });
 });
 
 describe('finalizeAgentSpan', () => {

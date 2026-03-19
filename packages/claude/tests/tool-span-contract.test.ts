@@ -21,8 +21,43 @@ describe('tool-span-contract', () => {
     });
   });
 
+  test('createToolSpanInputs serializes non-JSON-safe values and truncates long strings', () => {
+    const inputs = createToolSpanInputs({
+      toolName: 'Bash',
+      input: {
+        handler: () => 'ok',
+        longText: 'a'.repeat(10005),
+      },
+    });
+
+    expect(inputs['claude.tool.name']).toBe('Bash');
+    expect(inputs.toolName).toBe('Bash');
+    expect(inputs.input).toEqual({
+      handler: expect.any(String),
+      longText: `${'a'.repeat(10000)}... [truncated]`,
+    });
+  });
+
   test('createToolSpanOutputs normalizes undefined to null', () => {
     expect(createToolSpanOutputs(undefined)).toEqual({ output: null });
+  });
+
+  test('createToolSpanOutputs serializes non-JSON-safe values and truncates long strings', () => {
+    expect(
+      createToolSpanOutputs({
+        output: {
+          value: 1n,
+          summary: 'b'.repeat(10005),
+        },
+      })
+    ).toEqual({
+      output: {
+        output: {
+          value: '1',
+          summary: `${'b'.repeat(10000)}... [truncated]`,
+        },
+      },
+    });
   });
 
   test('buildToolSpanSchema embeds the provided input schema', () => {
@@ -99,11 +134,11 @@ describe('tool-span-contract', () => {
             {
               type: 'object',
               properties: {
-                error_type: { type: 'string' },
+                type: { type: 'string' },
                 message: { type: 'string' },
                 stacktrace: { type: 'string' },
               },
-              required: ['error_type', 'message', 'stacktrace'],
+              required: ['type', 'message', 'stacktrace'],
               additionalProperties: false,
             },
           ],

@@ -1,4 +1,4 @@
-import type { JsonSchema } from '@prefactor/core';
+import { type JsonSchema, serializeValue } from '@prefactor/core';
 
 export const GENERIC_OBJECT_SCHEMA = {
   type: 'object',
@@ -38,16 +38,29 @@ const ERROR_SCHEMA = {
     {
       type: 'object',
       properties: {
-        error_type: { type: 'string' },
+        type: { type: 'string' },
         message: { type: 'string' },
         stacktrace: { type: 'string' },
       },
-      required: ['error_type', 'message', 'stacktrace'],
+      required: ['type', 'message', 'stacktrace'],
       additionalProperties: false,
     },
   ],
 } as const satisfies JsonSchema;
 
+/**
+ * Build the tool-call input payload for Claude spans.
+ *
+ * The tool name is intentionally duplicated under both `claude.tool.name` and
+ * `toolName` for compatibility with existing span consumers. Optional fields
+ * are omitted when `toolUseId` or `input` is undefined.
+ *
+ * @param params - Tool-call metadata and optional input payload.
+ * @param params.toolName - Claude tool name to record in the span.
+ * @param params.toolUseId - Optional Claude tool-use identifier.
+ * @param params.input - Optional tool input payload, serialized for JSON-safe storage.
+ * @returns A span input object suitable for `tracer.startSpan`.
+ */
 export function createToolSpanInputs({
   toolName,
   toolUseId,
@@ -61,16 +74,36 @@ export function createToolSpanInputs({
     'claude.tool.name': toolName,
     toolName,
     ...(toolUseId ? { toolUseId } : {}),
-    ...(input !== undefined ? { input } : {}),
+    ...(input !== undefined ? { input: serializeValue(input) } : {}),
   };
 }
 
+/**
+ * Build the tool-call output payload for Claude spans.
+ *
+ * This delegates to `normalizeToolSpanOutput`, which converts `undefined` to
+ * `null` before the payload is serialized for JSON-safe span storage.
+ *
+ * @param output - Raw tool output value from Claude.
+ * @returns A span output object with normalized and serialized output data.
+ */
 export function createToolSpanOutputs(output: unknown): { output: unknown } {
   return {
-    output: normalizeToolSpanOutput(output),
+    output: serializeValue(normalizeToolSpanOutput(output)),
   };
 }
 
+/**
+ * Build the full JSON schema envelope used for Claude tool spans.
+ *
+ * The returned schema includes the standard span envelope fields plus
+ * `inputs`, `outputs`, `metadata`, `token_usage`, and `error`. It enforces
+ * required fields on the envelope and nested tool input/output objects while
+ * leaving the top-level `metadata` object open via `additionalProperties`.
+ *
+ * @param inputSchema - JSON schema describing the tool-specific `input` payload.
+ * @returns The complete tool span schema used in agent normalization.
+ */
 export function buildToolSpanSchema(inputSchema: JsonSchema): JsonSchema {
   return {
     type: 'object',

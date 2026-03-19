@@ -36,6 +36,22 @@ function startSpanWithParent(
     : tracer.startSpan(options);
 }
 
+function endInFlightSpans(
+  tracer: Tracer,
+  spanMap: Map<string, Span>,
+  spanKind: 'tool' | 'subagent'
+): void {
+  for (const [id, span] of spanMap) {
+    try {
+      tracer.endSpan(span, { error: new Error('Agent stopped before span completed') });
+    } catch (error) {
+      logger.warn(`Stop hook failed to end ${spanKind} span ${id}`, error);
+    } finally {
+      spanMap.delete(id);
+    }
+  }
+}
+
 export function createInstrumentationHooks(
   tracer: Tracer,
   toolSpanTypes: Record<string, string> | undefined,
@@ -158,6 +174,8 @@ export function createInstrumentationHooks(
   const stop: HookCallback = async () => {
     try {
       finalizeAgentSpan(state, tracer);
+      endInFlightSpans(tracer, state.toolSpanMap, 'tool');
+      endInFlightSpans(tracer, state.subagentSpanMap, 'subagent');
     } catch (error) {
       logger.warn('Stop hook error', error);
     }
