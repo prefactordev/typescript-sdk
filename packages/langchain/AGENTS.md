@@ -61,6 +61,10 @@ Rules:
 - If changing middleware lifecycle behavior, verify parent/child span relationships are preserved.
 - If a change introduces reusable logic, move it to `@prefactor/core` instead of duplicating it here.
 
+## Testing guidance
+- Focus tests on lifecycle behavior, correctness of side effects, and data validity.
+- Do not write tests for behavior guaranteed by the type system.
+
 ## Never do
 - Do not add speculative span types.
 - Do not move shared tracing logic out of core into this package.

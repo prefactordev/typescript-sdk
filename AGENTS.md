@@ -193,6 +193,14 @@ Do not consider work complete until all applicable items below are true:
 - Do not commit changes unless explicitly asked.
 - Do not publish packages, even if requested.
 - Do not add speculative abstractions, future-only hooks, or placeholder implementations unless explicitly requested.
+- Do not write tests for behavior guaranteed by the type system (e.g., type narrowing, null checks, basic input validation). Focus tests on lifecycle behavior, correctness of side effects, and data validity.
 
 ## Versioning
 When bumping versions, always check the lockfile and verify dependency changes are intentional. Run a full build after version bumps to ensure the change is correct.
+
+## Creating new packages
+When creating a new provider package (e.g., for a new AI framework):
+1. Read existing provider packages (`packages/ai`, `packages/langchain`) to understand patterns
+2. Follow their architecture: thin adapter over `@prefactor/core`
+3. Use their test patterns and structure as a template
+4. Check what conventions exist in neighboring packages before establishing new ones

@@ -60,6 +60,10 @@ This is a consumption tool, NOT shared infrastructure.
 - If adding new clients, keep them thin - just typed wrappers around ApiClient.
 - Do NOT add shared utilities that other packages might need.
 
+## Testing guidance
+- Focus tests on lifecycle behavior, correctness of side effects, and data validity.
+- Do not write tests for behavior guaranteed by the type system.
+
 ## Validation
 Run the most targeted checks possible first.
 Examples:
