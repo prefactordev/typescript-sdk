@@ -5,45 +5,257 @@
  * @prefactor/claude. The agent uses built-in tools (Read, Glob, Grep, Bash)
  * to explore the current repository and answer a question about its structure.
  *
- * Captured spans:
- *   - claude:agent   — the full session
- *   - claude:llm     — each LLM turn (assistant message)
- *   - claude:tool    — each tool call (Read, Glob, Grep, Bash)
- *   - claude:subagent — any spawned subagents
- *
- * Prerequisites:
- * - ANTHROPIC_API_KEY environment variable set
- * - For HTTP transport: PREFACTOR_API_URL and PREFACTOR_API_TOKEN
+ * This example includes custom tool schemas that provide structured, queryable
+ * trace data for each tool type (Read, Edit, Glob, Grep, Bash, Write, etc.).
  *
  * Run:
  *   bun examples/claude-agent/simple-agent.ts
  */
 
+import { query } from '@anthropic-ai/claude-agent-sdk';
 import { init } from '@prefactor/core';
 import { PrefactorClaude } from '@prefactor/claude';
+
+const agentSchema = {
+  external_identifier: "claude-simple-agent-2026-03",
+
+  toolSchemas: {
+    Read: {
+      spanType: "claude:tool:read",
+      inputSchema: {
+        type: "object",
+        properties: {
+          file_path: {
+            type: "string",
+            description: "Absolute path to the file",
+          },
+          offset: {
+            type: "number",
+            description: "Line offset to start reading from",
+          },
+          limit: { type: "number", description: "Maximum lines to read" },
+        },
+        required: ["file_path"],
+        additionalProperties: false,
+      },
+    },
+
+    Edit: {
+      spanType: "claude:tool:edit",
+      inputSchema: {
+        type: "object",
+        properties: {
+          file_path: {
+            type: "string",
+            description: "Absolute path to the file",
+          },
+          old_string: {
+            type: "string",
+            description: "Text to find and replace",
+          },
+          new_string: { type: "string", description: "Replacement text" },
+          replace_all: {
+            type: "boolean",
+            description: "Whether to replace all occurrences",
+          },
+        },
+        required: ["file_path", "old_string", "new_string"],
+        additionalProperties: false,
+      },
+    },
+
+    Glob: {
+      spanType: "claude:tool:glob",
+      inputSchema: {
+        type: "object",
+        properties: {
+          pattern: {
+            type: "string",
+            description: "Glob pattern (e.g. **/*.ts)",
+          },
+          path: { type: "string", description: "Directory to search in" },
+        },
+        required: ["pattern"],
+        additionalProperties: false,
+      },
+    },
+
+    Grep: {
+      spanType: "claude:tool:grep",
+      inputSchema: {
+        type: "object",
+        properties: {
+          pattern: {
+            type: "string",
+            description: "Regex pattern to search for",
+          },
+          path: { type: "string", description: "File or directory to search" },
+          glob: { type: "string", description: "File glob filter" },
+          output_mode: {
+            type: "string",
+            enum: ["content", "files_with_matches", "count"],
+          },
+        },
+        required: ["pattern"],
+        additionalProperties: true,
+      },
+    },
+
+    Bash: {
+      spanType: "claude:tool:bash",
+      inputSchema: {
+        type: "object",
+        properties: {
+          command: { type: "string", description: "Shell command to execute" },
+          description: {
+            type: "string",
+            description: "Human-readable description",
+          },
+          timeout: { type: "number", description: "Timeout in milliseconds" },
+        },
+        required: ["command"],
+        additionalProperties: false,
+      },
+    },
+
+    Write: {
+      spanType: "claude:tool:write",
+      inputSchema: {
+        type: "object",
+        properties: {
+          file_path: { type: "string", description: "Absolute path to write" },
+          content: { type: "string", description: "File content" },
+        },
+        required: ["file_path", "content"],
+        additionalProperties: false,
+      },
+    },
+
+    WebFetch: {
+      spanType: "claude:tool:web-fetch",
+      inputSchema: {
+        type: "object",
+        properties: {
+          url: { type: "string", description: "URL to fetch" },
+          prompt: { type: "string", description: "Extraction prompt" },
+        },
+        required: ["url"],
+        additionalProperties: true,
+      },
+    },
+
+    Agent: {
+      spanType: "claude:tool:agent",
+      inputSchema: {
+        type: "object",
+        properties: {
+          prompt: { type: "string", description: "Task for the subagent" },
+          description: {
+            type: "string",
+            description: "Short description of the task",
+          },
+          model: {
+            type: "string",
+            description: "Model override for the subagent",
+          },
+        },
+        required: ["prompt"],
+        additionalProperties: true,
+      },
+    },
+  },
+
+  span_schemas: {
+    "claude:agent": {
+      type: "object",
+      properties: {
+        inputs: {
+          type: "object",
+          properties: {
+            session_id: { type: "string" },
+            model: { type: "string" },
+          },
+          additionalProperties: true,
+        },
+      },
+      additionalProperties: true,
+    },
+    "claude:llm": {
+      type: "object",
+      properties: {
+        inputs: { type: "object", additionalProperties: true },
+        outputs: {
+          type: "object",
+          properties: {
+            "claude.response.content": {},
+          },
+          additionalProperties: true,
+        },
+      },
+      additionalProperties: true,
+    },
+    "claude:tool": { type: "object", additionalProperties: true },
+    "claude:subagent": {
+      type: "object",
+      properties: {
+        inputs: {
+          type: "object",
+          properties: {
+            agent_id: { type: "string" },
+            agent_type: { type: "string" },
+          },
+          additionalProperties: true,
+        },
+      },
+      additionalProperties: true,
+    },
+  },
+
+  span_result_schemas: {
+    "claude:agent": {
+      type: "object",
+      properties: {
+        result: { type: "string" },
+        subtype: { type: "string" },
+        stop_reason: { type: "string" },
+        num_turns: { type: "number" },
+        total_cost_usd: { type: "number" },
+        is_error: { type: "boolean" },
+      },
+      additionalProperties: true,
+    },
+    "claude:llm": { type: "object", additionalProperties: true },
+    "claude:tool": { type: "object", additionalProperties: true },
+    "claude:subagent": {
+      type: "object",
+      properties: {
+        agent_type: { type: "string" },
+        transcript_path: { type: "string" },
+      },
+      additionalProperties: true,
+    },
+  },
+};
 
 async function main() {
   if (!process.env.ANTHROPIC_API_KEY) {
     throw new Error(
-      'ANTHROPIC_API_KEY environment variable is required. ' +
-        'Please set it before running this example.'
+      "ANTHROPIC_API_KEY environment variable is required. " +
+        "Please set it before running this example."
     );
   }
 
-  console.log('='.repeat(80));
-  console.log('@prefactor/claude - Simple Agent Example');
-  console.log('='.repeat(80));
-  console.log();
-
   const prefactor = init({
-    provider: new PrefactorClaude(),
+    provider: new PrefactorClaude({ query, agentSchema }),
     httpConfig: {
-      apiUrl: process.env.PREFACTOR_API_URL || 'http://localhost:8000',
-      apiToken: process.env.PREFACTOR_API_TOKEN || 'dev-token',
+      apiUrl: process.env.PREFACTOR_API_URL || "http://localhost:8000",
+      apiToken: process.env.PREFACTOR_API_TOKEN || "dev-token",
       agentId: process.env.PREFACTOR_AGENT_ID,
-      agentIdentifier: 'claude-simple-v1',
-      agentName: 'Claude Simple Agent',
-      agentDescription: 'An agent demonstrating @prefactor/claude tracing.',
+      agentIdentifier: "claude-simple-v1",
+      agentName: "Claude Simple Agent",
+      agentDescription:
+        "An agent demonstrating @prefactor/claude tracing with custom tool schemas.",
+      agentSchema,
     },
   });
 
@@ -60,6 +272,7 @@ async function main() {
       maxTurns: 6,
       permissionMode: 'bypassPermissions',
       allowDangerouslySkipPermissions: true,
+      model: 'claude-3-haiku-20240307'
     },
   })) {
     if (message.type === 'system' && 'session_id' in message) {
