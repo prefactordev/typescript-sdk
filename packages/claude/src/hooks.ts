@@ -55,13 +55,12 @@ export function createInstrumentationHooks(
         input: toolInput,
       });
 
-      const span = startSpanWithParent(tracer, state.currentLlmSpan ?? state.agentSpan, {
-        name: 'claude:tool-call',
-        spanType,
-        inputs,
-      });
-
       if (toolUseID) {
+        const span = startSpanWithParent(tracer, state.currentLlmSpan ?? state.agentSpan, {
+          name: 'claude:tool-call',
+          spanType,
+          inputs,
+        });
         state.toolSpanMap.set(toolUseID, span);
       }
     } catch (error) {
