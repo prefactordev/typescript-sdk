@@ -2,6 +2,10 @@ import type { HttpTransportConfig } from '../config.js';
 import type { TransportAction } from '../queue/actions.js';
 import { InMemoryQueue } from '../queue/in-memory-queue.js';
 import { TaskExecutor } from '../queue/task-executor.js';
+import {
+  resolveRuntimeEnvironment,
+  type RuntimeEnvironment,
+} from '../runtime-environment.js';
 import { buildSpanResultPayload } from '../tracing/result-payload.js';
 import type { Span } from '../tracing/span.js';
 import { getLogger } from '../utils/logging.js';
@@ -60,6 +64,7 @@ const logger = getLogger('http-transport');
  */
 export class HttpTransport implements Transport {
   private closed = false;
+  private readonly runtimeEnvironment: RuntimeEnvironment;
   private readonly actionQueue = new InMemoryQueue<TransportAction>();
   private readonly taskExecutor: TaskExecutor<TransportAction>;
   private readonly agentInstanceClient: AgentInstanceClient;
@@ -72,8 +77,12 @@ export class HttpTransport implements Transport {
   private pendingFinishes = new Map<string, PendingFinish>();
   private pendingChildren = new Map<string, Span[]>();
 
-  constructor(private config: HttpTransportConfig) {
-    const httpClient = new HttpClient(config);
+  constructor(
+    private config: HttpTransportConfig,
+    sdkPackages: Array<{ packageName: string; version: string }> = []
+  ) {
+    this.runtimeEnvironment = resolveRuntimeEnvironment(sdkPackages);
+    const httpClient = new HttpClient(config, {}, this.runtimeEnvironment);
     this.agentInstanceClient = new AgentInstanceClient(httpClient);
     this.agentSpanClient = new AgentSpanClient(httpClient);
     this.taskExecutor = new TaskExecutor(this.actionQueue, this.processAction, {
@@ -348,6 +357,8 @@ export class HttpTransport implements Transport {
     if (this.config.agentSchema) {
       payload.agent_schema_version = this.config.agentSchema;
     }
+
+    payload.runtime_environment = this.runtimeEnvironment;
 
     try {
       const data = await this.agentInstanceClient.register(payload);

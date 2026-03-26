@@ -3,6 +3,7 @@
 import { existsSync, mkdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { $ } from 'bun';
+import { generateVersionModules } from './generate-versions.ts';
 
 const ROOT = import.meta.dir.replace('/scripts', '');
 
@@ -109,6 +110,9 @@ async function buildPackage(pkg: PackageConfig): Promise<void> {
 }
 
 console.log('🏗️  Building @prefactor packages...\n');
+
+console.log('📝 Generating SDK version modules...');
+await generateVersionModules();
 
 // Clean all dist directories first
 for (const pkg of packages) {

@@ -22,15 +22,19 @@ export type CoreRuntime = {
  * Creates a fully initialized core runtime from validated SDK configuration.
  *
  * @param config - Resolved SDK configuration.
+ * @param sdkPackages - Optional adapter package metadata added ahead of core.
  * @returns Runtime containing tracer, agent manager, and shutdown function.
  */
-export function createCore(config: Config): CoreRuntime {
+export function createCore(
+  config: Config,
+  sdkPackages: Array<{ packageName: string; version: string }> = []
+): CoreRuntime {
   if (!config.httpConfig) {
     throw new Error('HTTP transport requires httpConfig to be provided in configuration');
   }
 
   const httpConfig = HttpTransportConfigSchema.parse(config.httpConfig);
-  const transport = new HttpTransport(httpConfig);
+  const transport = new HttpTransport(httpConfig, sdkPackages);
 
   let partition: Partition | undefined;
   if (config.httpConfig.agentId) {
