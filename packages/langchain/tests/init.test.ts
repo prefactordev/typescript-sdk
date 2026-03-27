@@ -1,9 +1,15 @@
 import { afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test';
-import { AgentInstanceManager, getClient, init as initCore, Tracer } from '@prefactor/core';
+import {
+  AgentInstanceManager,
+  buildSdkHeader,
+  getClient,
+  init as initCore,
+  Tracer,
+} from '@prefactor/core';
 import { init, shutdown, withSpan } from '../src/init.js';
 import { PrefactorLangChain } from '../src/provider.js';
-import { LANGCHAIN_SDK_HEADER } from '../src/sdk-header.js';
 import { buildToolSpanSchema } from '../src/tool-span-contract.js';
+import { PACKAGE_NAME, PACKAGE_VERSION } from '../src/version.js';
 
 const baseConfig = {
   transportType: 'http' as const,
@@ -13,6 +19,8 @@ const baseConfig = {
     agentIdentifier: '1.0.0',
   },
 };
+
+const LANGCHAIN_SDK_HEADER = buildSdkHeader(`${PACKAGE_NAME}@${PACKAGE_VERSION}`);
 
 describe('langchain init schema registration', () => {
   const originalRegisterSchema = AgentInstanceManager.prototype.registerSchema;

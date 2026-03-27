@@ -1,4 +1,5 @@
 import {
+  buildSdkHeader,
   type Config,
   type CoreRuntime,
   configureLogging,
@@ -13,9 +14,10 @@ import {
 import { type AgentMiddleware, createMiddleware } from 'langchain';
 import { PrefactorMiddleware } from './middleware.js';
 import { DEFAULT_LANGCHAIN_AGENT_SCHEMA, normalizeAgentSchema } from './schema.js';
-import { LANGCHAIN_SDK_HEADER } from './sdk-header.js';
+import { PACKAGE_NAME, PACKAGE_VERSION } from './version.js';
 
 const logger = getLogger('init');
+const LANGCHAIN_SDK_HEADER = buildSdkHeader(`${PACKAGE_NAME}@${PACKAGE_VERSION}`);
 
 let globalCore: CoreRuntime | null = null;
 let globalTracer: Tracer | null = null;

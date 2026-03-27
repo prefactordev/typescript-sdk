@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test';
 import {
   AgentInstanceManager,
+  buildSdkHeader,
   getClient,
   init as initCore,
   type Span,
@@ -10,8 +11,8 @@ import {
 } from '@prefactor/core';
 import { init, shutdown, withSpan } from '../src/init.js';
 import { PrefactorAISDK } from '../src/provider.js';
-import { AI_SDK_HEADER } from '../src/sdk-header.js';
 import { buildToolSpanSchema } from '../src/tool-span-contract.js';
+import { PACKAGE_NAME, PACKAGE_VERSION } from '../src/version.js';
 
 const baseConfig = {
   transportType: 'http' as const,
@@ -21,6 +22,8 @@ const baseConfig = {
     agentIdentifier: '1.0.0',
   },
 };
+
+const AI_SDK_HEADER = buildSdkHeader(`${PACKAGE_NAME}@${PACKAGE_VERSION}`);
 
 function createTestSpan(spanId: string, spanType: string): Span {
   return {
