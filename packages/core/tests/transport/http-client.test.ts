@@ -1,11 +1,11 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import type { HttpTransportConfig } from '../../src/config.js';
-import { buildSdkHeader, DEFAULT_SDK_HEADER } from '../../src/sdk-header.js';
 import {
   type FetchLike,
   HttpClient,
   HttpClientError,
 } from '../../src/transport/http/http-client.js';
+import { PACKAGE_NAME, PACKAGE_VERSION } from '../../src/version.js';
 
 const baseConfig: HttpTransportConfig = {
   apiUrl: 'https://example.com',
@@ -18,6 +18,7 @@ const baseConfig: HttpTransportConfig = {
   retryMultiplier: 2,
   retryOnStatusCodes: [429, ...Array.from({ length: 100 }, (_, index) => 500 + index)],
 };
+const DEFAULT_SDK_HEADER = `${PACKAGE_NAME}@${PACKAGE_VERSION}`;
 
 describe('HttpClient', () => {
   const originalFetch = globalThis.fetch;
@@ -125,14 +126,18 @@ describe('HttpClient', () => {
       });
     };
 
-    const sdkHeader = buildSdkHeader('@prefactor/ai@0.3.1');
-    const client = new HttpClient(baseConfig, {
-      fetchFn,
-      sdkHeader,
-    });
+    const client = new HttpClient(
+      baseConfig,
+      {
+        fetchFn,
+      },
+      '@prefactor/ai@0.3.1'
+    );
     await client.request('/api/v1/test');
 
-    expect(requestHeaders?.get('X-Prefactor-SDK')).toBe(sdkHeader);
+    expect(requestHeaders?.get('X-Prefactor-SDK')).toBe(
+      `@prefactor/ai@0.3.1 ${DEFAULT_SDK_HEADER}`
+    );
   });
 
   test('throws graceful error object with parsed JSON body', async () => {

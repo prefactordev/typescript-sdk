@@ -149,8 +149,6 @@ export interface PrefactorOptions<TMiddleware = MiddlewareLike> {
   provider: PrefactorProvider<TMiddleware>;
   /** Optional HTTP configuration overrides for the runtime config. */
   httpConfig?: Config['httpConfig'];
-  /** Optional SDK header override sent with transport requests. */
-  sdkHeader?: string;
 }
 
 /**
@@ -208,7 +206,7 @@ export function init<TMiddleware = MiddlewareLike>(
     }
   }
 
-  const core = createCore(finalConfig, options.sdkHeader);
+  const core = createCore(finalConfig);
 
   const httpConfig = finalConfig.httpConfig;
   if (httpConfig?.agentSchema) {

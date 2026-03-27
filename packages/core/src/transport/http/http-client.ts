@@ -1,5 +1,5 @@
 import type { HttpTransportConfig } from '../../config.js';
-import { DEFAULT_SDK_HEADER } from '../../sdk-header.js';
+import { buildSdkHeader, DEFAULT_SDK_HEADER } from '../../sdk-header.js';
 import { calculateRetryDelay, shouldRetryStatusCode } from './retry-policy.js';
 
 export type FetchLike = (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
@@ -8,7 +8,6 @@ export type HttpClientDependencies = {
   fetchFn?: FetchLike;
   sleep?: (delayMs: number) => Promise<void>;
   random?: () => number;
-  sdkHeader?: string;
 };
 
 export type HttpRequestOptions = Omit<RequestInit, 'body' | 'headers' | 'signal'> & {
@@ -57,15 +56,17 @@ export class HttpClient {
   private readonly random: () => number;
   private readonly sdkHeader: string;
 
+  constructor(config: HttpTransportConfig, dependencies?: HttpClientDependencies);
   constructor(
     private readonly config: HttpTransportConfig,
-    dependencies: HttpClientDependencies = {}
+    dependencies: HttpClientDependencies = {},
+    sdkHeaderEntry?: string
   ) {
     this.fetchFn = dependencies.fetchFn ?? fetch;
     this.sleep =
       dependencies.sleep ?? ((delayMs) => new Promise((resolve) => setTimeout(resolve, delayMs)));
     this.random = dependencies.random ?? Math.random;
-    this.sdkHeader = dependencies.sdkHeader ?? DEFAULT_SDK_HEADER;
+    this.sdkHeader = sdkHeaderEntry ? buildSdkHeader(sdkHeaderEntry) : DEFAULT_SDK_HEADER;
   }
 
   async request<TResponse = unknown>(

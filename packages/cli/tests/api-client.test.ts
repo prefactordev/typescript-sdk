@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { DEFAULT_SDK_HEADER } from '@prefactor/core';
+import { PACKAGE_NAME, PACKAGE_VERSION } from '../../core/src/version.js';
 import { ApiClient } from '../src/api-client.js';
+
+const DEFAULT_SDK_HEADER = `${PACKAGE_NAME}@${PACKAGE_VERSION}`;
 
 describe('ApiClient', () => {
   const originalFetch = globalThis.fetch;

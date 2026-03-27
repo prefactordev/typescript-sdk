@@ -9,7 +9,6 @@
  */
 
 import {
-  buildSdkHeader,
   type Config,
   type CoreRuntime,
   configureLogging,
@@ -27,7 +26,11 @@ import type { MiddlewareConfig } from './types.js';
 import { PACKAGE_NAME, PACKAGE_VERSION } from './version.js';
 
 const logger = getLogger('ai-init');
-const AI_SDK_HEADER = buildSdkHeader(`${PACKAGE_NAME}@${PACKAGE_VERSION}`);
+const AI_SDK_HEADER_ENTRY = `${PACKAGE_NAME}@${PACKAGE_VERSION}`;
+const createCoreWithSdkHeader = createCore as (
+  config: Config,
+  sdkHeaderEntry?: string
+) => CoreRuntime;
 
 /** Global Prefactor tracer instance. */
 let globalTracer: Tracer | null = null;
@@ -147,7 +150,7 @@ export function init(
 
   logger.info('Initializing Prefactor AI Middleware', { transport: finalConfig.transportType });
 
-  const core = createCore(finalConfig, AI_SDK_HEADER);
+  const core = createCoreWithSdkHeader(finalConfig, AI_SDK_HEADER_ENTRY);
   globalCore = core;
   globalTracer = core.tracer;
 

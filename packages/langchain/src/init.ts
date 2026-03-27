@@ -1,5 +1,4 @@
 import {
-  buildSdkHeader,
   type Config,
   type CoreRuntime,
   configureLogging,
@@ -17,7 +16,11 @@ import { DEFAULT_LANGCHAIN_AGENT_SCHEMA, normalizeAgentSchema } from './schema.j
 import { PACKAGE_NAME, PACKAGE_VERSION } from './version.js';
 
 const logger = getLogger('init');
-const LANGCHAIN_SDK_HEADER = buildSdkHeader(`${PACKAGE_NAME}@${PACKAGE_VERSION}`);
+const LANGCHAIN_SDK_HEADER_ENTRY = `${PACKAGE_NAME}@${PACKAGE_VERSION}`;
+const createCoreWithSdkHeader = createCore as (
+  config: Config,
+  sdkHeaderEntry?: string
+) => CoreRuntime;
 
 let globalCore: CoreRuntime | null = null;
 let globalTracer: Tracer | null = null;
@@ -101,7 +104,7 @@ export function init(config?: Partial<Config>): AgentMiddleware {
     createConfig(preparedConfig)
   );
 
-  const core = createCore(finalConfig, LANGCHAIN_SDK_HEADER);
+  const core = createCoreWithSdkHeader(finalConfig, LANGCHAIN_SDK_HEADER_ENTRY);
   globalCore = core;
   globalTracer = core.tracer;
 

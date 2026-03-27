@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { DEFAULT_SDK_HEADER } from '../../src/sdk-header.js';
 import { type Span, SpanStatus, SpanType } from '../../src/tracing/span.js';
 import { HttpTransport } from '../../src/transport/http.js';
+import { PACKAGE_NAME, PACKAGE_VERSION } from '../../src/version.js';
 
 const createConfig = () => ({
   apiUrl: 'https://example.com',
@@ -53,7 +53,7 @@ describe('HttpTransport', () => {
     expect(registerPayload.agent_id).toBe('agent-123');
     expect(registerPayload.agent_schema_version).toEqual({ type: 'object' });
     expect(registerPayload.runtime_environment).toBeUndefined();
-    expect(registerHeaders.get('X-Prefactor-SDK')).toBe(DEFAULT_SDK_HEADER);
+    expect(registerHeaders.get('X-Prefactor-SDK')).toBe(`${PACKAGE_NAME}@${PACKAGE_VERSION}`);
   });
 
   test('buffers span finish until span emit maps backend id', async () => {
