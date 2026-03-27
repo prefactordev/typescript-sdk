@@ -5,9 +5,18 @@ type FetchCall = {
   options?: RequestInit;
 };
 
-export function createSdkHeaderFetchRecorder(options?: { includeSpanResponses?: boolean }) {
+type SdkHeaderFetchRecorder = {
+  fetch: typeof globalThis.fetch;
+  fetchCalls: FetchCall[];
+  getRegisterHeaders(): Headers;
+  getRegisterPayload(): Record<string, unknown>;
+};
+
+export function createSdkHeaderFetchRecorder(options?: {
+  includeSpanResponses?: boolean;
+}): SdkHeaderFetchRecorder {
   const fetchCalls: FetchCall[] = [];
-  const fetch = (async (url, requestOptions) => {
+  const fetch: typeof globalThis.fetch = async (url, requestOptions) => {
     const requestUrl = String(url);
     fetchCalls.push({ url: requestUrl, options: requestOptions });
 
@@ -29,7 +38,7 @@ export function createSdkHeaderFetchRecorder(options?: { includeSpanResponses?: 
       status: 200,
       headers: { 'Content-Type': 'application/json' },
     });
-  }) as typeof fetch;
+  };
 
   function getRegisterCall(): FetchCall {
     const call = fetchCalls.find((entry) => entry.url.endsWith('/agent_instance/register'));
@@ -46,7 +55,24 @@ export function createSdkHeaderFetchRecorder(options?: { includeSpanResponses?: 
       return new Headers(getRegisterCall().options?.headers);
     },
     getRegisterPayload(): Record<string, unknown> {
-      return JSON.parse(String(getRegisterCall().options?.body)) as Record<string, unknown>;
+      const body = getRegisterCall().options?.body;
+      if (typeof body !== 'string') {
+        throw new Error('Expected register payload body to be a JSON string');
+      }
+
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(body) as unknown;
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        throw new Error(`Failed to parse register payload JSON: ${message}`);
+      }
+
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+        throw new Error('Expected register payload to parse to an object');
+      }
+
+      return parsed as Record<string, unknown>;
     },
   };
 }

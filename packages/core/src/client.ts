@@ -168,7 +168,8 @@ export interface PrefactorOptions<TMiddleware = MiddlewareLike> {
 export function init<TMiddleware = MiddlewareLike>(
   options: PrefactorOptions<TMiddleware>
 ): PrefactorClient<TMiddleware> {
-  const nextInitKey = buildInitKey(options);
+  const sdkHeaderEntry = options.provider.getSdkHeaderEntry?.();
+  const nextInitKey = buildInitKey(options, sdkHeaderEntry);
 
   if (prefactorClient) {
     if (prefactorInitKey !== nextInitKey) {
@@ -213,7 +214,7 @@ export function init<TMiddleware = MiddlewareLike>(
   }
 
   const core = createCore(finalConfig, {
-    sdkHeaderEntry: options.provider.getSdkHeaderEntry?.(),
+    sdkHeaderEntry,
   });
 
   const httpConfig = finalConfig.httpConfig;
@@ -238,9 +239,13 @@ export function getClient(): PrefactorClient<MiddlewareLike> | null {
   return prefactorClient;
 }
 
-function buildInitKey(options: PrefactorOptions): string {
+function buildInitKey(options: PrefactorOptions, sdkHeaderEntry?: string): string {
   const providerType = options.provider.constructor?.name ?? 'anonymous-provider';
-  return `${providerType}:${stableStringify(options.httpConfig ?? null)}`;
+  return stableStringify({
+    providerType,
+    httpConfig: options.httpConfig ?? null,
+    sdkHeaderEntry: sdkHeaderEntry ?? null,
+  });
 }
 
 function stableStringify(value: unknown): string {

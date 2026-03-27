@@ -1,4 +1,6 @@
-export const ROOT = import.meta.dir.replace('/scripts', '');
+import { dirname } from 'node:path';
+
+export const ROOT = dirname(import.meta.dir);
 
 export interface PackageConfig {
   name: string;
