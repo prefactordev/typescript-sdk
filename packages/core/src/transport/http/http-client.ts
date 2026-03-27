@@ -1,6 +1,6 @@
 import type { HttpTransportConfig } from '../../config.js';
-import { buildSdkHeader, DEFAULT_SDK_HEADER } from '../../sdk-header.js';
 import { calculateRetryDelay, shouldRetryStatusCode } from './retry-policy.js';
+import { buildSdkRequestHeader, DEFAULT_SDK_REQUEST_HEADER } from './sdk-request-header.js';
 
 export type FetchLike = (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
 
@@ -72,7 +72,9 @@ export class HttpClient {
     this.sleep =
       dependencies.sleep ?? ((delayMs) => new Promise((resolve) => setTimeout(resolve, delayMs)));
     this.random = dependencies.random ?? Math.random;
-    this.sdkHeader = sdkHeaderEntry ? buildSdkHeader(sdkHeaderEntry) : DEFAULT_SDK_HEADER;
+    this.sdkHeader = sdkHeaderEntry
+      ? buildSdkRequestHeader(sdkHeaderEntry)
+      : DEFAULT_SDK_REQUEST_HEADER;
   }
 
   async request<TResponse = unknown>(
