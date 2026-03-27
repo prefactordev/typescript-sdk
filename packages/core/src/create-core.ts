@@ -26,7 +26,6 @@ export type CoreRuntime = {
  * @param config - Resolved SDK configuration.
  * @returns Runtime containing tracer, agent manager, and shutdown function.
  */
-export function createCore(config: Config): CoreRuntime;
 export function createCore(config: Config): CoreRuntime {
   if (!config.httpConfig) {
     throw new Error('HTTP transport requires httpConfig to be provided in configuration');
