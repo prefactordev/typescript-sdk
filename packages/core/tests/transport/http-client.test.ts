@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import type { HttpTransportConfig } from '../../src/config.js';
+import { buildSdkHeader, DEFAULT_SDK_HEADER } from '../../src/sdk-header.js';
 import {
   type FetchLike,
   HttpClient,
@@ -94,7 +95,7 @@ describe('HttpClient', () => {
     expect(sleepCalls).toEqual([50]);
   });
 
-  test('includes authorization and content-type headers', async () => {
+  test('includes authorization, sdk, and content-type headers', async () => {
     let requestHeaders: Headers | undefined;
 
     const fetchFn: FetchLike = async (_url, init) => {
@@ -109,7 +110,29 @@ describe('HttpClient', () => {
     await client.request('/api/v1/test', { method: 'POST', body: { hello: 'world' } });
 
     expect(requestHeaders?.get('Authorization')).toBe('Bearer test-token');
+    expect(requestHeaders?.get('X-Prefactor-SDK')).toBe(DEFAULT_SDK_HEADER);
     expect(requestHeaders?.get('Content-Type')).toBe('application/json');
+  });
+
+  test('uses provided sdk header override', async () => {
+    let requestHeaders: Headers | undefined;
+
+    const fetchFn: FetchLike = async (_url, init) => {
+      requestHeaders = new Headers(init?.headers);
+      return new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    };
+
+    const sdkHeader = buildSdkHeader('@prefactor/ai@0.3.1');
+    const client = new HttpClient(baseConfig, {
+      fetchFn,
+      sdkHeader,
+    });
+    await client.request('/api/v1/test');
+
+    expect(requestHeaders?.get('X-Prefactor-SDK')).toBe(sdkHeader);
   });
 
   test('throws graceful error object with parsed JSON body', async () => {

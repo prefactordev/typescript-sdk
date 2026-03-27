@@ -5,13 +5,8 @@ import {
   normalizeAgentSchema,
 } from './schema.js';
 import type { LanguageModelMiddleware, MiddlewareConfig } from './types.js';
-import { PACKAGE_NAME, PACKAGE_VERSION } from './version.js';
 
 export const DEFAULT_AI_AGENT_SCHEMA = DEFAULT_AI_AGENT_SCHEMA_BASE;
-const AI_SDK_PACKAGE = {
-  packageName: PACKAGE_NAME,
-  version: PACKAGE_VERSION,
-} as const;
 
 export interface PrefactorAISDKOptions {
   middleware?: MiddlewareConfig;
@@ -74,9 +69,5 @@ export class PrefactorAISDK implements PrefactorProvider<LanguageModelMiddleware
 
   getDefaultAgentSchema(): Record<string, unknown> | undefined {
     return this.options.agentSchema ?? DEFAULT_AI_AGENT_SCHEMA;
-  }
-
-  getSdkPackages(): Array<{ packageName: string; version: string }> {
-    return [AI_SDK_PACKAGE];
   }
 }

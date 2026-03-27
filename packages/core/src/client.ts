@@ -26,10 +26,6 @@ export interface ManualSpanOptions {
  */
 export type MiddlewareLike = unknown;
 
-type ProviderWithSdkPackages = {
-  getSdkPackages?: () => Array<{ packageName: string; version: string }>;
-};
-
 /**
  * Provider integration contract for Prefactor SDK clients.
  */
@@ -153,6 +149,8 @@ export interface PrefactorOptions<TMiddleware = MiddlewareLike> {
   provider: PrefactorProvider<TMiddleware>;
   /** Optional HTTP configuration overrides for the runtime config. */
   httpConfig?: Config['httpConfig'];
+  /** Optional SDK header override sent with transport requests. */
+  sdkHeader?: string;
 }
 
 /**
@@ -210,7 +208,7 @@ export function init<TMiddleware = MiddlewareLike>(
     }
   }
 
-  const core = createCore(finalConfig, getProviderSdkPackages(options.provider));
+  const core = createCore(finalConfig, options.sdkHeader);
 
   const httpConfig = finalConfig.httpConfig;
   if (httpConfig?.agentSchema) {
@@ -237,13 +235,6 @@ export function getClient(): PrefactorClient<MiddlewareLike> | null {
 function buildInitKey(options: PrefactorOptions): string {
   const providerType = options.provider.constructor?.name ?? 'anonymous-provider';
   return `${providerType}:${stableStringify(options.httpConfig ?? null)}`;
-}
-
-function getProviderSdkPackages(
-  provider: PrefactorProvider
-): Array<{ packageName: string; version: string }> {
-  const providerWithSdkPackages = provider as PrefactorProvider & ProviderWithSdkPackages;
-  return providerWithSdkPackages.getSdkPackages?.() ?? [];
 }
 
 function stableStringify(value: unknown): string {

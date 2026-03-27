@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test';
 import { AgentInstanceManager, getClient, init as initCore, Tracer } from '@prefactor/core';
 import { init, shutdown, withSpan } from '../src/init.js';
 import { PrefactorLangChain } from '../src/provider.js';
+import { LANGCHAIN_SDK_HEADER } from '../src/sdk-header.js';
 import { buildToolSpanSchema } from '../src/tool-span-contract.js';
 
 const baseConfig = {
@@ -15,6 +16,7 @@ const baseConfig = {
 
 describe('langchain init schema registration', () => {
   const originalRegisterSchema = AgentInstanceManager.prototype.registerSchema;
+  const originalFetch = globalThis.fetch;
   let registeredSchemas: Record<string, unknown>[] = [];
 
   beforeEach(() => {
@@ -28,6 +30,7 @@ describe('langchain init schema registration', () => {
 
   afterEach(async () => {
     AgentInstanceManager.prototype.registerSchema = originalRegisterSchema;
+    globalThis.fetch = originalFetch;
     await shutdown();
     await getClient()?.shutdown();
   });
@@ -209,5 +212,84 @@ describe('langchain init schema registration', () => {
       startSpanSpy.mockRestore();
       endSpanSpy.mockRestore();
     }
+  });
+
+  test('sends adapter sdk header for package init and omits runtime metadata body fields', async () => {
+    const fetchCalls: Array<{ url: string; options?: RequestInit }> = [];
+    globalThis.fetch = (async (url, options) => {
+      fetchCalls.push({ url: String(url), options });
+
+      if (String(url).endsWith('/agent_instance/register')) {
+        return new Response(JSON.stringify({ details: { id: 'agent-instance-1' } }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+
+      return new Response(JSON.stringify({ details: { id: 'span-1' } }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }) as typeof fetch;
+
+    init(baseConfig);
+    await withSpan(
+      {
+        name: 'test:header',
+        spanType: 'langchain:llm',
+        inputs: { prompt: 'hi' },
+      },
+      async () => 'ok'
+    );
+    await shutdown();
+
+    const registerCall = fetchCalls.find((call) => call.url.endsWith('/agent_instance/register'));
+    const headers = new Headers(registerCall?.options?.headers);
+    const payload = JSON.parse(String(registerCall?.options?.body)) as Record<string, unknown>;
+
+    expect(headers.get('X-Prefactor-SDK')).toBe(LANGCHAIN_SDK_HEADER);
+    expect(payload.runtime_environment).toBeUndefined();
+  });
+
+  test('sends adapter sdk header for core provider init when sdkHeader is provided', async () => {
+    const fetchCalls: Array<{ url: string; options?: RequestInit }> = [];
+    globalThis.fetch = (async (url, options) => {
+      fetchCalls.push({ url: String(url), options });
+
+      if (String(url).endsWith('/agent_instance/register')) {
+        return new Response(JSON.stringify({ details: { id: 'agent-instance-1' } }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+
+      return new Response(JSON.stringify({ details: { id: 'span-1' } }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }) as typeof fetch;
+
+    const client = initCore({
+      provider: new PrefactorLangChain(),
+      sdkHeader: LANGCHAIN_SDK_HEADER,
+      httpConfig: baseConfig.httpConfig,
+    });
+
+    await client.withSpan(
+      {
+        name: 'test:provider-header',
+        spanType: 'langchain:llm',
+        inputs: { prompt: 'hi' },
+      },
+      async () => 'ok'
+    );
+    await client.shutdown();
+
+    const registerCall = fetchCalls.find((call) => call.url.endsWith('/agent_instance/register'));
+    const headers = new Headers(registerCall?.options?.headers);
+    const payload = JSON.parse(String(registerCall?.options?.body)) as Record<string, unknown>;
+
+    expect(headers.get('X-Prefactor-SDK')).toBe(LANGCHAIN_SDK_HEADER);
+    expect(payload.runtime_environment).toBeUndefined();
   });
 });

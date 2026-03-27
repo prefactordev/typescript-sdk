@@ -75,6 +75,7 @@ export {
 } from './config.js';
 export { type CoreRuntime, createCore } from './create-core.js';
 export { registerShutdownHandler, shutdown } from './lifecycle.js';
+export { buildSdkHeader, DEFAULT_SDK_HEADER } from './sdk-header.js';
 export {
   type JsonSchema,
   normalizeAgentToolSchemas,

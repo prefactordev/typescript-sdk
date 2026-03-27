@@ -1,9 +1,5 @@
 import type { HttpTransportConfig } from '../../config.js';
-import {
-  formatRuntimeEnvironmentHeader,
-  resolveRuntimeEnvironment,
-  type RuntimeEnvironment,
-} from '../../runtime-environment.js';
+import { DEFAULT_SDK_HEADER } from '../../sdk-header.js';
 import { calculateRetryDelay, shouldRetryStatusCode } from './retry-policy.js';
 
 export type FetchLike = (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
@@ -12,6 +8,7 @@ export type HttpClientDependencies = {
   fetchFn?: FetchLike;
   sleep?: (delayMs: number) => Promise<void>;
   random?: () => number;
+  sdkHeader?: string;
 };
 
 export type HttpRequestOptions = Omit<RequestInit, 'body' | 'headers' | 'signal'> & {
@@ -58,18 +55,17 @@ export class HttpClient {
   private readonly fetchFn: FetchLike;
   private readonly sleep: (delayMs: number) => Promise<void>;
   private readonly random: () => number;
-  private readonly runtimeEnvironment: RuntimeEnvironment;
+  private readonly sdkHeader: string;
 
   constructor(
     private readonly config: HttpTransportConfig,
-    dependencies: HttpClientDependencies = {},
-    runtimeEnvironment?: RuntimeEnvironment
+    dependencies: HttpClientDependencies = {}
   ) {
     this.fetchFn = dependencies.fetchFn ?? fetch;
     this.sleep =
       dependencies.sleep ?? ((delayMs) => new Promise((resolve) => setTimeout(resolve, delayMs)));
     this.random = dependencies.random ?? Math.random;
-    this.runtimeEnvironment = runtimeEnvironment ?? resolveRuntimeEnvironment();
+    this.sdkHeader = dependencies.sdkHeader ?? DEFAULT_SDK_HEADER;
   }
 
   async request<TResponse = unknown>(
@@ -83,7 +79,7 @@ export class HttpClient {
     while (true) {
       const headers = new Headers(options.headers);
       headers.set('Authorization', `Bearer ${this.config.apiToken}`);
-      headers.set('X-Prefactor-SDK', formatRuntimeEnvironmentHeader(this.runtimeEnvironment));
+      headers.set('X-Prefactor-SDK', this.sdkHeader);
       if (options.body !== undefined && !headers.has('Content-Type')) {
         headers.set('Content-Type', 'application/json');
       }

@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { DEFAULT_SDK_HEADER } from '@prefactor/core';
 import { ApiClient } from '../src/api-client.js';
 
 describe('ApiClient', () => {
@@ -117,6 +118,7 @@ describe('ApiClient', () => {
     const headers = new Headers(init?.headers);
     expect(init?.method).toBe('POST');
     expect(init?.body).toBe('{"name":"demo"}');
+    expect(headers.get('x-prefactor-sdk')).toBe(DEFAULT_SDK_HEADER);
     expect(headers.get('content-type')).toBe('application/json');
   });
 

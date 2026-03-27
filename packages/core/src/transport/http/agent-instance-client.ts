@@ -1,5 +1,4 @@
 import type { HttpRequester } from './http-client.js';
-import type { RuntimeEnvironment } from '../../runtime-environment.js';
 import { ensureIdempotencyKey } from './idempotency.js';
 
 export type AgentInstanceRegisterPayload = {
@@ -10,7 +9,6 @@ export type AgentInstanceRegisterPayload = {
     description: string;
   };
   agent_schema_version?: Record<string, unknown>;
-  runtime_environment?: RuntimeEnvironment;
   idempotency_key?: string;
 };
 

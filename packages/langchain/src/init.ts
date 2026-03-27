@@ -13,13 +13,9 @@ import {
 import { type AgentMiddleware, createMiddleware } from 'langchain';
 import { PrefactorMiddleware } from './middleware.js';
 import { DEFAULT_LANGCHAIN_AGENT_SCHEMA, normalizeAgentSchema } from './schema.js';
-import { PACKAGE_NAME, PACKAGE_VERSION } from './version.js';
+import { LANGCHAIN_SDK_HEADER } from './sdk-header.js';
 
 const logger = getLogger('init');
-const LANGCHAIN_SDK_PACKAGE = {
-  packageName: PACKAGE_NAME,
-  version: PACKAGE_VERSION,
-} as const;
 
 let globalCore: CoreRuntime | null = null;
 let globalTracer: Tracer | null = null;
@@ -103,7 +99,7 @@ export function init(config?: Partial<Config>): AgentMiddleware {
     createConfig(preparedConfig)
   );
 
-  const core = createCore(finalConfig, [LANGCHAIN_SDK_PACKAGE]);
+  const core = createCore(finalConfig, LANGCHAIN_SDK_HEADER);
   globalCore = core;
   globalTracer = core.tracer;
 
