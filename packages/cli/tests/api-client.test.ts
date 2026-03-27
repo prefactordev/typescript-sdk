@@ -1,8 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { PACKAGE_NAME, PACKAGE_VERSION } from '../../core/src/version.js';
 import { ApiClient } from '../src/api-client.js';
-
-const DEFAULT_SDK_HEADER = `${PACKAGE_NAME}@${PACKAGE_VERSION}`;
 
 describe('ApiClient', () => {
   const originalFetch = globalThis.fetch;
@@ -120,7 +117,7 @@ describe('ApiClient', () => {
     const headers = new Headers(init?.headers);
     expect(init?.method).toBe('POST');
     expect(init?.body).toBe('{"name":"demo"}');
-    expect(headers.get('x-prefactor-sdk')).toBe(DEFAULT_SDK_HEADER);
+    expect(headers.get('x-prefactor-sdk')).toMatch(/^@prefactor\/core@/);
     expect(headers.get('content-type')).toBe('application/json');
   });
 

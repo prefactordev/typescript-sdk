@@ -56,6 +56,12 @@ export class HttpClient {
   private readonly random: () => number;
   private readonly sdkHeader: string;
 
+  /** @internal */
+  constructor(
+    config: HttpTransportConfig,
+    dependencies: HttpClientDependencies,
+    sdkHeaderEntry: string
+  );
   constructor(config: HttpTransportConfig, dependencies?: HttpClientDependencies);
   constructor(
     private readonly config: HttpTransportConfig,

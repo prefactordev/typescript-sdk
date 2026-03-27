@@ -126,13 +126,7 @@ describe('HttpClient', () => {
       });
     };
 
-    const client = new HttpClient(
-      baseConfig,
-      {
-        fetchFn,
-      },
-      '@prefactor/ai@0.3.1'
-    );
+    const client = new HttpClient(baseConfig, { fetchFn }, '@prefactor/ai@0.3.1');
     await client.request('/api/v1/test');
 
     expect(requestHeaders?.get('X-Prefactor-SDK')).toBe(

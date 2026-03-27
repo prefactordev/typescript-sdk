@@ -16,11 +16,8 @@ import { DEFAULT_LANGCHAIN_AGENT_SCHEMA, normalizeAgentSchema } from './schema.j
 import { PACKAGE_NAME, PACKAGE_VERSION } from './version.js';
 
 const logger = getLogger('init');
+const SDK_HEADER_ENTRY_SYMBOL = Symbol.for('prefactor.sdkHeaderEntry');
 const LANGCHAIN_SDK_HEADER_ENTRY = `${PACKAGE_NAME}@${PACKAGE_VERSION}`;
-const createCoreWithSdkHeader = createCore as (
-  config: Config,
-  sdkHeaderEntry?: string
-) => CoreRuntime;
 
 let globalCore: CoreRuntime | null = null;
 let globalTracer: Tracer | null = null;
@@ -104,7 +101,8 @@ export function init(config?: Partial<Config>): AgentMiddleware {
     createConfig(preparedConfig)
   );
 
-  const core = createCoreWithSdkHeader(finalConfig, LANGCHAIN_SDK_HEADER_ENTRY);
+  Reflect.set(finalConfig, SDK_HEADER_ENTRY_SYMBOL, LANGCHAIN_SDK_HEADER_ENTRY);
+  const core = createCore(finalConfig);
   globalCore = core;
   globalTracer = core.tracer;
 

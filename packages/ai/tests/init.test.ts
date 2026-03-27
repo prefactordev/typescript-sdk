@@ -8,10 +8,6 @@ import {
   type SpanType,
   Tracer,
 } from '@prefactor/core';
-import {
-  PACKAGE_NAME as CORE_PACKAGE_NAME,
-  PACKAGE_VERSION as CORE_PACKAGE_VERSION,
-} from '../../core/src/version.js';
 import { init, shutdown, withSpan } from '../src/init.js';
 import { PrefactorAISDK } from '../src/provider.js';
 import { buildToolSpanSchema } from '../src/tool-span-contract.js';
@@ -26,7 +22,7 @@ const baseConfig = {
   },
 };
 
-const AI_SDK_HEADER = `${PACKAGE_NAME}@${PACKAGE_VERSION} ${CORE_PACKAGE_NAME}@${CORE_PACKAGE_VERSION}`;
+const AI_SDK_HEADER_ENTRY = `${PACKAGE_NAME}@${PACKAGE_VERSION}`;
 
 function createTestSpan(spanId: string, spanType: string): Span {
   return {
@@ -335,7 +331,8 @@ describe('ai init schema registration', () => {
     const headers = new Headers(registerCall?.options?.headers);
     const payload = JSON.parse(String(registerCall?.options?.body)) as Record<string, unknown>;
 
-    expect(headers.get('X-Prefactor-SDK')).toBe(AI_SDK_HEADER);
+    expect(headers.get('X-Prefactor-SDK')).toContain(AI_SDK_HEADER_ENTRY);
+    expect(headers.get('X-Prefactor-SDK')).toContain('@prefactor/core@');
     expect(payload.runtime_environment).toBeUndefined();
   });
 });

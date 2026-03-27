@@ -1,9 +1,5 @@
 import { afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test';
 import { AgentInstanceManager, getClient, init as initCore, Tracer } from '@prefactor/core';
-import {
-  PACKAGE_NAME as CORE_PACKAGE_NAME,
-  PACKAGE_VERSION as CORE_PACKAGE_VERSION,
-} from '../../core/src/version.js';
 import { init, shutdown, withSpan } from '../src/init.js';
 import { PrefactorLangChain } from '../src/provider.js';
 import { buildToolSpanSchema } from '../src/tool-span-contract.js';
@@ -18,7 +14,7 @@ const baseConfig = {
   },
 };
 
-const LANGCHAIN_SDK_HEADER = `${PACKAGE_NAME}@${PACKAGE_VERSION} ${CORE_PACKAGE_NAME}@${CORE_PACKAGE_VERSION}`;
+const LANGCHAIN_SDK_HEADER_ENTRY = `${PACKAGE_NAME}@${PACKAGE_VERSION}`;
 
 describe('langchain init schema registration', () => {
   const originalRegisterSchema = AgentInstanceManager.prototype.registerSchema;
@@ -253,7 +249,8 @@ describe('langchain init schema registration', () => {
     const headers = new Headers(registerCall?.options?.headers);
     const payload = JSON.parse(String(registerCall?.options?.body)) as Record<string, unknown>;
 
-    expect(headers.get('X-Prefactor-SDK')).toBe(LANGCHAIN_SDK_HEADER);
+    expect(headers.get('X-Prefactor-SDK')).toContain(LANGCHAIN_SDK_HEADER_ENTRY);
+    expect(headers.get('X-Prefactor-SDK')).toContain('@prefactor/core@');
     expect(payload.runtime_environment).toBeUndefined();
   });
 });

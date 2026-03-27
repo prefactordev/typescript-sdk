@@ -12,13 +12,7 @@ import {
   type AgentSpanFinishStatus,
   type AgentSpanStatus,
 } from './http/agent-span-client.js';
-import { HttpClient, type HttpClientDependencies } from './http/http-client.js';
-
-type HttpClientConstructor = new (
-  config: HttpTransportConfig,
-  dependencies?: HttpClientDependencies,
-  sdkHeaderEntry?: string
-) => HttpClient;
+import { HttpClient } from './http/http-client.js';
 
 export type AgentInstanceOptions = {
   /** Existing backend agent id, when available. */
@@ -78,13 +72,17 @@ export class HttpTransport implements Transport {
   private pendingFinishes = new Map<string, PendingFinish>();
   private pendingChildren = new Map<string, Span[]>();
 
+  /** @internal */
+  constructor(config: HttpTransportConfig, sdkHeaderEntry: string);
   constructor(config: HttpTransportConfig);
   constructor(
     private config: HttpTransportConfig,
     sdkHeaderEntry?: string
   ) {
-    const HttpClientWithSdkHeader = HttpClient as unknown as HttpClientConstructor;
-    const httpClient = new HttpClientWithSdkHeader(config, {}, sdkHeaderEntry);
+    const httpClient =
+      sdkHeaderEntry === undefined
+        ? new HttpClient(config)
+        : new HttpClient(config, {}, sdkHeaderEntry);
     this.agentInstanceClient = new AgentInstanceClient(httpClient);
     this.agentSpanClient = new AgentSpanClient(httpClient);
     this.taskExecutor = new TaskExecutor(this.actionQueue, this.processAction, {
