@@ -7,8 +7,6 @@ import { clearActiveTracer, setActiveTracer } from './tracing/active-tracer.js';
 import { Tracer } from './tracing/tracer.js';
 import { HttpTransport } from './transport/http.js';
 
-const SDK_HEADER_ENTRY_SYMBOL = Symbol.for('prefactor.sdkHeaderEntry');
-
 export type CoreRuntime = {
   /** Active tracer used to create and finish spans. */
   tracer: Tracer;
@@ -20,23 +18,28 @@ export type CoreRuntime = {
   shutdown: () => Promise<void>;
 };
 
+export type CreateCoreOptions = {
+  /** Optional adapter identifier appended ahead of the core SDK header. */
+  sdkHeaderEntry?: string;
+};
+
 /**
  * Creates a fully initialized core runtime from validated SDK configuration.
  *
  * @param config - Resolved SDK configuration.
+ * @param options - Optional runtime construction options.
  * @returns Runtime containing tracer, agent manager, and shutdown function.
  */
-export function createCore(config: Config): CoreRuntime {
+export function createCore(config: Config, options: CreateCoreOptions = {}): CoreRuntime {
   if (!config.httpConfig) {
     throw new Error('HTTP transport requires httpConfig to be provided in configuration');
   }
 
-  const sdkHeaderEntry = getSdkHeaderEntry(config);
   const httpConfig = HttpTransportConfigSchema.parse(config.httpConfig);
   const transport =
-    sdkHeaderEntry === undefined
+    options.sdkHeaderEntry === undefined
       ? new HttpTransport(httpConfig)
-      : new HttpTransport(httpConfig, sdkHeaderEntry);
+      : new HttpTransport(httpConfig, options.sdkHeaderEntry);
 
   let partition: Partition | undefined;
   if (config.httpConfig.agentId) {
@@ -63,9 +66,4 @@ export function createCore(config: Config): CoreRuntime {
   const runtime: CoreRuntime = { tracer, agentManager, shutdown };
   setActiveCoreRuntime(runtime);
   return runtime;
-}
-
-function getSdkHeaderEntry(config: Config): string | undefined {
-  const value = Reflect.get(config, SDK_HEADER_ENTRY_SYMBOL);
-  return typeof value === 'string' ? value : undefined;
 }

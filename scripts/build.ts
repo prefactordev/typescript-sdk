@@ -4,55 +4,7 @@ import { existsSync, mkdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { $ } from 'bun';
 import { generateVersionModules } from './generate-versions.ts';
-
-const ROOT = import.meta.dir.replace('/scripts', '');
-
-interface PackageConfig {
-  name: string;
-  path: string;
-  entrypoint?: string;
-  entrypoints?: string[];
-  external: string[];
-}
-
-const packages: PackageConfig[] = [
-  {
-    name: '@prefactor/core',
-    path: 'packages/core',
-    entrypoint: './packages/core/src/index.ts',
-    external: ['@prefactor/pfid', 'zod'],
-  },
-  {
-    name: '@prefactor/cli',
-    path: 'packages/cli',
-    entrypoints: ['./packages/cli/src/index.ts', './packages/cli/src/bin/cli.ts'],
-    external: ['@prefactor/core', 'commander'],
-  },
-  {
-    name: '@prefactor/ai',
-    path: 'packages/ai',
-    entrypoint: './packages/ai/src/index.ts',
-    external: ['@prefactor/core', '@prefactor/pfid'],
-  },
-  {
-    name: '@prefactor/claude',
-    path: 'packages/claude',
-    entrypoint: './packages/claude/src/index.ts',
-    external: ['@prefactor/core', '@prefactor/pfid', '@anthropic-ai/claude-agent-sdk'],
-  },
-  {
-    name: '@prefactor/langchain',
-    path: 'packages/langchain',
-    entrypoint: './packages/langchain/src/index.ts',
-    external: ['@prefactor/core', '@prefactor/pfid', '@langchain/core', 'langchain', 'zod'],
-  },
-  {
-    name: '@prefactor/openclaw',
-    path: 'packages/openclaw',
-    entrypoint: './packages/openclaw/src/index.ts',
-    external: ['@prefactor/core', 'zod'],
-  },
-];
+import { PACKAGE_CONFIGS, type PackageConfig, ROOT } from './package-config.ts';
 
 async function buildPackage(pkg: PackageConfig): Promise<void> {
   const pkgDir = join(ROOT, pkg.path);
@@ -115,7 +67,7 @@ console.log('📝 Generating SDK version modules...');
 await generateVersionModules();
 
 // Clean all dist directories first
-for (const pkg of packages) {
+for (const pkg of PACKAGE_CONFIGS) {
   const distDir = join(ROOT, pkg.path, 'dist');
   rmSync(distDir, { recursive: true, force: true });
 }
@@ -126,7 +78,7 @@ console.log('🔨 Compiling TypeScript declarations...');
 await $`tsc --build --force`;
 
 // Build packages in dependency order (Bun bundler for JS)
-for (const pkg of packages) {
+for (const pkg of PACKAGE_CONFIGS) {
   await buildPackage(pkg);
 }
 

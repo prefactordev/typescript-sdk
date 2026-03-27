@@ -18,7 +18,7 @@ const baseConfig: HttpTransportConfig = {
   retryMultiplier: 2,
   retryOnStatusCodes: [429, ...Array.from({ length: 100 }, (_, index) => 500 + index)],
 };
-const DEFAULT_SDK_HEADER = `${PACKAGE_NAME}@${PACKAGE_VERSION}`;
+const DEFAULT_SDK_HEADER = `${PACKAGE_NAME.replace(/^@/, '')}@${PACKAGE_VERSION}`;
 
 describe('HttpClient', () => {
   const originalFetch = globalThis.fetch;
@@ -129,9 +129,7 @@ describe('HttpClient', () => {
     const client = new HttpClient(baseConfig, { fetchFn }, '@prefactor/ai@0.3.1');
     await client.request('/api/v1/test');
 
-    expect(requestHeaders?.get('X-Prefactor-SDK')).toBe(
-      `@prefactor/ai@0.3.1 ${DEFAULT_SDK_HEADER}`
-    );
+    expect(requestHeaders?.get('X-Prefactor-SDK')).toBe(`prefactor/ai@0.3.1 ${DEFAULT_SDK_HEADER}`);
   });
 
   test('throws graceful error object with parsed JSON body', async () => {

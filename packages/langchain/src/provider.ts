@@ -5,8 +5,10 @@ import {
   DEFAULT_LANGCHAIN_AGENT_SCHEMA as DEFAULT_LANGCHAIN_AGENT_SCHEMA_BASE,
   normalizeAgentSchema,
 } from './schema.js';
+import { PACKAGE_NAME, PACKAGE_VERSION } from './version.js';
 
 export const DEFAULT_LANGCHAIN_AGENT_SCHEMA = DEFAULT_LANGCHAIN_AGENT_SCHEMA_BASE;
+const SDK_HEADER_ENTRY = `${PACKAGE_NAME}@${PACKAGE_VERSION}`;
 
 export interface PrefactorLangChainOptions {
   agentSchema?: Record<string, unknown>;
@@ -63,6 +65,10 @@ export class PrefactorLangChain implements PrefactorProvider<AgentMiddleware> {
   shutdown(): void {
     this.middleware?.shutdown();
     this.middleware = null;
+  }
+
+  getSdkHeaderEntry(): string {
+    return SDK_HEADER_ENTRY;
   }
 
   normalizeAgentSchema(agentSchema: Record<string, unknown>): Record<string, unknown> {

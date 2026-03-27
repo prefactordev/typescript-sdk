@@ -8,6 +8,11 @@ import {
   type SpanType,
   Tracer,
 } from '@prefactor/core';
+import {
+  createSdkHeaderFetchRecorder,
+  expectRuntimeMetadataOmitted,
+  expectSdkHeaderHeaders,
+} from '../../core/tests/shared/sdk-header.js';
 import { init, shutdown, withSpan } from '../src/init.js';
 import { PrefactorAISDK } from '../src/provider.js';
 import { buildToolSpanSchema } from '../src/tool-span-contract.js';
@@ -22,7 +27,7 @@ const baseConfig = {
   },
 };
 
-const AI_SDK_HEADER_ENTRY = `${PACKAGE_NAME}@${PACKAGE_VERSION}`;
+const AI_SDK_HEADER_ENTRY = `${PACKAGE_NAME.replace(/^@/, '')}@${PACKAGE_VERSION}`;
 
 function createTestSpan(spanId: string, spanType: string): Span {
   return {
@@ -299,22 +304,8 @@ describe('ai init schema registration', () => {
   });
 
   test('sends adapter sdk header for package init and omits runtime metadata body fields', async () => {
-    const fetchCalls: Array<{ url: string; options?: RequestInit }> = [];
-    globalThis.fetch = (async (url, options) => {
-      fetchCalls.push({ url: String(url), options });
-
-      if (String(url).endsWith('/agent_instance/register')) {
-        return new Response(JSON.stringify({ details: { id: 'agent-instance-1' } }), {
-          status: 200,
-          headers: { 'Content-Type': 'application/json' },
-        });
-      }
-
-      return new Response(JSON.stringify({ details: { id: 'span-1' } }), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-      });
-    }) as typeof fetch;
+    const recorder = createSdkHeaderFetchRecorder({ includeSpanResponses: true });
+    globalThis.fetch = recorder.fetch;
 
     init(baseConfig);
     await withSpan(
@@ -327,12 +318,21 @@ describe('ai init schema registration', () => {
     );
     await shutdown();
 
-    const registerCall = fetchCalls.find((call) => call.url.endsWith('/agent_instance/register'));
-    const headers = new Headers(registerCall?.options?.headers);
-    const payload = JSON.parse(String(registerCall?.options?.body)) as Record<string, unknown>;
+    expectSdkHeaderHeaders(recorder.getRegisterHeaders(), AI_SDK_HEADER_ENTRY);
+    expectRuntimeMetadataOmitted(recorder.getRegisterPayload());
+  });
 
-    expect(headers.get('X-Prefactor-SDK')).toContain(AI_SDK_HEADER_ENTRY);
-    expect(headers.get('X-Prefactor-SDK')).toContain('@prefactor/core@');
-    expect(payload.runtime_environment).toBeUndefined();
+  test('sends adapter sdk header for the core provider path', async () => {
+    const recorder = createSdkHeaderFetchRecorder();
+    globalThis.fetch = recorder.fetch;
+
+    const prefactor = initCore({
+      provider: new PrefactorAISDK(),
+      httpConfig: baseConfig.httpConfig,
+    });
+    prefactor.getTracer().startAgentInstance();
+    await prefactor.shutdown();
+
+    expectSdkHeaderHeaders(recorder.getRegisterHeaders(), AI_SDK_HEADER_ENTRY);
   });
 });

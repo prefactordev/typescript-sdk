@@ -44,6 +44,12 @@ export interface PrefactorProvider<TMiddleware = MiddlewareLike> {
    */
   shutdown?: () => void | Promise<void>;
   /**
+   * Returns the SDK header entry to append to HTTP requests created by the core runtime.
+   *
+   * @returns Adapter-specific SDK identifier, or `undefined` to use the core header only.
+   */
+  getSdkHeaderEntry?: () => string | undefined;
+  /**
    * Normalizes a user- or provider-authored agent schema before core registers it.
    *
    * @param agentSchema - Authored agent schema configuration.
@@ -206,7 +212,9 @@ export function init<TMiddleware = MiddlewareLike>(
     }
   }
 
-  const core = createCore(finalConfig);
+  const core = createCore(finalConfig, {
+    sdkHeaderEntry: options.provider.getSdkHeaderEntry?.(),
+  });
 
   const httpConfig = finalConfig.httpConfig;
   if (httpConfig?.agentSchema) {

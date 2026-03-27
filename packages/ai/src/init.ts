@@ -26,7 +26,6 @@ import type { MiddlewareConfig } from './types.js';
 import { PACKAGE_NAME, PACKAGE_VERSION } from './version.js';
 
 const logger = getLogger('ai-init');
-const SDK_HEADER_ENTRY_SYMBOL = Symbol.for('prefactor.sdkHeaderEntry');
 const AI_SDK_HEADER_ENTRY = `${PACKAGE_NAME}@${PACKAGE_VERSION}`;
 
 /** Global Prefactor tracer instance. */
@@ -147,8 +146,7 @@ export function init(
 
   logger.info('Initializing Prefactor AI Middleware', { transport: finalConfig.transportType });
 
-  Reflect.set(finalConfig, SDK_HEADER_ENTRY_SYMBOL, AI_SDK_HEADER_ENTRY);
-  const core = createCore(finalConfig);
+  const core = createCore(finalConfig, { sdkHeaderEntry: AI_SDK_HEADER_ENTRY });
   globalCore = core;
   globalTracer = core.tracer;
 

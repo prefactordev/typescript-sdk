@@ -1,6 +1,12 @@
 import { afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test';
 import { createConfig } from '../src/config.js';
 import { createCore } from '../src/create-core.js';
+import { PACKAGE_NAME, PACKAGE_VERSION } from '../src/version.js';
+import {
+  createSdkHeaderFetchRecorder,
+  expectRuntimeMetadataOmitted,
+  expectSdkHeaderHeaders,
+} from './shared/sdk-header.js';
 
 const createWarnSpy = () => {
   const warnMessages: string[] = [];
@@ -10,6 +16,8 @@ const createWarnSpy = () => {
 
   return { warnMessages, warnSpy };
 };
+
+const CORE_SDK_HEADER_ENTRY = `${PACKAGE_NAME.replace(/^@/, '')}@${PACKAGE_VERSION}`;
 
 describe('createCore', () => {
   const originalFetch = globalThis.fetch;
@@ -61,6 +69,66 @@ describe('createCore', () => {
     } finally {
       warnSpy.mockRestore();
       await core.shutdown();
+    }
+  });
+
+  test('emits only the core sdk header by default', async () => {
+    const recorder = createSdkHeaderFetchRecorder();
+    globalThis.fetch = recorder.fetch;
+    const config = createConfig({
+      transportType: 'http',
+      httpConfig: {
+        apiUrl: 'https://example.com',
+        apiToken: 'test-token',
+        agentIdentifier: '1.0.0',
+        agentSchema: { type: 'object' },
+      },
+    });
+    const core = createCore(config);
+    let isShutdown = false;
+
+    try {
+      core.agentManager.startInstance({ agentId: 'agent-1' });
+      await core.shutdown();
+      isShutdown = true;
+
+      const headers = recorder.getRegisterHeaders();
+      const payload = recorder.getRegisterPayload();
+
+      expect(headers.get('X-Prefactor-SDK')).toBe(CORE_SDK_HEADER_ENTRY);
+      expectRuntimeMetadataOmitted(payload);
+    } finally {
+      if (!isShutdown) {
+        await core.shutdown();
+      }
+    }
+  });
+
+  test('appends adapter sdk header when provided in createCore options', async () => {
+    const recorder = createSdkHeaderFetchRecorder();
+    globalThis.fetch = recorder.fetch;
+    const config = createConfig({
+      transportType: 'http',
+      httpConfig: {
+        apiUrl: 'https://example.com',
+        apiToken: 'test-token',
+        agentIdentifier: '1.0.0',
+        agentSchema: { type: 'object' },
+      },
+    });
+    const core = createCore(config, { sdkHeaderEntry: '@prefactor/ai@0.3.1' });
+    let isShutdown = false;
+
+    try {
+      core.agentManager.startInstance({ agentId: 'agent-1' });
+      await core.shutdown();
+      isShutdown = true;
+
+      expectSdkHeaderHeaders(recorder.getRegisterHeaders(), 'prefactor/ai@0.3.1');
+    } finally {
+      if (!isShutdown) {
+        await core.shutdown();
+      }
     }
   });
 

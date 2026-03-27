@@ -73,7 +73,7 @@ export {
   type PartialHttpConfig,
   PartialHttpConfigSchema,
 } from './config.js';
-export { type CoreRuntime, createCore } from './create-core.js';
+export { type CoreRuntime, type CreateCoreOptions, createCore } from './create-core.js';
 export { registerShutdownHandler, shutdown } from './lifecycle.js';
 export {
   type JsonSchema,
