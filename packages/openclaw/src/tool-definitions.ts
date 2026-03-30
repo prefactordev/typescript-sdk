@@ -1,5 +1,4 @@
-// Define JsonSchema type locally since @prefactor/core may not export it in dist
-type JsonSchema = Record<string, unknown>;
+import type { JsonSchema } from '@prefactor/core';
 
 /**
  * Input schemas for critical OpenClaw tools.
