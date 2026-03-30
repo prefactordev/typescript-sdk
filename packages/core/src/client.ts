@@ -68,6 +68,8 @@ export interface PrefactorProvider<TMiddleware = MiddlewareLike> {
 
 let prefactorClient: PrefactorClient<MiddlewareLike> | null = null;
 let prefactorInitKey: string | null = null;
+const functionIds = new WeakMap<Function, number>();
+let nextFunctionId = 1;
 
 export class PrefactorClient<TMiddleware = MiddlewareLike> {
   private readonly core: CoreRuntime;
@@ -155,6 +157,8 @@ export interface PrefactorOptions<TMiddleware = MiddlewareLike> {
   provider: PrefactorProvider<TMiddleware>;
   /** Optional HTTP configuration overrides for the runtime config. */
   httpConfig?: Config['httpConfig'];
+  /** Optional failure handling callbacks for transport errors. */
+  failureHandling?: Config['failureHandling'];
 }
 
 /**
@@ -184,7 +188,10 @@ export function init<TMiddleware = MiddlewareLike>(
 
   configureLogging();
 
-  const config: Partial<Config> = options.httpConfig ? { httpConfig: options.httpConfig } : {};
+  const config: Partial<Config> = {
+    ...(options.httpConfig ? { httpConfig: options.httpConfig } : {}),
+    ...(options.failureHandling ? { failureHandling: options.failureHandling } : {}),
+  };
   let finalConfig = createConfig(config);
 
   const providerSchema = options.provider.getDefaultAgentSchema?.();
@@ -245,6 +252,9 @@ function buildInitKey(options: PrefactorOptions, sdkHeaderEntry?: string): strin
     providerType,
     httpConfig: options.httpConfig ?? null,
     sdkHeaderEntry: sdkHeaderEntry ?? null,
+    failureHandling: {
+      onFatalError: getFunctionIdentity(options.failureHandling?.onFatalError),
+    },
   });
 }
 
@@ -253,6 +263,10 @@ function stableStringify(value: unknown): string {
 }
 
 function normalizeValue(value: unknown): unknown {
+  if (typeof value === 'function') {
+    return getFunctionIdentity(value);
+  }
+
   if (Array.isArray(value)) {
     return value.map((entry) => normalizeValue(entry));
   }
@@ -268,4 +282,17 @@ function normalizeValue(value: unknown): unknown {
   }
 
   return value;
+}
+
+function getFunctionIdentity(value: unknown): string | null {
+  if (typeof value !== 'function') {
+    return null;
+  }
+
+  if (!functionIds.has(value)) {
+    functionIds.set(value, nextFunctionId);
+    nextFunctionId += 1;
+  }
+
+  return `fn:${functionIds.get(value)}`;
 }

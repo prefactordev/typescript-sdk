@@ -36,10 +36,10 @@ export function createCore(config: Config, options: CreateCoreOptions = {}): Cor
   }
 
   const httpConfig = HttpTransportConfigSchema.parse(config.httpConfig);
-  const transport =
-    options.sdkHeaderEntry === undefined
-      ? new HttpTransport(httpConfig)
-      : new HttpTransport(httpConfig, options.sdkHeaderEntry);
+  const transport = new HttpTransport(httpConfig, {
+    failureHandling: config.failureHandling,
+    sdkHeaderEntry: options.sdkHeaderEntry,
+  });
 
   let partition: Partition | undefined;
   if (config.httpConfig.agentId) {
@@ -59,9 +59,12 @@ export function createCore(config: Config, options: CreateCoreOptions = {}): Cor
   });
 
   const shutdown = async (): Promise<void> => {
-    await tracer.close();
-    clearActiveTracer(tracer);
-    setActiveCoreRuntime(null);
+    try {
+      await tracer.close();
+    } finally {
+      clearActiveTracer(tracer);
+      setActiveCoreRuntime(null);
+    }
   };
   const runtime: CoreRuntime = { tracer, agentManager, shutdown };
   setActiveCoreRuntime(runtime);

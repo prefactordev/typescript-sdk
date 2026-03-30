@@ -1,34 +1,33 @@
 import type { Span } from '../tracing/span.js';
 import type { AgentInstanceOptions, FinishSpanOptions } from '../transport/http.js';
+import type { TransientFailureKind } from '../transport/http.js';
 
-export type SchemaRegisterAction = {
-  type: 'schema_register';
-  schema: Record<string, unknown>;
+type RetryableActionMetadata = {
+  idempotencyKey: string;
+  retryAttempt: number;
+  transientKind?: TransientFailureKind;
 };
 
 export type AgentStartAction = {
   type: 'agent_start';
   options?: AgentInstanceOptions;
-};
+  schemaRevision: number;
+} & RetryableActionMetadata;
 
 export type AgentFinishAction = {
   type: 'agent_finish';
-};
+} & RetryableActionMetadata;
 
 export type SpanEndAction = {
   type: 'span_end';
   span: Span;
-};
+} & RetryableActionMetadata;
 
 export type SpanFinishAction = {
   type: 'span_finish';
   spanId: string;
   endTime: number;
-} & FinishSpanOptions;
+} & FinishSpanOptions &
+  RetryableActionMetadata;
 
-export type TransportAction =
-  | SchemaRegisterAction
-  | AgentStartAction
-  | AgentFinishAction
-  | SpanEndAction
-  | SpanFinishAction;
+export type TransportAction = AgentStartAction | AgentFinishAction | SpanEndAction | SpanFinishAction;

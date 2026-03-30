@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { FailureHandlingConfig, PrefactorFatalError } from './errors.js';
 
 const DEFAULT_RETRY_ON_STATUS_CODES = [
   429,
@@ -97,6 +98,15 @@ export const ConfigSchema = z.object({
 
   /** HTTP transport configuration (required if transportType is 'http') */
   httpConfig: PartialHttpConfigSchema.optional(),
+
+  /** Optional failure handling callbacks. */
+  failureHandling: z
+    .object({
+      onFatalError: z
+        .custom<(error: PrefactorFatalError) => void>((value) => value === undefined || typeof value === 'function')
+        .optional(),
+    })
+    .optional(),
 });
 
 export type Config = z.infer<typeof ConfigSchema>;
@@ -140,11 +150,14 @@ export function createConfig(options?: Partial<Config>): Config {
           retryOnStatusCodes: options.httpConfig.retryOnStatusCodes ?? retryOnStatusCodesFromEnv,
         }
       : undefined,
+    failureHandling: options?.failureHandling,
   };
 
   // Validate and return
   return ConfigSchema.parse(config);
 }
+
+export type { FailureHandlingConfig };
 
 function parseRetryOnStatusCodesEnv(value: string | undefined): number[] | undefined {
   if (!value) {

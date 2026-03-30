@@ -82,9 +82,9 @@ export class Tracer {
   /**
    * Start a new span
    *
-   * @param options - Span configuration options
-   * @returns The created span
-   */
+  * @param options - Span configuration options
+  * @returns The created span
+  */
   startSpan(options: StartSpanOptions): Span {
     const parentSpan = SpanContext.getCurrent();
     const spanId = generate(this.partition);
@@ -122,9 +122,9 @@ export class Tracer {
   /**
    * End a span and emit it to the transport
    *
-   * @param span - The span to end
-   * @param options - End span options (outputs, error, token usage)
-   */
+  * @param span - The span to end
+  * @param options - End span options (outputs, error, token usage)
+  */
   endSpan(span: Span, options?: EndSpanOptions): void {
     const endTime = Date.now();
     span.endTime = endTime;
@@ -142,9 +142,9 @@ export class Tracer {
       span.status = SpanStatus.SUCCESS;
     }
 
+    // AGENT spans use finishSpan API (they were already emitted on start)
+    // Other span types are emitted here
     try {
-      // AGENT spans use finishSpan API (they were already emitted on start)
-      // Other span types are emitted here
       if (span.spanType === SpanType.AGENT) {
         const status = span.status === SpanStatus.ERROR ? 'failed' : 'complete';
 
@@ -166,11 +166,7 @@ export class Tracer {
    * @returns Promise that resolves when the tracer is closed
    */
   async close(): Promise<void> {
-    try {
-      await this.transport.close();
-    } catch (error) {
-      console.error('Failed to close transport:', error);
-    }
+    await this.transport.close();
   }
 
   startAgentInstance(): void {
