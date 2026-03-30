@@ -68,12 +68,22 @@ export {
   type Config,
   ConfigSchema,
   createConfig,
+  type FailureHandlingConfig,
   type HttpTransportConfig,
   HttpTransportConfigSchema,
   type PartialHttpConfig,
   PartialHttpConfigSchema,
 } from './config.js';
 export { type CoreRuntime, type CreateCoreOptions, createCore } from './create-core.js';
+export {
+  type PrefactorFatalErrorKind,
+  PrefactorFatalError,
+  type PrefactorShutdownDetails,
+  type PrefactorShutdownErrorKind,
+  PrefactorShutdownError,
+  type PrefactorTransportHealthState,
+  type PrefactorTransportOperation,
+} from './errors.js';
 export { registerShutdownHandler, shutdown } from './lifecycle.js';
 export {
   type JsonSchema,
