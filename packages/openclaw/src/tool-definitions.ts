@@ -409,7 +409,7 @@ export function getToolInputSchema(toolName: string): JsonSchema {
 }
 
 /**
- * Checks if a tool is one of the critical tools with a defined schema.
+ * Checks if a tool is one of the supported tools with a defined schema.
  */
 export function isSupportedTool(toolName: string): boolean {
   const canonicalName = normalizeToolName(toolName);

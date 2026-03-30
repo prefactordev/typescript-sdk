@@ -244,8 +244,8 @@ export class Agent {
             },
           },
         },
-        // Critical tool-specific schemas
-        ...this.buildCriticalToolSchemas(),
+        // Supported tool-specific schemas
+        ...this.buildSupportedToolSchemas(),
         {
           name: 'openclaw:assistant_response',
           description: 'Assistant response generation span',
@@ -334,14 +334,14 @@ export class Agent {
   }
 
   /**
-   * Builds span type schemas for critical tools (read, write, edit, exec, web_search, web_fetch, browser).
+   * Builds span type schemas for supported tools (read, write, edit, exec, web_search, web_fetch, browser).
    * Each tool gets its own schema with proper input validation.
    */
-  private buildCriticalToolSchemas(): SpanTypeSchema[] {
-    const criticalTools = getAllSupportedToolDefinitions();
+  private buildSupportedToolSchemas(): SpanTypeSchema[] {
+    const supportedTools = getAllSupportedToolDefinitions();
     const schemas: SpanTypeSchema[] = [];
 
-    for (const [canonicalName, definition] of Object.entries(criticalTools)) {
+    for (const [canonicalName, definition] of Object.entries(supportedTools)) {
       const spanType = `openclaw:tool:${canonicalName}`;
       const toolSchema = buildToolSpanSchema(definition.inputSchema);
 
@@ -375,13 +375,13 @@ export class Agent {
 
   /**
    * Resolves a tool name to its span type.
-   * Returns the specific span type for critical tools, or the generic fallback.
+   * Returns the specific span type for supported tools, or the generic fallback.
    */
   resolveToolSpanType(toolName: string): string {
     const canonicalName = normalizeToolName(toolName);
-    const criticalTools = getAllSupportedToolDefinitions();
+    const supportedTools = getAllSupportedToolDefinitions();
 
-    if (canonicalName in criticalTools) {
+    if (canonicalName in supportedTools) {
       return `openclaw:tool:${canonicalName}`;
     }
 

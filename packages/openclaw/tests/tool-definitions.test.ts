@@ -12,7 +12,7 @@ import {
 
 describe('Tool Definitions', () => {
   describe('SUPPORTED_TOOL_DEFINITIONS', () => {
-    test('should contain all 7 critical tools', () => {
+    test('should contain all 7 supported tools', () => {
       expect(Object.keys(SUPPORTED_TOOL_DEFINITIONS)).toHaveLength(7);
       expect(SUPPORTED_TOOL_DEFINITIONS).toHaveProperty('read');
       expect(SUPPORTED_TOOL_DEFINITIONS).toHaveProperty('write');
@@ -480,7 +480,7 @@ describe('Tool Definitions', () => {
 });
 
 describe('OpenClaw Schema Alignment', () => {
-  describe('Critical Fixes', () => {
+  describe('Schema Alignment', () => {
     test('exec tool should use workdir instead of cwd', () => {
       const exec = SUPPORTED_TOOL_DEFINITIONS.exec;
       const properties = exec.inputSchema.properties as Record<string, unknown>;

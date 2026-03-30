@@ -490,7 +490,7 @@ describe('Tool Span Transformation', () => {
       expect(payload.isError).toBe(true);
     });
 
-    test('should build complete span schema for critical tools', () => {
+    test('should build complete span schema for supported tools', () => {
       const execInputSchema = {
         type: 'object' as const,
         properties: {
@@ -569,7 +569,7 @@ describe('Data Risk Detection Support', () => {
 
     const toolInput = inputs.input as { paths: string[]; inputRef: string };
     expect(toolInput.paths).toEqual(['/data/secrets.txt', '/data/config.json']);
-    // Upload paths are critical for data exfiltration detection
+    // Upload paths are supported for data exfiltration detection
   });
 
   test('should capture web_search filtering for exfiltration detection', () => {

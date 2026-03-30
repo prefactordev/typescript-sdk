@@ -473,7 +473,7 @@ export class SessionStateManager {
       input: params,
     });
 
-    // Determine span type: use specific span type for critical tools, generic otherwise
+    // Determine span type: use specific span type for supported tools, generic otherwise
     const spanType = this.agent.resolveToolSpanType(normalizedToolName);
 
     // Merge structured inputs with original payload (keeping ctx for reference)
