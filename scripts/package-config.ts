@@ -37,6 +37,7 @@ export const PACKAGE_CONFIGS: PackageConfig[] = [
     path: 'packages/claude',
     entrypoint: './packages/claude/src/index.ts',
     external: ['@prefactor/core', '@prefactor/pfid', '@anthropic-ai/claude-agent-sdk'],
+    generateVersionModule: true,
   },
   {
     name: '@prefactor/langchain',

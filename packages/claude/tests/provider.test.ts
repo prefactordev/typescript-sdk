@@ -1,13 +1,33 @@
-import { describe, expect, test } from 'bun:test';
+import { afterEach, describe, expect, test } from 'bun:test';
 import type { Query } from '@anthropic-ai/claude-agent-sdk';
+import { getClient, init as initCore } from '@prefactor/core';
+import {
+  createSdkHeaderFetchRecorder,
+  expectRuntimeMetadataOmitted,
+  expectSdkHeaderHeaders,
+} from '../../core/tests/shared/sdk-header.js';
 import { DEFAULT_CLAUDE_AGENT_SCHEMA, PrefactorClaude } from '../src/index.js';
+import { PACKAGE_NAME, PACKAGE_VERSION } from '../src/version.js';
+
+const CLAUDE_SDK_HEADER_ENTRY = `${PACKAGE_NAME.replace(/^@/, '')}@${PACKAGE_VERSION}`;
 
 describe('PrefactorClaude', () => {
   const mockQuery = (() => ({}) as Query) as typeof import('@anthropic-ai/claude-agent-sdk').query;
+  const originalFetch = globalThis.fetch;
+
+  afterEach(async () => {
+    globalThis.fetch = originalFetch;
+    await getClient()?.shutdown();
+  });
 
   test('getDefaultAgentSchema returns DEFAULT_CLAUDE_AGENT_SCHEMA', () => {
     const provider = new PrefactorClaude({ query: mockQuery });
     expect(provider.getDefaultAgentSchema()).toEqual(DEFAULT_CLAUDE_AGENT_SCHEMA);
+  });
+
+  test('getSdkHeaderEntry returns package name and version', () => {
+    const provider = new PrefactorClaude({ query: mockQuery });
+    expect(provider.getSdkHeaderEntry()).toBe(`${PACKAGE_NAME}@${PACKAGE_VERSION}`);
   });
 
   test('normalizeAgentSchema extracts tool span types', () => {
@@ -201,5 +221,24 @@ describe('PrefactorClaude', () => {
     expect((provider as any).agentManager).toBeNull();
     // biome-ignore lint/suspicious/noExplicitAny: verifying private refs are always cleared
     expect((provider as any).runtimeController).toBeNull();
+  });
+
+  test('sends adapter sdk header for the core provider path and omits runtime metadata fields', async () => {
+    const recorder = createSdkHeaderFetchRecorder();
+    globalThis.fetch = recorder.fetch;
+
+    const prefactor = initCore({
+      provider: new PrefactorClaude({ query: mockQuery }),
+      httpConfig: {
+        apiUrl: 'https://example.com',
+        apiToken: 'test-token',
+        agentIdentifier: '1.0.0',
+      },
+    });
+    prefactor.getTracer().startAgentInstance();
+    await prefactor.shutdown();
+
+    expectSdkHeaderHeaders(recorder.getRegisterHeaders(), CLAUDE_SDK_HEADER_ENTRY);
+    expectRuntimeMetadataOmitted(recorder.getRegisterPayload());
   });
 });
