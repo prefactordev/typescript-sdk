@@ -65,6 +65,16 @@ export const CRITICAL_TOOL_DEFINITIONS: Record<string, ToolDefinition> = {
   edit: {
     name: 'edit',
     description: 'Find and replace text in files',
+    aliases: [
+      'oldText',
+      'old_text',
+      'oldString',
+      'old_string',
+      'newText',
+      'new_text',
+      'newString',
+      'new_string',
+    ],
     inputSchema: {
       type: 'object',
       properties: {
@@ -96,17 +106,45 @@ export const CRITICAL_TOOL_DEFINITIONS: Record<string, ToolDefinition> = {
           type: 'string',
           description: 'Command to execute',
         },
-        cwd: {
+        workdir: {
           type: 'string',
-          description: 'Working directory for command execution (optional)',
+          description: 'Working directory for command execution (optional, defaults to cwd)',
         },
-        pty: {
-          type: 'boolean',
-          description: 'Whether to allocate a pseudo-terminal (optional)',
+        env: {
+          type: 'object',
+          additionalProperties: { type: 'string' },
+          description: 'Environment variables (optional)',
         },
-        elevated: {
+        timeout: {
+          type: 'number',
+          description: 'Timeout in seconds (optional, default 1800)',
+        },
+        background: {
           type: 'boolean',
-          description: 'Whether to run with elevated privileges (optional)',
+          description: 'Run in background (optional)',
+        },
+        yieldMs: {
+          type: 'number',
+          description: 'Milliseconds before backgrounding (optional, default 10000)',
+        },
+        host: {
+          type: 'string',
+          enum: ['auto', 'sandbox', 'gateway', 'node'],
+          description: 'Execution host (optional)',
+        },
+        security: {
+          type: 'string',
+          enum: ['deny', 'allowlist', 'full'],
+          description: 'Security mode (optional)',
+        },
+        ask: {
+          type: 'string',
+          enum: ['off', 'on-miss', 'always'],
+          description: 'Ask mode (optional)',
+        },
+        node: {
+          type: 'string',
+          description: 'Node id for host=node (optional)',
         },
       },
       required: ['command'],
@@ -123,9 +161,36 @@ export const CRITICAL_TOOL_DEFINITIONS: Record<string, ToolDefinition> = {
           type: 'string',
           description: 'Search query string',
         },
+        count: {
+          type: 'number',
+          minimum: 1,
+          maximum: 10,
+          description: 'Number of results to return (1-10, optional)',
+        },
+        country: {
+          type: 'string',
+          description: '2-letter country code (e.g., "US", "DE", "ALL", optional)',
+        },
+        language: {
+          type: 'string',
+          description: 'ISO 639-1 language code (e.g., "en", "de", "fr", optional)',
+        },
+        freshness: {
+          type: 'string',
+          enum: ['day', 'week', 'month', 'year'],
+          description: 'Time filter for results (optional)',
+        },
+        date_after: {
+          type: 'string',
+          description: 'Filter results after this date (YYYY-MM-DD, optional)',
+        },
+        date_before: {
+          type: 'string',
+          description: 'Filter results before this date (YYYY-MM-DD, optional)',
+        },
       },
       required: ['query'],
-      additionalProperties: false,
+      additionalProperties: true,
     },
   },
   web_fetch: {
@@ -140,12 +205,13 @@ export const CRITICAL_TOOL_DEFINITIONS: Record<string, ToolDefinition> = {
         },
         extractMode: {
           type: 'string',
-          enum: ['raw', 'readability', 'firecrawl'],
-          description: 'Content extraction mode (optional)',
+          enum: ['markdown', 'text'],
+          description: 'Extraction mode, default: "markdown"',
         },
         maxChars: {
           type: 'number',
-          description: 'Maximum characters to fetch (optional)',
+          minimum: 100,
+          description: 'Maximum characters to fetch (optional, default 50000)',
         },
       },
       required: ['url'],
@@ -160,24 +226,130 @@ export const CRITICAL_TOOL_DEFINITIONS: Record<string, ToolDefinition> = {
       properties: {
         action: {
           type: 'string',
-          enum: ['navigate', 'click', 'type', 'screenshot', 'evaluate', 'close'],
+          enum: [
+            'status',
+            'start',
+            'stop',
+            'profiles',
+            'tabs',
+            'open',
+            'focus',
+            'close',
+            'snapshot',
+            'screenshot',
+            'navigate',
+            'console',
+            'pdf',
+            'upload',
+            'dialog',
+            'act',
+          ],
           description: 'Browser action to perform',
+        },
+        target: {
+          type: 'string',
+          enum: ['sandbox', 'host', 'node'],
+          description: 'Execution target (optional)',
+        },
+        node: {
+          type: 'string',
+          description: 'Node identifier for host=node (optional)',
+        },
+        profile: {
+          type: 'string',
+          description: 'Browser profile (optional)',
         },
         url: {
           type: 'string',
-          description: 'URL for navigate action (optional)',
+          description: 'URL for navigate/open action (optional)',
+        },
+        targetUrl: {
+          type: 'string',
+          description: 'Target URL for open/navigation (optional)',
+        },
+        targetId: {
+          type: 'string',
+          description: 'Tab/target identifier (optional)',
+        },
+        limit: {
+          type: 'number',
+          description: 'Limit for tabs/lists (optional)',
+        },
+        snapshotFormat: {
+          type: 'string',
+          enum: ['aria', 'ai'],
+          description: 'Snapshot format (optional)',
+        },
+        refs: {
+          type: 'string',
+          enum: ['role', 'aria'],
+          description: 'Element reference type (optional)',
+        },
+        interactive: {
+          type: 'boolean',
+          description: 'Interactive mode (optional)',
+        },
+        compact: {
+          type: 'boolean',
+          description: 'Compact output (optional)',
+        },
+        depth: {
+          type: 'number',
+          description: 'Crawl depth (optional)',
+        },
+        fullPage: {
+          type: 'boolean',
+          description: 'Full page screenshot (optional)',
         },
         selector: {
           type: 'string',
-          description: 'CSS selector for click/type actions (optional)',
+          description: 'CSS selector (optional)',
+        },
+        ref: {
+          type: 'string',
+          description: 'Element reference (optional)',
+        },
+        element: {
+          type: 'string',
+          description: 'Element selector (optional)',
+        },
+        type: {
+          type: 'string',
+          enum: ['png', 'jpeg'],
+          description: 'Screenshot format (optional)',
         },
         text: {
           type: 'string',
-          description: 'Text to type for type action (optional)',
+          description: 'Text to type (optional)',
+        },
+        level: {
+          type: 'string',
+          description: 'Console log level (optional)',
+        },
+        paths: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'File paths for upload (optional)',
+        },
+        inputRef: {
+          type: 'string',
+          description: 'Input element reference (optional)',
         },
         script: {
           type: 'string',
-          description: 'JavaScript to evaluate for evaluate action (optional)',
+          description: 'JavaScript to evaluate (optional)',
+        },
+        timeoutMs: {
+          type: 'number',
+          description: 'Action timeout in milliseconds (optional)',
+        },
+        accept: {
+          type: 'boolean',
+          description: 'Dialog acceptance (optional)',
+        },
+        promptText: {
+          type: 'string',
+          description: 'Prompt text (optional)',
         },
       },
       required: ['action'],

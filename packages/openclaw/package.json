@@ -46,6 +46,7 @@
     "extensions": ["./dist/index.js"]
   },
   "scripts": {
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "bun test"
   }
 }
