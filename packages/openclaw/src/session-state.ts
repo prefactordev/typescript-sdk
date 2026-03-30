@@ -4,6 +4,8 @@
 
 import type { Agent } from './agent.js';
 import type { Logger } from './logger.js';
+import { getToolDefinition, normalizeToolName } from './tool-definitions.js';
+import { createToolSpanInputs, createToolSpanResultPayload } from './tool-span-contract.js';
 
 interface ToolCallEntry {
   spanId: string;
@@ -453,16 +455,55 @@ export class SessionStateManager {
       }
     }
 
+    // Normalize tool name and extract tool call ID if available
+    const normalizedToolName = normalizeToolName(toolName);
+    const toolCallId =
+      (payload.toolCallId as string) ||
+      ((payload.event as Record<string, unknown>)?.toolCallId as string) ||
+      '';
+
+    // Extract tool parameters from the event
+    const event = payload.event as Record<string, unknown> | undefined;
+    const params = event?.params as Record<string, unknown> | undefined;
+
+    // Build structured tool inputs using the tool-span-contract
+    const structuredInputs = createToolSpanInputs({
+      toolName: normalizedToolName,
+      toolCallId: toolCallId || undefined,
+      input: params,
+    });
+
+    // Determine span type: use specific span type for critical tools, generic otherwise
+    const spanType = this.agent.resolveToolSpanType(normalizedToolName);
+
+    // Merge structured inputs with original payload (keeping ctx for reference)
+    const spanPayload: Record<string, unknown> = {
+      ...structuredInputs,
+      // Keep original context for backwards compatibility
+      raw: {
+        originalToolName: toolName,
+        event: payload.event,
+        ctx: payload.ctx,
+      },
+    };
+
     const spanId = await this.agent.createSpan(
       sessionKey,
-      'openclaw:tool_call',
-      payload,
+      spanType,
+      spanPayload,
       state.agentRunSpanId
     );
 
     if (spanId) {
-      state.toolCallSpans.push({ spanId, toolName });
-      this.logger.info('tool_call_span_created', { sessionKey, spanId, tool: toolName });
+      state.toolCallSpans.push({ spanId, toolName: normalizedToolName, toolCallId });
+      this.logger.info('tool_call_span_created', {
+        sessionKey,
+        spanId,
+        tool: normalizedToolName,
+        originalToolName: toolName,
+        spanType,
+        hasParams: !!params,
+      });
     }
 
     return spanId;
@@ -515,7 +556,7 @@ export class SessionStateManager {
     const [entry] = state.toolCallSpans.splice(index, 1);
 
     const status = isError ? 'failed' : 'complete';
-    const resultPayload = resultText ? { text: resultText } : undefined;
+    const resultPayload = createToolSpanResultPayload(resultText, isError);
 
     await this.agent.finishSpan(sessionKey, entry.spanId, status, resultPayload);
     this.logger.info('tool_call_span_closed', {

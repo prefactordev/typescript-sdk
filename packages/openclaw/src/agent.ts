@@ -11,6 +11,8 @@ import {
   type HttpTransportConfig,
 } from '@prefactor/core';
 import type { Logger } from './logger.js';
+import { getAllCriticalToolDefinitions, normalizeToolName } from './tool-definitions.js';
+import { buildToolSpanSchema } from './tool-span-contract.js';
 
 // Session state tracking
 interface SessionState {
@@ -222,9 +224,10 @@ export class Agent {
             },
           },
         },
+        // Generic fallback for unknown tools
         {
-          name: 'openclaw:tool_call',
-          description: 'Tool execution span',
+          name: 'openclaw:tool',
+          description: 'Generic tool execution span for unknown tools',
           template: '{{ toolName }}',
           params_schema: {
             type: 'object',
@@ -241,6 +244,8 @@ export class Agent {
             },
           },
         },
+        // Critical tool-specific schemas
+        ...this.buildCriticalToolSchemas(),
         {
           name: 'openclaw:assistant_response',
           description: 'Assistant response generation span',
@@ -326,6 +331,62 @@ export class Agent {
       agentVersion: this.agentVersion.external_identifier,
       schemaVersion: this.agentSchemaVersion.external_identifier,
     });
+  }
+
+  /**
+   * Builds span type schemas for critical tools (read, write, edit, exec, web_search, web_fetch, browser).
+   * Each tool gets its own schema with proper input validation.
+   */
+  private buildCriticalToolSchemas(): SpanTypeSchema[] {
+    const criticalTools = getAllCriticalToolDefinitions();
+    const schemas: SpanTypeSchema[] = [];
+
+    for (const [canonicalName, definition] of Object.entries(criticalTools)) {
+      const spanType = `openclaw:tool:${canonicalName}`;
+      const toolSchema = buildToolSpanSchema(definition.inputSchema);
+
+      // Extract nested schemas from the tool-span-contract schema
+      const schemaProperties = toolSchema.properties as
+        | Record<string, { type: string; properties?: Record<string, unknown> }>
+        | undefined;
+
+      schemas.push({
+        name: spanType,
+        description: definition.description,
+        template: `{{ toolName }} - {{ input }}`,
+        params_schema: (schemaProperties?.inputs as SpanTypeSchema['params_schema']) ?? {
+          type: 'object',
+          properties: {
+            toolName: { type: 'string' },
+            input: { type: 'object' },
+          },
+        },
+        result_schema: (schemaProperties?.outputs as SpanTypeSchema['result_schema']) ?? {
+          type: 'object',
+          properties: {
+            output: { type: 'string' },
+          },
+        },
+      });
+    }
+
+    return schemas;
+  }
+
+  /**
+   * Resolves a tool name to its span type.
+   * Returns the specific span type for critical tools, or the generic fallback.
+   */
+  resolveToolSpanType(toolName: string): string {
+    const canonicalName = normalizeToolName(toolName);
+    const criticalTools = getAllCriticalToolDefinitions();
+
+    if (canonicalName in criticalTools) {
+      return `openclaw:tool:${canonicalName}`;
+    }
+
+    // Fallback to generic tool span type
+    return 'openclaw:tool';
   }
 
   private getOrCreateSession(sessionKey: string): SessionState {

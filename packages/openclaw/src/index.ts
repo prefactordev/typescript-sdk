@@ -649,3 +649,22 @@ export type { Logger, LogLevel } from './logger.js';
 export { createLogger } from './logger.js';
 export type { SessionStateManager } from './session-state.js';
 export { createSessionStateManager } from './session-state.js';
+
+// Tool schema exports
+export type { ToolDefinition } from './tool-definitions.js';
+export {
+  CRITICAL_TOOL_DEFINITIONS,
+  getAllCriticalToolDefinitions,
+  getToolDefinition,
+  getToolInputSchema,
+  isCriticalTool,
+  normalizeToolName,
+  TOOL_ALIAS_MAP,
+} from './tool-definitions.js';
+export {
+  buildToolSpanSchema,
+  createToolSpanInputs,
+  createToolSpanOutputs,
+  createToolSpanResultPayload,
+  GENERIC_OBJECT_SCHEMA,
+} from './tool-span-contract.js';
