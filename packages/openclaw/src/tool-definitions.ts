@@ -1,7 +1,7 @@
 import type { JsonSchema } from '@prefactor/core';
 
 /**
- * Input schemas for critical OpenClaw tools.
+ * Input schemas for supported OpenClaw tools.
  * These define the expected parameters for each tool to enable
  * proper validation and structured span capture.
  */
@@ -17,7 +17,7 @@ export interface ToolDefinition {
  * Map of canonical tool names to their definitions.
  * Aliases are normalized to canonical names during span creation.
  */
-export const CRITICAL_TOOL_DEFINITIONS: Record<string, ToolDefinition> = {
+export const SUPPORTED_TOOL_DEFINITIONS: Record<string, ToolDefinition> = {
   read: {
     name: 'read',
     description: 'Read file contents from the filesystem',
@@ -363,7 +363,7 @@ export const CRITICAL_TOOL_DEFINITIONS: Record<string, ToolDefinition> = {
  * Used for normalizing tool names during span creation.
  */
 export const TOOL_ALIAS_MAP: Record<string, string> = Object.entries(
-  CRITICAL_TOOL_DEFINITIONS
+  SUPPORTED_TOOL_DEFINITIONS
 ).reduce(
   (acc, [canonicalName, definition]) => {
     // Map canonical name to itself
@@ -396,7 +396,7 @@ export function normalizeToolName(toolName: string): string {
  */
 export function getToolDefinition(toolName: string): ToolDefinition | undefined {
   const canonicalName = normalizeToolName(toolName);
-  return CRITICAL_TOOL_DEFINITIONS[canonicalName];
+  return SUPPORTED_TOOL_DEFINITIONS[canonicalName];
 }
 
 /**
@@ -411,15 +411,15 @@ export function getToolInputSchema(toolName: string): JsonSchema {
 /**
  * Checks if a tool is one of the critical tools with a defined schema.
  */
-export function isCriticalTool(toolName: string): boolean {
+export function isSupportedTool(toolName: string): boolean {
   const canonicalName = normalizeToolName(toolName);
-  return canonicalName in CRITICAL_TOOL_DEFINITIONS;
+  return canonicalName in SUPPORTED_TOOL_DEFINITIONS;
 }
 
 /**
  * Gets all tool definitions for schema registration.
  * Used when building the agent schema version.
  */
-export function getAllCriticalToolDefinitions(): Record<string, ToolDefinition> {
-  return { ...CRITICAL_TOOL_DEFINITIONS };
+export function getAllSupportedToolDefinitions(): Record<string, ToolDefinition> {
+  return { ...SUPPORTED_TOOL_DEFINITIONS };
 }

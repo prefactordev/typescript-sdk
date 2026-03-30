@@ -11,7 +11,7 @@ import {
   type HttpTransportConfig,
 } from '@prefactor/core';
 import type { Logger } from './logger.js';
-import { getAllCriticalToolDefinitions, normalizeToolName } from './tool-definitions.js';
+import { getAllSupportedToolDefinitions, normalizeToolName } from './tool-definitions.js';
 import { buildToolSpanSchema } from './tool-span-contract.js';
 
 // Session state tracking
@@ -338,7 +338,7 @@ export class Agent {
    * Each tool gets its own schema with proper input validation.
    */
   private buildCriticalToolSchemas(): SpanTypeSchema[] {
-    const criticalTools = getAllCriticalToolDefinitions();
+    const criticalTools = getAllSupportedToolDefinitions();
     const schemas: SpanTypeSchema[] = [];
 
     for (const [canonicalName, definition] of Object.entries(criticalTools)) {
@@ -379,7 +379,7 @@ export class Agent {
    */
   resolveToolSpanType(toolName: string): string {
     const canonicalName = normalizeToolName(toolName);
-    const criticalTools = getAllCriticalToolDefinitions();
+    const criticalTools = getAllSupportedToolDefinitions();
 
     if (canonicalName in criticalTools) {
       return `openclaw:tool:${canonicalName}`;

@@ -653,11 +653,11 @@ export { createSessionStateManager } from './session-state.js';
 // Tool schema exports
 export type { ToolDefinition } from './tool-definitions.js';
 export {
-  CRITICAL_TOOL_DEFINITIONS,
-  getAllCriticalToolDefinitions,
+  SUPPORTED_TOOL_DEFINITIONS,
+  getAllSupportedToolDefinitions,
   getToolDefinition,
   getToolInputSchema,
-  isCriticalTool,
+  isSupportedTool,
   normalizeToolName,
   TOOL_ALIAS_MAP,
 } from './tool-definitions.js';

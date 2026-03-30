@@ -1,30 +1,30 @@
 import { beforeEach, describe, expect, test } from 'bun:test';
 import {
-  CRITICAL_TOOL_DEFINITIONS,
-  getAllCriticalToolDefinitions,
+  SUPPORTED_TOOL_DEFINITIONS,
+  getAllSupportedToolDefinitions,
   getToolDefinition,
   getToolInputSchema,
-  isCriticalTool,
+  isSupportedTool,
   normalizeToolName,
   TOOL_ALIAS_MAP,
   type ToolDefinition,
 } from '../src/tool-definitions.js';
 
 describe('Tool Definitions', () => {
-  describe('CRITICAL_TOOL_DEFINITIONS', () => {
+  describe('SUPPORTED_TOOL_DEFINITIONS', () => {
     test('should contain all 7 critical tools', () => {
-      expect(Object.keys(CRITICAL_TOOL_DEFINITIONS)).toHaveLength(7);
-      expect(CRITICAL_TOOL_DEFINITIONS).toHaveProperty('read');
-      expect(CRITICAL_TOOL_DEFINITIONS).toHaveProperty('write');
-      expect(CRITICAL_TOOL_DEFINITIONS).toHaveProperty('edit');
-      expect(CRITICAL_TOOL_DEFINITIONS).toHaveProperty('exec');
-      expect(CRITICAL_TOOL_DEFINITIONS).toHaveProperty('web_search');
-      expect(CRITICAL_TOOL_DEFINITIONS).toHaveProperty('web_fetch');
-      expect(CRITICAL_TOOL_DEFINITIONS).toHaveProperty('browser');
+      expect(Object.keys(SUPPORTED_TOOL_DEFINITIONS)).toHaveLength(7);
+      expect(SUPPORTED_TOOL_DEFINITIONS).toHaveProperty('read');
+      expect(SUPPORTED_TOOL_DEFINITIONS).toHaveProperty('write');
+      expect(SUPPORTED_TOOL_DEFINITIONS).toHaveProperty('edit');
+      expect(SUPPORTED_TOOL_DEFINITIONS).toHaveProperty('exec');
+      expect(SUPPORTED_TOOL_DEFINITIONS).toHaveProperty('web_search');
+      expect(SUPPORTED_TOOL_DEFINITIONS).toHaveProperty('web_fetch');
+      expect(SUPPORTED_TOOL_DEFINITIONS).toHaveProperty('browser');
     });
 
     test('each tool should have required properties', () => {
-      for (const [name, definition] of Object.entries(CRITICAL_TOOL_DEFINITIONS)) {
+      for (const [name, definition] of Object.entries(SUPPORTED_TOOL_DEFINITIONS)) {
         expect(definition.name).toBe(name);
         expect(definition.description).toBeTruthy();
         expect(definition.inputSchema).toBeDefined();
@@ -39,7 +39,7 @@ describe('Tool Definitions', () => {
     let tool: ToolDefinition;
 
     beforeEach(() => {
-      tool = CRITICAL_TOOL_DEFINITIONS.read;
+      tool = SUPPORTED_TOOL_DEFINITIONS.read;
     });
 
     test('should have correct metadata', () => {
@@ -69,7 +69,7 @@ describe('Tool Definitions', () => {
     let tool: ToolDefinition;
 
     beforeEach(() => {
-      tool = CRITICAL_TOOL_DEFINITIONS.write;
+      tool = SUPPORTED_TOOL_DEFINITIONS.write;
     });
 
     test('should have correct metadata', () => {
@@ -92,7 +92,7 @@ describe('Tool Definitions', () => {
     let tool: ToolDefinition;
 
     beforeEach(() => {
-      tool = CRITICAL_TOOL_DEFINITIONS.edit;
+      tool = SUPPORTED_TOOL_DEFINITIONS.edit;
     });
 
     test('should have correct metadata', () => {
@@ -126,7 +126,7 @@ describe('Tool Definitions', () => {
     let tool: ToolDefinition;
 
     beforeEach(() => {
-      tool = CRITICAL_TOOL_DEFINITIONS.exec;
+      tool = SUPPORTED_TOOL_DEFINITIONS.exec;
     });
 
     test('should have correct metadata', () => {
@@ -183,7 +183,7 @@ describe('Tool Definitions', () => {
     let tool: ToolDefinition;
 
     beforeEach(() => {
-      tool = CRITICAL_TOOL_DEFINITIONS.web_search;
+      tool = SUPPORTED_TOOL_DEFINITIONS.web_search;
     });
 
     test('should have correct metadata', () => {
@@ -229,7 +229,7 @@ describe('Tool Definitions', () => {
     let tool: ToolDefinition;
 
     beforeEach(() => {
-      tool = CRITICAL_TOOL_DEFINITIONS.web_fetch;
+      tool = SUPPORTED_TOOL_DEFINITIONS.web_fetch;
     });
 
     test('should have correct metadata', () => {
@@ -261,7 +261,7 @@ describe('Tool Definitions', () => {
     let tool: ToolDefinition;
 
     beforeEach(() => {
-      tool = CRITICAL_TOOL_DEFINITIONS.browser;
+      tool = SUPPORTED_TOOL_DEFINITIONS.browser;
     });
 
     test('should have correct metadata', () => {
@@ -447,34 +447,34 @@ describe('Tool Definitions', () => {
     });
   });
 
-  describe('isCriticalTool', () => {
+  describe('isSupportedTool', () => {
     test('should return true for canonical names', () => {
-      expect(isCriticalTool('read')).toBe(true);
-      expect(isCriticalTool('write')).toBe(true);
-      expect(isCriticalTool('exec')).toBe(true);
+      expect(isSupportedTool('read')).toBe(true);
+      expect(isSupportedTool('write')).toBe(true);
+      expect(isSupportedTool('exec')).toBe(true);
     });
 
     test('should return true for aliases', () => {
-      expect(isCriticalTool('file_path')).toBe(true);
-      expect(isCriticalTool('bash')).toBe(true);
-      expect(isCriticalTool('old_string')).toBe(true);
+      expect(isSupportedTool('file_path')).toBe(true);
+      expect(isSupportedTool('bash')).toBe(true);
+      expect(isSupportedTool('old_string')).toBe(true);
     });
 
     test('should return false for unknown tools', () => {
-      expect(isCriticalTool('custom')).toBe(false);
-      expect(isCriticalTool('unknown')).toBe(false);
+      expect(isSupportedTool('custom')).toBe(false);
+      expect(isSupportedTool('unknown')).toBe(false);
     });
   });
 
-  describe('getAllCriticalToolDefinitions', () => {
+  describe('getAllSupportedToolDefinitions', () => {
     test('should return a copy of all definitions', () => {
-      const all = getAllCriticalToolDefinitions();
+      const all = getAllSupportedToolDefinitions();
       expect(Object.keys(all)).toHaveLength(7);
       expect(all.read).toBeDefined();
 
       // Verify it's a copy, not the original
       delete (all as Record<string, unknown>).read;
-      expect(CRITICAL_TOOL_DEFINITIONS.read).toBeDefined();
+      expect(SUPPORTED_TOOL_DEFINITIONS.read).toBeDefined();
     });
   });
 });
@@ -482,7 +482,7 @@ describe('Tool Definitions', () => {
 describe('OpenClaw Schema Alignment', () => {
   describe('Critical Fixes', () => {
     test('exec tool should use workdir instead of cwd', () => {
-      const exec = CRITICAL_TOOL_DEFINITIONS.exec;
+      const exec = SUPPORTED_TOOL_DEFINITIONS.exec;
       const properties = exec.inputSchema.properties as Record<string, unknown>;
 
       // OpenClaw uses 'workdir', not 'cwd'
@@ -491,7 +491,7 @@ describe('OpenClaw Schema Alignment', () => {
     });
 
     test('web_fetch should have correct extractMode enum', () => {
-      const webFetch = CRITICAL_TOOL_DEFINITIONS.web_fetch;
+      const webFetch = SUPPORTED_TOOL_DEFINITIONS.web_fetch;
       const properties = webFetch.inputSchema.properties as Record<string, { enum?: string[] }>;
 
       // OpenClaw uses ['markdown', 'text'], not ['raw', 'readability', 'firecrawl']
@@ -502,7 +502,7 @@ describe('OpenClaw Schema Alignment', () => {
     });
 
     test('edit tool should have Claude Code aliases', () => {
-      const edit = CRITICAL_TOOL_DEFINITIONS.edit;
+      const edit = SUPPORTED_TOOL_DEFINITIONS.edit;
 
       // Should support both camelCase and snake_case variants
       expect(edit.aliases).toContain('old_string');
@@ -514,7 +514,7 @@ describe('OpenClaw Schema Alignment', () => {
 
   describe('web_search optional parameters', () => {
     test('should support data risk detection parameters', () => {
-      const webSearch = CRITICAL_TOOL_DEFINITIONS.web_search;
+      const webSearch = SUPPORTED_TOOL_DEFINITIONS.web_search;
       const properties = webSearch.inputSchema.properties as Record<string, unknown>;
 
       // These fields affect data exfiltration detection
@@ -527,14 +527,14 @@ describe('OpenClaw Schema Alignment', () => {
     });
 
     test('should allow additional properties for provider extensions', () => {
-      const webSearch = CRITICAL_TOOL_DEFINITIONS.web_search;
+      const webSearch = SUPPORTED_TOOL_DEFINITIONS.web_search;
       expect(webSearch.inputSchema.additionalProperties).toBe(true);
     });
   });
 
   describe('browser tool completeness', () => {
     test('should support all OpenClaw browser actions', () => {
-      const browser = CRITICAL_TOOL_DEFINITIONS.browser;
+      const browser = SUPPORTED_TOOL_DEFINITIONS.browser;
       const properties = browser.inputSchema.properties as Record<string, { enum?: string[] }>;
       const actions = properties.action.enum || [];
 
@@ -550,7 +550,7 @@ describe('OpenClaw Schema Alignment', () => {
     });
 
     test('should support action-specific parameters', () => {
-      const browser = CRITICAL_TOOL_DEFINITIONS.browser;
+      const browser = SUPPORTED_TOOL_DEFINITIONS.browser;
       const properties = browser.inputSchema.properties as Record<string, unknown>;
 
       // Security-relevant parameters
