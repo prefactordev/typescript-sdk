@@ -76,11 +76,11 @@ export {
 } from './config.js';
 export { type CoreRuntime, type CreateCoreOptions, createCore } from './create-core.js';
 export {
-  type PrefactorFatalErrorKind,
   PrefactorFatalError,
+  type PrefactorFatalErrorKind,
   type PrefactorShutdownDetails,
-  type PrefactorShutdownErrorKind,
   PrefactorShutdownError,
+  type PrefactorShutdownErrorKind,
   type PrefactorTransportHealthState,
   type PrefactorTransportOperation,
 } from './errors.js';

@@ -3,17 +3,22 @@ import { PrefactorFatalError } from '../../src/errors.js';
 import { type Span, SpanStatus, SpanType } from '../../src/tracing/span.js';
 import { HttpTransport } from '../../src/transport/http.js';
 
-const createConfig = () => ({
-  apiUrl: 'https://example.com',
-  apiToken: 'test-token',
-  agentIdentifier: '1.0.0',
-  requestTimeout: 10,
-  maxRetries: 0,
-  initialRetryDelay: 1,
-  maxRetryDelay: 1,
-  retryMultiplier: 1,
-  retryOnStatusCodes: [429, 500, 502, 503, 504],
-});
+type TestTransportConfig = ConstructorParameters<typeof HttpTransport>[0];
+
+function createConfig(overrides: Partial<TestTransportConfig> = {}): TestTransportConfig {
+  return {
+    apiUrl: 'https://example.com',
+    apiToken: 'test-token',
+    agentIdentifier: '1.0.0',
+    requestTimeout: 10,
+    maxRetries: 0,
+    initialRetryDelay: 1,
+    maxRetryDelay: 1,
+    retryMultiplier: 1,
+    retryOnStatusCodes: [429, 500, 502, 503, 504],
+    ...overrides,
+  };
+}
 
 function createSpan(spanId: string, parentSpanId: string | null = null): Span {
   return {
@@ -164,7 +169,7 @@ describe('HttpTransport failure modes', () => {
       });
     }) as unknown as typeof fetch;
 
-    const transport = new HttpTransport(createConfig());
+    const transport = new HttpTransport(createConfig({ maxRetries: 1 }));
     transport.startAgentInstance();
     await waitForQueue();
 
@@ -175,7 +180,7 @@ describe('HttpTransport failure modes', () => {
     await transport.close();
   });
 
-  test('retries exhausted network failures with the same idempotency key', async () => {
+  test('retries transient network failures with the same idempotency key', async () => {
     const registerBodies: Array<Record<string, unknown>> = [];
     let registerAttempts = 0;
 
@@ -203,7 +208,7 @@ describe('HttpTransport failure modes', () => {
       });
     }) as unknown as typeof fetch;
 
-    const transport = new HttpTransport(createConfig());
+    const transport = new HttpTransport(createConfig({ maxRetries: 1 }));
     transport.startAgentInstance();
     await waitForQueue();
 
@@ -245,7 +250,7 @@ describe('HttpTransport failure modes', () => {
       });
     }) as unknown as typeof fetch;
 
-    const transport = new HttpTransport(createConfig());
+    const transport = new HttpTransport(createConfig({ maxRetries: 1 }));
     transport.startAgentInstance();
     await waitForQueue();
 
@@ -287,7 +292,7 @@ describe('HttpTransport failure modes', () => {
       });
     }) as unknown as typeof fetch;
 
-    const transport = new HttpTransport(createConfig());
+    const transport = new HttpTransport(createConfig({ maxRetries: 1 }));
     transport.startAgentInstance();
     await waitForQueue();
 
@@ -295,6 +300,57 @@ describe('HttpTransport failure modes', () => {
     expect(startBodies[0]?.idempotency_key).toBe(startBodies[1]?.idempotency_key);
     expect(transport.getHealthState()).toBe('healthy');
 
+    await transport.close();
+  });
+
+  test('enters fatal retry_exhausted state after permanent transient failures', async () => {
+    const fatalErrors: PrefactorFatalError[] = [];
+    let registerAttempts = 0;
+
+    globalThis.fetch = (async (url) => {
+      if (String(url).endsWith('/agent_instance/register')) {
+        registerAttempts += 1;
+        return new Response(JSON.stringify({ error: 'backend unavailable' }), {
+          status: 503,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+
+      return new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }) as unknown as typeof fetch;
+
+    const transport = new HttpTransport(createConfig(), {
+      failureHandling: {
+        onFatalError: (error) => {
+          fatalErrors.push(error);
+        },
+      },
+    });
+
+    transport.startAgentInstance();
+    await waitForQueue();
+
+    expect(registerAttempts).toBe(1);
+    expect(fatalErrors).toHaveLength(1);
+    expect(fatalErrors[0]?.kind).toBe('retry_exhausted');
+    expect(fatalErrors[0]?.operation).toBe('agent_start');
+    expect(fatalErrors[0]?.responseBody).toEqual({
+      transientKind: 'backend_transient',
+      retryAttempt: 0,
+      responseBody: { error: 'backend unavailable' },
+    });
+
+    let thrownError: unknown;
+    try {
+      transport.startAgentInstance();
+    } catch (error) {
+      thrownError = error;
+    }
+
+    expect(thrownError).toBe(fatalErrors[0]);
     await transport.close();
   });
 
@@ -334,18 +390,19 @@ describe('HttpTransport failure modes', () => {
 
     const transport = new HttpTransport({
       ...createConfig(),
+      maxRetries: 1,
       initialRetryDelay: 50,
       maxRetryDelay: 50,
     });
 
     transport.registerSchema({ type: 'object' });
     transport.startAgentInstance({ agentIdentifier: 'v1.0.0' });
-    await waitFor(() => startAttempts === 1);
+    await waitFor(() => startAttempts === 2);
 
     const updatedSchema = { type: 'object', properties: { name: { type: 'string' } } };
     transport.registerSchema(updatedSchema);
     transport.startAgentInstance({ agentIdentifier: 'v1.1.0' });
-    await waitFor(() => startBodies.length === 2);
+    await waitFor(() => startBodies.length === 3);
     await waitForQueue();
 
     expect(registerBodies).toHaveLength(2);
@@ -361,8 +418,9 @@ describe('HttpTransport failure modes', () => {
       name: 'Agent',
       description: '',
     });
-    expect(startBodies).toHaveLength(2);
-    expect(startBodies[0]?.idempotency_key).not.toBe(startBodies[1]?.idempotency_key);
+    expect(startBodies).toHaveLength(3);
+    expect(startBodies[0]?.idempotency_key).toBe(startBodies[1]?.idempotency_key);
+    expect(startBodies[0]?.idempotency_key).not.toBe(startBodies[2]?.idempotency_key);
     expect(transport.getHealthState()).toBe('healthy');
 
     await transport.close();
@@ -410,7 +468,7 @@ describe('HttpTransport failure modes', () => {
   test('rejects shutdown when close races with new work', async () => {
     let releaseRegister: (() => void) | null = null;
 
-    globalThis.fetch = (((url) => {
+    globalThis.fetch = ((url) => {
       if (String(url).endsWith('/agent_instance/register')) {
         return new Promise<Response>((resolve) => {
           releaseRegister = () => {
@@ -430,7 +488,7 @@ describe('HttpTransport failure modes', () => {
           headers: { 'Content-Type': 'application/json' },
         })
       );
-    }) as unknown) as typeof fetch;
+    }) as unknown as typeof fetch;
 
     const transport = new HttpTransport(createConfig());
     transport.startAgentInstance();

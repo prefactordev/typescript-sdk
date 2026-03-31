@@ -1,4 +1,9 @@
-export type PrefactorFatalErrorKind = 'auth' | 'contract' | 'schema_drift' | 'queue_closed';
+export type PrefactorFatalErrorKind =
+  | 'auth'
+  | 'contract'
+  | 'schema_drift'
+  | 'queue_closed'
+  | 'retry_exhausted';
 
 export type PrefactorShutdownErrorKind = 'partial_telemetry' | 'dropped_on_shutdown';
 

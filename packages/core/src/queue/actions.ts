@@ -1,6 +1,9 @@
 import type { Span } from '../tracing/span.js';
-import type { AgentInstanceOptions, FinishSpanOptions } from '../transport/http.js';
-import type { TransientFailureKind } from '../transport/http.js';
+import type {
+  AgentInstanceOptions,
+  FinishSpanOptions,
+  TransientFailureKind,
+} from '../transport/http.js';
 
 type RetryableActionMetadata = {
   idempotencyKey: string;
@@ -30,4 +33,8 @@ export type SpanFinishAction = {
 } & FinishSpanOptions &
   RetryableActionMetadata;
 
-export type TransportAction = AgentStartAction | AgentFinishAction | SpanEndAction | SpanFinishAction;
+export type TransportAction =
+  | AgentStartAction
+  | AgentFinishAction
+  | SpanEndAction
+  | SpanFinishAction;

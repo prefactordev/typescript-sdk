@@ -82,9 +82,9 @@ export class Tracer {
   /**
    * Start a new span
    *
-  * @param options - Span configuration options
-  * @returns The created span
-  */
+   * @param options - Span configuration options
+   * @returns The created span
+   */
   startSpan(options: StartSpanOptions): Span {
     const parentSpan = SpanContext.getCurrent();
     const spanId = generate(this.partition);
@@ -122,9 +122,9 @@ export class Tracer {
   /**
    * End a span and emit it to the transport
    *
-  * @param span - The span to end
-  * @param options - End span options (outputs, error, token usage)
-  */
+   * @param span - The span to end
+   * @param options - End span options (outputs, error, token usage)
+   */
   endSpan(span: Span, options?: EndSpanOptions): void {
     const endTime = Date.now();
     span.endTime = endTime;

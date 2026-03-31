@@ -1,10 +1,3 @@
-import type {
-  AgentFinishAction,
-  AgentStartAction,
-  SpanEndAction,
-  SpanFinishAction,
-  TransportAction,
-} from '../queue/actions.js';
 import type { HttpTransportConfig } from '../config.js';
 import type {
   FailureHandlingConfig,
@@ -12,6 +5,13 @@ import type {
   PrefactorTransportOperation,
 } from '../errors.js';
 import { PrefactorFatalError, PrefactorShutdownError } from '../errors.js';
+import type {
+  AgentFinishAction,
+  AgentStartAction,
+  SpanEndAction,
+  SpanFinishAction,
+  TransportAction,
+} from '../queue/actions.js';
 import { InMemoryQueue } from '../queue/in-memory-queue.js';
 import { TaskExecutor } from '../queue/task-executor.js';
 import { buildSpanResultPayload } from '../tracing/result-payload.js';
@@ -51,6 +51,9 @@ type HttpTransportOptions = {
 };
 
 type RetryableAction = AgentStartAction | AgentFinishAction | SpanEndAction | SpanFinishAction;
+type RetryTimerMetadata = {
+  operation: PrefactorTransportOperation;
+};
 
 type FailureClassification =
   | {
@@ -60,6 +63,7 @@ type FailureClassification =
   | {
       type: 'transient';
       kind: TransientFailureKind;
+      error: HttpClientError;
     }
   | {
       type: 'unexpected';
@@ -108,8 +112,8 @@ export class HttpTransport implements Transport {
   private readonly agentInstanceClient: AgentInstanceClient;
   private readonly agentSpanClient: AgentSpanClient;
   private readonly onFatalError?: (error: PrefactorFatalError) => void;
-  private readonly retryTimers = new Set<ReturnType<typeof setTimeout>>();
-  private readonly transientFailureCounts = new Map<TransientFailureKind, number>();
+  private readonly retryTimers = new Map<ReturnType<typeof setTimeout>, RetryTimerMetadata>();
+  private readonly transientFailureCounts = new Map<string, number>();
   private previousAgentSchema: string | null = null;
   private requiresNewAgentIdentifier = false;
   private previousAgentIdentifier: string | null = null;
@@ -159,6 +163,8 @@ export class HttpTransport implements Transport {
       this.previousAgentIdentifier = this.latestAgentIdentifier ?? this.config.agentIdentifier;
       this.agentInstanceId = null;
       this.currentAgentRegisterIdempotencyKey = null;
+      this.cancelScheduledRetriesForOperation('agent_start');
+      this.clearTransientFailuresForOperation('agent_start');
     } else if (this.previousAgentSchema === null) {
       this.schemaRevision = 1;
     }
@@ -236,7 +242,7 @@ export class HttpTransport implements Transport {
     this.healthState = 'closed';
 
     const cancelledTimers = this.retryTimers.size;
-    for (const timer of this.retryTimers) {
+    for (const timer of this.retryTimers.keys()) {
       clearTimeout(timer);
     }
     this.retryTimers.clear();
@@ -322,6 +328,12 @@ export class HttpTransport implements Transport {
   }
 
   private processAction = async (action: TransportAction): Promise<void> => {
+    // Once the transport is fatal, queued follow-up work should be ignored rather than
+    // generating secondary partial-telemetry noise.
+    if (this.fatalError) {
+      return;
+    }
+
     switch (action.type) {
       case 'agent_start':
         await this.processAgentStart(action);
@@ -398,7 +410,7 @@ export class HttpTransport implements Transport {
     }
 
     if (classification.type === 'transient') {
-      this.scheduleRetry(action, classification.kind);
+      this.scheduleRetry(action, classification.kind, classification.error);
       return;
     }
 
@@ -424,6 +436,7 @@ export class HttpTransport implements Transport {
       return {
         type: 'transient',
         kind: 'agent_not_found',
+        error,
       };
     }
 
@@ -448,6 +461,7 @@ export class HttpTransport implements Transport {
       return {
         type: 'transient',
         kind: 'network',
+        error,
       };
     }
 
@@ -455,6 +469,7 @@ export class HttpTransport implements Transport {
       return {
         type: 'transient',
         kind: 'rate_limit',
+        error,
       };
     }
 
@@ -462,6 +477,7 @@ export class HttpTransport implements Transport {
       return {
         type: 'transient',
         kind: 'backend_transient',
+        error,
       };
     }
 
@@ -485,14 +501,41 @@ export class HttpTransport implements Transport {
     return { type: 'unexpected' };
   }
 
-  private scheduleRetry(action: RetryableAction, kind: TransientFailureKind): void {
+  private scheduleRetry(
+    action: RetryableAction,
+    kind: TransientFailureKind,
+    error: HttpClientError
+  ): void {
     if (this.closed || this.fatalError) {
       return;
     }
 
-    const consecutiveFailures = (this.transientFailureCounts.get(kind) ?? 0) + 1;
-    this.transientFailureCounts.set(kind, consecutiveFailures);
+    const operation = operationForAction(action);
+    const key = transientFailureKey(operation, kind);
+    const consecutiveFailures = (this.transientFailureCounts.get(key) ?? 0) + 1;
+    this.transientFailureCounts.set(key, consecutiveFailures);
     this.healthState = 'degraded';
+
+    if (action.retryAttempt >= this.config.maxRetries) {
+      this.enterFatalState(
+        new PrefactorFatalError(
+          'retry_exhausted',
+          'Prefactor transport exhausted its retry budget after transient failures.',
+          {
+            operation,
+            status: error.status,
+            responseBody: {
+              transientKind: kind,
+              retryAttempt: action.retryAttempt,
+              responseBody: error.responseBody,
+            },
+            consecutiveFailures,
+            cause: error,
+          }
+        )
+      );
+      return;
+    }
 
     const nextAction = {
       ...action,
@@ -502,7 +545,7 @@ export class HttpTransport implements Transport {
     const delayMs = calculateRetryDelay(action.retryAttempt, this.config);
 
     logger.warn(
-      `Retrying ${operationForAction(action)} after transient ${kind} failure (attempt ${nextAction.retryAttempt}) in ${delayMs}ms`
+      `Retrying ${operation} after transient ${kind} failure (attempt ${nextAction.retryAttempt}) in ${delayMs}ms`
     );
 
     const timer = setTimeout(() => {
@@ -521,16 +564,41 @@ export class HttpTransport implements Transport {
       }
     }, delayMs);
 
-    this.retryTimers.add(timer);
+    this.retryTimers.set(timer, { operation });
   }
 
   private recordActionSuccess(action: RetryableAction): void {
     if (action.transientKind) {
-      this.transientFailureCounts.delete(action.transientKind);
+      this.transientFailureCounts.delete(
+        transientFailureKey(operationForAction(action), action.transientKind)
+      );
     }
 
     if (this.healthState === 'degraded' && this.transientFailureCounts.size === 0) {
       this.healthState = 'healthy';
+    }
+  }
+
+  private clearTransientFailuresForOperation(operation: PrefactorTransportOperation): void {
+    for (const key of this.transientFailureCounts.keys()) {
+      if (key.startsWith(`${operation}:`)) {
+        this.transientFailureCounts.delete(key);
+      }
+    }
+
+    if (this.healthState === 'degraded' && this.transientFailureCounts.size === 0) {
+      this.healthState = 'healthy';
+    }
+  }
+
+  private cancelScheduledRetriesForOperation(operation: PrefactorTransportOperation): void {
+    for (const [timer, metadata] of this.retryTimers) {
+      if (metadata.operation !== operation) {
+        continue;
+      }
+
+      clearTimeout(timer);
+      this.retryTimers.delete(timer);
     }
   }
 
@@ -856,11 +924,22 @@ function operationForAction(action: TransportAction): PrefactorTransportOperatio
   }
 }
 
+function transientFailureKey(
+  operation: PrefactorTransportOperation,
+  kind: TransientFailureKind
+): string {
+  return `${operation}:${kind}`;
+}
+
 function isAgentNotFoundFailure(
   operation: PrefactorTransportOperation,
   error: HttpClientError
 ): boolean {
-  if (operation !== 'agent_register' && operation !== 'agent_start' && operation !== 'agent_finish') {
+  if (
+    operation !== 'agent_register' &&
+    operation !== 'agent_start' &&
+    operation !== 'agent_finish'
+  ) {
     return false;
   }
 
