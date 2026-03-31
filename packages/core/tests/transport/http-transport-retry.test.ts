@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { PrefactorFatalError } from '../../src/errors.js';
+import type { PrefactorFatalError } from '../../src/errors.js';
 import { HttpTransport } from '../../src/transport/http.js';
 
 const createConfig = () => ({

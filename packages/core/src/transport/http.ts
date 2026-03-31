@@ -421,7 +421,12 @@ export class HttpTransport implements Transport {
     if (classification.type === 'transient') {
       if (classification.kind !== 'agent_not_found') {
         this.enterFatalState(
-          this.createRetryExhaustedError(operation, action, classification.kind, classification.error)
+          this.createRetryExhaustedError(
+            operation,
+            action,
+            classification.kind,
+            classification.error
+          )
         );
         return;
       }
