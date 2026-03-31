@@ -4,7 +4,7 @@
 
 import type { Agent } from './agent.js';
 import type { Logger } from './logger.js';
-import { getToolDefinition, normalizeToolName } from './tool-definitions.js';
+import { normalizeToolName } from './tool-definitions.js';
 import { createToolSpanInputs, createToolSpanResultPayload } from './tool-span-contract.js';
 
 interface ToolCallEntry {
