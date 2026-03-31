@@ -354,6 +354,254 @@ describe('HttpTransport failure modes', () => {
     await transport.close();
   });
 
+  test('retries deferred span finishes without reissuing span create', async () => {
+    const createBodies: Array<Record<string, unknown>> = [];
+    const finishBodies: Array<Record<string, unknown>> = [];
+    let finishAttempts = 0;
+
+    globalThis.fetch = (async (url, options) => {
+      const urlString = String(url);
+
+      if (urlString.endsWith('/agent_instance/register')) {
+        return new Response(JSON.stringify({ details: { id: 'agent-instance-1' } }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+
+      if (urlString.endsWith('/agent_spans')) {
+        createBodies.push(JSON.parse(String(options?.body)) as Record<string, unknown>);
+
+        return new Response(JSON.stringify({ details: { id: 'backend-span-1' } }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+
+      if (urlString.endsWith('/agent_spans/backend-span-1/finish')) {
+        finishAttempts += 1;
+        finishBodies.push(JSON.parse(String(options?.body)) as Record<string, unknown>);
+
+        if (finishAttempts === 1) {
+          return new Response(JSON.stringify({ error: 'temporary unavailable' }), {
+            status: 503,
+            headers: { 'Content-Type': 'application/json' },
+          });
+        }
+      }
+
+      return new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }) as unknown as typeof fetch;
+
+    const transport = new HttpTransport(createConfig({ maxRetries: 1 }));
+    const span = createSpan('deferred-finish-span');
+
+    transport.finishSpan(span.spanId, span.endTime ?? Date.now(), {
+      status: 'complete',
+      resultPayload: { ok: true },
+    });
+    transport.emit(span);
+    await waitFor(() => finishBodies.length === 2);
+
+    expect(createBodies).toHaveLength(1);
+    expect(finishBodies).toHaveLength(2);
+    expect(finishBodies[0]?.idempotency_key).toBe(finishBodies[1]?.idempotency_key);
+
+    await transport.close();
+  });
+
+  test('enters fatal retry_exhausted when a deferred span finish keeps failing', async () => {
+    const fatalErrors: PrefactorFatalError[] = [];
+    let createAttempts = 0;
+    let finishAttempts = 0;
+
+    globalThis.fetch = (async (url) => {
+      const urlString = String(url);
+
+      if (urlString.endsWith('/agent_instance/register')) {
+        return new Response(JSON.stringify({ details: { id: 'agent-instance-1' } }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+
+      if (urlString.endsWith('/agent_spans')) {
+        createAttempts += 1;
+        return new Response(JSON.stringify({ details: { id: 'backend-span-1' } }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+
+      if (urlString.endsWith('/agent_spans/backend-span-1/finish')) {
+        finishAttempts += 1;
+        return new Response(JSON.stringify({ error: 'temporary unavailable' }), {
+          status: 503,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+
+      return new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }) as unknown as typeof fetch;
+
+    const transport = new HttpTransport(createConfig({ maxRetries: 1 }), {
+      failureHandling: {
+        onFatalError: (error) => {
+          fatalErrors.push(error);
+        },
+      },
+    });
+    const span = createSpan('deferred-finish-fatal');
+
+    transport.finishSpan(span.spanId, span.endTime ?? Date.now(), {
+      status: 'complete',
+      resultPayload: { ok: true },
+    });
+    transport.emit(span);
+    await waitFor(() => fatalErrors.length === 1);
+
+    expect(createAttempts).toBe(1);
+    expect(finishAttempts).toBe(2);
+    expect(fatalErrors[0]?.kind).toBe('retry_exhausted');
+    expect(fatalErrors[0]?.operation).toBe('span_finish');
+
+    await transport.close();
+  });
+
+  test('retries queued child span creates without reissuing the parent span', async () => {
+    const parentBodies: Array<Record<string, unknown>> = [];
+    const childBodies: Array<Record<string, unknown>> = [];
+    let childAttempts = 0;
+
+    globalThis.fetch = (async (url, options) => {
+      const urlString = String(url);
+
+      if (urlString.endsWith('/agent_instance/register')) {
+        return new Response(JSON.stringify({ details: { id: 'agent-instance-1' } }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+
+      if (urlString.endsWith('/agent_spans')) {
+        const body = JSON.parse(String(options?.body)) as Record<string, unknown>;
+        const details = body.details as Record<string, unknown>;
+        const payload = details.payload as Record<string, unknown>;
+        const spanId = String(payload.span_id);
+
+        if (spanId === 'parent-span') {
+          parentBodies.push(body);
+          return new Response(JSON.stringify({ details: { id: 'backend-parent' } }), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          });
+        }
+
+        childAttempts += 1;
+        childBodies.push(body);
+        if (childAttempts === 1) {
+          return new Response(JSON.stringify({ error: 'temporary unavailable' }), {
+            status: 503,
+            headers: { 'Content-Type': 'application/json' },
+          });
+        }
+
+        return new Response(JSON.stringify({ details: { id: 'backend-child' } }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+
+      return new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }) as unknown as typeof fetch;
+
+    const transport = new HttpTransport(createConfig({ maxRetries: 1 }));
+
+    transport.emit(createSpan('child-span', 'parent-span'));
+    transport.emit(createSpan('parent-span'));
+    await waitFor(() => childBodies.length === 2);
+
+    expect(parentBodies).toHaveLength(1);
+    expect(childBodies).toHaveLength(2);
+    expect(childBodies[0]?.idempotency_key).toBe(childBodies[1]?.idempotency_key);
+    expect((childBodies[1]?.details as Record<string, unknown>)?.parent_span_id).toBe(
+      'backend-parent'
+    );
+
+    await transport.close();
+  });
+
+  test('enters fatal retry_exhausted when a queued child span keeps failing', async () => {
+    const fatalErrors: PrefactorFatalError[] = [];
+    let parentAttempts = 0;
+    let childAttempts = 0;
+
+    globalThis.fetch = (async (url, options) => {
+      const urlString = String(url);
+
+      if (urlString.endsWith('/agent_instance/register')) {
+        return new Response(JSON.stringify({ details: { id: 'agent-instance-1' } }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+
+      if (urlString.endsWith('/agent_spans')) {
+        const body = JSON.parse(String(options?.body)) as Record<string, unknown>;
+        const details = body.details as Record<string, unknown>;
+        const payload = details.payload as Record<string, unknown>;
+        const spanId = String(payload.span_id);
+
+        if (spanId === 'parent-span') {
+          parentAttempts += 1;
+          return new Response(JSON.stringify({ details: { id: 'backend-parent' } }), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          });
+        }
+
+        childAttempts += 1;
+        return new Response(JSON.stringify({ error: 'temporary unavailable' }), {
+          status: 503,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+
+      return new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }) as unknown as typeof fetch;
+
+    const transport = new HttpTransport(createConfig({ maxRetries: 1 }), {
+      failureHandling: {
+        onFatalError: (error) => {
+          fatalErrors.push(error);
+        },
+      },
+    });
+
+    transport.emit(createSpan('child-span', 'parent-span'));
+    transport.emit(createSpan('parent-span'));
+    await waitFor(() => fatalErrors.length === 1);
+
+    expect(parentAttempts).toBe(1);
+    expect(childAttempts).toBe(2);
+    expect(fatalErrors[0]?.kind).toBe('retry_exhausted');
+    expect(fatalErrors[0]?.operation).toBe('span_create');
+
+    await transport.close();
+  });
+
   test('drops stale retried agent starts after a schema revision change', async () => {
     const registerBodies: Array<Record<string, unknown>> = [];
     const startBodies: Array<Record<string, unknown>> = [];

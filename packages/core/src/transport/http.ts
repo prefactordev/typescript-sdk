@@ -392,8 +392,17 @@ export class HttpTransport implements Transport {
 
     try {
       await this.finishSpanHttp(action);
+      this.deletePendingFinishIfTracked(action);
     } catch (error) {
-      this.handleActionError('span_finish', action, error);
+      try {
+        this.handleActionError('span_finish', action, error);
+        this.deletePendingFinishIfTracked(action);
+      } catch (unexpectedError) {
+        if (this.pendingFinishes.get(action.spanId) !== action) {
+          this.pendingFinishes.set(action.spanId, action);
+        }
+        throw unexpectedError;
+      }
     }
   }
 
@@ -410,6 +419,13 @@ export class HttpTransport implements Transport {
     }
 
     if (classification.type === 'transient') {
+      if (classification.kind !== 'agent_not_found') {
+        this.enterFatalState(
+          this.createRetryExhaustedError(operation, action, classification.kind, classification.error)
+        );
+        return;
+      }
+
       this.scheduleRetry(action, classification.kind, classification.error);
       return;
     }
@@ -517,23 +533,7 @@ export class HttpTransport implements Transport {
     this.healthState = 'degraded';
 
     if (action.retryAttempt >= this.config.maxRetries) {
-      this.enterFatalState(
-        new PrefactorFatalError(
-          'retry_exhausted',
-          'Prefactor transport exhausted its retry budget after transient failures.',
-          {
-            operation,
-            status: error.status,
-            responseBody: {
-              transientKind: kind,
-              retryAttempt: action.retryAttempt,
-              responseBody: error.responseBody,
-            },
-            consecutiveFailures,
-            cause: error,
-          }
-        )
-      );
+      this.enterFatalState(this.createRetryExhaustedError(operation, action, kind, error));
       return;
     }
 
@@ -628,6 +628,33 @@ export class HttpTransport implements Transport {
     return error;
   }
 
+  private createRetryExhaustedError(
+    operation: PrefactorTransportOperation,
+    action: RetryableAction,
+    kind: TransientFailureKind,
+    error: HttpClientError
+  ): PrefactorFatalError {
+    const retryAttempt = kind === 'agent_not_found' ? action.retryAttempt : this.config.maxRetries;
+    const consecutiveFailures =
+      kind === 'agent_not_found' ? action.retryAttempt + 1 : this.config.maxRetries + 1;
+
+    return new PrefactorFatalError(
+      'retry_exhausted',
+      'Prefactor transport exhausted its retry budget after transient failures.',
+      {
+        operation,
+        status: error.status,
+        responseBody: {
+          transientKind: kind,
+          retryAttempt,
+          responseBody: error.responseBody,
+        },
+        consecutiveFailures,
+        cause: error,
+      }
+    );
+  }
+
   private assertSchemaIdentifier(nextAgentIdentifier: string | undefined): void {
     if (!this.requiresNewAgentIdentifier) {
       return;
@@ -662,8 +689,7 @@ export class HttpTransport implements Transport {
       return;
     }
 
-    this.pendingFinishes.delete(spanId);
-    await this.finishSpanHttp(pendingFinish);
+    await this.processSpanFinish(pendingFinish);
   }
 
   private queuePendingChild(parentSpanId: string, childAction: SpanEndAction): void {
@@ -679,8 +705,20 @@ export class HttpTransport implements Transport {
     }
 
     this.pendingChildren.delete(parentSpanId);
-    for (const childAction of waitingChildren) {
-      await this.sendSpan(childAction);
+    for (let index = 0; index < waitingChildren.length; index += 1) {
+      const childAction = waitingChildren[index];
+
+      try {
+        await this.processSpanCreate(childAction);
+      } catch (error) {
+        const remainingChildren = waitingChildren.slice(index);
+        this.pendingChildren.set(parentSpanId, remainingChildren);
+        throw error;
+      }
+
+      if (this.fatalError) {
+        return;
+      }
     }
   }
 
@@ -870,6 +908,9 @@ export class HttpTransport implements Transport {
     this.spanIdMap.set(action.span.spanId, backendSpanId);
     this.recordActionSuccess(action);
     await this.processPendingFinishes(action.span.spanId);
+    if (this.fatalError) {
+      return;
+    }
     await this.processPendingChildren(action.span.spanId);
   }
 
@@ -893,6 +934,12 @@ export class HttpTransport implements Transport {
   private recordPartialTelemetry(message: string): void {
     this.partialTelemetryEvents += 1;
     logger.warn(message);
+  }
+
+  private deletePendingFinishIfTracked(action: SpanFinishAction): void {
+    if (this.pendingFinishes.get(action.spanId) === action) {
+      this.pendingFinishes.delete(action.spanId);
+    }
   }
 
   private createQueueClosedError(operation: PrefactorTransportOperation): PrefactorFatalError {
