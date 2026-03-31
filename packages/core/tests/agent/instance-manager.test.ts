@@ -1,6 +1,9 @@
 import { describe, expect, spyOn, test } from 'bun:test';
-import type { PrefactorTransportHealthState, PrefactorTransportOperation } from '../../src/errors.js';
 import { AgentInstanceManager } from '../../src/agent/instance-manager.js';
+import type {
+  PrefactorTransportHealthState,
+  PrefactorTransportOperation,
+} from '../../src/errors.js';
 import type { Span } from '../../src/tracing/span.js';
 import type { AgentInstanceOptions, Transport } from '../../src/transport/http.js';
 

@@ -1,17 +1,17 @@
 import { describe, expect, spyOn, test } from 'bun:test';
+import type {
+  PrefactorTransportHealthState,
+  PrefactorTransportOperation,
+} from '../../src/errors.js';
 import { SpanStatus, SpanType, withSpan } from '../../src/index';
 import type { Span } from '../../src/tracing/span';
 import type { Tracer } from '../../src/tracing/tracer';
 import { Tracer as CoreTracer } from '../../src/tracing/tracer';
 import type {
+  AgentInstanceOptions,
   FinishSpanOptions,
   Transport,
-  AgentInstanceOptions,
 } from '../../src/transport/http.js';
-import type {
-  PrefactorTransportHealthState,
-  PrefactorTransportOperation,
-} from '../../src/errors.js';
 
 function createSpan(): Span {
   return {

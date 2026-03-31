@@ -68,8 +68,6 @@ export interface PrefactorProvider<TMiddleware = MiddlewareLike> {
 
 let prefactorClient: PrefactorClient<MiddlewareLike> | null = null;
 let prefactorInitKey: string | null = null;
-const functionIds = new WeakMap<Function, number>();
-let nextFunctionId = 1;
 
 export class PrefactorClient<TMiddleware = MiddlewareLike> {
   private readonly core: CoreRuntime;
@@ -263,10 +261,6 @@ function stableStringify(value: unknown): string {
 }
 
 function normalizeValue(value: unknown): unknown {
-  if (typeof value === 'function') {
-    return getFunctionIdentity(value);
-  }
-
   if (Array.isArray(value)) {
     return value.map((entry) => normalizeValue(entry));
   }
@@ -282,17 +276,4 @@ function normalizeValue(value: unknown): unknown {
   }
 
   return value;
-}
-
-function getFunctionIdentity(value: unknown): string | null {
-  if (typeof value !== 'function') {
-    return null;
-  }
-
-  if (!functionIds.has(value)) {
-    functionIds.set(value, nextFunctionId);
-    nextFunctionId += 1;
-  }
-
-  return `fn:${functionIds.get(value)}`;
 }

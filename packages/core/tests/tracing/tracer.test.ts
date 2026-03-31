@@ -1,6 +1,9 @@
 import { beforeEach, describe, expect, spyOn, test } from 'bun:test';
 import { extractPartition, isPfid, type Partition } from '@prefactor/pfid';
-import type { PrefactorTransportHealthState, PrefactorTransportOperation } from '../../src/errors.js';
+import type {
+  PrefactorTransportHealthState,
+  PrefactorTransportOperation,
+} from '../../src/errors.js';
 import { SpanContext } from '../../src/tracing/context';
 import { type Span, SpanStatus, SpanType } from '../../src/tracing/span';
 import { Tracer } from '../../src/tracing/tracer';

@@ -103,7 +103,9 @@ export const ConfigSchema = z.object({
   failureHandling: z
     .object({
       onFatalError: z
-        .custom<(error: PrefactorFatalError) => void>((value) => value === undefined || typeof value === 'function')
+        .custom<(error: PrefactorFatalError) => void>(
+          (value) => value === undefined || typeof value === 'function'
+        )
         .optional(),
     })
     .optional(),
