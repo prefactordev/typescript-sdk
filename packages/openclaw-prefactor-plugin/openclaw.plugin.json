@@ -1,6 +1,6 @@
 {
-  "id": "prefactor",
-  "name": "@prefactor/openclaw",
+  "id": "openclaw-prefactor-plugin",
+  "name": "@prefactor/openclaw-prefactor-plugin",
   "version": "0.0.21",
   "description": "Comprehensive lifecycle event monitoring and instrumentation for OpenClaw",
   "runtime": "node",
