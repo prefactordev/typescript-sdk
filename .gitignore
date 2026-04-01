@@ -48,6 +48,7 @@ docs/plans/
 
 # Prefactor CLI profile
 prefactor.json
-.agents/
+
+# AI stuff
 .desloppify/
-.claude/skills/desloppify/SKILL.md
+scorecard.png
