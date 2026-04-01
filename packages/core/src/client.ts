@@ -68,6 +68,8 @@ export interface PrefactorProvider<TMiddleware = MiddlewareLike> {
 
 let prefactorClient: PrefactorClient<MiddlewareLike> | null = null;
 let prefactorInitKey: string | null = null;
+const functionIds = new WeakMap<Function, number>();
+let nextFunctionId = 1;
 
 export class PrefactorClient<TMiddleware = MiddlewareLike> {
   private readonly core: CoreRuntime;
@@ -251,7 +253,7 @@ function buildInitKey(options: PrefactorOptions, sdkHeaderEntry?: string): strin
     httpConfig: options.httpConfig ?? null,
     sdkHeaderEntry: sdkHeaderEntry ?? null,
     failureHandling: {
-      onFatalError: getFunctionIdentity(options.failureHandling?.onFatalError),
+      onFatalErrorConfigured: Boolean(options.failureHandling?.onFatalError),
     },
   });
 }
@@ -261,6 +263,10 @@ function stableStringify(value: unknown): string {
 }
 
 function normalizeValue(value: unknown): unknown {
+  if (typeof value === 'function') {
+    return getFunctionIdentity(value);
+  }
+
   if (Array.isArray(value)) {
     return value.map((entry) => normalizeValue(entry));
   }
@@ -276,4 +282,20 @@ function normalizeValue(value: unknown): unknown {
   }
 
   return value;
+}
+
+function getFunctionIdentity(fn: Function | undefined): string | null {
+  if (fn === undefined) {
+    return null;
+  }
+
+  const existingId = functionIds.get(fn);
+  if (existingId !== undefined) {
+    return `fn:${existingId}`;
+  }
+
+  const id = nextFunctionId;
+  nextFunctionId += 1;
+  functionIds.set(fn, id);
+  return `fn:${id}`;
 }
