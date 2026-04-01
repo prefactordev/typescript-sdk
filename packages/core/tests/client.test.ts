@@ -7,11 +7,16 @@ import type { Tracer } from '../src/tracing/tracer.js';
 class TestProvider implements PrefactorProvider {
   constructor(
     private readonly middleware: unknown,
-    private readonly onShutdown?: () => void
+    private readonly onShutdown?: () => void,
+    private readonly sdkHeaderEntry?: string
   ) {}
 
   createMiddleware(_tracer: Tracer, _agentManager: AgentInstanceManager, _config: Config): unknown {
     return this.middleware;
+  }
+
+  getSdkHeaderEntry(): string | undefined {
+    return this.sdkHeaderEntry;
   }
 
   shutdown(): void {
@@ -90,6 +95,28 @@ describe('core client init', () => {
           apiUrl: 'https://example.com',
           apiToken: 'token',
           agentIdentifier: '2.0.0',
+        },
+      })
+    ).toThrow(/already initialized/i);
+  });
+
+  test('throws when re-initialized with different sdk header entries', () => {
+    init({
+      provider: new TestProvider({ name: 'first' }, undefined, '@prefactor/ai@0.3.1'),
+      httpConfig: {
+        apiUrl: 'https://example.com',
+        apiToken: 'token',
+        agentIdentifier: '1.0.0',
+      },
+    });
+
+    expect(() =>
+      init({
+        provider: new TestProvider({ name: 'second' }, undefined, '@prefactor/langchain@0.3.1'),
+        httpConfig: {
+          apiUrl: 'https://example.com',
+          apiToken: 'token',
+          agentIdentifier: '1.0.0',
         },
       })
     ).toThrow(/already initialized/i);

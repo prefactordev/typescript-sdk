@@ -1,5 +1,6 @@
 import type { HttpTransportConfig } from '../../config.js';
 import { calculateRetryDelay, shouldRetryStatusCode } from './retry-policy.js';
+import { buildSdkRequestHeader, DEFAULT_SDK_REQUEST_HEADER } from './sdk-request-header.js';
 
 export type FetchLike = (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
 
@@ -53,15 +54,27 @@ export class HttpClient {
   private readonly fetchFn: FetchLike;
   private readonly sleep: (delayMs: number) => Promise<void>;
   private readonly random: () => number;
+  private readonly sdkHeader: string;
 
+  /** @internal */
+  constructor(
+    config: HttpTransportConfig,
+    dependencies: HttpClientDependencies,
+    sdkHeaderEntry: string
+  );
+  constructor(config: HttpTransportConfig, dependencies?: HttpClientDependencies);
   constructor(
     private readonly config: HttpTransportConfig,
-    dependencies: HttpClientDependencies = {}
+    dependencies: HttpClientDependencies = {},
+    sdkHeaderEntry?: string
   ) {
     this.fetchFn = dependencies.fetchFn ?? fetch;
     this.sleep =
       dependencies.sleep ?? ((delayMs) => new Promise((resolve) => setTimeout(resolve, delayMs)));
     this.random = dependencies.random ?? Math.random;
+    this.sdkHeader = sdkHeaderEntry
+      ? buildSdkRequestHeader(sdkHeaderEntry)
+      : DEFAULT_SDK_REQUEST_HEADER;
   }
 
   async request<TResponse = unknown>(
@@ -75,6 +88,7 @@ export class HttpClient {
     while (true) {
       const headers = new Headers(options.headers);
       headers.set('Authorization', `Bearer ${this.config.apiToken}`);
+      headers.set('X-Prefactor-SDK', this.sdkHeader);
       if (options.body !== undefined && !headers.has('Content-Type')) {
         headers.set('Content-Type', 'application/json');
       }

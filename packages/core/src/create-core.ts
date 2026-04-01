@@ -18,19 +18,28 @@ export type CoreRuntime = {
   shutdown: () => Promise<void>;
 };
 
+export type CreateCoreOptions = {
+  /** Optional adapter identifier appended ahead of the core SDK header. */
+  sdkHeaderEntry?: string;
+};
+
 /**
  * Creates a fully initialized core runtime from validated SDK configuration.
  *
  * @param config - Resolved SDK configuration.
+ * @param options - Optional runtime construction options.
  * @returns Runtime containing tracer, agent manager, and shutdown function.
  */
-export function createCore(config: Config): CoreRuntime {
+export function createCore(config: Config, options: CreateCoreOptions = {}): CoreRuntime {
   if (!config.httpConfig) {
     throw new Error('HTTP transport requires httpConfig to be provided in configuration');
   }
 
   const httpConfig = HttpTransportConfigSchema.parse(config.httpConfig);
-  const transport = new HttpTransport(httpConfig);
+  const transport =
+    options.sdkHeaderEntry === undefined
+      ? new HttpTransport(httpConfig)
+      : new HttpTransport(httpConfig, options.sdkHeaderEntry);
 
   let partition: Partition | undefined;
   if (config.httpConfig.agentId) {

@@ -8,9 +8,15 @@ import {
   type SpanType,
   Tracer,
 } from '@prefactor/core';
+import {
+  createSdkHeaderFetchRecorder,
+  expectRuntimeMetadataOmitted,
+  expectSdkHeaderHeaders,
+} from '../../core/tests/shared/sdk-header.js';
 import { init, shutdown, withSpan } from '../src/init.js';
 import { PrefactorAISDK } from '../src/provider.js';
 import { buildToolSpanSchema } from '../src/tool-span-contract.js';
+import { PACKAGE_NAME, PACKAGE_VERSION } from '../src/version.js';
 
 const baseConfig = {
   transportType: 'http' as const,
@@ -20,6 +26,8 @@ const baseConfig = {
     agentIdentifier: '1.0.0',
   },
 };
+
+const AI_SDK_HEADER_ENTRY = `${PACKAGE_NAME.replace(/^@/, '')}@${PACKAGE_VERSION}`;
 
 function createTestSpan(spanId: string, spanType: string): Span {
   return {
@@ -41,6 +49,7 @@ function createTestSpan(spanId: string, spanType: string): Span {
 
 describe('ai init schema registration', () => {
   const originalRegisterSchema = AgentInstanceManager.prototype.registerSchema;
+  const originalFetch = globalThis.fetch;
   let registeredSchemas: Record<string, unknown>[] = [];
 
   beforeEach(() => {
@@ -54,6 +63,7 @@ describe('ai init schema registration', () => {
 
   afterEach(async () => {
     AgentInstanceManager.prototype.registerSchema = originalRegisterSchema;
+    globalThis.fetch = originalFetch;
     await shutdown();
     await getClient()?.shutdown();
   });
@@ -291,5 +301,38 @@ describe('ai init schema registration', () => {
     provider.shutdown();
 
     expect(finishCalls).toBe(1);
+  });
+
+  test('sends adapter sdk header for package init and omits runtime metadata body fields', async () => {
+    const recorder = createSdkHeaderFetchRecorder({ includeSpanResponses: true });
+    globalThis.fetch = recorder.fetch;
+
+    init(baseConfig);
+    await withSpan(
+      {
+        name: 'test:header',
+        spanType: 'ai-sdk:llm',
+        inputs: { prompt: 'hi' },
+      },
+      async () => 'ok'
+    );
+    await shutdown();
+
+    expectSdkHeaderHeaders(recorder.getRegisterHeaders(), AI_SDK_HEADER_ENTRY);
+    expectRuntimeMetadataOmitted(recorder.getRegisterPayload());
+  });
+
+  test('sends adapter sdk header for the core provider path', async () => {
+    const recorder = createSdkHeaderFetchRecorder();
+    globalThis.fetch = recorder.fetch;
+
+    const prefactor = initCore({
+      provider: new PrefactorAISDK(),
+      httpConfig: baseConfig.httpConfig,
+    });
+    prefactor.getTracer().startAgentInstance();
+    await prefactor.shutdown();
+
+    expectSdkHeaderHeaders(recorder.getRegisterHeaders(), AI_SDK_HEADER_ENTRY);
   });
 });

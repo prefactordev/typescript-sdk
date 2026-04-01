@@ -44,6 +44,12 @@ export interface PrefactorProvider<TMiddleware = MiddlewareLike> {
    */
   shutdown?: () => void | Promise<void>;
   /**
+   * Returns the SDK header entry to append to HTTP requests created by the core runtime.
+   *
+   * @returns Adapter-specific SDK identifier, or `undefined` to use the core header only.
+   */
+  getSdkHeaderEntry?: () => string | undefined;
+  /**
    * Normalizes a user- or provider-authored agent schema before core registers it.
    *
    * @param agentSchema - Authored agent schema configuration.
@@ -162,7 +168,8 @@ export interface PrefactorOptions<TMiddleware = MiddlewareLike> {
 export function init<TMiddleware = MiddlewareLike>(
   options: PrefactorOptions<TMiddleware>
 ): PrefactorClient<TMiddleware> {
-  const nextInitKey = buildInitKey(options);
+  const sdkHeaderEntry = options.provider.getSdkHeaderEntry?.();
+  const nextInitKey = buildInitKey(options, sdkHeaderEntry);
 
   if (prefactorClient) {
     if (prefactorInitKey !== nextInitKey) {
@@ -206,7 +213,9 @@ export function init<TMiddleware = MiddlewareLike>(
     }
   }
 
-  const core = createCore(finalConfig);
+  const core = createCore(finalConfig, {
+    sdkHeaderEntry,
+  });
 
   const httpConfig = finalConfig.httpConfig;
   if (httpConfig?.agentSchema) {
@@ -230,9 +239,13 @@ export function getClient(): PrefactorClient<MiddlewareLike> | null {
   return prefactorClient;
 }
 
-function buildInitKey(options: PrefactorOptions): string {
+function buildInitKey(options: PrefactorOptions, sdkHeaderEntry?: string): string {
   const providerType = options.provider.constructor?.name ?? 'anonymous-provider';
-  return `${providerType}:${stableStringify(options.httpConfig ?? null)}`;
+  return stableStringify({
+    providerType,
+    httpConfig: options.httpConfig ?? null,
+    sdkHeaderEntry: sdkHeaderEntry ?? null,
+  });
 }
 
 function stableStringify(value: unknown): string {

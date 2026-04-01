@@ -1,8 +1,14 @@
 import { afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test';
 import { AgentInstanceManager, getClient, init as initCore, Tracer } from '@prefactor/core';
+import {
+  createSdkHeaderFetchRecorder,
+  expectRuntimeMetadataOmitted,
+  expectSdkHeaderHeaders,
+} from '../../core/tests/shared/sdk-header.js';
 import { init, shutdown, withSpan } from '../src/init.js';
 import { PrefactorLangChain } from '../src/provider.js';
 import { buildToolSpanSchema } from '../src/tool-span-contract.js';
+import { PACKAGE_NAME, PACKAGE_VERSION } from '../src/version.js';
 
 const baseConfig = {
   transportType: 'http' as const,
@@ -13,8 +19,11 @@ const baseConfig = {
   },
 };
 
+const LANGCHAIN_SDK_HEADER_ENTRY = `${PACKAGE_NAME.replace(/^@/, '')}@${PACKAGE_VERSION}`;
+
 describe('langchain init schema registration', () => {
   const originalRegisterSchema = AgentInstanceManager.prototype.registerSchema;
+  const originalFetch = globalThis.fetch;
   let registeredSchemas: Record<string, unknown>[] = [];
 
   beforeEach(() => {
@@ -28,6 +37,7 @@ describe('langchain init schema registration', () => {
 
   afterEach(async () => {
     AgentInstanceManager.prototype.registerSchema = originalRegisterSchema;
+    globalThis.fetch = originalFetch;
     await shutdown();
     await getClient()?.shutdown();
   });
@@ -209,5 +219,38 @@ describe('langchain init schema registration', () => {
       startSpanSpy.mockRestore();
       endSpanSpy.mockRestore();
     }
+  });
+
+  test('sends adapter sdk header for package init and omits runtime metadata body fields', async () => {
+    const recorder = createSdkHeaderFetchRecorder({ includeSpanResponses: true });
+    globalThis.fetch = recorder.fetch;
+
+    init(baseConfig);
+    await withSpan(
+      {
+        name: 'test:header',
+        spanType: 'langchain:llm',
+        inputs: { prompt: 'hi' },
+      },
+      async () => 'ok'
+    );
+    await shutdown();
+
+    expectSdkHeaderHeaders(recorder.getRegisterHeaders(), LANGCHAIN_SDK_HEADER_ENTRY);
+    expectRuntimeMetadataOmitted(recorder.getRegisterPayload());
+  });
+
+  test('sends adapter sdk header for the core provider path', async () => {
+    const recorder = createSdkHeaderFetchRecorder();
+    globalThis.fetch = recorder.fetch;
+
+    const prefactor = initCore({
+      provider: new PrefactorLangChain(),
+      httpConfig: baseConfig.httpConfig,
+    });
+    prefactor.getTracer().startAgentInstance();
+    await prefactor.shutdown();
+
+    expectSdkHeaderHeaders(recorder.getRegisterHeaders(), LANGCHAIN_SDK_HEADER_ENTRY);
   });
 });

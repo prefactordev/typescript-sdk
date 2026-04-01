@@ -72,8 +72,17 @@ export class HttpTransport implements Transport {
   private pendingFinishes = new Map<string, PendingFinish>();
   private pendingChildren = new Map<string, Span[]>();
 
-  constructor(private config: HttpTransportConfig) {
-    const httpClient = new HttpClient(config);
+  /** @internal */
+  constructor(config: HttpTransportConfig, sdkHeaderEntry: string);
+  constructor(config: HttpTransportConfig);
+  constructor(
+    private config: HttpTransportConfig,
+    sdkHeaderEntry?: string
+  ) {
+    const httpClient =
+      sdkHeaderEntry === undefined
+        ? new HttpClient(config)
+        : new HttpClient(config, {}, sdkHeaderEntry);
     this.agentInstanceClient = new AgentInstanceClient(httpClient);
     this.agentSpanClient = new AgentSpanClient(httpClient);
     this.taskExecutor = new TaskExecutor(this.actionQueue, this.processAction, {

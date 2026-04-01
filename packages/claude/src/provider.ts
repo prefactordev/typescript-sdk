@@ -16,9 +16,11 @@ import type {
   ClaudeQuery,
   ClaudeRuntimeController,
 } from './types.js';
+import { PACKAGE_NAME, PACKAGE_VERSION } from './version.js';
 
 export const DEFAULT_CLAUDE_AGENT_SCHEMA = DEFAULT_CLAUDE_AGENT_SCHEMA_BASE;
 const logger = getLogger('claude');
+const SDK_HEADER_ENTRY = `${PACKAGE_NAME}@${PACKAGE_VERSION}`;
 
 export interface PrefactorClaudeOptions {
   query: ClaudeQuery;
@@ -72,6 +74,10 @@ export class PrefactorClaude implements PrefactorProvider<ClaudeMiddleware> {
 
   getDefaultAgentSchema(): Record<string, unknown> | undefined {
     return DEFAULT_CLAUDE_AGENT_SCHEMA;
+  }
+
+  getSdkHeaderEntry(): string {
+    return SDK_HEADER_ENTRY;
   }
 }
 
