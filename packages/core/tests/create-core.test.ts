@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test';
 import { createConfig } from '../src/config.js';
 import { createCore } from '../src/create-core.js';
-import { PACKAGE_NAME, PACKAGE_VERSION } from '../src/version.js';
 import { getActiveTracer } from '../src/tracing/active-tracer.js';
 import { withSpan } from '../src/tracing/with-span.js';
+import { PACKAGE_NAME, PACKAGE_VERSION } from '../src/version.js';
 import {
   createSdkHeaderFetchRecorder,
   expectRuntimeMetadataOmitted,

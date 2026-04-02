@@ -135,8 +135,7 @@ export class HttpTransport implements Transport {
     private config: HttpTransportConfig,
     options: HttpTransportOptions | string = {}
   ) {
-    const resolvedOptions =
-      typeof options === 'string' ? { sdkHeaderEntry: options } : options;
+    const resolvedOptions = typeof options === 'string' ? { sdkHeaderEntry: options } : options;
     const httpClient = resolvedOptions.sdkHeaderEntry
       ? new HttpClient(config, {}, resolvedOptions.sdkHeaderEntry)
       : new HttpClient(config);
