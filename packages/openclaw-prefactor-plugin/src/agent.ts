@@ -10,9 +10,12 @@ import {
   type HttpClientError,
   type HttpTransportConfig,
 } from '@prefactor/core';
+import packageJson from '../package.json' with { type: 'json' };
 import type { Logger } from './logger.js';
 import { getAllSupportedToolDefinitions, normalizeToolName } from './tool-definitions.js';
 import { buildToolSpanSchema } from './tool-span-contract.js';
+
+const SDK_HEADER_ENTRY = `${packageJson.name}@${packageJson.version}`;
 
 // Session state tracking
 interface SessionState {
@@ -194,7 +197,7 @@ export class Agent {
       retryOnStatusCodes: [429, ...Array.from({ length: 100 }, (_, i) => 500 + i)],
     };
 
-    const httpClient = new HttpClient(httpConfig);
+    const httpClient = new HttpClient(httpConfig, {}, SDK_HEADER_ENTRY);
     this.agentInstanceClient = new AgentInstanceClient(httpClient);
     this.agentSpanClient = new AgentSpanClient(httpClient);
 
