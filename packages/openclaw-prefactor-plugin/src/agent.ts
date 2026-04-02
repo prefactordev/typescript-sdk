@@ -11,6 +11,7 @@ import {
   type HttpTransportConfig,
 } from '@prefactor/core';
 import packageJson from '../package.json' with { type: 'json' };
+import { defaultSpanTypeRiskConfigs } from './data-risk-config.js';
 import type { Logger } from './logger.js';
 import { getAllSupportedToolDefinitions, normalizeToolName } from './tool-definitions.js';
 import { buildToolSpanSchema } from './tool-span-contract.js';
@@ -31,6 +32,43 @@ interface AgentVersionForRegister {
   description: string;
 }
 
+// Risk configuration types
+export type ActionProfile = {
+  create_data: 'unknown' | 'allowed' | 'disallowed';
+  read_data: 'unknown' | 'allowed' | 'disallowed';
+  update_data: 'unknown' | 'allowed' | 'disallowed';
+  destroy_data: 'unknown' | 'allowed' | 'disallowed';
+  financial_transactions: 'unknown' | 'allowed' | 'disallowed';
+  external_communication: 'unknown' | 'allowed' | 'disallowed';
+};
+
+export type DataCategories = {
+  classification: 'unknown' | 'public' | 'internal' | 'confidential' | 'restricted' | 'secret';
+  personal_identifiers: 'unknown' | 'included' | 'excluded';
+  contact_information: 'unknown' | 'included' | 'excluded';
+  financial_information: 'unknown' | 'included' | 'excluded';
+  health_and_medical: 'unknown' | 'included' | 'excluded';
+  criminal_justice: 'unknown' | 'included' | 'excluded';
+  authentication_and_secrets: 'unknown' | 'included' | 'excluded';
+  organisational_confidential: 'unknown' | 'included' | 'excluded';
+  minors_data: 'unknown' | 'included' | 'excluded';
+  location_and_tracking: 'unknown' | 'included' | 'excluded';
+  behavioural_and_inferred: 'unknown' | 'included' | 'excluded';
+  gdpr_racial_or_ethnic_origin: 'unknown' | 'included' | 'excluded';
+  gdpr_political_opinions: 'unknown' | 'included' | 'excluded';
+  gdpr_religious_or_philosophical_beliefs: 'unknown' | 'included' | 'excluded';
+  gdpr_trade_union_membership: 'unknown' | 'included' | 'excluded';
+  gdpr_genetic_data: 'unknown' | 'included' | 'excluded';
+  gdpr_biometric_for_identification: 'unknown' | 'included' | 'excluded';
+  gdpr_sex_life_or_sexual_orientation: 'unknown' | 'included' | 'excluded';
+};
+
+export type DataRisk = {
+  action_profile: ActionProfile;
+  params_data_categories: DataCategories;
+  result_data_categories: DataCategories;
+};
+
 // Agent schema version info for registration
 interface SpanTypeSchema {
   name: string;
@@ -45,6 +83,7 @@ interface SpanTypeSchema {
   template?: string | null;
   result_template?: string | null;
   description?: string;
+  data_risk?: DataRisk;
 }
 
 interface AgentSchemaVersionForRegister extends Record<string, unknown> {
@@ -149,6 +188,7 @@ export interface AgentConfig {
   pluginVersion?: string;
   userAgentVersion?: string;
   userAgentName?: string;
+  spanTypeRiskConfigs?: Record<string, DataRisk>;
 }
 
 /**
@@ -214,6 +254,7 @@ export class Agent {
       description: `${agentName} — OpenClaw ${openclawVersion} with Prefactor Plugin ${pluginVersion}`,
     } satisfies AgentVersionForRegister;
 
+    const spanTypeRiskConfigs = config.spanTypeRiskConfigs ?? defaultSpanTypeRiskConfigs;
     this.agentSchemaVersion = {
       external_identifier: `plugin-${pluginVersion}`,
       span_type_schemas: [
@@ -227,6 +268,7 @@ export class Agent {
               raw: { type: 'object', description: 'Raw OpenClaw message context' },
             },
           },
+          data_risk: spanTypeRiskConfigs?.['openclaw:user_message'],
         },
         // Generic fallback for unknown tools
         {
@@ -247,9 +289,10 @@ export class Agent {
               isError: { type: 'boolean', description: 'Whether tool failed' },
             },
           },
+          data_risk: spanTypeRiskConfigs?.['openclaw:tool_call'],
         },
         // Supported tool-specific schemas
-        ...this.buildSupportedToolSchemas(),
+        ...this.buildSupportedToolSchemas(spanTypeRiskConfigs),
         {
           name: 'openclaw:assistant_response',
           description: 'Assistant response generation span',
@@ -269,6 +312,7 @@ export class Agent {
               text: { type: 'string', description: 'Assistant response text' },
             },
           },
+          data_risk: spanTypeRiskConfigs?.['openclaw:assistant_response'],
         },
         {
           name: 'openclaw:agent_run',
@@ -280,6 +324,7 @@ export class Agent {
               raw: { type: 'object', description: 'Raw OpenClaw context' },
             },
           },
+          data_risk: spanTypeRiskConfigs?.['openclaw:agent_run'],
         },
         {
           name: 'openclaw:session',
@@ -291,6 +336,7 @@ export class Agent {
               createdAt: { type: 'string', description: 'Session created timestamp' },
             },
           },
+          data_risk: spanTypeRiskConfigs?.['openclaw:session'],
         },
         {
           name: 'openclaw:user_interaction',
@@ -302,6 +348,7 @@ export class Agent {
               startedAt: { type: 'string', description: 'User interaction timestamp' },
             },
           },
+          data_risk: spanTypeRiskConfigs?.['openclaw:user_interaction'],
         },
         {
           name: 'openclaw:agent_thinking',
@@ -323,6 +370,7 @@ export class Agent {
               thinking: { type: 'string', description: 'Agent thinking content' },
             },
           },
+          data_risk: spanTypeRiskConfigs?.['openclaw:agent_thinking'],
         },
       ],
     };
@@ -368,7 +416,9 @@ export class Agent {
    * Builds span type schemas for supported tools (read, write, edit, exec, web_search, web_fetch, browser).
    * Each tool gets its own schema with proper input validation and tool-specific templates.
    */
-  private buildSupportedToolSchemas(): SpanTypeSchema[] {
+  private buildSupportedToolSchemas(
+    spanTypeRiskConfigs: Record<string, DataRisk>
+  ): SpanTypeSchema[] {
     const supportedTools = getAllSupportedToolDefinitions();
     const schemas: SpanTypeSchema[] = [];
 
@@ -401,6 +451,7 @@ export class Agent {
             output: { type: 'string' },
           },
         },
+        data_risk: spanTypeRiskConfigs[spanType],
       });
     }
 
