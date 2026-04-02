@@ -11,6 +11,7 @@ import {
   type HttpTransportConfig,
 } from '@prefactor/core';
 import packageJson from '../package.json' with { type: 'json' };
+import { defaultSpanTypeRiskConfigs } from './data-risk-config.js';
 import type { Logger } from './logger.js';
 import { getAllSupportedToolDefinitions, normalizeToolName } from './tool-definitions.js';
 import { buildToolSpanSchema } from './tool-span-contract.js';
@@ -253,7 +254,7 @@ export class Agent {
       description: `${agentName} — OpenClaw ${openclawVersion} with Prefactor Plugin ${pluginVersion}`,
     } satisfies AgentVersionForRegister;
 
-    const spanTypeRiskConfigs = config.spanTypeRiskConfigs;
+    const spanTypeRiskConfigs = config.spanTypeRiskConfigs ?? defaultSpanTypeRiskConfigs;
     this.agentSchemaVersion = {
       external_identifier: `plugin-${pluginVersion}`,
       span_type_schemas: [
@@ -291,7 +292,7 @@ export class Agent {
           data_risk: spanTypeRiskConfigs?.['openclaw:tool_call'],
         },
         // Supported tool-specific schemas
-        ...this.buildSupportedToolSchemas(),
+        ...this.buildSupportedToolSchemas(spanTypeRiskConfigs),
         {
           name: 'openclaw:assistant_response',
           description: 'Assistant response generation span',
@@ -415,7 +416,9 @@ export class Agent {
    * Builds span type schemas for supported tools (read, write, edit, exec, web_search, web_fetch, browser).
    * Each tool gets its own schema with proper input validation and tool-specific templates.
    */
-  private buildSupportedToolSchemas(): SpanTypeSchema[] {
+  private buildSupportedToolSchemas(
+    spanTypeRiskConfigs: Record<string, DataRisk>
+  ): SpanTypeSchema[] {
     const supportedTools = getAllSupportedToolDefinitions();
     const schemas: SpanTypeSchema[] = [];
 
@@ -448,6 +451,7 @@ export class Agent {
             output: { type: 'string' },
           },
         },
+        data_risk: spanTypeRiskConfigs[spanType],
       });
     }
 

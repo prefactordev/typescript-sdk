@@ -645,11 +645,30 @@ export default function register(api: OpenClawPluginApi) {
 // Re-export types for TypeDoc visibility
 export type { ActionProfile, Agent, AgentConfig, DataCategories, DataRisk } from './agent.js';
 export { createAgent } from './agent.js';
+
+// Data risk configuration exports
+export {
+  agentRunRisk,
+  agentThinkingRisk,
+  assistantResponseRisk,
+  createRiskConfig,
+  defaultSpanTypeRiskConfigs,
+  sessionRisk,
+  toolBrowserRisk,
+  toolEditRisk,
+  toolExecRisk,
+  toolReadRisk,
+  toolRisk,
+  toolWebFetchRisk,
+  toolWebSearchRisk,
+  toolWriteRisk,
+  userInteractionRisk,
+  userMessageRisk,
+} from './data-risk-config.js';
 export type { Logger, LogLevel } from './logger.js';
 export { createLogger } from './logger.js';
 export type { SessionStateManager } from './session-state.js';
 export { createSessionStateManager } from './session-state.js';
-
 // Tool schema exports
 export type { ToolDefinition } from './tool-definitions.js';
 export {
