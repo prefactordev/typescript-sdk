@@ -643,7 +643,7 @@ export default function register(api: OpenClawPluginApi) {
 }
 
 // Re-export types for TypeDoc visibility
-export type { Agent, AgentConfig } from './agent.js';
+export type { ActionProfile, Agent, AgentConfig, DataCategories, DataRisk } from './agent.js';
 export { createAgent } from './agent.js';
 export type { Logger, LogLevel } from './logger.js';
 export { createLogger } from './logger.js';
