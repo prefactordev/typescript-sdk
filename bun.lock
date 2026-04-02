@@ -90,8 +90,8 @@
         "langchain": "^1.0.0",
       },
     },
-    "packages/openclaw": {
-      "name": "@prefactor/openclaw",
+    "packages/openclaw-prefactor-plugin": {
+      "name": "@prefactor/openclaw-prefactor-plugin",
       "version": "0.0.21",
       "dependencies": {
         "zod": "^4.0.0",
@@ -385,7 +385,7 @@
 
     "@prefactor/langchain": ["@prefactor/langchain@workspace:packages/langchain"],
 
-    "@prefactor/openclaw": ["@prefactor/openclaw@workspace:packages/openclaw"],
+    "@prefactor/openclaw-prefactor-plugin": ["@prefactor/openclaw-prefactor-plugin@workspace:packages/openclaw-prefactor-plugin"],
 
     "@prefactor/pfid": ["@prefactor/pfid@0.1.0", "", {}, "sha512-39nHAYgYlSuc1zHKa9jMdNdsobKJ3AElGcPGc9Vvk0oLf1CQ7WNrZ1P4JCVuSzgbz5mszKFCBoJCej00ogBKHA=="],
 
@@ -1249,7 +1249,7 @@
 
     "@prefactor/cli/@types/bun": ["@types/bun@1.3.9", "", { "dependencies": { "bun-types": "1.3.9" } }, "sha512-KQ571yULOdWJiMH+RIWIOZ7B2RXQGpL1YQrBtLIV3FqDcCu6FsbFUBwhdKUlCKUpS3PJDsHlJ1QKlpxoVR+xtw=="],
 
-    "@prefactor/openclaw/@types/node": ["@types/node@22.19.15", "", { "dependencies": { "undici-types": "~6.21.0" } }, "sha512-F0R/h2+dsy5wJAUe3tAU6oqa2qbWY5TpNfL/RGmo1y38hiyO1w3x2jPtt76wmuaJI4DQnOBu21cNXQ2STIUUWg=="],
+    "@prefactor/openclaw-prefactor-plugin/@types/node": ["@types/node@22.19.15", "", { "dependencies": { "undici-types": "~6.21.0" } }, "sha512-F0R/h2+dsy5wJAUe3tAU6oqa2qbWY5TpNfL/RGmo1y38hiyO1w3x2jPtt76wmuaJI4DQnOBu21cNXQ2STIUUWg=="],
 
     "@types/yauzl/@types/node": ["@types/node@25.5.0", "", { "dependencies": { "undici-types": "~7.18.0" } }, "sha512-jp2P3tQMSxWugkCUKLRPVUpGaL5MVFwF8RDuSRztfwgN1wmqJeMSbKlnEtQqU8UrhTmzEmZdu2I6v2dpp7XIxw=="],
 
