@@ -17,14 +17,14 @@ export function buildSdkRequestHeader(...entries: Array<string | null | undefine
 function normalizeSdkHeaderEntry(entry: string): string {
   const atIndex = entry.lastIndexOf('@');
   if (atIndex <= 0) {
-    return entry.replace(/^@+/, '');
+    return entry;
   }
 
-  const packageName = entry.slice(0, atIndex).replace(/^@+/, '');
+  const packageName = entry.slice(0, atIndex);
   const version = entry.slice(atIndex + 1);
   return version ? `${packageName}@${version}` : packageName;
 }
 
 function formatSdkHeaderEntry(packageName: string, version: string): string {
-  return `${packageName.replace(/^@+/, '')}@${version}`;
+  return `${packageName}@${version}`;
 }

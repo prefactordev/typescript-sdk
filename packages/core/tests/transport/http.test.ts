@@ -3,7 +3,7 @@ import { type Span, SpanStatus, SpanType } from '../../src/tracing/span.js';
 import { HttpTransport } from '../../src/transport/http.js';
 import { PACKAGE_NAME, PACKAGE_VERSION } from '../../src/version.js';
 
-const DEFAULT_SDK_HEADER = `${PACKAGE_NAME.replace(/^@/, '')}@${PACKAGE_VERSION}`;
+const DEFAULT_SDK_HEADER = `${PACKAGE_NAME}@${PACKAGE_VERSION}`;
 
 const createConfig = () => ({
   apiUrl: 'https://example.com',

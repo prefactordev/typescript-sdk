@@ -9,7 +9,7 @@ import {
 import { DEFAULT_CLAUDE_AGENT_SCHEMA, PrefactorClaude } from '../src/index.js';
 import { PACKAGE_NAME, PACKAGE_VERSION } from '../src/version.js';
 
-const CLAUDE_SDK_HEADER_ENTRY = `${PACKAGE_NAME.replace(/^@/, '')}@${PACKAGE_VERSION}`;
+const CLAUDE_SDK_HEADER_ENTRY = `${PACKAGE_NAME}@${PACKAGE_VERSION}`;
 
 describe('PrefactorClaude', () => {
   const mockQuery = (() => ({}) as Query) as typeof import('@anthropic-ai/claude-agent-sdk').query;

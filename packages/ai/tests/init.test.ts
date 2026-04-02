@@ -27,7 +27,7 @@ const baseConfig = {
   },
 };
 
-const AI_SDK_HEADER_ENTRY = `${PACKAGE_NAME.replace(/^@/, '')}@${PACKAGE_VERSION}`;
+const AI_SDK_HEADER_ENTRY = `${PACKAGE_NAME}@${PACKAGE_VERSION}`;
 
 function createTestSpan(spanId: string, spanType: string): Span {
   return {

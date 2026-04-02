@@ -19,7 +19,7 @@ const baseConfig = {
   },
 };
 
-const LANGCHAIN_SDK_HEADER_ENTRY = `${PACKAGE_NAME.replace(/^@/, '')}@${PACKAGE_VERSION}`;
+const LANGCHAIN_SDK_HEADER_ENTRY = `${PACKAGE_NAME}@${PACKAGE_VERSION}`;
 
 describe('langchain init schema registration', () => {
   const originalRegisterSchema = AgentInstanceManager.prototype.registerSchema;
