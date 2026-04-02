@@ -43,6 +43,7 @@ interface SpanTypeSchema {
     properties: Record<string, { type: string; description?: string }>;
   };
   template?: string | null;
+  result_template?: string | null;
   description?: string;
 }
 
@@ -336,9 +337,36 @@ export class Agent {
     });
   }
 
+  // Tool parameter templates with safety defaults
+  private static readonly TOOL_PARAM_TEMPLATES: Record<string, string> = {
+    read: '{{ toolName | default: "read" }}: {{ input.path | default: "(unknown file)" }}{% if input.offset %}:{{ input.offset }}{% endif %}{% if input.limit %}-{{ input.offset | plus: input.limit }}{% endif %}',
+    write: '{{ toolName | default: "write" }}: {{ input.path | default: "(unknown file)" }}',
+    edit: '{{ toolName | default: "edit" }}: {{ input.path | default: "(unknown file)" }}',
+    exec: '{{ toolName | default: "exec" }}: `{% assign cmd = input.command | default: "(no command)" %}{% if cmd.size > 50 %}{{ cmd | slice: 0, 50 }}...{% else %}{{ cmd }}{% endif %}`{% if input.workdir %} (in {{ input.workdir }}){% endif %}',
+    web_search:
+      '{{ toolName | default: "web_search" }}: "{{ input.query | default: "(empty query)" }}"{% if input.count %} (max {{ input.count }}){% endif %}{% if input.freshness %} [{{ input.freshness }}]{% endif %}',
+    web_fetch:
+      '{{ toolName | default: "web_fetch" }}: {% assign url = input.url | default: "(no URL)" %}{% if url.size > 60 %}{{ url | slice: 0, 60 }}...{% else %}{{ url }}{% endif %}{% if input.extractMode %} [{{ input.extractMode }}]{% endif %}',
+    browser:
+      '{{ toolName | default: "browser" }}: {{ input.action | default: "(unknown action)" }}{% if input.url %}: {{ input.url }}{% endif %}{% if input.targetId %} (tab {{ input.targetId }}){% endif %}',
+  };
+
+  // Tool result templates with safety defaults
+  private static readonly TOOL_RESULT_TEMPLATES: Record<string, string> = {
+    read: '{% if output %}{{ output | size | default: 0 }} chars{% else %}(no output){% endif %}',
+    write: '{% if output %}written{% else %}done{% endif %}',
+    edit: '{% if output %}edited{% else %}done{% endif %}',
+    exec: '{% if output.exitCode == 0 %}exit 0{% elsif output.exitCode %}exit {{ output.exitCode }}{% else %}done{% endif %}',
+    web_search:
+      '{% if output.results %}{{ output.results | size | default: 0 }} results{% elsif output %}done{% else %}(no output){% endif %}',
+    web_fetch:
+      '{% if output %}{{ output | size | default: 0 }} chars{% else %}(no output){% endif %}',
+    browser: '{% if output.success %}done{% elsif output.error %}error{% else %}done{% endif %}',
+  };
+
   /**
    * Builds span type schemas for supported tools (read, write, edit, exec, web_search, web_fetch, browser).
-   * Each tool gets its own schema with proper input validation.
+   * Each tool gets its own schema with proper input validation and tool-specific templates.
    */
   private buildSupportedToolSchemas(): SpanTypeSchema[] {
     const supportedTools = getAllSupportedToolDefinitions();
@@ -356,7 +384,10 @@ export class Agent {
       schemas.push({
         name: spanType,
         description: definition.description,
-        template: `{{ toolName }} - {{ input }}`,
+        template:
+          Agent.TOOL_PARAM_TEMPLATES[canonicalName] || '{{ toolName | default: "(unknown)" }}',
+        result_template:
+          Agent.TOOL_RESULT_TEMPLATES[canonicalName] || '{{ output | default: "(completed)" }}',
         params_schema: (schemaProperties?.inputs as SpanTypeSchema['params_schema']) ?? {
           type: 'object',
           properties: {
