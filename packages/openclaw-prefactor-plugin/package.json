@@ -14,7 +14,6 @@
   "files": [
     "dist/index.js",
     "dist/index.cjs",
-    "skills/prefactor-fixup/SKILL.md",
     "openclaw.plugin.json",
     "README.md",
     "LICENSE"
