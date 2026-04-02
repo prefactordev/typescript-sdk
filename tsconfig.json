@@ -6,6 +6,6 @@
     { "path": "./packages/ai" },
     { "path": "./packages/claude" },
     { "path": "./packages/langchain" },
-    { "path": "./packages/openclaw" },
+    { "path": "./packages/openclaw-prefactor-plugin" },
   ],
 }

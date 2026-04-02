@@ -2,7 +2,7 @@
  * OpenClaw plugin for Prefactor observability. Provides automatic tracing of agent
  * lifecycle events including sessions, user interactions, agent runs, and tool calls.
  *
- * ## `@prefactor/openclaw` overview
+ * ## `@prefactor/openclaw-prefactor-plugin` overview
  *
  * This plugin hooks into OpenClaw's lifecycle events to create a hierarchical span
  * structure for distributed tracing. The span hierarchy follows:
@@ -44,7 +44,7 @@
  * - {@link Logger} - Structured logger for plugin diagnostics
  * - {@link register} - Plugin entry point (used by OpenClaw, not imported directly)
  *
- * @module @prefactor/openclaw
+ * @module @prefactor/openclaw-prefactor-plugin
  * @category Packages
  * @packageDocumentation
  */
@@ -649,3 +649,22 @@ export type { Logger, LogLevel } from './logger.js';
 export { createLogger } from './logger.js';
 export type { SessionStateManager } from './session-state.js';
 export { createSessionStateManager } from './session-state.js';
+
+// Tool schema exports
+export type { ToolDefinition } from './tool-definitions.js';
+export {
+  getAllSupportedToolDefinitions,
+  getToolDefinition,
+  getToolInputSchema,
+  isSupportedTool,
+  normalizeToolName,
+  SUPPORTED_TOOL_DEFINITIONS,
+  TOOL_ALIAS_MAP,
+} from './tool-definitions.js';
+export {
+  buildToolSpanSchema,
+  createToolSpanInputs,
+  createToolSpanOutputs,
+  createToolSpanResultPayload,
+  GENERIC_OBJECT_SCHEMA,
+} from './tool-span-contract.js';

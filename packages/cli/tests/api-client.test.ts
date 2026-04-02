@@ -117,7 +117,7 @@ describe('ApiClient', () => {
     const headers = new Headers(init?.headers);
     expect(init?.method).toBe('POST');
     expect(init?.body).toBe('{"name":"demo"}');
-    expect(headers.get('x-prefactor-sdk')).toMatch(/^prefactor\/core@/);
+    expect(headers.get('x-prefactor-sdk')).toMatch(/^@prefactor\/core@/);
     expect(headers.get('content-type')).toBe('application/json');
   });
 

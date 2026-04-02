@@ -1,6 +1,6 @@
 {
-  "name": "@prefactor/openclaw",
-  "version": "0.0.21",
+  "name": "@prefactor/openclaw-prefactor-plugin",
+  "version": "0.0.22",
   "description": "OpenClaw lifecycle event monitoring and instrumentation for Prefactor",
   "type": "module",
   "main": "./dist/index.cjs",
@@ -14,7 +14,6 @@
   "files": [
     "dist/index.js",
     "dist/index.cjs",
-    "skills/prefactor-fixup/SKILL.md",
     "openclaw.plugin.json",
     "README.md",
     "LICENSE"
@@ -38,7 +37,7 @@
     "@prefactor/core": "^0.3.0"
   },
   "devDependencies": {
-    "openclaw": "^2026.2.24",
+    "openclaw": "^2026.3.28",
     "typescript": "^5.0.0",
     "@types/node": "^22.0.0"
   },
@@ -46,6 +45,7 @@
     "extensions": ["./dist/index.js"]
   },
   "scripts": {
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "bun test"
   }
 }

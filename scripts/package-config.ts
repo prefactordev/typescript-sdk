@@ -47,9 +47,9 @@ export const PACKAGE_CONFIGS: PackageConfig[] = [
     generateVersionModule: true,
   },
   {
-    name: '@prefactor/openclaw',
-    path: 'packages/openclaw',
-    entrypoint: './packages/openclaw/src/index.ts',
+    name: '@prefactor/openclaw-prefactor-plugin',
+    path: 'packages/openclaw-prefactor-plugin',
+    entrypoint: './packages/openclaw-prefactor-plugin/src/index.ts',
     external: ['@prefactor/core', 'zod'],
   },
 ];

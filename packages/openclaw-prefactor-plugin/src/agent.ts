@@ -10,7 +10,12 @@ import {
   type HttpClientError,
   type HttpTransportConfig,
 } from '@prefactor/core';
+import packageJson from '../package.json' with { type: 'json' };
 import type { Logger } from './logger.js';
+import { getAllSupportedToolDefinitions, normalizeToolName } from './tool-definitions.js';
+import { buildToolSpanSchema } from './tool-span-contract.js';
+
+const SDK_HEADER_ENTRY = `${packageJson.name}@${packageJson.version}`;
 
 // Session state tracking
 interface SessionState {
@@ -38,6 +43,7 @@ interface SpanTypeSchema {
     properties: Record<string, { type: string; description?: string }>;
   };
   template?: string | null;
+  result_template?: string | null;
   description?: string;
 }
 
@@ -192,7 +198,7 @@ export class Agent {
       retryOnStatusCodes: [429, ...Array.from({ length: 100 }, (_, i) => 500 + i)],
     };
 
-    const httpClient = new HttpClient(httpConfig);
+    const httpClient = new HttpClient(httpConfig, {}, SDK_HEADER_ENTRY);
     this.agentInstanceClient = new AgentInstanceClient(httpClient);
     this.agentSpanClient = new AgentSpanClient(httpClient);
 
@@ -222,9 +228,10 @@ export class Agent {
             },
           },
         },
+        // Generic fallback for unknown tools
         {
-          name: 'openclaw:tool_call',
-          description: 'Tool execution span',
+          name: 'openclaw:tool',
+          description: 'Generic tool execution span for unknown tools',
           template: '{{ toolName }}',
           params_schema: {
             type: 'object',
@@ -241,6 +248,8 @@ export class Agent {
             },
           },
         },
+        // Supported tool-specific schemas
+        ...this.buildSupportedToolSchemas(),
         {
           name: 'openclaw:assistant_response',
           description: 'Assistant response generation span',
@@ -326,6 +335,92 @@ export class Agent {
       agentVersion: this.agentVersion.external_identifier,
       schemaVersion: this.agentSchemaVersion.external_identifier,
     });
+  }
+
+  // Tool parameter templates with safety defaults
+  private static readonly TOOL_PARAM_TEMPLATES: Record<string, string> = {
+    read: '{{ toolName | default: "read" }}: {{ input.file_path | default: input.path | default: "(unknown file)" }}{% if input.offset %}:{{ input.offset }}{% endif %}{% if input.limit %}-{{ input.offset | plus: input.limit }}{% endif %}',
+    write: '{{ toolName | default: "write" }}: {{ input.path | default: "(unknown file)" }}',
+    edit: '{{ toolName | default: "edit" }}: {{ input.path | default: "(unknown file)" }}',
+    exec: '{{ toolName | default: "exec" }}: `{% assign cmd = input.command | default: "(no command)" %}{% if cmd.size > 50 %}{{ cmd | slice: 0, 50 }}...{% else %}{{ cmd }}{% endif %}`{% if input.workdir %} (in {{ input.workdir }}){% endif %}',
+    web_search:
+      '{{ toolName | default: "web_search" }}: "{{ input.query | default: "(empty query)" }}"{% if input.count %} (max {{ input.count }}){% endif %}{% if input.freshness %} [{{ input.freshness }}]{% endif %}',
+    web_fetch:
+      '{{ toolName | default: "web_fetch" }}: {% assign url = input.url | default: "(no URL)" %}{% if url.size > 60 %}{{ url | slice: 0, 60 }}...{% else %}{{ url }}{% endif %}{% if input.extractMode %} [{{ input.extractMode }}]{% endif %}',
+    browser:
+      '{{ toolName | default: "browser" }}: {{ input.action | default: "(unknown action)" }}{% if input.url %}: {{ input.url }}{% endif %}{% if input.targetId %} (tab {{ input.targetId }}){% endif %}',
+  };
+
+  // Tool result templates with safety defaults
+  private static readonly TOOL_RESULT_TEMPLATES: Record<string, string> = {
+    read: '{% if output %}{{ output | size | default: 0 }} chars{% else %}(no output){% endif %}',
+    write: '{% if output %}written{% else %}done{% endif %}',
+    edit: '{% if output %}edited{% else %}done{% endif %}',
+    exec: '{% if output.exitCode == 0 %}exit 0{% elsif output.exitCode %}exit {{ output.exitCode }}{% else %}done{% endif %}',
+    web_search:
+      '{% if output.results %}{{ output.results | size | default: 0 }} results{% elsif output %}done{% else %}(no output){% endif %}',
+    web_fetch:
+      '{% if output %}{{ output | size | default: 0 }} chars{% else %}(no output){% endif %}',
+    browser: '{% if output.success %}done{% elsif output.error %}error{% else %}done{% endif %}',
+  };
+
+  /**
+   * Builds span type schemas for supported tools (read, write, edit, exec, web_search, web_fetch, browser).
+   * Each tool gets its own schema with proper input validation and tool-specific templates.
+   */
+  private buildSupportedToolSchemas(): SpanTypeSchema[] {
+    const supportedTools = getAllSupportedToolDefinitions();
+    const schemas: SpanTypeSchema[] = [];
+
+    for (const [canonicalName, definition] of Object.entries(supportedTools)) {
+      const spanType = `openclaw:tool:${canonicalName}`;
+      const toolSchema = buildToolSpanSchema(definition.inputSchema);
+
+      // Extract nested schemas from the tool-span-contract schema
+      const schemaProperties = toolSchema.properties as
+        | Record<string, { type: string; properties?: Record<string, unknown> }>
+        | undefined;
+
+      schemas.push({
+        name: spanType,
+        description: definition.description,
+        template:
+          Agent.TOOL_PARAM_TEMPLATES[canonicalName] || '{{ toolName | default: "(unknown)" }}',
+        result_template:
+          Agent.TOOL_RESULT_TEMPLATES[canonicalName] || '{{ output | default: "(completed)" }}',
+        params_schema: (schemaProperties?.inputs as SpanTypeSchema['params_schema']) ?? {
+          type: 'object',
+          properties: {
+            toolName: { type: 'string' },
+            input: { type: 'object' },
+          },
+        },
+        result_schema: (schemaProperties?.outputs as SpanTypeSchema['result_schema']) ?? {
+          type: 'object',
+          properties: {
+            output: { type: 'string' },
+          },
+        },
+      });
+    }
+
+    return schemas;
+  }
+
+  /**
+   * Resolves a tool name to its span type.
+   * Returns the specific span type for supported tools, or the generic fallback.
+   */
+  resolveToolSpanType(toolName: string): string {
+    const canonicalName = normalizeToolName(toolName);
+    const supportedTools = getAllSupportedToolDefinitions();
+
+    if (canonicalName in supportedTools) {
+      return `openclaw:tool:${canonicalName}`;
+    }
+
+    // Fallback to generic tool span type
+    return 'openclaw:tool';
   }
 
   private getOrCreateSession(sessionKey: string): SessionState {

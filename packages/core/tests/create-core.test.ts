@@ -17,7 +17,7 @@ const createWarnSpy = () => {
   return { warnMessages, warnSpy };
 };
 
-const CORE_SDK_HEADER_ENTRY = `${PACKAGE_NAME.replace(/^@/, '')}@${PACKAGE_VERSION}`;
+const CORE_SDK_HEADER_ENTRY = `${PACKAGE_NAME}@${PACKAGE_VERSION}`;
 
 describe('createCore', () => {
   const originalFetch = globalThis.fetch;

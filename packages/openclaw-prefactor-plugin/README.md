@@ -1,4 +1,4 @@
-# @prefactor/openclaw
+# @prefactor/openclaw-prefactor-plugin
 
 OpenClaw lifecycle event monitoring and instrumentation for Prefactor.
 
@@ -8,27 +8,27 @@ This plugin provides lifecycle event monitoring and instrumentation for OpenClaw
 
 ## Getting Started
 
-To get started with `@prefactor/openclaw`, follow these steps:
+To get started with `@prefactor/openclaw-prefactor-plugin`, follow these steps:
 
 1. Install the plugin:
 
 ```bash
-openclaw plugins install @prefactor/openclaw
+openclaw plugins install @prefactor/openclaw-prefactor-plugin
 ```
 
 2. Enable the plugin:
 
 ```bash
-openclaw plugins enable prefactor
+openclaw plugins enable openclaw-prefactor-plugin
 ```
 
 3. Get your Prefactor agent credentials from the Prefactor dashboard.
 
 4. Configure the plugin to use your agent credentials with following commands:
 ```bash
-openclaw config set plugins.entries.prefactor.config.agentId "${PREFACTOR_AGENT_ID}"
-openclaw config set plugins.entries.prefactor.config.apiToken "${PREFACTOR_API_TOKEN}"
-openclaw config set plugins.entries.prefactor.config.apiUrl "${PREFACTOR_API_URL}"
+openclaw config set plugins.entries.openclaw-prefactor-plugin.config.agentId "${PREFACTOR_AGENT_ID}"
+openclaw config set plugins.entries.openclaw-prefactor-plugin.config.apiToken "${PREFACTOR_API_TOKEN}"
+openclaw config set plugins.entries.openclaw-prefactor-plugin.config.apiUrl "${PREFACTOR_API_URL}"
 ```
 
 ## Configuration
@@ -39,7 +39,7 @@ Enable the plugin in `~/.openclaw/.openclaw.json`:
 {
   "plugins": {
     "entries": {
-      "prefactor": {
+      "openclaw-prefactor-plugin": {
         "enabled": true,
         "config": {
           "agentId": "${PREFACTOR_AGENT_ID}",
@@ -56,25 +56,25 @@ Enable the plugin in `~/.openclaw/.openclaw.json`:
 
 ```bash
 # Install the plugin
-openclaw plugins install @prefactor/openclaw
+openclaw plugins install @prefactor/openclaw-prefactor-plugin
 
 # Upgrade to latest version
-openclaw plugins update @prefactor/openclaw
+openclaw plugins update @prefactor/openclaw-prefactor-plugin
 
 # List all plugins
 openclaw plugins list
 
 # Check plugin info (shows current version)
-openclaw plugins info prefactor
+openclaw plugins info openclaw-prefactor-plugin
 
 # Enable/disable
-openclaw plugins enable prefactor
-openclaw plugins disable prefactor
+openclaw plugins enable openclaw-prefactor-plugin
+openclaw plugins disable openclaw-prefactor-plugin
 
 # Configuration
-openclaw config set plugins.entries.prefactor.config.agentId "${PREFACTOR_AGENT_ID}"
-openclaw config set plugins.entries.prefactor.config.apiToken "${PREFACTOR_API_TOKEN}"
-openclaw config set plugins.entries.prefactor.config.apiUrl "${PREFACTOR_API_URL}"
+openclaw config set plugins.entries.openclaw-prefactor-plugin.config.agentId "${PREFACTOR_AGENT_ID}"
+openclaw config set plugins.entries.openclaw-prefactor-plugin.config.apiToken "${PREFACTOR_API_TOKEN}"
+openclaw config set plugins.entries.openclaw-prefactor-plugin.config.apiUrl "${PREFACTOR_API_URL}"
 ```
 
 ## Exports
@@ -82,7 +82,7 @@ openclaw config set plugins.entries.prefactor.config.apiUrl "${PREFACTOR_API_URL
 ### Plugin Entry Point
 
 ```typescript
-import register from '@prefactor/openclaw';
+import register from '@prefactor/openclaw-prefactor-plugin';
 
 // Used by OpenClaw to load the plugin
 // Do not import directly in user code
@@ -91,19 +91,19 @@ import register from '@prefactor/openclaw';
 ### Agent HTTP Client
 
 ```typescript
-import { Agent, AgentConfig, createAgent } from '@prefactor/openclaw';
+import { Agent, AgentConfig, createAgent } from '@prefactor/openclaw-prefactor-plugin';
 ```
 
 ### Session State Manager
 
 ```typescript
-import { SessionStateManager, createSessionStateManager } from '@prefactor/openclaw';
+import { SessionStateManager, createSessionStateManager } from '@prefactor/openclaw-prefactor-plugin';
 ```
 
 ### Logging
 
 ```typescript
-import { Logger, LogLevel, createLogger } from '@prefactor/openclaw';
+import { Logger, LogLevel, createLogger } from '@prefactor/openclaw-prefactor-plugin';
 ```
 
 ## Span Types
