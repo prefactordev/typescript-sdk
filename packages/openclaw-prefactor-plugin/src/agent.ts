@@ -339,7 +339,7 @@ export class Agent {
 
   // Tool parameter templates with safety defaults
   private static readonly TOOL_PARAM_TEMPLATES: Record<string, string> = {
-    read: '{{ toolName | default: "read" }}: {{ input.path | default: "(unknown file)" }}{% if input.offset %}:{{ input.offset }}{% endif %}{% if input.limit %}-{{ input.offset | plus: input.limit }}{% endif %}',
+    read: '{{ toolName | default: "read" }}: {{ input.file_path | default: input.path | default: "(unknown file)" }}{% if input.offset %}:{{ input.offset }}{% endif %}{% if input.limit %}-{{ input.offset | plus: input.limit }}{% endif %}',
     write: '{{ toolName | default: "write" }}: {{ input.path | default: "(unknown file)" }}',
     edit: '{{ toolName | default: "edit" }}: {{ input.path | default: "(unknown file)" }}',
     exec: '{{ toolName | default: "exec" }}: `{% assign cmd = input.command | default: "(no command)" %}{% if cmd.size > 50 %}{{ cmd | slice: 0, 50 }}...{% else %}{{ cmd }}{% endif %}`{% if input.workdir %} (in {{ input.workdir }}){% endif %}',
