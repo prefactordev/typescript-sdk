@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { PrefactorFatalError } from '../../src/errors.js';
 import { type Span, SpanStatus, SpanType } from '../../src/tracing/span.js';
 import { HttpTransport } from '../../src/transport/http.js';
 import { PACKAGE_NAME, PACKAGE_VERSION } from '../../src/version.js';
@@ -236,7 +237,7 @@ describe('HttpTransport', () => {
     ]);
   });
 
-  test('requires new agent identifier after schema changes', async () => {
+  test('throws when schema changes without a new agent identifier', async () => {
     const fetchCalls: Array<{ url: string; options?: RequestInit }> = [];
     globalThis.fetch = (async (url, options) => {
       fetchCalls.push({ url: String(url), options });
@@ -257,14 +258,78 @@ describe('HttpTransport', () => {
     transport.registerSchema({ type: 'object' });
     transport.startAgentInstance({ agentIdentifier: 'v1.0.0' });
     transport.registerSchema({ type: 'object', properties: { name: { type: 'string' } } });
-    transport.startAgentInstance({ agentIdentifier: 'v1.0.0' });
-    transport.startAgentInstance({ agentIdentifier: 'v1.1.0' });
+
+    let thrownError: unknown;
+    try {
+      transport.startAgentInstance({ agentIdentifier: 'v1.0.0' });
+    } catch (error) {
+      thrownError = error;
+    }
+
+    expect(thrownError).toBeInstanceOf(PrefactorFatalError);
+
+    let laterError: unknown;
+    try {
+      transport.startAgentInstance({ agentIdentifier: 'v1.1.0' });
+    } catch (error) {
+      laterError = error;
+    }
+
+    expect(laterError).toBe(thrownError);
     await transport.close();
 
     const startCalls = fetchCalls.filter((call) =>
       call.url.includes('/agent_instance/agent-instance-1/start')
     );
-    expect(startCalls).toHaveLength(2);
+    expect(startCalls).toHaveLength(0);
+  });
+
+  test('drops stale queued agent starts after schema revision and accepts a new identifier', async () => {
+    const fetchCalls: Array<{ url: string; options?: RequestInit }> = [];
+    const updatedSchema = { type: 'object', properties: { name: { type: 'string' } } };
+
+    globalThis.fetch = (async (url, options) => {
+      fetchCalls.push({ url: String(url), options });
+      if (String(url).endsWith('/agent_instance/register')) {
+        return new Response(JSON.stringify({ details: { id: 'agent-instance-2' } }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+
+      return new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }) as unknown as typeof fetch;
+
+    const transport = new HttpTransport(createConfig());
+    transport.registerSchema({ type: 'object' });
+    transport.startAgentInstance({ agentIdentifier: 'v1.0.0' });
+    transport.registerSchema(updatedSchema);
+    transport.startAgentInstance({ agentIdentifier: 'v1.1.0' });
+    await transport.close();
+
+    const registerCalls = fetchCalls.filter((call) =>
+      call.url.endsWith('/agent_instance/register')
+    );
+    const startCalls = fetchCalls.filter((call) =>
+      call.url.endsWith('/agent_instance/agent-instance-2/start')
+    );
+
+    expect(registerCalls).toHaveLength(1);
+    expect(startCalls).toHaveLength(1);
+
+    const registerPayload = JSON.parse(String(registerCalls[0]?.options?.body)) as Record<
+      string,
+      unknown
+    >;
+    expect(registerPayload.agent_schema_version).toEqual(updatedSchema);
+    expect(registerPayload.agent_version).toEqual({
+      external_identifier: 'v1.1.0',
+      name: 'Agent',
+      description: '',
+    });
   });
 
   test('does not send default schema when no schema is configured', async () => {

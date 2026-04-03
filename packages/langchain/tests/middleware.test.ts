@@ -1,6 +1,8 @@
 import { describe, expect, test } from 'bun:test';
 import {
   AgentInstanceManager,
+  type PrefactorTransportHealthState,
+  type PrefactorTransportOperation,
   type Span,
   SpanContext,
   SpanStatus,
@@ -30,6 +32,12 @@ class CaptureTransport implements Transport {
   }
 
   registerSchema(_schema: Record<string, unknown>): void {}
+
+  assertUsable(_operation: PrefactorTransportOperation): void {}
+
+  getHealthState(): PrefactorTransportHealthState {
+    return 'healthy';
+  }
 
   async flush(): Promise<void> {}
 

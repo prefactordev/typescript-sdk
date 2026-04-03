@@ -1,5 +1,9 @@
 import { describe, expect, spyOn, test } from 'bun:test';
 import { AgentInstanceManager } from '../../src/agent/instance-manager.js';
+import type {
+  PrefactorTransportHealthState,
+  PrefactorTransportOperation,
+} from '../../src/errors.js';
 import type { Span } from '../../src/tracing/span.js';
 import type { AgentInstanceOptions, Transport } from '../../src/transport/http.js';
 
@@ -28,6 +32,12 @@ class MockTransport implements Transport {
 
   registerSchema(schema: Record<string, unknown>): void {
     this.registeredSchemas.push(schema);
+  }
+
+  assertUsable(_operation: PrefactorTransportOperation): void {}
+
+  getHealthState(): PrefactorTransportHealthState {
+    return 'healthy';
   }
 
   async close(): Promise<void> {}

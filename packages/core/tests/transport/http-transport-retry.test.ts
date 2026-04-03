@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import type { PrefactorFatalError } from '../../src/errors.js';
 import { HttpTransport } from '../../src/transport/http.js';
 
 const createConfig = () => ({
@@ -62,5 +63,51 @@ describe('HttpTransport retry policy integration', () => {
     await transport.close();
 
     expect(startAttempts).toBe(2);
+  });
+
+  test('caps permanent transient failures to the shared client retry budget', async () => {
+    const fatalErrors: PrefactorFatalError[] = [];
+    let startAttempts = 0;
+
+    globalThis.fetch = (async (url) => {
+      const urlString = String(url);
+      if (urlString.endsWith('/agent_instance/register')) {
+        return new Response(JSON.stringify({ details: { id: 'agent-instance-1' } }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+
+      if (urlString.endsWith('/agent_instance/agent-instance-1/start')) {
+        startAttempts += 1;
+        return new Response(JSON.stringify({ error: 'temporary unavailable' }), {
+          status: 503,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+
+      return new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }) as unknown as typeof fetch;
+
+    const transport = new HttpTransport(createConfig(), {
+      failureHandling: {
+        onFatalError: (error) => {
+          fatalErrors.push(error);
+        },
+      },
+    });
+
+    transport.startAgentInstance();
+    await new Promise((resolve) => setTimeout(resolve, 25));
+
+    expect(startAttempts).toBe(2);
+    expect(fatalErrors).toHaveLength(1);
+    expect(fatalErrors[0]?.kind).toBe('retry_exhausted');
+    expect(fatalErrors[0]?.operation).toBe('agent_start');
+
+    await transport.close();
   });
 });

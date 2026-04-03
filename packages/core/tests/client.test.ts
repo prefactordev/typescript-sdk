@@ -32,7 +32,9 @@ class AlternateProvider implements PrefactorProvider {
 
 describe('core client init', () => {
   afterEach(async () => {
-    await getClient()?.shutdown();
+    await getClient()
+      ?.shutdown()
+      .catch(() => {});
   });
 
   test('returns existing client for equivalent provider/config', () => {
@@ -120,6 +122,91 @@ describe('core client init', () => {
         },
       })
     ).toThrow(/already initialized/i);
+  });
+
+  test('returns existing client when equivalent init recreates onFatalError callback', () => {
+    const first = init({
+      provider: new TestProvider({ name: 'first' }),
+      httpConfig: {
+        apiUrl: 'https://example.com',
+        apiToken: 'token',
+        agentIdentifier: '1.0.0',
+      },
+      failureHandling: {
+        onFatalError: () => {},
+      },
+    });
+
+    const second = init({
+      provider: new TestProvider({ name: 'second' }),
+      httpConfig: {
+        apiUrl: 'https://example.com',
+        apiToken: 'token',
+        agentIdentifier: '1.0.0',
+      },
+      failureHandling: {
+        onFatalError: () => {},
+      },
+    });
+
+    expect(second).toBe(first);
+    expect(second.getMiddleware()).toEqual({ name: 'first' });
+  });
+
+  test('keeps the first onFatalError callback for equivalent re-initialization', async () => {
+    const originalFetch = globalThis.fetch;
+    const firstCallback = { onFatalError: (_error: unknown) => {} };
+    const secondCallback = { onFatalError: (_error: unknown) => {} };
+    const firstSpy = spyOn(firstCallback, 'onFatalError');
+    const secondSpy = spyOn(secondCallback, 'onFatalError');
+
+    globalThis.fetch = (async () =>
+      new Response(JSON.stringify({ error: 'bad token' }), {
+        status: 401,
+        headers: { 'Content-Type': 'application/json' },
+      })) as unknown as typeof fetch;
+
+    try {
+      const first = init({
+        provider: new TestProvider({ name: 'first' }),
+        httpConfig: {
+          apiUrl: 'https://example.com',
+          apiToken: 'token',
+          agentIdentifier: '1.0.0',
+        },
+        failureHandling: {
+          onFatalError: (error) => {
+            firstCallback.onFatalError(error);
+          },
+        },
+      });
+
+      const second = init({
+        provider: new TestProvider({ name: 'second' }),
+        httpConfig: {
+          apiUrl: 'https://example.com',
+          apiToken: 'token',
+          agentIdentifier: '1.0.0',
+        },
+        failureHandling: {
+          onFatalError: (error) => {
+            secondCallback.onFatalError(error);
+          },
+        },
+      });
+
+      expect(second).toBe(first);
+
+      first.getTracer().startAgentInstance();
+      await new Promise((resolve) => setTimeout(resolve, 25));
+
+      expect(firstSpy).toHaveBeenCalledTimes(1);
+      expect(secondSpy).toHaveBeenCalledTimes(0);
+    } finally {
+      globalThis.fetch = originalFetch;
+      firstSpy.mockRestore();
+      secondSpy.mockRestore();
+    }
   });
 
   test('invokes provider shutdown when client shuts down', async () => {

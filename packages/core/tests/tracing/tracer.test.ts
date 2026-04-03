@@ -1,5 +1,9 @@
-import { beforeEach, describe, expect, test } from 'bun:test';
+import { beforeEach, describe, expect, spyOn, test } from 'bun:test';
 import { extractPartition, isPfid, type Partition } from '@prefactor/pfid';
+import type {
+  PrefactorTransportHealthState,
+  PrefactorTransportOperation,
+} from '../../src/errors.js';
 import { SpanContext } from '../../src/tracing/context';
 import { type Span, SpanStatus, SpanType } from '../../src/tracing/span';
 import { Tracer } from '../../src/tracing/tracer';
@@ -15,24 +19,46 @@ class MockTransport implements Transport {
   }> = [];
   startedInstances = 0;
   finishedInstances = 0;
+  emitError: Error | null = null;
+  finishSpanError: Error | null = null;
+  startInstanceError: Error | null = null;
+  finishInstanceError: Error | null = null;
 
   emit(span: Span): void {
+    if (this.emitError) {
+      throw this.emitError;
+    }
     this.emitted.push(span);
   }
 
   finishSpan(spanId: string, endTime: number, options?: FinishSpanOptions): void {
+    if (this.finishSpanError) {
+      throw this.finishSpanError;
+    }
     this.finished.push({ spanId, endTime, ...options });
   }
 
   startAgentInstance(): void {
+    if (this.startInstanceError) {
+      throw this.startInstanceError;
+    }
     this.startedInstances += 1;
   }
 
   finishAgentInstance(): void {
+    if (this.finishInstanceError) {
+      throw this.finishInstanceError;
+    }
     this.finishedInstances += 1;
   }
 
   registerSchema(_schema: Record<string, unknown>): void {}
+
+  assertUsable(_operation: PrefactorTransportOperation): void {}
+
+  getHealthState(): PrefactorTransportHealthState {
+    return 'healthy';
+  }
 
   async close(): Promise<void> {}
 }
@@ -71,6 +97,25 @@ describe('Tracer', () => {
 
     expect(transport.emitted).toHaveLength(1);
     expect(transport.emitted[0]).toEqual(span);
+  });
+
+  test('swallows transport errors when emitting agent spans on start', () => {
+    const errorSpy = spyOn(console, 'error').mockImplementation(() => {});
+    transport.emitError = new Error('transport unavailable');
+
+    try {
+      expect(() =>
+        tracer.startSpan({
+          name: 'agent',
+          spanType: SpanType.AGENT,
+          inputs: {},
+        })
+      ).not.toThrow();
+
+      expect(transport.emitted).toHaveLength(0);
+    } finally {
+      errorSpy.mockRestore();
+    }
   });
 
   test('should not emit non-agent spans immediately', () => {
@@ -126,6 +171,25 @@ describe('Tracer', () => {
     expect(span.error?.errorType).toBe('Error');
     expect(span.error?.message).toBe('Test error');
     expect(span.error?.stacktrace).toBeDefined();
+  });
+
+  test('swallows transport errors when ending spans', () => {
+    const errorSpy = spyOn(console, 'error').mockImplementation(() => {});
+    transport.emitError = new Error('transport unavailable');
+    const span = tracer.startSpan({
+      name: 'test',
+      spanType: SpanType.LLM,
+      inputs: {},
+    });
+    const userError = new Error('user failure');
+
+    try {
+      expect(() => tracer.endSpan(span, { error: userError })).not.toThrow();
+      expect(span.error?.message).toBe('user failure');
+      expect(transport.emitted).toHaveLength(0);
+    } finally {
+      errorSpy.mockRestore();
+    }
   });
 
   test('should use finishSpan for agent spans', () => {
@@ -207,6 +271,21 @@ describe('Tracer', () => {
     });
 
     expect(span.metadata).toEqual({ foo: 'bar' });
+  });
+
+  test('swallows transport errors when starting and finishing agent instances', () => {
+    const errorSpy = spyOn(console, 'error').mockImplementation(() => {});
+    transport.startInstanceError = new Error('start failed');
+    transport.finishInstanceError = new Error('finish failed');
+
+    try {
+      expect(() => tracer.startAgentInstance()).not.toThrow();
+      expect(() => tracer.finishAgentInstance()).not.toThrow();
+      expect(transport.startedInstances).toBe(0);
+      expect(transport.finishedInstances).toBe(0);
+    } finally {
+      errorSpy.mockRestore();
+    }
   });
 
   describe('PFID integration', () => {
