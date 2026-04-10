@@ -171,8 +171,8 @@ export default function prefactorExtension(pi: ExtensionAPI) {
   pi.on("turn_end", async (event, ctx) => {
     const sessionKey = getSessionKey(ctx);
     
-    // Capture thinking if enabled and present
-    if (config.captureThinking && event.message?.thinking) {
+    // Capture thinking if present (automatic for models that support it)
+    if (event.message?.thinking) {
       const thinking = typeof event.message.thinking === 'string'
         ? event.message.thinking
         : '';

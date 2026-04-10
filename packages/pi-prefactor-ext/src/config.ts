@@ -32,14 +32,6 @@ export const configSchema = z.object({
   sessionTimeoutHours: z.number().positive().default(24)
     .describe('Timeout for session spans (hours)'),
   
-  // Optional - Capture flags
-  captureThinking: z.boolean().default(true)
-    .describe('Capture agent thinking/reasoning content'),
-  captureToolInputs: z.boolean().default(true)
-    .describe('Capture tool call inputs'),
-  captureToolOutputs: z.boolean().default(true)
-    .describe('Capture tool call outputs'),
-  
   // Optional - Payload limits
   maxInputLength: z.number().positive().default(10000)
     .describe('Maximum input payload length to capture (characters)'),
@@ -95,14 +87,6 @@ export function loadConfig(packageConfig?: Record<string, unknown>): PrefactorCo
       (process.env.PREFACTOR_SESSION_TIMEOUT_HOURS 
         ? parseInt(process.env.PREFACTOR_SESSION_TIMEOUT_HOURS, 10) 
         : 24),
-    
-    // Capture flags (parse boolean strings)
-    captureThinking: packageConfig?.captureThinking ?? 
-      (process.env.PREFACTOR_CAPTURE_THINKING === 'false' ? false : true),
-    captureToolInputs: packageConfig?.captureToolInputs ?? 
-      (process.env.PREFACTOR_CAPTURE_TOOL_INPUTS === 'false' ? false : true),
-    captureToolOutputs: packageConfig?.captureToolOutputs ?? 
-      (process.env.PREFACTOR_CAPTURE_TOOL_OUTPUTS === 'false' ? false : true),
     
     // Payload limits
     maxInputLength: packageConfig?.maxInputLength ?? 
