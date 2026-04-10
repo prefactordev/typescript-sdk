@@ -1,4 +1,9 @@
-import type { HookCallback, HookCallbackMatcher, HookEvent } from '@anthropic-ai/claude-agent-sdk';
+import type {
+  HookCallback,
+  HookCallbackMatcher,
+  HookEvent,
+  StopHookInput,
+} from '@anthropic-ai/claude-agent-sdk';
 import { getLogger, type Span, type Tracer } from '@prefactor/core';
 import { resolveToolSpanType } from './schema.js';
 import { startSpanWithParent } from './span-utils.js';
@@ -151,9 +156,15 @@ export function createInstrumentationHooks(
     return {};
   };
 
-  const stop: HookCallback = async () => {
+  const stop: HookCallback = async (input) => {
     try {
-      finalizeAgentSpan(state, tracer);
+      const hookInput = input as StopHookInput;
+      finalizeAgentSpan(state, tracer, {
+        'claude.finishReason': 'stopped',
+        ...(hookInput.last_assistant_message
+          ? { 'claude.lastAssistantMessage': hookInput.last_assistant_message }
+          : {}),
+      });
       endInFlightSpans(tracer, state.toolSpanMap, 'tool');
       endInFlightSpans(tracer, state.subagentSpanMap, 'subagent');
     } catch (error) {

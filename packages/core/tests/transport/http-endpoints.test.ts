@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import { AgentInstanceClient } from '../../src/transport/http/agent-instance-client.js';
 import { AgentSpanClient } from '../../src/transport/http/agent-span-client.js';
 import type { HttpRequestOptions } from '../../src/transport/http/http-client.js';
+import { HttpClientError } from '../../src/transport/http/http-client.js';
 
 const UUID_V4_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 
@@ -122,6 +123,28 @@ describe('HTTP endpoint clients', () => {
     expect((calls[1].options.body as Record<string, unknown>).idempotency_key).toMatch(
       UUID_V4_REGEX
     );
+  });
+
+  test('agent span finish treats already-finished conflicts as success', async () => {
+    const httpClient = {
+      request: async <_TResponse>() => {
+        throw new HttpClientError('already finished', {
+          url: 'https://example.com/api/v1/agent_spans/backend-span-1/finish',
+          method: 'POST',
+          status: 409,
+          responseBody: { code: 'invalid_action' },
+          retryable: false,
+        });
+      },
+    };
+
+    const client = new AgentSpanClient(httpClient);
+
+    await expect(
+      client.finish('backend-span-1', '2026-02-09T00:00:01.000Z', {
+        status: 'complete',
+      })
+    ).resolves.toBeUndefined();
   });
 });
 

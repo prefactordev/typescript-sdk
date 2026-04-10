@@ -27,7 +27,7 @@
     },
     "packages/ai": {
       "name": "@prefactor/ai",
-      "version": "0.3.1",
+      "version": "0.3.2",
       "dependencies": {
         "@prefactor/pfid": "^0.1.0",
       },
@@ -41,7 +41,7 @@
     },
     "packages/claude": {
       "name": "@prefactor/claude",
-      "version": "0.1.0",
+      "version": "0.1.1",
       "dependencies": {
         "@prefactor/pfid": "^0.1.0",
       },
@@ -55,7 +55,7 @@
     },
     "packages/cli": {
       "name": "@prefactor/cli",
-      "version": "0.0.3",
+      "version": "0.0.4",
       "bin": {
         "prefactor": "dist/bin/cli.js",
       },
@@ -71,7 +71,7 @@
     },
     "packages/core": {
       "name": "@prefactor/core",
-      "version": "0.3.2",
+      "version": "0.3.3",
       "dependencies": {
         "@prefactor/pfid": "^0.1.0",
       },
@@ -81,7 +81,7 @@
     },
     "packages/langchain": {
       "name": "@prefactor/langchain",
-      "version": "0.3.1",
+      "version": "0.3.2",
       "dependencies": {
         "@prefactor/pfid": "^0.1.0",
       },
@@ -92,7 +92,7 @@
     },
     "packages/openclaw-prefactor-plugin": {
       "name": "@prefactor/openclaw-prefactor-plugin",
-      "version": "0.0.21",
+      "version": "0.0.22",
       "dependencies": {
         "zod": "^4.0.0",
       },

@@ -5,6 +5,7 @@ import type {
   HookEvent,
   Query,
   SDKMessage,
+  StopHookInput,
 } from '@anthropic-ai/claude-agent-sdk';
 import { type Span, SpanStatus, type Tracer } from '@prefactor/core';
 import { createInstrumentationHooks, finalizeAgentSpan, mergeHooks } from '../src/hooks.js';
@@ -254,7 +255,7 @@ describe('hooks', () => {
     expect(mock.ended[0].outputs).toEqual({ output: 'file contents here' });
   });
 
-  test('Stop ends in-flight tool and subagent spans and clears the maps', async () => {
+  test('Stop finalizes the agent span with stop metadata and clears in-flight spans', async () => {
     const hooks = createInstrumentationHooks(mock.tracer, undefined, state);
     state.agentSpan = createSpan('claude:agent', {}, 'claude:session');
 
@@ -269,12 +270,20 @@ describe('hooks', () => {
       { signal }
     );
 
-    await getHook(hooks, 'Stop')({}, undefined, { signal });
+    await getHook(hooks, 'Stop')(
+      { last_assistant_message: 'Stopped by user' } as StopHookInput,
+      undefined,
+      { signal }
+    );
 
     expect(state.agentSpanFinished).toBe(true);
     expect(state.toolSpanMap.size).toBe(0);
     expect(state.subagentSpanMap.size).toBe(0);
     expect(mock.ended).toHaveLength(3);
+    expect(mock.ended[0]?.outputs).toEqual({
+      'claude.finishReason': 'stopped',
+      'claude.lastAssistantMessage': 'Stopped by user',
+    });
     expect(mock.ended[1]?.error?.message).toBe('Agent stopped before span completed');
     expect(mock.ended[2]?.error?.message).toBe('Agent stopped before span completed');
   });
@@ -466,18 +475,30 @@ describe('createTracedQuery', () => {
   });
 
   test('releases the active run when iteration is interrupted via return()', async () => {
+    const mock = createMockTracer();
     const controlled = createControlledQueryStream();
     const middleware = createTracedQuery(
       (() => controlled.stream) as ClaudeQuery,
-      createMockTracer().tracer,
+      mock.tracer,
       { startInstance: () => {}, finishInstance: () => {} } as never,
       { agentIdentifier: 'claude-test' },
       createClaudeRuntimeController()
     );
 
     const query = middleware.tracedQuery({ prompt: 'first' });
+    controlled.push({
+      type: 'system',
+      subtype: 'init',
+      session_id: 'session-1',
+      model: 'claude-sonnet',
+    } as SDKMessage);
+    await query.next();
     await query.return();
 
+    const agentEnd = mock.ended.find((entry) => entry.span.spanType === 'claude:agent');
+    expect(agentEnd?.outputs).toEqual({
+      'claude.finishReason': 'interrupted',
+    });
     expect(() => middleware.tracedQuery({ prompt: 'second' })).not.toThrow();
     controlled.finish();
   });

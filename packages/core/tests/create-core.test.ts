@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test';
 import { createConfig } from '../src/config.js';
 import { createCore } from '../src/create-core.js';
+import { getActiveTracer } from '../src/tracing/active-tracer.js';
+import { withSpan } from '../src/tracing/with-span.js';
 import { PACKAGE_NAME, PACKAGE_VERSION } from '../src/version.js';
 import {
   createSdkHeaderFetchRecorder,
@@ -47,6 +49,26 @@ describe('createCore', () => {
     expect(core.tracer).toBeDefined();
     expect(core.agentManager).toBeDefined();
     await core.shutdown();
+  });
+
+  test('throws when createCore is called without httpConfig', () => {
+    const config = createConfig({
+      transportType: 'http',
+    });
+
+    expect(() => createCore(config)).toThrow(/requires httpConfig/i);
+  });
+
+  test('rejects invalid HTTP config values during config creation', () => {
+    expect(() =>
+      createConfig({
+        transportType: 'http',
+        httpConfig: {
+          apiUrl: 'not-a-url',
+          apiToken: '',
+        } as never,
+      })
+    ).toThrow();
   });
 
   test('does not warn when agentSchema is provided for HTTP transport', async () => {
@@ -152,6 +174,65 @@ describe('createCore', () => {
       warnSpy.mockRestore();
       await core.shutdown();
     }
+  });
+
+  test('clears active tracer when shutdown rejects with partial telemetry', async () => {
+    globalThis.fetch = (async (url) => {
+      if (String(url).endsWith('/agent_instance/register')) {
+        return new Response(JSON.stringify({ details: { id: 'agent-instance-1' } }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+
+      if (String(url).endsWith('/agent_spans')) {
+        return new Response(JSON.stringify({ details: {} }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+
+      return new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }) as typeof fetch;
+
+    const core = createCore(
+      createConfig({
+        transportType: 'http',
+        httpConfig: {
+          apiUrl: 'https://example.com',
+          apiToken: 'test-token',
+          agentIdentifier: '1.0.0',
+        },
+      })
+    );
+
+    await withSpan(
+      {
+        name: 'partial-telemetry',
+        spanType: 'custom:partial-telemetry',
+        inputs: {},
+      },
+      async () => ({ ok: true })
+    );
+
+    expect(getActiveTracer()).toBeDefined();
+    await expect(core.shutdown()).rejects.toMatchObject({
+      kind: 'partial_telemetry',
+    });
+    expect(getActiveTracer()).toBeUndefined();
+    await expect(
+      withSpan(
+        {
+          name: 'missing-tracer-after-shutdown',
+          spanType: 'custom:missing-tracer-after-shutdown',
+          inputs: {},
+        },
+        async () => ({ ok: true })
+      )
+    ).rejects.toThrow(/No active tracer found/i);
   });
 
   test('rejects stdio transport type', () => {

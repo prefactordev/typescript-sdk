@@ -155,6 +155,8 @@ export interface PrefactorOptions<TMiddleware = MiddlewareLike> {
   provider: PrefactorProvider<TMiddleware>;
   /** Optional HTTP configuration overrides for the runtime config. */
   httpConfig?: Config['httpConfig'];
+  /** Optional failure handling callbacks for transport errors. */
+  failureHandling?: Config['failureHandling'];
 }
 
 /**
@@ -184,7 +186,10 @@ export function init<TMiddleware = MiddlewareLike>(
 
   configureLogging();
 
-  const config: Partial<Config> = options.httpConfig ? { httpConfig: options.httpConfig } : {};
+  const config: Partial<Config> = {
+    ...(options.httpConfig ? { httpConfig: options.httpConfig } : {}),
+    ...(options.failureHandling ? { failureHandling: options.failureHandling } : {}),
+  };
   let finalConfig = createConfig(config);
 
   const providerSchema = options.provider.getDefaultAgentSchema?.();
@@ -245,6 +250,9 @@ function buildInitKey(options: PrefactorOptions, sdkHeaderEntry?: string): strin
     providerType,
     httpConfig: options.httpConfig ?? null,
     sdkHeaderEntry: sdkHeaderEntry ?? null,
+    failureHandling: {
+      onFatalErrorConfigured: Boolean(options.failureHandling?.onFatalError),
+    },
   });
 }
 
