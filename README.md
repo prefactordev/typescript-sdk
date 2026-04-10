@@ -2,6 +2,12 @@
 
 Automatic observability for LangChain.js agents. Capture distributed traces of LLM calls, tool executions, and agent workflows with minimal integration effort.
 
+## Links
+
+- Docs: https://docs.prefactorai.com/sdks/typescript-sdk/
+- DeepWiki: https://deepwiki.com/prefactordev/typescript-sdk
+- GitHub: https://github.com/prefactordev/typescript-sdk
+
 ## Features
 
 - Automatic tracing of LLM calls with token usage
