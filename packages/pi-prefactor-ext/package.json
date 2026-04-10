@@ -1,0 +1,50 @@
+{
+  "name": "@prefactor/pi-prefactor-ext",
+  "version": "0.0.1-mvp",
+  "type": "module",
+  "description": "Prefactor instrumentation extension for pi coding agent",
+  "main": "./src/index.ts",
+  "pi": {
+    "extensions": ["./src/index.ts"],
+    "config": {
+      "schema": {
+        "type": "object",
+        "properties": {
+          "apiUrl": {
+            "type": "string",
+            "description": "Prefactor API URL",
+            "default": "https://app.prefactorai.com"
+          },
+          "apiToken": {
+            "type": "string",
+            "description": "Prefactor API token",
+            "sensitive": true
+          },
+          "agentId": {
+            "type": "string",
+            "description": "Agent ID in Prefactor"
+          },
+          "agentName": {
+            "type": "string",
+            "description": "Human-readable agent name",
+            "default": "Pi Agent"
+          },
+          "logLevel": {
+            "type": "string",
+            "enum": ["debug", "info", "warn", "error"],
+            "default": "info"
+          }
+        },
+        "required": ["apiToken", "agentId"]
+      }
+    }
+  },
+  "dependencies": {
+    "@prefactor/core": "workspace:*",
+    "zod": "^3.24.0"
+  },
+  "devDependencies": {
+    "@mariozechner/pi-coding-agent": "^0.66.0",
+    "typescript": "^5.7.2"
+  }
+}
