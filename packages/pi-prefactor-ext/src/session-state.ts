@@ -264,6 +264,32 @@ export class SessionStateManager {
     return spanId;
   }
 
+  // Agent thinking spans
+  async createAgentThinkingSpan(
+    sessionKey: string,
+    thinking: string,
+    tokens?: { input?: number; output?: number },
+    metadata?: { provider?: string; model?: string }
+  ): Promise<string | null> {
+    if (!this.agent) return null;
+    const state = this.getOrCreateSessionState(sessionKey);
+    
+    const spanId = await this.agent.createSpan(
+      sessionKey,
+      'pi:agent_thinking',
+      {
+        thinking: thinking.slice(0, 10000), // Truncate for safety
+        tokens,
+        ...metadata,
+      },
+      state.agentRunSpanId  // Thinking is child of agent_run
+    );
+    if (spanId) {
+      this.logger.info('thinking_span_created', { sessionKey, spanId, thinkingLength: thinking.length });
+    }
+    return spanId;
+  }
+
   // Cleanup
   async cleanupAllSessions(): Promise<void> {
     this.logger.info('cleanup_all_sessions_start', { count: this.sessions.size });

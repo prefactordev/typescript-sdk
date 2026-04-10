@@ -171,6 +171,28 @@ export default function prefactorExtension(pi: ExtensionAPI) {
   pi.on("turn_end", async (event, ctx) => {
     const sessionKey = getSessionKey(ctx);
     
+    // Capture thinking if enabled and present
+    if (config.captureThinking && event.message?.thinking) {
+      const thinking = typeof event.message.thinking === 'string'
+        ? event.message.thinking
+        : '';
+      
+      if (thinking) {
+        await sessionManager.createAgentThinkingSpan(
+          sessionKey,
+          thinking,
+          event.usage ? {
+            input: event.usage.inputTokens,
+            output: event.usage.outputTokens,
+          } : undefined,
+          {
+            provider: (ctx.model as any)?.provider,
+            model: (ctx.model as any)?.id,
+          }
+        );
+      }
+    }
+    
     // Capture assistant response
     const text = extractTextFromContent(event.message?.content);
     if (text) {
