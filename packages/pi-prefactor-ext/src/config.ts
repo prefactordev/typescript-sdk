@@ -24,7 +24,7 @@ export const configSchema = z.object({
   agentVersion: z.string().default('default').describe('Agent version suffix for tracking deployments'),
   
   // Optional - Logging
-  logLevel: z.enum(['debug', 'info', 'warn', 'error']).default('info').describe('Logging verbosity level'),
+  logLevel: z.enum(['debug', 'info', 'warn', 'error']).default('warn').describe('Logging verbosity level'),
   
   // Optional - Timeouts
   userInteractionTimeoutMinutes: z.number().positive().default(5)
@@ -88,7 +88,7 @@ export function loadConfig(packageConfig?: Record<string, unknown>): PrefactorCo
     agentVersion: packageConfig?.agentVersion ?? process.env.PREFACTOR_AGENT_VERSION ?? 'default',
     
     // Logging
-    logLevel: packageConfig?.logLevel ?? process.env.PREFACTOR_LOG_LEVEL ?? 'info',
+    logLevel: packageConfig?.logLevel ?? process.env.PREFACTOR_LOG_LEVEL ?? 'warn',
     
     // Timeouts (parse from string env vars)
     userInteractionTimeoutMinutes: 

@@ -81,6 +81,6 @@ export class Logger {
  * @param level - Minimum log level to output (default: 'info')
  * @returns Logger instance
  */
-export function createLogger(level: LogLevel = 'info'): Logger {
+export function createLogger(level: LogLevel = 'warn'): Logger {
   return new Logger(level);
 }
