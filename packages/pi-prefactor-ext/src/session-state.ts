@@ -618,10 +618,39 @@ export class SessionStateManager {
       entry.status = 'closed';
     }
 
-    // Clear tracking arrays (spans are now closed)
+    // Close interaction span if still tracked
+    if (state.interactionSpanId) {
+      this.logger.warn('closing_interaction_span', {
+        sessionKey,
+        spanId: state.interactionSpanId,
+      });
+      await this.agent.finishSpan(
+        sessionKey,
+        state.interactionSpanId,
+        'complete',
+        { reason: 'child_cleanup' }
+      );
+      state.interactionSpanId = null;
+    }
+
+    // Close session span if still tracked (shouldn't happen, but defensive)
+    if (state.sessionSpanId) {
+      this.logger.warn('closing_session_span', {
+        sessionKey,
+        spanId: state.sessionSpanId,
+      });
+      await this.agent.finishSpan(
+        sessionKey,
+        state.sessionSpanId,
+        'complete',
+        { reason: 'child_cleanup' }
+      );
+      state.sessionSpanId = null;
+    }
+
+    // Clear other tracking arrays (these are just references, spans already closed)
     state.toolCallSpans = [];
     state.agentRunSpanId = null;
-    state.interactionSpanId = null;
     state.assistantResponseSpanId = null;
     state.userMessageSpanId = null;
     state.agentThinkingSpanId = null;
