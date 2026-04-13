@@ -1,9 +1,9 @@
 /**
  * Prefactor Extension Configuration
- * 
+ *
  * Supports both environment variables and package configuration.
  * Priority: package config > environment variables > defaults
- * 
+ *
  * @module
  */
 
@@ -15,44 +15,75 @@ import { z } from 'zod';
  */
 export const configSchema = z.object({
   // Required - Prefactor API credentials
-  apiUrl: z.string().url().default('https://app.prefactorai.com').describe('Prefactor API URL (e.g., https://app.prefactorai.com)'),
+  apiUrl: z
+    .string()
+    .url()
+    .default('https://app.prefactorai.com')
+    .describe('Prefactor API URL (e.g., https://app.prefactorai.com)'),
   apiToken: z.string().min(1).describe('Prefactor API token for authentication'),
   agentId: z.string().min(1).describe('Agent ID registered in Prefactor'),
-  
+
   // Optional - Agent identification
-  agentName: z.string().default('Pi Agent').describe('Human-readable agent name shown in Prefactor UI'),
-  agentVersion: z.string().default('default').describe('Agent version suffix for tracking deployments'),
-  
+  agentName: z
+    .string()
+    .default('Pi Agent')
+    .describe('Human-readable agent name shown in Prefactor UI'),
+  agentVersion: z
+    .string()
+    .default('default')
+    .describe('Agent version suffix for tracking deployments'),
+
   // Optional - Logging
-  logLevel: z.enum(['debug', 'info', 'warn', 'error']).default('warn').describe('Logging verbosity level'),
-  
+  logLevel: z
+    .enum(['debug', 'info', 'warn', 'error'])
+    .default('warn')
+    .describe('Logging verbosity level'),
+
   // Optional - Timeouts
-  userInteractionTimeoutMinutes: z.number().positive().default(5)
+  userInteractionTimeoutMinutes: z
+    .number()
+    .positive()
+    .default(5)
     .describe('Timeout for user interaction spans (minutes)'),
-  sessionTimeoutHours: z.number().positive().default(24)
+  sessionTimeoutHours: z
+    .number()
+    .positive()
+    .default(24)
     .describe('Timeout for session spans (hours)'),
-  
+
   // Optional - Payload limits
-  maxInputLength: z.number().positive().default(10000)
+  maxInputLength: z
+    .number()
+    .positive()
+    .default(10000)
     .describe('Maximum input payload length to capture (characters)'),
-  maxOutputLength: z.number().positive().default(10000)
+  maxOutputLength: z
+    .number()
+    .positive()
+    .default(10000)
     .describe('Maximum output payload length to capture (characters)'),
-  maxSystemPromptLength: z.number().positive().default(2000)
+  maxSystemPromptLength: z
+    .number()
+    .positive()
+    .default(2000)
     .describe('Maximum system prompt length to capture (characters)'),
-  
+
   // Optional - Capture flags
-  captureThinking: z.boolean().default(true)
+  captureThinking: z
+    .boolean()
+    .default(true)
     .describe('Whether to capture agent thinking/reasoning traces'),
-  captureToolInputs: z.boolean().default(true)
-    .describe('Whether to capture tool call inputs'),
-  captureToolOutputs: z.boolean().default(true)
-    .describe('Whether to capture tool call outputs'),
-  
+  captureToolInputs: z.boolean().default(true).describe('Whether to capture tool call inputs'),
+  captureToolOutputs: z.boolean().default(true).describe('Whether to capture tool call outputs'),
+
   // Optional - Sampling and enablement
-  samplingRate: z.number().min(0).max(1).default(1)
+  samplingRate: z
+    .number()
+    .min(0)
+    .max(1)
+    .default(1)
     .describe('Sampling rate for traces (0-1, where 1 = 100%)'),
-  enabled: z.boolean().default(true)
-    .describe('Whether the extension is enabled'),
+  enabled: z.boolean().default(true).describe('Whether the extension is enabled'),
 });
 
 /**
@@ -62,15 +93,15 @@ export type PrefactorConfig = z.infer<typeof configSchema>;
 
 /**
  * Load configuration from environment variables and/or package config.
- * 
+ *
  * Priority order:
  * 1. Package config (from settings.json packages[].config)
  * 2. Environment variables
  * 3. Default values
- * 
+ *
  * @param packageConfig - Optional configuration from pi package system
  * @returns Validated configuration object
- * 
+ *
  * @example
  * ```typescript
  * // In extension entry point
@@ -84,63 +115,67 @@ export function loadConfig(packageConfig?: Record<string, unknown>): PrefactorCo
     apiUrl: packageConfig?.apiUrl ?? process.env.PREFACTOR_API_URL ?? 'https://app.prefactorai.com',
     apiToken: packageConfig?.apiToken ?? process.env.PREFACTOR_API_TOKEN,
     agentId: packageConfig?.agentId ?? process.env.PREFACTOR_AGENT_ID,
-    
+
     // Agent identification
     agentName: packageConfig?.agentName ?? process.env.PREFACTOR_AGENT_NAME ?? 'Pi Agent',
     agentVersion: packageConfig?.agentVersion ?? process.env.PREFACTOR_AGENT_VERSION ?? 'default',
-    
+
     // Logging
     logLevel: packageConfig?.logLevel ?? process.env.PREFACTOR_LOG_LEVEL ?? 'warn',
-    
+
     // Timeouts (parse from string env vars)
-    userInteractionTimeoutMinutes: 
-      packageConfig?.userInteractionTimeoutMinutes ?? 
-      (process.env.PREFACTOR_USER_INTERACTION_TIMEOUT_MINUTES 
-        ? parseInt(process.env.PREFACTOR_USER_INTERACTION_TIMEOUT_MINUTES, 10) 
+    userInteractionTimeoutMinutes:
+      packageConfig?.userInteractionTimeoutMinutes ??
+      (process.env.PREFACTOR_USER_INTERACTION_TIMEOUT_MINUTES
+        ? parseInt(process.env.PREFACTOR_USER_INTERACTION_TIMEOUT_MINUTES, 10)
         : 5),
-    sessionTimeoutHours: 
-      packageConfig?.sessionTimeoutHours ?? 
-      (process.env.PREFACTOR_SESSION_TIMEOUT_HOURS 
-        ? parseInt(process.env.PREFACTOR_SESSION_TIMEOUT_HOURS, 10) 
+    sessionTimeoutHours:
+      packageConfig?.sessionTimeoutHours ??
+      (process.env.PREFACTOR_SESSION_TIMEOUT_HOURS
+        ? parseInt(process.env.PREFACTOR_SESSION_TIMEOUT_HOURS, 10)
         : 24),
-    
+
     // Payload limits
-    maxInputLength: packageConfig?.maxInputLength ?? 
-      (process.env.PREFACTOR_MAX_INPUT_LENGTH 
-        ? parseInt(process.env.PREFACTOR_MAX_INPUT_LENGTH, 10) 
+    maxInputLength:
+      packageConfig?.maxInputLength ??
+      (process.env.PREFACTOR_MAX_INPUT_LENGTH
+        ? parseInt(process.env.PREFACTOR_MAX_INPUT_LENGTH, 10)
         : 10000),
-    maxOutputLength: packageConfig?.maxOutputLength ?? 
-      (process.env.PREFACTOR_MAX_OUTPUT_LENGTH 
-        ? parseInt(process.env.PREFACTOR_MAX_OUTPUT_LENGTH, 10) 
+    maxOutputLength:
+      packageConfig?.maxOutputLength ??
+      (process.env.PREFACTOR_MAX_OUTPUT_LENGTH
+        ? parseInt(process.env.PREFACTOR_MAX_OUTPUT_LENGTH, 10)
         : 10000),
-    maxSystemPromptLength: packageConfig?.maxSystemPromptLength ?? 
-      (process.env.PREFACTOR_MAX_SYSTEM_PROMPT_LENGTH 
-        ? parseInt(process.env.PREFACTOR_MAX_SYSTEM_PROMPT_LENGTH, 10) 
+    maxSystemPromptLength:
+      packageConfig?.maxSystemPromptLength ??
+      (process.env.PREFACTOR_MAX_SYSTEM_PROMPT_LENGTH
+        ? parseInt(process.env.PREFACTOR_MAX_SYSTEM_PROMPT_LENGTH, 10)
         : 2000),
-    
+
     // Capture flags
-    captureThinking: packageConfig?.captureThinking ?? 
-      (process.env.PREFACTOR_CAPTURE_THINKING 
-        ? process.env.PREFACTOR_CAPTURE_THINKING === 'true' 
+    captureThinking:
+      packageConfig?.captureThinking ??
+      (process.env.PREFACTOR_CAPTURE_THINKING
+        ? process.env.PREFACTOR_CAPTURE_THINKING === 'true'
         : true),
-    captureToolInputs: packageConfig?.captureToolInputs ?? 
-      (process.env.PREFACTOR_CAPTURE_TOOL_INPUTS 
-        ? process.env.PREFACTOR_CAPTURE_TOOL_INPUTS === 'true' 
+    captureToolInputs:
+      packageConfig?.captureToolInputs ??
+      (process.env.PREFACTOR_CAPTURE_TOOL_INPUTS
+        ? process.env.PREFACTOR_CAPTURE_TOOL_INPUTS === 'true'
         : true),
-    captureToolOutputs: packageConfig?.captureToolOutputs ?? 
-      (process.env.PREFACTOR_CAPTURE_TOOL_OUTPUTS 
-        ? process.env.PREFACTOR_CAPTURE_TOOL_OUTPUTS === 'true' 
+    captureToolOutputs:
+      packageConfig?.captureToolOutputs ??
+      (process.env.PREFACTOR_CAPTURE_TOOL_OUTPUTS
+        ? process.env.PREFACTOR_CAPTURE_TOOL_OUTPUTS === 'true'
         : true),
-    
+
     // Sampling and enablement
-    samplingRate: packageConfig?.samplingRate ?? 
-      (process.env.PREFACTOR_SAMPLE_RATE 
-        ? parseFloat(process.env.PREFACTOR_SAMPLE_RATE) 
-        : 1),
-    enabled: packageConfig?.enabled ?? 
-      (process.env.PREFACTOR_ENABLED 
-        ? process.env.PREFACTOR_ENABLED === 'true' 
-        : true),
+    samplingRate:
+      packageConfig?.samplingRate ??
+      (process.env.PREFACTOR_SAMPLE_RATE ? parseFloat(process.env.PREFACTOR_SAMPLE_RATE) : 1),
+    enabled:
+      packageConfig?.enabled ??
+      (process.env.PREFACTOR_ENABLED ? process.env.PREFACTOR_ENABLED === 'true' : true),
   };
 
   return configSchema.parse(merged);
@@ -148,10 +183,10 @@ export function loadConfig(packageConfig?: Record<string, unknown>): PrefactorCo
 
 /**
  * Validate that required configuration is present.
- * 
+ *
  * @param config - Configuration object to validate
  * @returns Validation result with error details if invalid
- * 
+ *
  * @example
  * ```typescript
  * const validation = validateConfig(config);
@@ -161,16 +196,16 @@ export function loadConfig(packageConfig?: Record<string, unknown>): PrefactorCo
  * }
  * ```
  */
-export function validateConfig(config: PrefactorConfig): { 
-  ok: boolean; 
+export function validateConfig(config: PrefactorConfig): {
+  ok: boolean;
   error?: string;
   missing?: string[];
 } {
   const missing: string[] = [];
-  
+
   if (!config.apiToken) missing.push('PREFACTOR_API_TOKEN');
   if (!config.agentId) missing.push('PREFACTOR_AGENT_ID');
-  
+
   if (missing.length > 0) {
     return {
       ok: false,
@@ -178,17 +213,17 @@ export function validateConfig(config: PrefactorConfig): {
       missing,
     };
   }
-  
+
   return { ok: true };
 }
 
 /**
  * Get configuration summary for logging/debugging.
  * Hides sensitive values (apiToken) for security.
- * 
+ *
  * @param config - Configuration object
  * @returns Safe-to-log summary object
- * 
+ *
  * @example
  * ```typescript
  * logger.info('config_loaded', getConfigSummary(config));
@@ -202,21 +237,21 @@ export function getConfigSummary(config: PrefactorConfig): Record<string, unknow
     agentId: config.agentId,
     agentName: config.agentName,
     agentVersion: config.agentVersion,
-    
+
     // Settings
     logLevel: config.logLevel,
     userInteractionTimeoutMinutes: config.userInteractionTimeoutMinutes,
     sessionTimeoutHours: config.sessionTimeoutHours,
-    
+
     // Capture flags
     captureThinking: config.captureThinking,
     captureToolInputs: config.captureToolInputs,
     captureToolOutputs: config.captureToolOutputs,
-    
+
     // Payload limits
     maxInputLength: config.maxInputLength,
     maxOutputLength: config.maxOutputLength,
-    
+
     // Token (masked for security)
     apiToken: config.apiToken ? '***' + config.apiToken.slice(-4) : undefined,
   };
@@ -224,7 +259,7 @@ export function getConfigSummary(config: PrefactorConfig): Record<string, unknow
 
 /**
  * Create a configuration error message for user display.
- * 
+ *
  * @param validation - Validation result from validateConfig()
  * @returns Formatted error message with setup instructions
  */
@@ -232,16 +267,16 @@ export function getConfigErrorMessage(validation: ReturnType<typeof validateConf
   if (validation.ok) {
     return '';
   }
-  
+
   let msg = `Prefactor Extension Configuration Error\n\n`;
   msg += `Missing required configuration:\n`;
-  
+
   if (validation.missing) {
     for (const field of validation.missing) {
       msg += `  - ${field}\n`;
     }
   }
-  
+
   msg += `\nSet environment variables:\n`;
   msg += `  export PREFACTOR_API_TOKEN=your-token\n`;
   msg += `  export PREFACTOR_AGENT_ID=your-agent-id\n`;
@@ -257,6 +292,6 @@ export function getConfigErrorMessage(validation: ReturnType<typeof validateConf
   msg += `      }\n`;
   msg += `    }]\n`;
   msg += `  }\n`;
-  
+
   return msg;
 }

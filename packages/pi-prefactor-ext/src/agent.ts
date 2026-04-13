@@ -2,7 +2,7 @@
  * Agent HTTP client for pi-prefactor extension
  * Manages AgentInstance lifecycle and span CRUD via Prefactor API
  * Multi-session support - tracks multiple independent AgentInstances simultaneously
- * 
+ *
  * @module
  */
 
@@ -218,7 +218,8 @@ export class Agent {
         {
           name: 'pi:agent_run',
           description: 'Agent execution run',
-          template: '{{ messageCount | default: 0 }} messages with {{ model | default: "unknown" }}',
+          template:
+            '{{ messageCount | default: 0 }} messages with {{ model | default: "unknown" }}',
           params_schema: {
             type: 'object',
             properties: {
@@ -226,16 +227,36 @@ export class Agent {
               model: { type: 'string', description: 'LLM model used' },
               provider: { type: 'string', description: 'Provider name (ollama, openai, etc.)' },
               temperature: { type: 'number', description: 'Model temperature setting' },
-              systemPrompt: { type: 'string', description: 'System prompt/instructions (first 2000 chars)' },
-              systemPromptHash: { type: 'string', description: 'SHA256 hash of full system prompt' },
-              systemPromptLength: { type: 'number', description: 'Full system prompt length in chars' },
-              skillsLoaded: { type: 'array', items: { type: 'string' }, description: 'Skills loaded for this session' },
-              toolsAvailable: { type: 'array', items: { type: 'string' }, description: 'Tools available' },
-              
+              systemPrompt: {
+                type: 'string',
+                description: 'System prompt/instructions (first 2000 chars)',
+              },
+              systemPromptHash: {
+                type: 'string',
+                description: 'SHA256 hash of full system prompt',
+              },
+              systemPromptLength: {
+                type: 'number',
+                description: 'Full system prompt length in chars',
+              },
+              skillsLoaded: {
+                type: 'array',
+                items: { type: 'string' },
+                description: 'Skills loaded for this session',
+              },
+              toolsAvailable: {
+                type: 'array',
+                items: { type: 'string' },
+                description: 'Tools available',
+              },
+
               // Context
-              userRequest: { type: 'string', description: 'Original user request (first user message)' },
+              userRequest: {
+                type: 'string',
+                description: 'Original user request (first user message)',
+              },
               messageCount: { type: 'number', description: 'Messages in conversation' },
-              
+
               // Timing
               startTime: { type: 'number', description: 'Start timestamp (ms)' },
             },
@@ -246,13 +267,13 @@ export class Agent {
             properties: {
               // Outcome (unique value - cannot derive from children)
               success: { type: 'boolean', description: 'Whether session succeeded' },
-              terminationReason: { 
-                type: 'string', 
+              terminationReason: {
+                type: 'string',
                 enum: ['completed', 'error', 'user_cancel', 'timeout', 'session_shutdown'],
-                description: 'Why session ended'
+                description: 'Why session ended',
               },
               error: { type: 'string', description: 'Error message if failed' },
-              
+
               // Token usage (unique value - cannot derive from children)
               tokens: {
                 type: 'object',
@@ -262,13 +283,21 @@ export class Agent {
                   total: { type: 'number', description: 'Total tokens' },
                 },
               },
-              
+
               // Convenience aggregations (could derive from children but useful)
-              filesModified: { type: 'array', items: { type: 'string' }, description: 'Files modified' },
-              filesCreated: { type: 'array', items: { type: 'string' }, description: 'Files created' },
+              filesModified: {
+                type: 'array',
+                items: { type: 'string' },
+                description: 'Files modified',
+              },
+              filesCreated: {
+                type: 'array',
+                items: { type: 'string' },
+                description: 'Files created',
+              },
               commandsRun: { type: 'number', description: 'Bash commands executed' },
               toolCalls: { type: 'number', description: 'Total tool calls' },
-              
+
               // Timing
               endTime: { type: 'number', description: 'End timestamp (ms)' },
               durationMs: { type: 'number', description: 'Duration in milliseconds' },
@@ -382,6 +411,39 @@ export class Agent {
               },
               isError: { type: 'boolean', description: 'Whether tool failed' },
             },
+          },
+        },
+        {
+          name: 'pi:assistant_response',
+          description: 'Assistant response message to user',
+          template: '{{ text | truncate: 100 }}',
+          params_schema: {
+            type: 'object',
+            properties: {
+              text: { type: 'string', description: 'Response text to user' },
+              model: { type: 'string', description: 'Model used for response' },
+              provider: { type: 'string', description: 'Provider used' },
+              startTime: { type: 'number', description: 'Start timestamp (ms)' },
+              thinking: { type: 'string', description: 'Agent thinking/reasoning (if enabled)' },
+              tokens: {
+                type: 'object',
+                properties: {
+                  input: { type: 'number' },
+                  output: { type: 'number' },
+                  total: { type: 'number' },
+                },
+              },
+            },
+            required: ['text', 'startTime'],
+          },
+          result_schema: {
+            type: 'object',
+            properties: {
+              endTime: { type: 'number', description: 'End timestamp (ms)' },
+              durationMs: { type: 'number', description: 'Response duration' },
+              isError: { type: 'boolean', description: 'Whether response failed' },
+            },
+            required: ['endTime', 'isError'],
           },
         },
       ],

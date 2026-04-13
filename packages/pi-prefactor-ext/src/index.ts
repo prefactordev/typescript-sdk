@@ -1,12 +1,12 @@
 /**
  * Pi Prefactor Extension - MVP
- * 
+ *
  * Instruments pi coding agent with Prefactor spans for distributed tracing.
- * 
+ *
  * @module
  */
 
-import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
+import type { ExtensionAPI, ExtensionContext } from '@mariozechner/pi-coding-agent';
 import packageJson from '../package.json' with { type: 'json' };
 import { createHash } from 'node:crypto';
 import { loadConfig, validateConfig, getConfigSummary, getConfigErrorMessage } from './config.js';
@@ -30,7 +30,7 @@ function getSessionKey(ctx: ExtensionContext): string {
 function extractTextFromContent(content: unknown): string {
   if (typeof content === 'string') return content;
   if (!Array.isArray(content)) return '';
-  
+
   const textParts: string[] = [];
   for (const block of content) {
     if (block?.type === 'text' && typeof block.text === 'string') {
@@ -46,7 +46,7 @@ function extractTextFromContent(content: unknown): string {
  */
 function extractPathFromToolResult(resultText: string, toolName: string): string | undefined {
   if (!resultText) return undefined;
-  
+
   if (toolName === 'write') {
     // Pattern: "Successfully wrote X bytes to /path/to/file.txt"
     const writeMatch = resultText.match(/to\s+([\/\w\-.]+\.[\w-]+)/i);
@@ -66,7 +66,7 @@ function extractPathFromToolResult(resultText: string, toolName: string): string
       return editMatch[1];
     }
   }
-  
+
   return undefined;
 }
 
@@ -79,13 +79,16 @@ function registerConfigCommand(pi: ExtensionAPI, config: any) {
     handler: async (_args, ctx) => {
       const validation = validateConfig(config);
       const summary = validation.ok ? getConfigSummary(config) : { status: 'invalid' };
-      
-      const msg = `Prefactor Extension Configuration:\n\n` +
+
+      const msg =
+        `Prefactor Extension Configuration:\n\n` +
         `Status: ${validation.ok ? '✅ Valid' : '❌ Invalid'}\n\n` +
-        (validation.ok 
-          ? Object.entries(summary).map(([k, v]) => `- ${k}: ${v}`).join('\n')
+        (validation.ok
+          ? Object.entries(summary)
+              .map(([k, v]) => `- ${k}: ${v}`)
+              .join('\n')
           : getConfigErrorMessage(validation));
-      
+
       if (ctx.hasUI) {
         ctx.ui.notify(msg, validation.ok ? 'info' : 'error');
       } else {
@@ -103,7 +106,7 @@ export default function prefactorExtension(pi: ExtensionAPI) {
   const packageConfig = pi.getPackageConfig?.('pi-prefactor') ?? {};
   const config = loadConfig(packageConfig);
   const validation = validateConfig(config);
-  
+
   // Validate configuration
   if (!validation.ok) {
     console.error('[pi-prefactor] Configuration error:', validation.error);
@@ -112,30 +115,33 @@ export default function prefactorExtension(pi: ExtensionAPI) {
     registerConfigCommand(pi, config);
     return;
   }
-  
+
   // Initialize logger
   const logger = createLogger(config.logLevel);
   logger.debug('config_loaded', getConfigSummary(config));
-  
+
   // Initialize Prefactor agent HTTP client
-  const agent = createAgent({
-    apiUrl: config.apiUrl,
-    apiToken: config.apiToken,
-    agentId: config.agentId,
-    agentName: config.agentName,
-    agentVersion: config.agentVersion,
-    piVersion: '0.66.0', // Pi version
-    pluginVersion: packageJson.version || '0.0.1',
-  }, logger);
-  
+  const agent = createAgent(
+    {
+      apiUrl: config.apiUrl,
+      apiToken: config.apiToken,
+      agentId: config.agentId,
+      agentName: config.agentName,
+      agentVersion: config.agentVersion,
+      piVersion: '0.66.0', // Pi version
+      pluginVersion: packageJson.version || '0.0.1',
+    },
+    logger
+  );
+
   // Initialize session state manager
   const sessionManager = createSessionStateManager(agent, logger, {
     userInteractionTimeoutMs: config.userInteractionTimeoutMinutes * 60 * 1000,
     sessionTimeoutMs: config.sessionTimeoutHours * 60 * 60 * 1000,
   });
-  
+
   // ==================== PROCESS EXIT HANDLERS ====================
-  
+
   // Graceful shutdown handlers
   const gracefulShutdown = async (signal: string) => {
     logger.debug('graceful_shutdown', { signal });
@@ -147,10 +153,10 @@ export default function prefactorExtension(pi: ExtensionAPI) {
     }
     process.exit(0);
   };
-  
+
   process.on('SIGINT', () => gracefulShutdown('SIGINT'));
   process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
-  
+
   // Error handlers
   process.on('uncaughtException', async (err) => {
     logger.error('uncaught_exception', { error: err.message });
@@ -161,7 +167,7 @@ export default function prefactorExtension(pi: ExtensionAPI) {
     }
     process.exit(1);
   });
-  
+
   process.on('unhandledRejection', async (reason) => {
     logger.error('unhandled_rejection', { reason: String(reason) });
     try {
@@ -171,29 +177,29 @@ export default function prefactorExtension(pi: ExtensionAPI) {
     }
     process.exit(1);
   });
-  
+
   // Note: 'exit' event is synchronous, async cleanup won't complete
   // But we can at least log
   process.on('exit', (code) => {
     logger.debug('process_exit', { code });
   });
-  
+
   // ==================== SESSION HOOKS ====================
-  
-  pi.on("session_start", async (event, ctx) => {
+
+  pi.on('session_start', async (event, ctx) => {
     const sessionKey = getSessionKey(ctx);
     logger.debug('session_start', { reason: event.reason, sessionKey });
     await sessionManager.createSessionSpan(sessionKey);
   });
-  
-  pi.on("session_shutdown", async (_event, ctx) => {
+
+  pi.on('session_shutdown', async (_event, ctx) => {
     const sessionKey = getSessionKey(ctx);
     logger.debug('session_shutdown', { sessionKey });
-    
+
     // P0 Critical Fix: Close agent_run span FIRST with comprehensive data before cleanup
     const state = sessionManager.getSessionState(sessionKey);
     const endTime = Date.now();
-    
+
     if (state && state.agentRunSpanId) {
       logger.debug('session_shutdown_closing_agent_run', {
         sessionKey,
@@ -202,11 +208,11 @@ export default function prefactorExtension(pi: ExtensionAPI) {
         toolCalls: state.toolCalls,
         commandsRun: state.commandsRun,
       });
-      
+
       await sessionManager.closeAgentRunSpan(sessionKey, 'complete', {
         endTime,
-        success: true,  // Session shutdown is normal completion
-        terminationReason: 'session_shutdown',  // Use new terminationReason field
+        success: true, // Session shutdown is normal completion
+        terminationReason: 'session_shutdown', // Use new terminationReason field
         filesModified: state.filesModified ? Array.from(state.filesModified) : [],
         filesRead: state.filesRead ? Array.from(state.filesRead) : [],
         filesCreated: state.filesCreated || [],
@@ -214,36 +220,36 @@ export default function prefactorExtension(pi: ExtensionAPI) {
         toolCalls: state.toolCalls || 0,
       });
     }
-    
+
     // Close ALL remaining open spans with 'complete' status
     // (they're not failed, just not closed by their handlers)
     await sessionManager.closeAllOpenSpans(sessionKey, 'complete');
-    
+
     // Then close session span
     await sessionManager.closeSessionSpan(sessionKey);
-    
+
     // Finally finish agent instance
     await agent.finishAgentInstance(sessionKey, 'complete');
   });
-  
+
   // ==================== INPUT HOOK ====================
-  
-  pi.on("input", async (event, ctx) => {
+
+  pi.on('input', async (event, ctx) => {
     const sessionKey = getSessionKey(ctx);
     pendingUserMessage = { text: event.text, timestamp: Date.now() };
-    
+
     logger.debug('input', {
       sessionKey,
       textPreview: event.text.slice(0, 50),
       source: event.source,
     });
-    
+
     // Create user_message span directly (no interaction span)
     await sessionManager.createUserMessageSpan(sessionKey, pendingUserMessage);
-    
+
     // Close the span immediately (message is complete once sent)
     await sessionManager.closeUserMessageSpan(sessionKey);
-    
+
     // P0 Agent Run Improvement #7: Capture first user message as userRequest
     const state = sessionManager.getSessionState(sessionKey);
     if (state && !state.userRequest && event.source === 'user') {
@@ -254,38 +260,38 @@ export default function prefactorExtension(pi: ExtensionAPI) {
       });
     }
   });
-  
+
   // ==================== AGENT HOOKS ====================
-  
-  pi.on("before_agent_start", async (event, ctx) => {
+
+  pi.on('before_agent_start', async (event, ctx) => {
     const sessionKey = getSessionKey(ctx);
     const startTime = Date.now();
-    
+
     logger.debug('before_agent_start', {
       sessionKey,
       promptPreview: event.prompt?.slice(0, 50),
       messageCount: event.messages?.length,
     });
-    
+
     if (pendingUserMessage) {
       pendingUserMessage = null;
     }
-    
+
     // P0 Agent Run Improvements: Capture comprehensive agent run data
     // Task 1: Capture systemPrompt (actual text from ctx, not user prompt)
     const systemPrompt = ctx.systemPrompt || '';
     const maxSystemPromptLength = config.maxSystemPromptLength || 2000;
-    
-    const systemPromptHash = systemPrompt 
-      ? createHash('sha256').update(systemPrompt).digest('hex').slice(0, 16) 
+
+    const systemPromptHash = systemPrompt
+      ? createHash('sha256').update(systemPrompt).digest('hex').slice(0, 16)
       : undefined;
-    
+
     // Task 2: Capture skillsLoaded
     const skillsLoaded = (ctx.skills || []).map((s: any) => s.name || s).filter(Boolean);
-    
+
     // Task 3: Capture toolsAvailable
     const toolsAvailable = (ctx.tools || []).map((t: any) => t.name || t).filter(Boolean);
-    
+
     // Task 6: Fix messageCount (actual count, not zero)
     // event.messages may be empty, so track in session state
     const state = sessionManager.getSessionState(sessionKey);
@@ -293,10 +299,10 @@ export default function prefactorExtension(pi: ExtensionAPI) {
       state.messageCount = (state.messageCount || 0) + 1;
     }
     const messageCount = state?.messageCount || event.messages?.length || 0;
-    
+
     // Task 7: Capture userRequest - use event.prompt (user's message) or state.userRequest
     const userRequest = event.prompt || state?.userRequest;
-    
+
     await sessionManager.createAgentRunSpan(sessionKey, {
       messageCount,
       startTime: startTime,
@@ -310,7 +316,7 @@ export default function prefactorExtension(pi: ExtensionAPI) {
       toolsAvailable,
       userRequest,
     });
-    
+
     // Track start time in session state for duration calculation
     const sessionState = sessionManager.getSessionState(sessionKey);
     if (sessionState) {
@@ -320,35 +326,35 @@ export default function prefactorExtension(pi: ExtensionAPI) {
       sessionState.toolsAvailable = toolsAvailable;
     }
   });
-  
-  pi.on("agent_end", async (event, ctx) => {
+
+  pi.on('agent_end', async (event, ctx) => {
     const sessionKey = getSessionKey(ctx);
     const endTime = Date.now();
-    
+
     logger.info('agent_end', {
       sessionKey,
       success: event.success,
       messageCount: event.messages?.length,
     });
-    
+
     // P0 Critical Fix #4: Get session state for comprehensive agent run payload
     const state = sessionManager.getSessionState(sessionKey);
-    
+
     // P0 Agent Run Improvement #4: Add token tracking
     const usage = event.usage || (event.result as any)?.usage;
     let tokens: { input: number; output: number; total: number } | undefined;
-    
+
     if (usage) {
       tokens = {
         input: usage.promptTokens || usage.input_tokens || 0,
         output: usage.completionTokens || usage.output_tokens || 0,
-        total: usage.totalTokens || (usage.promptTokens + usage.completionTokens) || 0,
+        total: usage.totalTokens || usage.promptTokens + usage.completionTokens || 0,
       };
     }
-    
+
     // P0 Agent Run Improvement #5: Fix terminationReason (no contradictions)
     let terminationReason: 'completed' | 'error' | 'user_cancel' | 'timeout' | 'session_shutdown';
-    
+
     if (event.success === true) {
       terminationReason = 'completed';
     } else if (event.error) {
@@ -358,9 +364,9 @@ export default function prefactorExtension(pi: ExtensionAPI) {
     } else if ((event as any).reason === 'timeout') {
       terminationReason = 'timeout';
     } else {
-      terminationReason = 'session_shutdown';  // Clean shutdown
+      terminationReason = 'session_shutdown'; // Clean shutdown
     }
-    
+
     // P0 Critical Fix #3, #4: Close agent run span with duration and comprehensive data
     // Only close if agent_run span still exists (session_shutdown may have already closed it)
     if (state && state.agentRunSpanId) {
@@ -381,25 +387,30 @@ export default function prefactorExtension(pi: ExtensionAPI) {
       logger.debug('agent_run_span_already_closed', { sessionKey });
     }
   });
-  
+
   // ==================== TURN HOOKS - REMOVED ====================
   // pi:turn spans removed as low-value clutter (P0 Cleanup Task)
-  
+
   // ==================== TOOL HOOKS ====================
-  
-  pi.on("tool_execution_start", async (event, ctx) => {
+
+  pi.on('tool_execution_start', async (event, ctx) => {
     const sessionKey = getSessionKey(ctx);
     const startTime = Date.now();
-    
+
     logger.debug('tool_execution_start', {
       sessionKey,
       toolName: event.toolName,
       toolCallId: event.toolCallId,
     });
-    
+
     // P0 Critical Fix #1: Determine schema name based on tool name - use SPECIFIC tool types
-    let schemaName: 'pi:tool:bash' | 'pi:tool:read' | 'pi:tool:write' | 'pi:tool:edit' | 'pi:tool_call' = 'pi:tool_call';
-    
+    let schemaName:
+      | 'pi:tool:bash'
+      | 'pi:tool:read'
+      | 'pi:tool:write'
+      | 'pi:tool:edit'
+      | 'pi:tool_call' = 'pi:tool_call';
+
     if (event.toolName === 'bash') {
       schemaName = 'pi:tool:bash';
     } else if (event.toolName === 'read') {
@@ -409,17 +420,17 @@ export default function prefactorExtension(pi: ExtensionAPI) {
     } else if (event.toolName === 'edit') {
       schemaName = 'pi:tool:edit';
     }
-    
+
     // P0 Critical Fix #2: Build tool-specific payload with start time for duration tracking
     const payload: Record<string, unknown> = {
       toolCallId: event.toolCallId,
-      startTime: startTime,  // CRITICAL: Track start time for duration
+      startTime: startTime, // CRITICAL: Track start time for duration
     };
-    
+
     // P0 Critical Fix #5: Track file path at tool_execution_start time (args available here)
     const state = sessionManager.getSessionState(sessionKey);
     let toolPath: string | undefined;
-    
+
     if (config.captureToolInputs) {
       if (event.toolName === 'bash') {
         const args = event.args as { command?: string; timeout?: number; cwd?: string };
@@ -437,7 +448,7 @@ export default function prefactorExtension(pi: ExtensionAPI) {
         toolPath = args.path;
         payload.path = args.path;
         payload.contentLength = args.content?.length;
-        payload.created = (event as any).created;  // If available
+        payload.created = (event as any).created; // If available
       } else if (event.toolName === 'edit') {
         const args = event.args as { path?: string; edits?: any[] };
         toolPath = args.path;
@@ -445,20 +456,28 @@ export default function prefactorExtension(pi: ExtensionAPI) {
         payload.editCount = args.edits?.length;
       }
     }
-    
+
     // CRITICAL: Await span creation to prevent race condition with tool_result
     await sessionManager.createToolCallSpan(sessionKey, event.toolName, payload, schemaName);
-    
+
     // P0 Critical Fix #5: Store tool path in session state for later tracking in tool_result
-    if (state && toolPath && (event.toolName === 'write' || event.toolName === 'read' || event.toolName === 'edit')) {
+    if (
+      state &&
+      toolPath &&
+      (event.toolName === 'write' || event.toolName === 'read' || event.toolName === 'edit')
+    ) {
       // Store in a temporary map for tool_result to access
       if (!state.pendingToolSpans.has(event.toolCallId)) {
         state.pendingToolSpans.set(event.toolCallId, Promise.resolve(null));
       }
       // Add path tracking to pendingToolSpans metadata
-      (state.pendingToolSpans as any).toolPaths = (state.pendingToolSpans as any).toolPaths || new Map();
-      (state.pendingToolSpans as any).toolPaths.set(event.toolCallId, { path: toolPath, toolName: event.toolName });
-      
+      (state.pendingToolSpans as any).toolPaths =
+        (state.pendingToolSpans as any).toolPaths || new Map();
+      (state.pendingToolSpans as any).toolPaths.set(event.toolCallId, {
+        path: toolPath,
+        toolName: event.toolName,
+      });
+
       logger.info('tool_path_stored', {
         sessionKey,
         toolCallId: event.toolCallId,
@@ -466,20 +485,20 @@ export default function prefactorExtension(pi: ExtensionAPI) {
         path: toolPath,
       });
     }
-    
+
     logger.debug('tool_span_creation_complete', {
       sessionKey,
       toolCallId: event.toolCallId,
       schemaName,
     });
   });
-  
-  pi.on("tool_result", async (event, ctx) => {
+
+  pi.on('tool_result', async (event, ctx) => {
     const sessionKey = getSessionKey(ctx);
     const resultText = extractTextFromContent(event.content);
     const isError = event.isError ?? false;
     const endTime = Date.now();
-    
+
     logger.debug('tool_result', {
       sessionKey,
       toolName: event.toolName,
@@ -487,23 +506,23 @@ export default function prefactorExtension(pi: ExtensionAPI) {
       isError,
       resultTextPreview: resultText.slice(0, 100),
     });
-    
+
     // P0 Critical Fix #5: Track file operations and activity in session state
     const state = sessionManager.getSessionState(sessionKey);
     if (state) {
       // Track tool call count
       state.toolCalls++;
-      
+
       // P0 CRITICAL: Extract path from result text (args not available in tool_result!)
       const extractedPath = extractPathFromToolResult(resultText, event.toolName);
-      
+
       // Also try direct args as backup
       const args = event.args as { path?: string } | undefined;
       const directPath = args?.path;
-      
+
       // Use extracted path from result text, fallback to direct path
       const path = extractedPath || directPath;
-      
+
       logger.info('tool_result_state_tracking', {
         sessionKey,
         toolName: event.toolName,
@@ -516,7 +535,7 @@ export default function prefactorExtension(pi: ExtensionAPI) {
         hasExtractedPath: !!extractedPath,
         hasDirectPath: !!directPath,
       });
-      
+
       // Track file modifications
       if ((event.toolName === 'write' || event.toolName === 'edit') && path) {
         if (!isError) {
@@ -527,7 +546,7 @@ export default function prefactorExtension(pi: ExtensionAPI) {
             toolName: event.toolName,
             filesModifiedCount: state.filesModified.size,
           });
-          
+
           if (event.toolName === 'write' && (event as any).created) {
             state.filesCreated.push(path);
             logger.info('file_created_tracked', {
@@ -538,7 +557,7 @@ export default function prefactorExtension(pi: ExtensionAPI) {
           }
         }
       }
-      
+
       if (event.toolName === 'read' && path) {
         if (!isError) {
           state.filesRead.add(path);
@@ -549,7 +568,7 @@ export default function prefactorExtension(pi: ExtensionAPI) {
           });
         }
       }
-      
+
       if (event.toolName === 'bash') {
         state.commandsRun++;
         logger.info('command_tracked', {
@@ -563,13 +582,13 @@ export default function prefactorExtension(pi: ExtensionAPI) {
         toolName: event.toolName,
       });
     }
-    
+
     // P0 Critical Fix #2: Build result payload based on tool type - ALWAYS capture outputs for auditing
     const resultPayload: Record<string, unknown> = {
       isError,
-      endTime: endTime,  // CRITICAL: Track end time for duration
+      endTime: endTime, // CRITICAL: Track end time for duration
     };
-    
+
     // Capture tool outputs - critical for auditing even on errors
     if (event.toolName === 'bash') {
       // Debug: log what's in event.result
@@ -579,8 +598,10 @@ export default function prefactorExtension(pi: ExtensionAPI) {
         resultType: typeof event.result,
         resultKeys: event.result ? Object.keys(event.result) : [],
       });
-      
-      const result = event.result as { exitCode?: number; stdout?: string; stderr?: string; durationMs?: number } | undefined;
+
+      const result = event.result as
+        | { exitCode?: number; stdout?: string; stderr?: string; durationMs?: number }
+        | undefined;
       if (result) {
         resultPayload.exitCode = result.exitCode;
         resultPayload.stdout = result.stdout?.slice(0, config.maxOutputLength);
@@ -593,7 +614,9 @@ export default function prefactorExtension(pi: ExtensionAPI) {
         resultPayload.stdout = resultText.slice(0, config.maxOutputLength);
       }
     } else if (event.toolName === 'read') {
-      const result = event.result as { content?: string; lineCount?: number; encoding?: string } | undefined;
+      const result = event.result as
+        | { content?: string; lineCount?: number; encoding?: string }
+        | undefined;
       if (result) {
         resultPayload.contentLength = result.content?.length;
         resultPayload.lineCount = result.lineCount;
@@ -612,7 +635,7 @@ export default function prefactorExtension(pi: ExtensionAPI) {
         resultPayload.failedCount = result.failedCount;
       }
     }
-    
+
     await sessionManager.closeToolCallSpanWithResult(
       sessionKey,
       event.toolCallId,
@@ -622,28 +645,77 @@ export default function prefactorExtension(pi: ExtensionAPI) {
       resultPayload
     );
   });
-  
+
   // ==================== MESSAGE HOOKS ====================
-  
-  pi.on("message_start", async (event, ctx) => {
+
+  pi.on('message_start', async (event, ctx) => {
     logger.debug('message_start', {
       sessionKey: getSessionKey(ctx),
       role: event.message.role,
     });
   });
-  
-  pi.on("message_end", async (event, ctx) => {
+
+  pi.on('message_end', async (event, ctx) => {
+    const sessionKey = getSessionKey(ctx);
+    const role = event.message.role;
+
     logger.debug('message_end', {
-      sessionKey: getSessionKey(ctx),
-      role: event.message.role,
+      sessionKey,
+      role,
     });
+
+    // P0 CRITICAL: Capture assistant response (assistant role messages)
+    if (role === 'assistant') {
+      const state = sessionManager.getSessionState(sessionKey);
+      const parentSpanId = state?.agentRunSpanId || null;
+
+      // Extract response text from message content
+      const responseText = extractTextFromContent(event.message.content);
+      const thinking = (event as any)?.thinking || (event as any)?.reasoning || '';
+
+      logger.debug('message_end_assistant', {
+        sessionKey,
+        hasResponse: !!responseText,
+        hasThinking: !!thinking,
+        parentSpanId,
+      });
+
+      if (responseText) {
+        const startTime = Date.now();
+
+        // Create assistant_response span
+        await sessionManager.createAssistantResponseSpan(
+          sessionKey,
+          {
+            text: responseText,
+            thinking: thinking || undefined,
+            model: (ctx.model as any)?.id,
+            provider: (ctx.model as any)?.provider,
+            startTime,
+          },
+          parentSpanId
+        );
+
+        // Close the span immediately
+        await sessionManager.closeAssistantResponseSpan(sessionKey, {
+          endTime: Date.now(),
+          durationMs: Date.now() - startTime,
+          isError: false,
+        });
+
+        logger.info('assistant_response_captured', {
+          sessionKey,
+          textPreview: responseText.slice(0, 50),
+        });
+      }
+    }
   });
-  
+
   // Register configuration command
   registerConfigCommand(pi, config);
-  
+
   logger.info('extension_initialized', {
-    hooks: 10,  // After P0 cleanup: removed turn_start, turn_end, interaction span creation
+    hooks: 10, // After P0 cleanup: removed turn_start, turn_end, interaction span creation
     sessionTimeoutHours: config.sessionTimeoutHours,
     interactionTimeoutMinutes: config.userInteractionTimeoutMinutes,
   });

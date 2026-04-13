@@ -1,7 +1,7 @@
 /**
  * Simple structured logger for pi-prefactor extension
  * Logs to console with [pi-prefactor:<event>] prefix - captured in pi logs
- * 
+ *
  * @module
  */
 
@@ -77,7 +77,7 @@ export class Logger {
 
 /**
  * Create a logger instance with specified log level
- * 
+ *
  * @param level - Minimum log level to output (default: 'info')
  * @returns Logger instance
  */
