@@ -63,7 +63,7 @@ export class SessionStateManager {
       sessionTimeoutMs: config.sessionTimeoutMs || 24 * 60 * 60 * 1000,
     };
 
-    this.logger.info('session_manager_init', {
+    this.logger.debug('session_manager_init', {
       interactionTimeoutMinutes: this.config.userInteractionTimeoutMs / 60000,
       sessionTimeoutHours: this.config.sessionTimeoutMs / 3600000,
     });
@@ -118,7 +118,7 @@ export class SessionStateManager {
         createdAt: Date.now(),
         status: 'open',
       });
-      this.logger.info('session_span_created', { sessionKey, spanId });
+      this.logger.debug('session_span_created', { sessionKey, spanId });
     }
     return spanId;
   }
@@ -128,7 +128,7 @@ export class SessionStateManager {
     const state = this.sessions.get(sessionKey);
     if (!state) return;
 
-    this.logger.info('closeSessionSpan_start', {
+    this.logger.debug('closeSessionSpan_start', {
       sessionKey,
       hasAgentRun: !!state.agentRunSpanId,
       hasInteraction: !!state.interactionSpanId,
@@ -147,7 +147,7 @@ export class SessionStateManager {
       spanEntry.status = 'closed';
     }
     await this.agent.finishSpan(sessionKey, spanId, 'complete');
-    this.logger.info('session_span_closed', { sessionKey, spanId });
+    this.logger.debug('session_span_closed', { sessionKey, spanId });
     this.sessions.delete(sessionKey);
   }
 
@@ -177,7 +177,7 @@ export class SessionStateManager {
         createdAt: Date.now(),
         status: 'open',
       });
-      this.logger.info('interaction_span_created', { sessionKey, spanId });
+      this.logger.debug('interaction_span_created', { sessionKey, spanId });
     }
     return spanId;
   }
@@ -208,7 +208,7 @@ export class SessionStateManager {
         createdAt: Date.now(),
         status: 'open',
       });
-      this.logger.info('user_message_span_created', { sessionKey, spanId });
+      this.logger.debug('user_message_span_created', { sessionKey, spanId });
     }
     return spanId;
   }
@@ -231,7 +231,7 @@ export class SessionStateManager {
       reason: 'message_delivered',
     });
     
-    this.logger.info('user_message_span_closed', { sessionKey, spanId });
+    this.logger.debug('user_message_span_closed', { sessionKey, spanId });
   }
 
   // Agent run spans
@@ -257,7 +257,7 @@ export class SessionStateManager {
         createdAt: Date.now(),
         status: 'open',
       });
-      this.logger.info('agent_run_span_created', { sessionKey, spanId });
+      this.logger.debug('agent_run_span_created', { sessionKey, spanId });
     }
     return spanId;
   }
@@ -279,9 +279,9 @@ export class SessionStateManager {
       spanEntry.status = 'closed';
     }
     
-    this.logger.info('agent_run_closing', { sessionKey, spanId, status });
+    this.logger.debug('agent_run_closing', { sessionKey, spanId, status });
     await this.agent.finishSpan(sessionKey, spanId, status);
-    this.logger.info('agent_run_span_closed', { sessionKey, spanId, status });
+    this.logger.debug('agent_run_span_closed', { sessionKey, spanId, status });
   }
 
   // Tool call spans
@@ -315,7 +315,7 @@ export class SessionStateManager {
         createdAt: Date.now(),
         status: 'open',
       });
-      this.logger.info('tool_call_span_created', { sessionKey, spanId, toolName });
+      this.logger.debug('tool_call_span_created', { sessionKey, spanId, toolName });
     }
     return spanId;
   }
@@ -362,9 +362,9 @@ export class SessionStateManager {
       spanEntry.status = 'closed';
     }
     
-    this.logger.info('tool_call_closing', { sessionKey, spanId: entry.spanId, isError, toolName });
+    this.logger.debug('tool_call_closing', { sessionKey, spanId: entry.spanId, isError, toolName });
     await this.agent.finishSpan(sessionKey, entry.spanId, status, resultPayload);
-    this.logger.info('tool_call_span_closed', { sessionKey, spanId: entry.spanId, status });
+    this.logger.debug('tool_call_span_closed', { sessionKey, spanId: entry.spanId, status });
     
     state.toolCallSpans = state.toolCallSpans.filter(e => e.spanId !== entry.spanId);
   }
@@ -398,7 +398,7 @@ export class SessionStateManager {
         createdAt: Date.now(),
         status: 'open',
       });
-      this.logger.info('assistant_response_span_created', { sessionKey, spanId });
+      this.logger.debug('assistant_response_span_created', { sessionKey, spanId });
     }
     return spanId;
   }
@@ -421,7 +421,7 @@ export class SessionStateManager {
       reason: 'turn_ended',
     });
     
-    this.logger.info('assistant_response_span_closed', { sessionKey, spanId });
+    this.logger.debug('assistant_response_span_closed', { sessionKey, spanId });
   }
 
   // Agent thinking spans
@@ -453,7 +453,7 @@ export class SessionStateManager {
         createdAt: Date.now(),
         status: 'open',
       });
-      this.logger.info('thinking_span_created', { sessionKey, spanId, thinkingLength: thinking.length });
+      this.logger.debug('thinking_span_created', { sessionKey, spanId, thinkingLength: thinking.length });
     }
     return spanId;
   }
@@ -476,7 +476,7 @@ export class SessionStateManager {
       reason: 'thinking_captured',
     });
     
-    this.logger.info('thinking_span_closed', { sessionKey, spanId });
+    this.logger.debug('thinking_span_closed', { sessionKey, spanId });
   }
 
   // Interaction span cleanup
@@ -494,9 +494,9 @@ export class SessionStateManager {
       spanEntry.status = 'closed';
     }
     
-    this.logger.info('interaction_span_closing', { sessionKey, spanId });
+    this.logger.debug('interaction_span_closing', { sessionKey, spanId });
     await this.agent.finishSpan(sessionKey, spanId, 'complete');
-    this.logger.info('interaction_span_closed', { sessionKey, spanId });
+    this.logger.debug('interaction_span_closed', { sessionKey, spanId });
   }
 
   /**
@@ -519,7 +519,7 @@ export class SessionStateManager {
       return;
     }
     
-    this.logger.info('closing_all_open_spans', {
+    this.logger.debug('closing_all_open_spans', {
       sessionKey,
       openSpanCount,
       defaultStatus,
@@ -549,7 +549,7 @@ export class SessionStateManager {
       entry.status = 'closed';
     }
     
-    this.logger.info('all_open_spans_closed', {
+    this.logger.debug('all_open_spans_closed', {
       sessionKey,
       closedCount: openSpanCount,
     });
@@ -564,7 +564,7 @@ export class SessionStateManager {
 
   // Cleanup
   async cleanupAllSessions(): Promise<void> {
-    this.logger.info('cleanup_all_sessions_start', { count: this.sessions.size });
+    this.logger.debug('cleanup_all_sessions_start', { count: this.sessions.size });
     for (const [sessionKey, state] of this.sessions.entries()) {
       // Close ALL open spans with 'complete' status
       // (they're not failed, just interrupted by process exit)
@@ -580,14 +580,14 @@ export class SessionStateManager {
       }
     }
     this.sessions.clear();
-    this.logger.info('cleanup_all_sessions_complete');
+    this.logger.debug('cleanup_all_sessions_complete');
   }
 
   private async closeAllChildSpans(sessionKey: string): Promise<void> {
     const state = this.sessions.get(sessionKey);
     if (!state || !this.agent) return;
 
-    this.logger.info('closeAllChildSpans_start', {
+    this.logger.debug('closeAllChildSpans_start', {
       sessionKey,
       hasAgentRun: !!state.agentRunSpanId,
       hasInteraction: !!state.interactionSpanId,
@@ -602,7 +602,7 @@ export class SessionStateManager {
       .sort((a, b) => b.createdAt - a.createdAt);  // Newest first
     
     for (const entry of openSpans) {
-      this.logger.warn('closing_missed_span', {
+      this.logger.debug('closing_missed_span', {
         sessionKey,
         spanId: entry.spanId,
         schemaName: entry.schemaName,
@@ -620,7 +620,7 @@ export class SessionStateManager {
 
     // Close interaction span if still tracked
     if (state.interactionSpanId) {
-      this.logger.warn('closing_interaction_span', {
+      this.logger.debug('closing_interaction_span', {
         sessionKey,
         spanId: state.interactionSpanId,
       });
@@ -655,7 +655,7 @@ export class SessionStateManager {
     state.userMessageSpanId = null;
     state.agentThinkingSpanId = null;
     
-    this.logger.info('closeAllChildSpans_complete', {
+    this.logger.debug('closeAllChildSpans_complete', {
       sessionKey,
       closedCount: openSpans.length,
     });

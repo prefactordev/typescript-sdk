@@ -84,7 +84,7 @@ export default function prefactorExtension(pi: ExtensionAPI) {
   
   // Initialize logger
   const logger = createLogger(config.logLevel);
-  logger.info('config_loaded', getConfigSummary(config));
+  logger.debug('config_loaded', getConfigSummary(config));
   
   // Initialize Prefactor agent HTTP client
   const agent = createAgent({
@@ -107,7 +107,7 @@ export default function prefactorExtension(pi: ExtensionAPI) {
   
   // Graceful shutdown handlers
   const gracefulShutdown = async (signal: string) => {
-    logger.info('graceful_shutdown', { signal });
+    logger.debug('graceful_shutdown', { signal });
     try {
       await sessionManager.cleanupAllSessions();
       await agent.finishAgentInstance('*', 'complete');
@@ -144,20 +144,20 @@ export default function prefactorExtension(pi: ExtensionAPI) {
   // Note: 'exit' event is synchronous, async cleanup won't complete
   // But we can at least log
   process.on('exit', (code) => {
-    logger.info('process_exit', { code });
+    logger.debug('process_exit', { code });
   });
   
   // ==================== SESSION HOOKS ====================
   
   pi.on("session_start", async (event, ctx) => {
     const sessionKey = getSessionKey(ctx);
-    logger.info('session_start', { reason: event.reason, sessionKey });
+    logger.debug('session_start', { reason: event.reason, sessionKey });
     await sessionManager.createSessionSpan(sessionKey);
   });
   
   pi.on("session_shutdown", async (_event, ctx) => {
     const sessionKey = getSessionKey(ctx);
-    logger.info('session_shutdown', { sessionKey });
+    logger.debug('session_shutdown', { sessionKey });
     
     // Close ALL remaining open spans with 'complete' status
     // (they're not failed, just not closed by their handlers)
@@ -176,7 +176,7 @@ export default function prefactorExtension(pi: ExtensionAPI) {
     const sessionKey = getSessionKey(ctx);
     pendingUserMessage = { text: event.text, timestamp: Date.now() };
     
-    logger.info('input', {
+    logger.debug('input', {
       sessionKey,
       textPreview: event.text.slice(0, 50),
       source: event.source,
@@ -194,7 +194,7 @@ export default function prefactorExtension(pi: ExtensionAPI) {
   pi.on("before_agent_start", async (event, ctx) => {
     const sessionKey = getSessionKey(ctx);
     
-    logger.info('before_agent_start', {
+    logger.debug('before_agent_start', {
       sessionKey,
       promptPreview: event.prompt?.slice(0, 50),
       messageCount: event.messages?.length,
@@ -212,7 +212,7 @@ export default function prefactorExtension(pi: ExtensionAPI) {
   pi.on("agent_end", async (event, ctx) => {
     const sessionKey = getSessionKey(ctx);
     
-    logger.info('agent_end', {
+    logger.debug('agent_end', {
       sessionKey,
       success: event.success,
       messageCount: event.messages?.length,
@@ -313,7 +313,7 @@ export default function prefactorExtension(pi: ExtensionAPI) {
       await sessionManager.closeAssistantResponseSpan(sessionKey);
     }
     
-    logger.info('turn_end', {
+    logger.debug('turn_end', {
       sessionKey,
       turnIndex: event.turnIndex,
       toolResultsCount: event.toolResults?.length,
@@ -325,7 +325,7 @@ export default function prefactorExtension(pi: ExtensionAPI) {
   pi.on("tool_execution_start", async (event, ctx) => {
     const sessionKey = getSessionKey(ctx);
     
-    logger.info('tool_execution_start', {
+    logger.debug('tool_execution_start', {
       sessionKey,
       toolName: event.toolName,
       toolCallId: event.toolCallId,
@@ -354,7 +354,7 @@ export default function prefactorExtension(pi: ExtensionAPI) {
     const resultText = extractTextFromContent(event.content);
     const isError = event.isError ?? false;
     
-    logger.info('tool_result', {
+    logger.debug('tool_result', {
       sessionKey,
       toolName: event.toolName,
       toolCallId: event.toolCallId,
