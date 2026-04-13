@@ -14,6 +14,13 @@ interface ToolCallEntry {
   toolCallId?: string;
 }
 
+interface SpanEntry {
+  spanId: string;
+  schemaName: string;
+  createdAt: number;
+  status: 'open' | 'closed';
+}
+
 interface SessionSpanState {
   sessionKey: string;
   sessionSpanId: string | null;
@@ -23,6 +30,14 @@ interface SessionSpanState {
   agentRunSpanId: string | null;
   toolCallSpans: ToolCallEntry[];
   pendingToolSpans: Map<string, Promise<string | null>>;  // Track pending tool span creations
+  
+  // Comprehensive span tracking
+  openSpans: Map<string, SpanEntry>;  // spanId -> entry
+  
+  // Individual span references for direct close methods
+  assistantResponseSpanId: string | null;
+  userMessageSpanId: string | null;
+  agentThinkingSpanId: string | null;
 }
 
 interface SessionManagerConfig {
@@ -66,6 +81,10 @@ export class SessionStateManager {
         agentRunSpanId: null,
         toolCallSpans: [],
         pendingToolSpans: new Map(),
+        openSpans: new Map(),
+        assistantResponseSpanId: null,
+        userMessageSpanId: null,
+        agentThinkingSpanId: null,
       };
       this.sessions.set(sessionKey, state);
       this.logger.debug('session_state_created', { sessionKey });
@@ -92,6 +111,13 @@ export class SessionStateManager {
     if (spanId) {
       state.sessionSpanId = spanId;
       state.sessionCreatedAt = Date.now();
+      // Register in openSpans map
+      state.openSpans.set(spanId, {
+        spanId,
+        schemaName: 'pi:session',
+        createdAt: Date.now(),
+        status: 'open',
+      });
       this.logger.info('session_span_created', { sessionKey, spanId });
     }
     return spanId;
@@ -107,6 +133,7 @@ export class SessionStateManager {
       hasAgentRun: !!state.agentRunSpanId,
       hasInteraction: !!state.interactionSpanId,
       toolCallCount: state.toolCallSpans.length,
+      openSpanCount: Array.from(state.openSpans.values()).filter(e => e.status === 'open').length,
     });
 
     await this.closeAllChildSpans(sessionKey);
@@ -114,6 +141,11 @@ export class SessionStateManager {
     if (!spanId) return;
     
     state.sessionSpanId = null;
+    // Mark as closed in openSpans map
+    const spanEntry = state.openSpans.get(spanId);
+    if (spanEntry) {
+      spanEntry.status = 'closed';
+    }
     await this.agent.finishSpan(sessionKey, spanId, 'complete');
     this.logger.info('session_span_closed', { sessionKey, spanId });
     this.sessions.delete(sessionKey);
@@ -138,6 +170,13 @@ export class SessionStateManager {
     if (spanId) {
       state.interactionSpanId = spanId;
       state.interactionLastActivity = Date.now();
+      // Register in openSpans map
+      state.openSpans.set(spanId, {
+        spanId,
+        schemaName: 'pi:user_interaction',
+        createdAt: Date.now(),
+        status: 'open',
+      });
       this.logger.info('interaction_span_created', { sessionKey, spanId });
     }
     return spanId;
@@ -161,9 +200,38 @@ export class SessionStateManager {
       state.interactionSpanId
     );
     if (spanId) {
+      state.userMessageSpanId = spanId;
+      // Register in openSpans map
+      state.openSpans.set(spanId, {
+        spanId,
+        schemaName: 'pi:user_message',
+        createdAt: Date.now(),
+        status: 'open',
+      });
       this.logger.info('user_message_span_created', { sessionKey, spanId });
     }
     return spanId;
+  }
+
+  async closeUserMessageSpan(sessionKey: string): Promise<void> {
+    if (!this.agent) return;
+    const state = this.sessions.get(sessionKey);
+    if (!state || !state.userMessageSpanId) return;
+    
+    const spanId = state.userMessageSpanId;
+    state.userMessageSpanId = null;
+    
+    // Mark as closed in openSpans map
+    const spanEntry = state.openSpans.get(spanId);
+    if (spanEntry) {
+      spanEntry.status = 'closed';
+    }
+    
+    await this.agent.finishSpan(sessionKey, spanId, 'complete', {
+      reason: 'message_delivered',
+    });
+    
+    this.logger.info('user_message_span_closed', { sessionKey, spanId });
   }
 
   // Agent run spans
@@ -182,6 +250,13 @@ export class SessionStateManager {
     );
     if (spanId) {
       state.agentRunSpanId = spanId;
+      // Register in openSpans map
+      state.openSpans.set(spanId, {
+        spanId,
+        schemaName: 'pi:agent_run',
+        createdAt: Date.now(),
+        status: 'open',
+      });
       this.logger.info('agent_run_span_created', { sessionKey, spanId });
     }
     return spanId;
@@ -197,6 +272,12 @@ export class SessionStateManager {
 
     const spanId = state.agentRunSpanId;
     state.agentRunSpanId = null;
+    
+    // Mark as closed in openSpans map
+    const spanEntry = state.openSpans.get(spanId);
+    if (spanEntry) {
+      spanEntry.status = 'closed';
+    }
     
     this.logger.info('agent_run_closing', { sessionKey, spanId, status });
     await this.agent.finishSpan(sessionKey, spanId, status);
@@ -227,6 +308,13 @@ export class SessionStateManager {
     const spanId = await spanPromise;
     if (spanId) {
       state.toolCallSpans.push({ spanId, toolName, toolCallId });
+      // Register in openSpans map
+      state.openSpans.set(spanId, {
+        spanId,
+        schemaName: 'pi:tool_call',
+        createdAt: Date.now(),
+        status: 'open',
+      });
       this.logger.info('tool_call_span_created', { sessionKey, spanId, toolName });
     }
     return spanId;
@@ -266,10 +354,17 @@ export class SessionStateManager {
     }
 
     const resultPayload = { output: resultText || '', isError };
+    const status = isError ? 'failed' : 'complete';
+    
+    // Mark as closed in openSpans map
+    const spanEntry = state.openSpans.get(entry.spanId);
+    if (spanEntry) {
+      spanEntry.status = 'closed';
+    }
     
     this.logger.info('tool_call_closing', { sessionKey, spanId: entry.spanId, isError, toolName });
-    await this.agent.finishSpan(sessionKey, entry.spanId, isError ? 'failed' : 'complete', resultPayload);
-    this.logger.info('tool_call_span_closed', { sessionKey, spanId: entry.spanId, isError });
+    await this.agent.finishSpan(sessionKey, entry.spanId, status, resultPayload);
+    this.logger.info('tool_call_span_closed', { sessionKey, spanId: entry.spanId, status });
     
     state.toolCallSpans = state.toolCallSpans.filter(e => e.spanId !== entry.spanId);
   }
@@ -295,9 +390,38 @@ export class SessionStateManager {
       state.interactionSpanId
     );
     if (spanId) {
+      state.assistantResponseSpanId = spanId;
+      // Register in openSpans map
+      state.openSpans.set(spanId, {
+        spanId,
+        schemaName: 'pi:assistant_response',
+        createdAt: Date.now(),
+        status: 'open',
+      });
       this.logger.info('assistant_response_span_created', { sessionKey, spanId });
     }
     return spanId;
+  }
+
+  async closeAssistantResponseSpan(sessionKey: string): Promise<void> {
+    if (!this.agent) return;
+    const state = this.sessions.get(sessionKey);
+    if (!state || !state.assistantResponseSpanId) return;
+    
+    const spanId = state.assistantResponseSpanId;
+    state.assistantResponseSpanId = null;
+    
+    // Mark as closed in openSpans map
+    const spanEntry = state.openSpans.get(spanId);
+    if (spanEntry) {
+      spanEntry.status = 'closed';
+    }
+    
+    await this.agent.finishSpan(sessionKey, spanId, 'complete', {
+      reason: 'turn_ended',
+    });
+    
+    this.logger.info('assistant_response_span_closed', { sessionKey, spanId });
   }
 
   // Agent thinking spans
@@ -321,9 +445,38 @@ export class SessionStateManager {
       state.agentRunSpanId  // Thinking is child of agent_run
     );
     if (spanId) {
+      state.agentThinkingSpanId = spanId;
+      // Register in openSpans map
+      state.openSpans.set(spanId, {
+        spanId,
+        schemaName: 'pi:agent_thinking',
+        createdAt: Date.now(),
+        status: 'open',
+      });
       this.logger.info('thinking_span_created', { sessionKey, spanId, thinkingLength: thinking.length });
     }
     return spanId;
+  }
+
+  async closeAgentThinkingSpan(sessionKey: string): Promise<void> {
+    if (!this.agent) return;
+    const state = this.sessions.get(sessionKey);
+    if (!state || !state.agentThinkingSpanId) return;
+    
+    const spanId = state.agentThinkingSpanId;
+    state.agentThinkingSpanId = null;
+    
+    // Mark as closed in openSpans map
+    const spanEntry = state.openSpans.get(spanId);
+    if (spanEntry) {
+      spanEntry.status = 'closed';
+    }
+    
+    await this.agent.finishSpan(sessionKey, spanId, 'complete', {
+      reason: 'thinking_captured',
+    });
+    
+    this.logger.info('thinking_span_closed', { sessionKey, spanId });
   }
 
   // Interaction span cleanup
@@ -335,17 +488,83 @@ export class SessionStateManager {
     const spanId = state.interactionSpanId;
     state.interactionSpanId = null;
     
+    // Mark as closed in openSpans map
+    const spanEntry = state.openSpans.get(spanId);
+    if (spanEntry) {
+      spanEntry.status = 'closed';
+    }
+    
     this.logger.info('interaction_span_closing', { sessionKey, spanId });
     await this.agent.finishSpan(sessionKey, spanId, 'complete');
     this.logger.info('interaction_span_closed', { sessionKey, spanId });
+  }
+
+  /**
+   * Close all remaining open spans with specified status.
+   * This is a defensive cleanup for spans not closed by their handlers.
+   */
+  async closeAllOpenSpans(
+    sessionKey: string,
+    defaultStatus: 'complete' | 'failed' | 'cancelled' = 'complete'
+  ): Promise<void> {
+    if (!this.agent) return;
+    const state = this.sessions.get(sessionKey);
+    if (!state) return;
+    
+    const openSpanCount = Array.from(state.openSpans.values())
+      .filter(entry => entry.status === 'open').length;
+    
+    if (openSpanCount === 0) {
+      this.logger.debug('no_open_spans_to_close', { sessionKey });
+      return;
+    }
+    
+    this.logger.info('closing_all_open_spans', {
+      sessionKey,
+      openSpanCount,
+      defaultStatus,
+    });
+    
+    // Close in reverse order (LIFO - newest first)
+    const openSpans = Array.from(state.openSpans.values())
+      .filter(entry => entry.status === 'open')
+      .sort((a, b) => b.createdAt - a.createdAt);  // Newest first
+    
+    for (const entry of openSpans) {
+      this.logger.warn('closing_orphaned_span', {
+        sessionKey,
+        spanId: entry.spanId,
+        schemaName: entry.schemaName,
+        age: Date.now() - entry.createdAt,
+        status: defaultStatus,
+      });
+      
+      await this.agent.finishSpan(
+        sessionKey,
+        entry.spanId,
+        defaultStatus,
+        { reason: 'session_shutdown_cleanup' }
+      );
+      
+      entry.status = 'closed';
+    }
+    
+    this.logger.info('all_open_spans_closed', {
+      sessionKey,
+      closedCount: openSpanCount,
+    });
   }
 
   // Cleanup
   async cleanupAllSessions(): Promise<void> {
     this.logger.info('cleanup_all_sessions_start', { count: this.sessions.size });
     for (const [sessionKey, state] of this.sessions.entries()) {
-      await this.closeAllChildSpans(sessionKey);
+      await this.closeAllOpenSpans(sessionKey, 'complete');
       if (state.sessionSpanId) {
+        const spanEntry = state.openSpans.get(state.sessionSpanId);
+        if (spanEntry) {
+          spanEntry.status = 'closed';
+        }
         await this.agent?.finishSpan(sessionKey, state.sessionSpanId, 'complete');
       }
     }
@@ -362,43 +581,43 @@ export class SessionStateManager {
       hasAgentRun: !!state.agentRunSpanId,
       hasInteraction: !!state.interactionSpanId,
       toolCallCount: state.toolCallSpans.length,
+      openSpanCount: Array.from(state.openSpans.values()).filter(e => e.status === 'open').length,
     });
 
-    // Close orphaned tool spans (only if still in array)
-    for (const toolSpan of state.toolCallSpans) {
-      this.logger.warn('closing_orphaned_tool_span', { 
-        sessionKey, 
-        toolSpanId: toolSpan.spanId,
-        toolName: toolSpan.toolName 
+    // Close any remaining open spans with 'complete' status
+    // (they're not failed, just missed by their handlers)
+    const openSpans = Array.from(state.openSpans.values())
+      .filter(entry => entry.status === 'open')
+      .sort((a, b) => b.createdAt - a.createdAt);  // Newest first
+    
+    for (const entry of openSpans) {
+      this.logger.warn('closing_missed_span', {
+        sessionKey,
+        spanId: entry.spanId,
+        schemaName: entry.schemaName,
       });
-      await this.agent.finishSpan(sessionKey, toolSpan.spanId, 'failed');
+      
+      await this.agent.finishSpan(
+        sessionKey,
+        entry.spanId,
+        'complete',  // Use 'complete', not 'failed'
+        { reason: 'defensive_cleanup' }
+      );
+      
+      entry.status = 'closed';
     }
+
+    // Clear tracking arrays (spans are now closed)
     state.toolCallSpans = [];
-
-    // Close orphaned agent run (only if still non-null)
-    if (state.agentRunSpanId) {
-      this.logger.warn('closing_orphaned_agent_run', { 
-        sessionKey, 
-        spanId: state.agentRunSpanId 
-      });
-      await this.agent.finishSpan(sessionKey, state.agentRunSpanId, 'failed');
-      state.agentRunSpanId = null;
-    }
-
-    // Close orphaned interaction (only if still non-null)
-    if (state.interactionSpanId) {
-      this.logger.warn('closing_orphaned_interaction', { 
-        sessionKey, 
-        spanId: state.interactionSpanId 
-      });
-      await this.agent.finishSpan(sessionKey, state.interactionSpanId, 'failed');
-      state.interactionSpanId = null;
-    }
+    state.agentRunSpanId = null;
+    state.interactionSpanId = null;
+    state.assistantResponseSpanId = null;
+    state.userMessageSpanId = null;
+    state.agentThinkingSpanId = null;
     
     this.logger.info('closeAllChildSpans_complete', {
       sessionKey,
-      closedAgentRun: !!state.agentRunSpanId,
-      closedInteraction: !!state.interactionSpanId,
+      closedCount: openSpans.length,
     });
   }
 }

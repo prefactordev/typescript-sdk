@@ -114,9 +114,15 @@ export default function prefactorExtension(pi: ExtensionAPI) {
   pi.on("session_shutdown", async (_event, ctx) => {
     const sessionKey = getSessionKey(ctx);
     logger.info('session_shutdown', { sessionKey });
-    // Close interaction span explicitly (it's not closed by any other handler)
-    await sessionManager.closeInteractionSpan(sessionKey);
+    
+    // Close ALL remaining open spans with 'complete' status
+    // (they're not failed, just not closed by their handlers)
+    await sessionManager.closeAllOpenSpans(sessionKey, 'complete');
+    
+    // Then close session span
     await sessionManager.closeSessionSpan(sessionKey);
+    
+    // Finally finish agent instance
     await agent.finishAgentInstance(sessionKey, 'complete');
   });
   
@@ -134,6 +140,9 @@ export default function prefactorExtension(pi: ExtensionAPI) {
     
     await sessionManager.createOrGetInteractionSpan(sessionKey);
     await sessionManager.createUserMessageSpan(sessionKey, pendingUserMessage);
+    
+    // Close the span immediately (message is complete once sent)
+    await sessionManager.closeUserMessageSpan(sessionKey);
   });
   
   // ==================== AGENT HOOKS ====================
@@ -165,7 +174,9 @@ export default function prefactorExtension(pi: ExtensionAPI) {
       messageCount: event.messages?.length,
     });
     
-    await sessionManager.closeAgentRunSpan(sessionKey, event.success ? 'complete' : 'failed');
+    // Always use 'complete' for normal agent exit
+    // (failed status is only for explicit errors, not cleanup)
+    await sessionManager.closeAgentRunSpan(sessionKey, 'complete');
   });
   
   // ==================== TURN HOOKS ====================
@@ -235,6 +246,8 @@ export default function prefactorExtension(pi: ExtensionAPI) {
           model: (ctx.model as any)?.id,
         }
       );
+      // Close immediately (thinking is complete once captured)
+      await sessionManager.closeAgentThinkingSpan(sessionKey);
     }
     
     // Capture assistant response
@@ -252,6 +265,8 @@ export default function prefactorExtension(pi: ExtensionAPI) {
           model: (ctx.model as any)?.id,
         }
       );
+      // Close the span immediately (response is complete once delivered)
+      await sessionManager.closeAssistantResponseSpan(sessionKey);
     }
     
     logger.info('turn_end', {
