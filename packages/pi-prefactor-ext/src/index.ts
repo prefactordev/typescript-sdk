@@ -7,7 +7,7 @@
  */
 
 import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
-import packageJson from '../../package.json' with { type: 'json' };
+import packageJson from '../package.json' with { type: 'json' };
 import { createHash } from 'node:crypto';
 import { loadConfig, validateConfig, getConfigSummary, getConfigErrorMessage } from './config.js';
 import { createLogger } from './logger.js';
@@ -238,7 +238,7 @@ export default function prefactorExtension(pi: ExtensionAPI) {
       source: event.source,
     });
     
-    await sessionManager.createOrGetInteractionSpan(sessionKey);
+    // Create user_message span directly (no interaction span)
     await sessionManager.createUserMessageSpan(sessionKey, pendingUserMessage);
     
     // Close the span immediately (message is complete once sent)
@@ -312,149 +312,8 @@ export default function prefactorExtension(pi: ExtensionAPI) {
     }
   });
   
-  // ==================== TURN HOOKS ====================
-  
-  pi.on("turn_start", async (event, ctx) => {
-    const sessionKey = getSessionKey(ctx);
-    if (!sessionKey) {
-      logger.debug('turn_start_no_session', { sessionId: ctx.sessionId });
-      return;
-    }
-    
-    logger.info('turn_start', { 
-      sessionKey, 
-      turnIndex: event.turnIndex,
-    });
-    
-    const spanId = await sessionManager.createTurnSpan(sessionKey, event.turnIndex, {
-      turnIndex: event.turnIndex,
-      model: ctx.model?.id,
-    });
-    
-    logger.info('turn_span_created', {
-      sessionKey,
-      turnIndex: event.turnIndex,
-      spanId,
-    });
-  });
-  
-  pi.on("turn_end", async (event, ctx) => {
-    const sessionKey = getSessionKey(ctx);
-    
-    // Debug: Log what's in the event
-    logger.debug('turn_end_debug', {
-      sessionKey,
-      hasMessage: !!event.message,
-      hasThinking: !!(event.message?.thinking),
-      thinkingType: typeof event.message?.thinking,
-      thinkingPreview: typeof event.message?.thinking === 'string' ? event.message.thinking.slice(0, 100) : 'N/A',
-      contentPreview: event.message?.content ? (Array.isArray(event.message.content) ? 'array' : typeof event.message.content) : 'N/A',
-    });
-    
-    // Capture thinking - try structured first, then extract from content
-    let thinking = '';
-    
-    // Try structured thinking field (some models support this)
-    if (event.message?.thinking && typeof event.message.thinking === 'string') {
-      thinking = event.message.thinking;
-    } else if (config.captureThinking) {
-      // Fallback: Extract thinking from content for models that output thinking as text
-      const content = event.message?.content;
-      if (Array.isArray(content)) {
-        const textBlocks = content
-          .filter(block => block?.type === 'text')
-          .map(block => block.text)
-          .join('\n');
-        
-        // Look for thinking patterns (common in reasoning models)
-        // Pattern 1: "Let me think/work through..." up to final answer
-        // Pattern 2: Numbered steps before final answer
-        const thinkingPatterns = [
-          /^(Let me (think|work) through[\s\S]*?)(?=\n\n\*\*|## |$)/i,
-          /^(Let me [\s\S]*?)(?=\n\n\*\*|## Answer|$)/i,
-          /^(Step \d+:[\s\S]*?)(?=\n\n\*\*|## |Final Answer|$)/i,
-        ];
-        
-        for (const pattern of thinkingPatterns) {
-          const match = textBlocks.match(pattern);
-          if (match && match[1].trim()) {
-            thinking = match[1].trim();
-            logger.debug('thinking_extracted_from_content', {
-              sessionKey,
-              thinkingLength: thinking.length,
-              pattern: pattern.toString(),
-            });
-            break;
-          }
-        }
-      }
-    }
-    
-    if (thinking && config.captureThinking) {
-      await sessionManager.createAgentThinkingSpan(
-        sessionKey,
-        thinking,
-        event.usage ? {
-          input: event.usage.inputTokens,
-          output: event.usage.outputTokens,
-        } : undefined,
-        {
-          provider: (ctx.model as any)?.provider,
-          model: (ctx.model as any)?.id,
-        }
-      );
-      // Close immediately (thinking is complete once captured)
-      await sessionManager.closeAgentThinkingSpan(sessionKey);
-    }
-    
-    // Capture assistant response
-    const text = extractTextFromContent(event.message?.content);
-    if (text) {
-      await sessionManager.createAssistantResponseSpan(
-        sessionKey,
-        text,
-        event.usage ? {
-          input: event.usage.inputTokens,
-          output: event.usage.outputTokens,
-        } : undefined,
-        {
-          provider: (ctx.model as any)?.provider,
-          model: (ctx.model as any)?.id,
-        }
-      );
-      // Close the span immediately (response is complete once delivered)
-      await sessionManager.closeAssistantResponseSpan(sessionKey);
-    }
-    
-    logger.info('turn_end', {
-      sessionKey,
-      turnIndex: event.turnIndex,
-      toolResultsCount: event.toolResults?.length,
-    });
-    
-    // Close turn span (may already be closed by session_shutdown cleanup)
-    logger.debug('closing_turn_span', {
-      sessionKey,
-      turnIndex: event.turnIndex,
-    });
-    try {
-      await sessionManager.closeTurnSpan(sessionKey, event.turnIndex, {
-        turnIndex: event.turnIndex,
-        success: event.success,
-      });
-      logger.debug('turn_span_closed', {
-        sessionKey,
-        turnIndex: event.turnIndex,
-      });
-    } catch (err) {
-      // Span may have already been closed by session_shutdown
-      logger.debug('turn_span_already_closed', {
-        sessionKey,
-        turnIndex: event.turnIndex,
-        error: err instanceof Error ? err.message : String(err),
-      });
-    }
-  });
+  // ==================== TURN HOOKS - REMOVED ====================
+  // pi:turn spans removed as low-value clutter (P0 Cleanup Task)
   
   // ==================== TOOL HOOKS ====================
   
@@ -714,7 +573,7 @@ export default function prefactorExtension(pi: ExtensionAPI) {
   registerConfigCommand(pi, config);
   
   logger.info('extension_initialized', {
-    hooks: 15,  // Added turn_start, turn_end (was: 13)
+    hooks: 10,  // After P0 cleanup: removed turn_start, turn_end, interaction span creation
     sessionTimeoutHours: config.sessionTimeoutHours,
     interactionTimeoutMinutes: config.userInteractionTimeoutMinutes,
   });

@@ -204,17 +204,6 @@ export class Agent {
           },
         },
         {
-          name: 'pi:user_interaction',
-          description: 'User interaction span',
-          template: null,
-          params_schema: {
-            type: 'object',
-            properties: {
-              startedAt: { type: 'string', description: 'User interaction timestamp' },
-            },
-          },
-        },
-        {
           name: 'pi:user_message',
           description: 'Inbound user message',
           template: '{{ text | default: "(no message)" }}',
@@ -266,41 +255,6 @@ export class Agent {
             properties: {
               output: { type: 'string', description: 'Tool output' },
               isError: { type: 'boolean', description: 'Whether tool failed' },
-            },
-          },
-        },
-        {
-          name: 'pi:assistant_response',
-          description: 'Assistant response',
-          template: '{{ text | default: "(no response)" }}',
-          params_schema: {
-            type: 'object',
-            properties: {
-              text: { type: 'string', description: 'Response text' },
-            },
-          },
-        },
-        {
-          name: 'pi:agent_thinking',
-          description: 'Agent thinking/reasoning trace',
-          template: null,
-          params_schema: {
-            type: 'object',
-            properties: {
-              thought: { type: 'string', description: 'Thinking/reasoning content' },
-              timestamp: { type: 'string', description: 'Thinking timestamp' },
-            },
-          },
-        },
-        {
-          name: 'pi:turn',
-          description: 'Single turn in multi-turn agent execution',
-          template: 'Turn {{ turnIndex | default: 0 }}',
-          params_schema: {
-            type: 'object',
-            properties: {
-              turnIndex: { type: 'number', description: 'Turn number (0-indexed)' },
-              model: { type: 'string', description: 'Model used for this turn' },
             },
           },
         },

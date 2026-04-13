@@ -25,8 +25,6 @@ interface SessionSpanState {
   sessionKey: string;
   sessionSpanId: string | null;
   sessionCreatedAt: number;
-  interactionSpanId: string | null;
-  interactionLastActivity: number;
   agentRunSpanId: string | null;
   agentRunStartTime: number | null;  // P0 Critical Fix #3: Track start time for duration
   toolCallSpans: ToolCallEntry[];
@@ -36,13 +34,7 @@ interface SessionSpanState {
   openSpans: Map<string, SpanEntry>;  // spanId -> entry
   
   // Individual span references for direct close methods
-  assistantResponseSpanId: string | null;
   userMessageSpanId: string | null;
-  agentThinkingSpanId: string | null;
-  
-  // Turn tracking
-  currentTurnIndex: number;
-  turnSpans: Map<number, string>;  // turnIndex -> spanId
   
   // File and activity tracking (P0 Critical Fix #5)
   filesModified: Set<string>;
@@ -88,18 +80,12 @@ export class SessionStateManager {
         sessionKey,
         sessionSpanId: null,
         sessionCreatedAt: now,
-        interactionSpanId: null,
-        interactionLastActivity: now,
         agentRunSpanId: null,
         agentRunStartTime: null,  // P0 Critical Fix #3
         toolCallSpans: [],
         pendingToolSpans: new Map(),
         openSpans: new Map(),
-        assistantResponseSpanId: null,
         userMessageSpanId: null,
-        agentThinkingSpanId: null,
-        currentTurnIndex: 0,
-        turnSpans: new Map(),
         // File and activity tracking (P0 Critical Fix #5)
         filesModified: new Set(),
         filesRead: new Set(),
@@ -152,7 +138,6 @@ export class SessionStateManager {
     this.logger.debug('closeSessionSpan_start', {
       sessionKey,
       hasAgentRun: !!state.agentRunSpanId,
-      hasInteraction: !!state.interactionSpanId,
       toolCallCount: state.toolCallSpans.length,
       openSpanCount: Array.from(state.openSpans.values()).filter(e => e.status === 'open').length,
     });
@@ -172,37 +157,6 @@ export class SessionStateManager {
     this.sessions.delete(sessionKey);
   }
 
-  // Interaction spans
-  async createOrGetInteractionSpan(sessionKey: string): Promise<string | null> {
-    if (!this.agent) return null;
-    const state = this.getOrCreateSessionState(sessionKey);
-    
-    if (state.interactionSpanId) {
-      state.interactionLastActivity = Date.now();
-      return state.interactionSpanId;
-    }
-
-    const spanId = await this.agent.createSpan(
-      sessionKey,
-      'pi:user_interaction',
-      { startedAt: new Date().toISOString() },
-      state.sessionSpanId
-    );
-    if (spanId) {
-      state.interactionSpanId = spanId;
-      state.interactionLastActivity = Date.now();
-      // Register in openSpans map
-      state.openSpans.set(spanId, {
-        spanId,
-        schemaName: 'pi:user_interaction',
-        createdAt: Date.now(),
-        status: 'open',
-      });
-      this.logger.debug('interaction_span_created', { sessionKey, spanId });
-    }
-    return spanId;
-  }
-
   // User message spans
   async createUserMessageSpan(
     sessionKey: string,
@@ -218,7 +172,7 @@ export class SessionStateManager {
         text: payload.text,
         timestamp: new Date(payload.timestamp).toISOString(),
       },
-      state.interactionSpanId
+      state.sessionSpanId  // Parent is session (not interaction)
     );
     if (spanId) {
       state.userMessageSpanId = spanId;
@@ -274,7 +228,7 @@ export class SessionStateManager {
       sessionKey,
       'pi:agent_run',
       payload,
-      state.interactionSpanId
+      state.userMessageSpanId  // Parent is user_message (not interaction)
     );
     if (spanId) {
       state.agentRunSpanId = spanId;
@@ -330,15 +284,8 @@ export class SessionStateManager {
     if (!this.agent) return null;
     const state = this.getOrCreateSessionState(sessionKey);
     
-    // Determine parent span - use current turn span if available, otherwise agent_run
-    let parentSpanId = state.agentRunSpanId;
-    if (state.turnSpans.size > 0) {
-      const currentTurnSpanId = state.turnSpans.get(state.currentTurnIndex);
-      if (currentTurnSpanId) {
-        parentSpanId = currentTurnSpanId;
-        this.logger.debug('tool_span_parent_is_turn', { sessionKey, turnIndex: state.currentTurnIndex, parentSpanId });
-      }
-    }
+    // Parent is always agent_run (no turn spans anymore)
+    const parentSpanId = state.agentRunSpanId;
     
     // Create span promise and track it
     const spanPromise = this.agent.createSpan(
@@ -418,226 +365,28 @@ export class SessionStateManager {
     state.toolCallSpans = state.toolCallSpans.filter(e => e.spanId !== entry.spanId);
   }
 
-  // Turn spans
-  async createTurnSpan(
-    sessionKey: string,
-    turnIndex: number,
-    payload: {
-      turnIndex: number;
-      model?: string;
-    }
-  ): Promise<string | null> {
-    if (!this.agent) return null;
-    const state = this.getOrCreateSessionState(sessionKey);
-    
-    if (!state.agentRunSpanId) {
-      this.logger.warn('cannot_create_turn_span_no_agent_run', { sessionKey, turnIndex });
-      return null;
-    }
-    
-    const spanId = await this.agent.createSpan(
-      sessionKey,
-      'pi:turn',
-      payload,
-      state.agentRunSpanId  // Parent is agent_run
-    );
-    
-    if (spanId) {
-      state.currentTurnIndex = turnIndex;
-      state.turnSpans.set(turnIndex, spanId);
-      // Register in openSpans map
-      state.openSpans.set(spanId, {
-        spanId,
-        schemaName: 'pi:turn',
-        createdAt: Date.now(),
-        status: 'open',
-      });
-      this.logger.debug('turn_span_created', { 
-        sessionKey, 
-        turnIndex, 
-        spanId 
-      });
-    }
-    
-    return spanId;
+  // Assistant response spans - REMOVED (redundant with agent_run)
+  // Thinking spans - REMOVED (low debugging value)
+
+  // Cleanup methods for removed spans - NOOPs
+  async closeInteractionSpan(_sessionKey: string): Promise<void> {
+    // Removed: pi:user_interaction span no longer exists
+    return Promise.resolve();
   }
 
-  async closeTurnSpan(
-    sessionKey: string,
-    turnIndex: number,
-    resultPayload?: Record<string, unknown>
-  ): Promise<void> {
-    if (!this.agent) return;
-    const state = this.sessions.get(sessionKey);
-    if (!state) {
-      this.logger.warn('cannot_close_turn_span_no_state', { sessionKey, turnIndex });
-      return;
-    }
-    
-    const spanId = state.turnSpans.get(turnIndex);
-    if (!spanId) {
-      this.logger.warn('turn_span_not_found', { sessionKey, turnIndex });
-      return;
-    }
-    
-    // Mark as closed in openSpans map
-    const spanEntry = state.openSpans.get(spanId);
-    if (spanEntry) {
-      spanEntry.status = 'closed';
-    }
-    
-    await this.agent.finishSpan(sessionKey, spanId, 'complete', resultPayload);
-    this.logger.debug('turn_span_closed', { sessionKey, turnIndex });
+  async closeAssistantResponseSpan(_sessionKey: string): Promise<void> {
+    // Removed: pi:assistant_response span no longer exists
+    return Promise.resolve();
   }
 
-  // Assistant response spans
-  async createAssistantResponseSpan(
-    sessionKey: string,
-    text: string,
-    tokens?: { input?: number; output?: number },
-    metadata?: { provider?: string; model?: string }
-  ): Promise<string | null> {
-    if (!this.agent) return null;
-    const state = this.getOrCreateSessionState(sessionKey);
-    
-    // Determine parent span - use current turn span if available, otherwise interaction
-    let parentSpanId = state.interactionSpanId;
-    if (state.turnSpans.size > 0) {
-      const currentTurnSpanId = state.turnSpans.get(state.currentTurnIndex);
-      if (currentTurnSpanId) {
-        parentSpanId = currentTurnSpanId;
-        this.logger.debug('assistant_response_parent_is_turn', { sessionKey, turnIndex: state.currentTurnIndex, parentSpanId });
-      }
-    }
-    
-    const spanId = await this.agent.createSpan(
-      sessionKey,
-      'pi:assistant_response',
-      {
-        text: text.slice(0, 10000), // Truncate for safety
-        tokens,
-        ...metadata,
-      },
-      parentSpanId
-    );
-    if (spanId) {
-      state.assistantResponseSpanId = spanId;
-      // Register in openSpans map
-      state.openSpans.set(spanId, {
-        spanId,
-        schemaName: 'pi:assistant_response',
-        createdAt: Date.now(),
-        status: 'open',
-      });
-      this.logger.debug('assistant_response_span_created', { sessionKey, spanId });
-    }
-    return spanId;
+  async closeAgentThinkingSpan(_sessionKey: string): Promise<void> {
+    // Removed: pi:agent_thinking span no longer exists
+    return Promise.resolve();
   }
 
-  async closeAssistantResponseSpan(sessionKey: string): Promise<void> {
-    if (!this.agent) return;
-    const state = this.sessions.get(sessionKey);
-    if (!state || !state.assistantResponseSpanId) return;
-    
-    const spanId = state.assistantResponseSpanId;
-    state.assistantResponseSpanId = null;
-    
-    // Mark as closed in openSpans map
-    const spanEntry = state.openSpans.get(spanId);
-    if (spanEntry) {
-      spanEntry.status = 'closed';
-    }
-    
-    await this.agent.finishSpan(sessionKey, spanId, 'complete', {
-      reason: 'turn_ended',
-    });
-    
-    this.logger.debug('assistant_response_span_closed', { sessionKey, spanId });
-  }
-
-  // Agent thinking spans
-  async createAgentThinkingSpan(
-    sessionKey: string,
-    thinking: string,
-    tokens?: { input?: number; output?: number },
-    metadata?: { provider?: string; model?: string }
-  ): Promise<string | null> {
-    if (!this.agent) return null;
-    const state = this.getOrCreateSessionState(sessionKey);
-    
-    // Determine parent span - use current turn span if available, otherwise agent_run
-    let parentSpanId = state.agentRunSpanId;
-    if (state.turnSpans.size > 0) {
-      const currentTurnSpanId = state.turnSpans.get(state.currentTurnIndex);
-      if (currentTurnSpanId) {
-        parentSpanId = currentTurnSpanId;
-        this.logger.debug('thinking_parent_is_turn', { sessionKey, turnIndex: state.currentTurnIndex, parentSpanId });
-      }
-    }
-    
-    const spanId = await this.agent.createSpan(
-      sessionKey,
-      'pi:agent_thinking',
-      {
-        thinking: thinking.slice(0, 10000), // Truncate for safety
-        tokens,
-        ...metadata,
-      },
-      parentSpanId  // Thinking is child of turn (or agent_run if no turn)
-    );
-    if (spanId) {
-      state.agentThinkingSpanId = spanId;
-      // Register in openSpans map
-      state.openSpans.set(spanId, {
-        spanId,
-        schemaName: 'pi:agent_thinking',
-        createdAt: Date.now(),
-        status: 'open',
-      });
-      this.logger.debug('thinking_span_created', { sessionKey, spanId, thinkingLength: thinking.length });
-    }
-    return spanId;
-  }
-
-  async closeAgentThinkingSpan(sessionKey: string): Promise<void> {
-    if (!this.agent) return;
-    const state = this.sessions.get(sessionKey);
-    if (!state || !state.agentThinkingSpanId) return;
-    
-    const spanId = state.agentThinkingSpanId;
-    state.agentThinkingSpanId = null;
-    
-    // Mark as closed in openSpans map
-    const spanEntry = state.openSpans.get(spanId);
-    if (spanEntry) {
-      spanEntry.status = 'closed';
-    }
-    
-    await this.agent.finishSpan(sessionKey, spanId, 'complete', {
-      reason: 'thinking_captured',
-    });
-    
-    this.logger.debug('thinking_span_closed', { sessionKey, spanId });
-  }
-
-  // Interaction span cleanup
-  async closeInteractionSpan(sessionKey: string): Promise<void> {
-    if (!this.agent) return;
-    const state = this.sessions.get(sessionKey);
-    if (!state || !state.interactionSpanId) return;
-
-    const spanId = state.interactionSpanId;
-    state.interactionSpanId = null;
-    
-    // Mark as closed in openSpans map
-    const spanEntry = state.openSpans.get(spanId);
-    if (spanEntry) {
-      spanEntry.status = 'closed';
-    }
-    
-    this.logger.debug('interaction_span_closing', { sessionKey, spanId });
-    await this.agent.finishSpan(sessionKey, spanId, 'complete');
-    this.logger.debug('interaction_span_closed', { sessionKey, spanId });
+  async closeTurnSpan(_sessionKey: string, _turnIndex: number, _resultPayload?: Record<string, unknown>): Promise<void> {
+    // Removed: pi:turn span no longer exists
+    return Promise.resolve();
   }
 
   /**
@@ -740,13 +489,11 @@ export class SessionStateManager {
     this.logger.debug('closeAllChildSpans_start', {
       sessionKey,
       hasAgentRun: !!state.agentRunSpanId,
-      hasInteraction: !!state.interactionSpanId,
       toolCallCount: state.toolCallSpans.length,
       openSpanCount: Array.from(state.openSpans.values()).filter(e => e.status === 'open').length,
     });
 
     // Close any remaining open spans with 'complete' status
-    // P0 Critical Fix: Skip agent_run span - agent_end/session_shutdown handler will close it with proper data
     const openSpans = Array.from(state.openSpans.values())
       .filter(entry => entry.status === 'open' && entry.schemaName !== 'pi:agent_run')
       .sort((a, b) => b.createdAt - a.createdAt);  // Newest first
@@ -768,21 +515,6 @@ export class SessionStateManager {
       entry.status = 'closed';
     }
 
-    // Close interaction span if still tracked
-    if (state.interactionSpanId) {
-      this.logger.debug('closing_interaction_span', {
-        sessionKey,
-        spanId: state.interactionSpanId,
-      });
-      await this.agent.finishSpan(
-        sessionKey,
-        state.interactionSpanId,
-        'complete',
-        { reason: 'child_cleanup' }
-      );
-      state.interactionSpanId = null;
-    }
-
     // Close session span if still tracked (shouldn't happen, but defensive)
     if (state.sessionSpanId) {
       this.logger.warn('closing_session_span', {
@@ -800,16 +532,11 @@ export class SessionStateManager {
 
     // Clear other tracking arrays (these are just references, spans already closed)
     state.toolCallSpans = [];
-    state.assistantResponseSpanId = null;
     state.userMessageSpanId = null;
-    state.agentThinkingSpanId = null;
-    // P0 Critical Fix: DO NOT clear agentRunSpanId - session_shutdown/agent_end handler needs it
-    // state.agentRunSpanId = null;  // REMOVED - keep for proper cleanup
     
     this.logger.debug('closeAllChildSpans_complete', {
       sessionKey,
       closedCount: openSpans.length,
-      agentRunSpanIdPreserved: !!state.agentRunSpanId,
     });
   }
 }
