@@ -212,7 +212,7 @@ export default function prefactorExtension(pi: ExtensionAPI) {
   pi.on("agent_end", async (event, ctx) => {
     const sessionKey = getSessionKey(ctx);
     
-    logger.debug('agent_end', {
+    logger.info('agent_end', {
       sessionKey,
       success: event.success,
       messageCount: event.messages?.length,
@@ -221,9 +221,34 @@ export default function prefactorExtension(pi: ExtensionAPI) {
     // Always use 'complete' for normal agent exit
     // (failed status is only for explicit errors, not cleanup)
     await sessionManager.closeAgentRunSpan(sessionKey, 'complete');
+    logger.info('agent_run_span_closed', { sessionKey });
   });
   
   // ==================== TURN HOOKS ====================
+  
+  pi.on("turn_start", async (event, ctx) => {
+    const sessionKey = getSessionKey(ctx);
+    if (!sessionKey) {
+      logger.debug('turn_start_no_session', { sessionId: ctx.sessionId });
+      return;
+    }
+    
+    logger.info('turn_start', { 
+      sessionKey, 
+      turnIndex: event.turnIndex,
+    });
+    
+    const spanId = await sessionManager.createTurnSpan(sessionKey, event.turnIndex, {
+      turnIndex: event.turnIndex,
+      model: ctx.model?.id,
+    });
+    
+    logger.info('turn_span_created', {
+      sessionKey,
+      turnIndex: event.turnIndex,
+      spanId,
+    });
+  });
   
   pi.on("turn_end", async (event, ctx) => {
     const sessionKey = getSessionKey(ctx);
@@ -313,11 +338,34 @@ export default function prefactorExtension(pi: ExtensionAPI) {
       await sessionManager.closeAssistantResponseSpan(sessionKey);
     }
     
-    logger.debug('turn_end', {
+    logger.info('turn_end', {
       sessionKey,
       turnIndex: event.turnIndex,
       toolResultsCount: event.toolResults?.length,
     });
+    
+    // Close turn span (may already be closed by session_shutdown cleanup)
+    logger.debug('closing_turn_span', {
+      sessionKey,
+      turnIndex: event.turnIndex,
+    });
+    try {
+      await sessionManager.closeTurnSpan(sessionKey, event.turnIndex, {
+        turnIndex: event.turnIndex,
+        success: event.success,
+      });
+      logger.debug('turn_span_closed', {
+        sessionKey,
+        turnIndex: event.turnIndex,
+      });
+    } catch (err) {
+      // Span may have already been closed by session_shutdown
+      logger.debug('turn_span_already_closed', {
+        sessionKey,
+        turnIndex: event.turnIndex,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
   });
   
   // ==================== TOOL HOOKS ====================
@@ -331,17 +379,44 @@ export default function prefactorExtension(pi: ExtensionAPI) {
       toolCallId: event.toolCallId,
     });
     
+    // Determine schema name based on tool name
+    const schemaName = `pi:tool:${event.toolName}` as 
+      | 'pi:tool:bash'
+      | 'pi:tool:read'
+      | 'pi:tool:write'
+      | 'pi:tool:edit'
+      | 'pi:tool_call';  // Fallback for unknown tools
+    
+    // Build tool-specific payload
     const payload: Record<string, unknown> = {
-      toolName: event.toolName,
       toolCallId: event.toolCallId,
     };
     
     if (config.captureToolInputs) {
-      payload.input = event.args;
+      if (event.toolName === 'bash') {
+        const args = event.args as { command?: string; timeout?: number; cwd?: string };
+        payload.command = args.command;
+        payload.timeout = args.timeout;
+        payload.cwd = args.cwd;
+      } else if (event.toolName === 'read') {
+        const args = event.args as { path?: string; offset?: number; limit?: number };
+        payload.path = args.path;
+        payload.offset = args.offset;
+        payload.limit = args.limit;
+      } else if (event.toolName === 'write') {
+        const args = event.args as { path?: string; content?: string };
+        payload.path = args.path;
+        payload.contentLength = args.content?.length;
+        payload.created = (event as any).created;  // If available
+      } else if (event.toolName === 'edit') {
+        const args = event.args as { path?: string; edits?: any[] };
+        payload.path = args.path;
+        payload.editCount = args.edits?.length;
+      }
     }
     
     // CRITICAL: Await span creation to prevent race condition with tool_result
-    await sessionManager.createToolCallSpan(sessionKey, event.toolName, payload);
+    await sessionManager.createToolCallSpan(sessionKey, event.toolName, payload, schemaName);
     
     logger.debug('tool_span_creation_complete', {
       sessionKey,
@@ -361,12 +436,49 @@ export default function prefactorExtension(pi: ExtensionAPI) {
       isError,
     });
     
+    // Build result payload based on tool type
+    const resultPayload: Record<string, unknown> = {
+      isError,
+    };
+    
+    if (config.captureToolOutputs && !isError) {
+      if (event.toolName === 'bash') {
+        const result = event.result as { exitCode?: number; stdout?: string; stderr?: string; durationMs?: number } | undefined;
+        if (result) {
+          resultPayload.exitCode = result.exitCode;
+          resultPayload.stdout = result.stdout?.slice(0, config.maxOutputLength);
+          resultPayload.stderr = result.stderr?.slice(0, config.maxOutputLength);
+          resultPayload.durationMs = result.durationMs;
+        }
+      } else if (event.toolName === 'read') {
+        const result = event.result as { content?: string; lineCount?: number; encoding?: string } | undefined;
+        if (result) {
+          resultPayload.contentLength = result.content?.length;
+          resultPayload.lineCount = result.lineCount;
+          resultPayload.encoding = result.encoding;
+        }
+      } else if (event.toolName === 'write') {
+        const result = event.result as { success?: boolean; backupPath?: string } | undefined;
+        if (result) {
+          resultPayload.success = result.success;
+          resultPayload.backupPath = result.backupPath;
+        }
+      } else if (event.toolName === 'edit') {
+        const result = event.result as { successCount?: number; failedCount?: number } | undefined;
+        if (result) {
+          resultPayload.successCount = result.successCount;
+          resultPayload.failedCount = result.failedCount;
+        }
+      }
+    }
+    
     await sessionManager.closeToolCallSpanWithResult(
       sessionKey,
       event.toolCallId,
       event.toolName,
       resultText,
-      isError
+      isError,
+      resultPayload
     );
   });
   
@@ -390,7 +502,7 @@ export default function prefactorExtension(pi: ExtensionAPI) {
   registerConfigCommand(pi, config);
   
   logger.info('extension_initialized', {
-    hooks: 11,
+    hooks: 15,  // Added turn_start, turn_end (was: 13)
     sessionTimeoutHours: config.sessionTimeoutHours,
     interactionTimeoutMinutes: config.userInteractionTimeoutMinutes,
   });

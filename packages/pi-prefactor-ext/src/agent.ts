@@ -280,6 +280,94 @@ export class Agent {
             },
           },
         },
+        {
+          name: 'pi:turn',
+          description: 'Single turn in multi-turn agent execution',
+          template: 'Turn {{ turnIndex | default: 0 }}',
+          params_schema: {
+            type: 'object',
+            properties: {
+              turnIndex: { type: 'number', description: 'Turn number (0-indexed)' },
+              model: { type: 'string', description: 'Model used for this turn' },
+            },
+          },
+        },
+        {
+          name: 'pi:tool:bash',
+          description: 'Bash command execution',
+          template: '{{ command | truncate: 100 }}',
+          params_schema: {
+            type: 'object',
+            properties: {
+              command: { type: 'string', description: 'Bash command to execute' },
+              timeout: { type: 'number', description: 'Timeout in milliseconds' },
+              cwd: { type: 'string', description: 'Working directory' },
+              // Result fields (on finish)
+              exitCode: { type: 'number', description: 'Exit code' },
+              stdout: { type: 'string', description: 'Standard output (truncated)' },
+              stderr: { type: 'string', description: 'Standard error (truncated)' },
+              durationMs: { type: 'number', description: 'Execution duration' },
+            },
+          },
+        },
+        {
+          name: 'pi:tool:read',
+          description: 'File read operation',
+          template: '{{ path | truncate: 100 }}',
+          params_schema: {
+            type: 'object',
+            properties: {
+              path: { type: 'string', description: 'File path to read' },
+              offset: { type: 'number', description: 'Start line number' },
+              limit: { type: 'number', description: 'Maximum lines to read' },
+              // Result fields
+              contentLength: { type: 'number', description: 'Bytes read' },
+              lineCount: { type: 'number', description: 'Lines read' },
+              encoding: { type: 'string', description: 'File encoding' },
+            },
+          },
+        },
+        {
+          name: 'pi:tool:write',
+          description: 'File write operation',
+          template: '{{ path | truncate: 100 }}',
+          params_schema: {
+            type: 'object',
+            properties: {
+              path: { type: 'string', description: 'File path to write' },
+              contentLength: { type: 'number', description: 'Bytes written' },
+              created: { type: 'boolean', description: 'Whether file was created (vs updated)' },
+              // Result fields
+              backupPath: { type: 'string', description: 'Backup file path if created' },
+              success: { type: 'boolean', description: 'Write success' },
+            },
+          },
+        },
+        {
+          name: 'pi:tool:edit',
+          description: 'File edit operation',
+          template: '{{ path | truncate: 100 }}',
+          params_schema: {
+            type: 'object',
+            properties: {
+              path: { type: 'string', description: 'File path to edit' },
+              editCount: { type: 'number', description: 'Number of edit blocks' },
+              // Result fields
+              successCount: { type: 'number', description: 'Successful edits' },
+              failedCount: { type: 'number', description: 'Failed edits' },
+              oldTextHashes: {
+                type: 'array',
+                items: { type: 'string' },
+                description: 'Hashes of replaced text',
+              },
+              newTextLengths: {
+                type: 'array',
+                items: { type: 'number' },
+                description: 'Lengths of replacement text',
+              },
+            },
+          },
+        },
       ],
     };
 
