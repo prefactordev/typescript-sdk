@@ -52,4 +52,11 @@ export const PACKAGE_CONFIGS: PackageConfig[] = [
     entrypoint: './packages/openclaw-prefactor-plugin/src/index.ts',
     external: ['@prefactor/core', 'zod'],
   },
+  {
+    name: '@prefactor/pi-prefactor-ext',
+    path: 'packages/pi-prefactor-ext',
+    entrypoint: './packages/pi-prefactor-ext/src/index.ts',
+    external: ['@prefactor/core', 'zod', '@mariozechner/pi-coding-agent'],
+    generateVersionModule: true,
+  },
 ];
