@@ -171,26 +171,68 @@ export default function prefactorExtension(pi: ExtensionAPI) {
   pi.on("turn_end", async (event, ctx) => {
     const sessionKey = getSessionKey(ctx);
     
-    // Capture thinking if present (automatic for models that support it)
-    if (event.message?.thinking) {
-      const thinking = typeof event.message.thinking === 'string'
-        ? event.message.thinking
-        : '';
-      
-      if (thinking) {
-        await sessionManager.createAgentThinkingSpan(
-          sessionKey,
-          thinking,
-          event.usage ? {
-            input: event.usage.inputTokens,
-            output: event.usage.outputTokens,
-          } : undefined,
-          {
-            provider: (ctx.model as any)?.provider,
-            model: (ctx.model as any)?.id,
+    // Debug: Log what's in the event
+    logger.debug('turn_end_debug', {
+      sessionKey,
+      hasMessage: !!event.message,
+      hasThinking: !!(event.message?.thinking),
+      thinkingType: typeof event.message?.thinking,
+      thinkingPreview: typeof event.message?.thinking === 'string' ? event.message.thinking.slice(0, 100) : 'N/A',
+      contentPreview: event.message?.content ? (Array.isArray(event.message.content) ? 'array' : typeof event.message.content) : 'N/A',
+    });
+    
+    // Capture thinking - try structured first, then extract from content
+    let thinking = '';
+    
+    // Try structured thinking field (some models support this)
+    if (event.message?.thinking && typeof event.message.thinking === 'string') {
+      thinking = event.message.thinking;
+    } else if (config.captureThinking) {
+      // Fallback: Extract thinking from content for models that output thinking as text
+      const content = event.message?.content;
+      if (Array.isArray(content)) {
+        const textBlocks = content
+          .filter(block => block?.type === 'text')
+          .map(block => block.text)
+          .join('\n');
+        
+        // Look for thinking patterns (common in reasoning models)
+        // Pattern 1: "Let me think/work through..." up to final answer
+        // Pattern 2: Numbered steps before final answer
+        const thinkingPatterns = [
+          /^(Let me (think|work) through[\s\S]*?)(?=\n\n\*\*|## |$)/i,
+          /^(Let me [\s\S]*?)(?=\n\n\*\*|## Answer|$)/i,
+          /^(Step \d+:[\s\S]*?)(?=\n\n\*\*|## |Final Answer|$)/i,
+        ];
+        
+        for (const pattern of thinkingPatterns) {
+          const match = textBlocks.match(pattern);
+          if (match && match[1].trim()) {
+            thinking = match[1].trim();
+            logger.debug('thinking_extracted_from_content', {
+              sessionKey,
+              thinkingLength: thinking.length,
+              pattern: pattern.toString(),
+            });
+            break;
           }
-        );
+        }
       }
+    }
+    
+    if (thinking && config.captureThinking) {
+      await sessionManager.createAgentThinkingSpan(
+        sessionKey,
+        thinking,
+        event.usage ? {
+          input: event.usage.inputTokens,
+          output: event.usage.outputTokens,
+        } : undefined,
+        {
+          provider: (ctx.model as any)?.provider,
+          model: (ctx.model as any)?.id,
+        }
+      );
     }
     
     // Capture assistant response
@@ -237,7 +279,13 @@ export default function prefactorExtension(pi: ExtensionAPI) {
       payload.input = event.args;
     }
     
+    // CRITICAL: Await span creation to prevent race condition with tool_result
     await sessionManager.createToolCallSpan(sessionKey, event.toolName, payload);
+    
+    logger.debug('tool_span_creation_complete', {
+      sessionKey,
+      toolCallId: event.toolCallId,
+    });
   });
   
   pi.on("tool_result", async (event, ctx) => {

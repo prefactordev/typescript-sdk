@@ -22,6 +22,7 @@ interface SessionSpanState {
   interactionLastActivity: number;
   agentRunSpanId: string | null;
   toolCallSpans: ToolCallEntry[];
+  pendingToolSpans: Map<string, Promise<string | null>>;  // Track pending tool span creations
 }
 
 interface SessionManagerConfig {
@@ -64,6 +65,7 @@ export class SessionStateManager {
         interactionLastActivity: now,
         agentRunSpanId: null,
         toolCallSpans: [],
+        pendingToolSpans: new Map(),
       };
       this.sessions.set(sessionKey, state);
       this.logger.debug('session_state_created', { sessionKey });
@@ -201,14 +203,21 @@ export class SessionStateManager {
     if (!this.agent) return null;
     const state = this.getOrCreateSessionState(sessionKey);
     
-    const spanId = await this.agent.createSpan(
+    // Create span promise and track it
+    const spanPromise = this.agent.createSpan(
       sessionKey,
       'pi:tool_call',
       payload,
       state.agentRunSpanId
     );
+    
+    // Track pending creation (tool_result may arrive before span is created)
+    const toolCallId = payload.toolCallId as string || `${toolName}-${Date.now()}`;
+    state.pendingToolSpans.set(toolCallId, spanPromise);
+    
+    const spanId = await spanPromise;
     if (spanId) {
-      state.toolCallSpans.push({ spanId, toolName });
+      state.toolCallSpans.push({ spanId, toolName, toolCallId });
       this.logger.info('tool_call_span_created', { sessionKey, spanId, toolName });
     }
     return spanId;
@@ -225,7 +234,23 @@ export class SessionStateManager {
     const state = this.sessions.get(sessionKey);
     if (!state) return;
 
-    const entry = state.toolCallSpans.find(e => e.toolCallId === toolCallId || e.toolName === toolName);
+    // Wait for pending span creation if needed (race condition fix)
+    let entry = state.toolCallSpans.find(e => e.toolCallId === toolCallId || e.toolName === toolName);
+    
+    if (!entry) {
+      // Check if span creation is still pending
+      const pendingPromise = state.pendingToolSpans.get(toolCallId);
+      if (pendingPromise) {
+        this.logger.debug('waiting_for_pending_tool_span', { sessionKey, toolCallId });
+        const spanId = await pendingPromise;
+        state.pendingToolSpans.delete(toolCallId);
+        if (spanId) {
+          entry = { spanId, toolName, toolCallId };
+          state.toolCallSpans.push(entry);
+        }
+      }
+    }
+    
     if (!entry) {
       this.logger.warn('tool_call_span_not_found', { sessionKey, toolCallId, toolName });
       return;
