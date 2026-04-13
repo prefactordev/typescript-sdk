@@ -114,6 +114,8 @@ export default function prefactorExtension(pi: ExtensionAPI) {
   pi.on("session_shutdown", async (_event, ctx) => {
     const sessionKey = getSessionKey(ctx);
     logger.info('session_shutdown', { sessionKey });
+    // Close interaction span explicitly (it's not closed by any other handler)
+    await sessionManager.closeInteractionSpan(sessionKey);
     await sessionManager.closeSessionSpan(sessionKey);
     await agent.finishAgentInstance(sessionKey, 'complete');
   });

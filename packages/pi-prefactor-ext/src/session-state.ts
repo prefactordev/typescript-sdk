@@ -102,6 +102,13 @@ export class SessionStateManager {
     const state = this.sessions.get(sessionKey);
     if (!state) return;
 
+    this.logger.info('closeSessionSpan_start', {
+      sessionKey,
+      hasAgentRun: !!state.agentRunSpanId,
+      hasInteraction: !!state.interactionSpanId,
+      toolCallCount: state.toolCallSpans.length,
+    });
+
     await this.closeAllChildSpans(sessionKey);
     const spanId = state.sessionSpanId;
     if (!spanId) return;
@@ -190,6 +197,8 @@ export class SessionStateManager {
 
     const spanId = state.agentRunSpanId;
     state.agentRunSpanId = null;
+    
+    this.logger.info('agent_run_closing', { sessionKey, spanId, status });
     await this.agent.finishSpan(sessionKey, spanId, status);
     this.logger.info('agent_run_span_closed', { sessionKey, spanId, status });
   }
@@ -257,6 +266,8 @@ export class SessionStateManager {
     }
 
     const resultPayload = { output: resultText || '', isError };
+    
+    this.logger.info('tool_call_closing', { sessionKey, spanId: entry.spanId, isError, toolName });
     await this.agent.finishSpan(sessionKey, entry.spanId, isError ? 'failed' : 'complete', resultPayload);
     this.logger.info('tool_call_span_closed', { sessionKey, spanId: entry.spanId, isError });
     
@@ -315,6 +326,20 @@ export class SessionStateManager {
     return spanId;
   }
 
+  // Interaction span cleanup
+  async closeInteractionSpan(sessionKey: string): Promise<void> {
+    if (!this.agent) return;
+    const state = this.sessions.get(sessionKey);
+    if (!state || !state.interactionSpanId) return;
+
+    const spanId = state.interactionSpanId;
+    state.interactionSpanId = null;
+    
+    this.logger.info('interaction_span_closing', { sessionKey, spanId });
+    await this.agent.finishSpan(sessionKey, spanId, 'complete');
+    this.logger.info('interaction_span_closed', { sessionKey, spanId });
+  }
+
   // Cleanup
   async cleanupAllSessions(): Promise<void> {
     this.logger.info('cleanup_all_sessions_start', { count: this.sessions.size });
@@ -332,23 +357,49 @@ export class SessionStateManager {
     const state = this.sessions.get(sessionKey);
     if (!state || !this.agent) return;
 
-    // Close tool spans
+    this.logger.info('closeAllChildSpans_start', {
+      sessionKey,
+      hasAgentRun: !!state.agentRunSpanId,
+      hasInteraction: !!state.interactionSpanId,
+      toolCallCount: state.toolCallSpans.length,
+    });
+
+    // Close orphaned tool spans (only if still in array)
     for (const toolSpan of state.toolCallSpans) {
+      this.logger.warn('closing_orphaned_tool_span', { 
+        sessionKey, 
+        toolSpanId: toolSpan.spanId,
+        toolName: toolSpan.toolName 
+      });
       await this.agent.finishSpan(sessionKey, toolSpan.spanId, 'failed');
     }
     state.toolCallSpans = [];
 
-    // Close agent run
+    // Close orphaned agent run (only if still non-null)
     if (state.agentRunSpanId) {
+      this.logger.warn('closing_orphaned_agent_run', { 
+        sessionKey, 
+        spanId: state.agentRunSpanId 
+      });
       await this.agent.finishSpan(sessionKey, state.agentRunSpanId, 'failed');
       state.agentRunSpanId = null;
     }
 
-    // Close interaction
+    // Close orphaned interaction (only if still non-null)
     if (state.interactionSpanId) {
+      this.logger.warn('closing_orphaned_interaction', { 
+        sessionKey, 
+        spanId: state.interactionSpanId 
+      });
       await this.agent.finishSpan(sessionKey, state.interactionSpanId, 'failed');
       state.interactionSpanId = null;
     }
+    
+    this.logger.info('closeAllChildSpans_complete', {
+      sessionKey,
+      closedAgentRun: !!state.agentRunSpanId,
+      closedInteraction: !!state.interactionSpanId,
+    });
   }
 }
 
