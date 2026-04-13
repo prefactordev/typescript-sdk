@@ -41,6 +41,41 @@ function extractTextFromContent(content: unknown): string {
 }
 
 /**
+ * Extract thinking/reasoning from assistant message content
+ * Looks for common thinking patterns: <thinking>, <think>, <reasoning>, etc.
+ */
+function extractThinkingFromContent(content: unknown): string | undefined {
+  const text = extractTextFromContent(content);
+  if (!text) return undefined;
+
+  // Pattern 1: <thinking>...</thinking>
+  const thinkingTagMatch = text.match(/<thinking>[\s\S]*?<\/thinking>/i);
+  if (thinkingTagMatch) {
+    return thinkingTagMatch[0]
+      .replace(/<thinking>[\s\S]*?>([\s\S]*?)<\/thinking>/i, '$1')
+      .trim();
+  }
+
+  // Pattern 2: <think>...</think>
+  const thinkTagMatch = text.match(/<think>[\s\S]*?<\/think>/i);
+  if (thinkTagMatch) {
+    return thinkTagMatch[0]
+      .replace(/<think>[\s\S]*?>([\s\S]*?)<\/think>/i, '$1')
+      .trim();
+  }
+
+  // Pattern 3: <reasoning>...</reasoning>
+  const reasoningTagMatch = text.match(/<reasoning>[\s\S]*?<\/reasoning>/i);
+  if (reasoningTagMatch) {
+    return reasoningTagMatch[0]
+      .replace(/<reasoning>[\s\S]*?>([\s\S]*?)<\/reasoning>/i, '$1')
+      .trim();
+  }
+
+  return undefined;
+}
+
+/**
  * Extract file path from tool result content (P0 Critical Fix #5)
  * Parses paths from result messages like "Successfully wrote to /path/to/file.txt"
  */
@@ -198,7 +233,6 @@ export default function prefactorExtension(pi: ExtensionAPI) {
 
     // P0 Critical Fix: Close agent_run span FIRST with comprehensive data before cleanup
     const state = sessionManager.getSessionState(sessionKey);
-    const endTime = Date.now();
 
     if (state && state.agentRunSpanId) {
       logger.debug('session_shutdown_closing_agent_run', {
@@ -210,7 +244,6 @@ export default function prefactorExtension(pi: ExtensionAPI) {
       });
 
       await sessionManager.closeAgentRunSpan(sessionKey, 'complete', {
-        endTime,
         success: true, // Session shutdown is normal completion
         terminationReason: 'session_shutdown', // Use new terminationReason field
         filesModified: state.filesModified ? Array.from(state.filesModified) : [],
@@ -292,22 +325,12 @@ export default function prefactorExtension(pi: ExtensionAPI) {
     // Task 3: Capture toolsAvailable
     const toolsAvailable = (ctx.tools || []).map((t: any) => t.name || t).filter(Boolean);
 
-    // Task 6: Fix messageCount (actual count, not zero)
-    // event.messages may be empty, so track in session state
-    const state = sessionManager.getSessionState(sessionKey);
-    if (state) {
-      state.messageCount = (state.messageCount || 0) + 1;
-    }
-    const messageCount = state?.messageCount || event.messages?.length || 0;
-
     // Task 7: Capture userRequest - use event.prompt (user's message) or state.userRequest
+    const state = sessionManager.getSessionState(sessionKey);
     const userRequest = event.prompt || state?.userRequest;
 
     await sessionManager.createAgentRunSpan(sessionKey, {
-      messageCount,
-      startTime: startTime,
       model: (ctx.model as any)?.id || 'unknown',
-      provider: (ctx.model as any)?.provider || 'unknown',
       temperature: (ctx.model as any)?.temperature,
       systemPrompt: systemPrompt.slice(0, maxSystemPromptLength),
       systemPromptHash: systemPromptHash,
@@ -325,6 +348,9 @@ export default function prefactorExtension(pi: ExtensionAPI) {
       sessionState.skillsLoaded = skillsLoaded;
       sessionState.toolsAvailable = toolsAvailable;
     }
+
+    // Track startTime locally for duration calculation (don't send to backend)
+    (sessionState as any).agentRunStartTime = startTime;
   });
 
   pi.on('agent_end', async (event, ctx) => {
@@ -371,7 +397,6 @@ export default function prefactorExtension(pi: ExtensionAPI) {
     // Only close if agent_run span still exists (session_shutdown may have already closed it)
     if (state && state.agentRunSpanId) {
       await sessionManager.closeAgentRunSpan(sessionKey, 'complete', {
-        endTime,
         success: event.success ?? true,
         terminationReason,
         error: event.error || undefined,
@@ -671,14 +696,46 @@ export default function prefactorExtension(pi: ExtensionAPI) {
 
       // Extract response text from message content
       const responseText = extractTextFromContent(event.message.content);
-      const thinking = (event as any)?.thinking || (event as any)?.reasoning || '';
+      
+      // Try to extract thinking from structured properties first, then from content
+      const structuredThinking = (event as any)?.thinking || (event as any)?.reasoning || '';
+      const contentThinking = extractThinkingFromContent(event.message.content);
+      const thinking = structuredThinking || contentThinking || '';
 
       logger.debug('message_end_assistant', {
         sessionKey,
         hasResponse: !!responseText,
         hasThinking: !!thinking,
+        thinkingSource: structuredThinking ? 'structured' : contentThinking ? 'content' : 'none',
         parentSpanId,
       });
+
+      // P0 Critical: Create pi:agent_thinking span if thinking content exists
+      if (thinking && responseText) {
+        const thinkingStartTime = Date.now();
+
+        // Create agent_thinking span as child of agent_run
+        await sessionManager.createAgentThinkingSpan(
+          sessionKey,
+          {
+            thinking: thinking,
+            model: (ctx.model as any)?.id,
+          },
+          parentSpanId
+        );
+
+        // Close thinking span immediately
+        await sessionManager.closeAgentThinkingSpan(sessionKey, {
+          durationMs: Date.now() - thinkingStartTime,
+          isError: false,
+        });
+
+        logger.info('agent_thinking_captured', {
+          sessionKey,
+          thinkingSource: structuredThinking ? 'structured' : 'content',
+          thinkingPreview: thinking.slice(0, 50),
+        });
+      }
 
       if (responseText) {
         const startTime = Date.now();
@@ -688,17 +745,13 @@ export default function prefactorExtension(pi: ExtensionAPI) {
           sessionKey,
           {
             text: responseText,
-            thinking: thinking || undefined,
             model: (ctx.model as any)?.id,
-            provider: (ctx.model as any)?.provider,
-            startTime,
           },
           parentSpanId
         );
 
         // Close the span immediately
         await sessionManager.closeAssistantResponseSpan(sessionKey, {
-          endTime: Date.now(),
           durationMs: Date.now() - startTime,
           isError: false,
         });

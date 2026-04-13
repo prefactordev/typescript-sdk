@@ -218,14 +218,12 @@ export class Agent {
         {
           name: 'pi:agent_run',
           description: 'Agent execution run',
-          template:
-            '{{ messageCount | default: 0 }} messages with {{ model | default: "unknown" }}',
+          template: '{{ model | default: "unknown" }}',
           params_schema: {
             type: 'object',
             properties: {
               // Configuration (unique value - cannot derive from children)
               model: { type: 'string', description: 'LLM model used' },
-              provider: { type: 'string', description: 'Provider name (ollama, openai, etc.)' },
               temperature: { type: 'number', description: 'Model temperature setting' },
               systemPrompt: {
                 type: 'string',
@@ -255,12 +253,8 @@ export class Agent {
                 type: 'string',
                 description: 'Original user request (first user message)',
               },
-              messageCount: { type: 'number', description: 'Messages in conversation' },
-
-              // Timing
-              startTime: { type: 'number', description: 'Start timestamp (ms)' },
             },
-            required: ['model', 'provider', 'startTime'],
+            required: ['model'],
           },
           result_schema: {
             type: 'object',
@@ -299,10 +293,9 @@ export class Agent {
               toolCalls: { type: 'number', description: 'Total tool calls' },
 
               // Timing
-              endTime: { type: 'number', description: 'End timestamp (ms)' },
               durationMs: { type: 'number', description: 'Duration in milliseconds' },
             },
-            required: ['success', 'terminationReason', 'endTime'],
+            required: ['success', 'terminationReason'],
           },
         },
         {
@@ -422,8 +415,6 @@ export class Agent {
             properties: {
               text: { type: 'string', description: 'Response text to user' },
               model: { type: 'string', description: 'Model used for response' },
-              provider: { type: 'string', description: 'Provider used' },
-              startTime: { type: 'number', description: 'Start timestamp (ms)' },
               thinking: { type: 'string', description: 'Agent thinking/reasoning (if enabled)' },
               tokens: {
                 type: 'object',
@@ -434,16 +425,15 @@ export class Agent {
                 },
               },
             },
-            required: ['text', 'startTime'],
+            required: ['text'],
           },
           result_schema: {
             type: 'object',
             properties: {
-              endTime: { type: 'number', description: 'End timestamp (ms)' },
               durationMs: { type: 'number', description: 'Response duration' },
               isError: { type: 'boolean', description: 'Whether response failed' },
             },
-            required: ['endTime', 'isError'],
+            required: ['isError'],
           },
         },
       ],

@@ -1,0 +1,52 @@
+# Key Points from README.md
+
+## Overview
+- Prefactor instrumentation extension for pi coding agent
+- Creates distributed tracing spans for agent sessions, user interactions, tool calls, and responses
+
+## Quick Start
+1. Set environment variables (PREFACTOR_API_TOKEN, PREFACTOR_AGENT_ID)
+2. Install extension globally (~/.pi/agent/extensions/) or project-local (.pi/extensions/)
+3. Reload pi with /reload
+4. Verify with /prefactor-config
+
+## Configuration
+
+### Required (2 vars)
+- PREFACTOR_API_TOKEN: Authentication token
+- PREFACTOR_AGENT_ID: Registered agent ID
+
+### Optional (12 vars)
+- PREFACTOR_API_URL: Defaults to https://app.prefactorai.com
+- PREFACTOR_AGENT_NAME: Defaults to "Pi Agent"
+- PREFACTOR_AGENT_VERSION: Defaults to "default"
+- PREFACTOR_LOG_LEVEL: Defaults to "info"
+- PREFACTOR_USER_INTERACTION_TIMEOUT_MINUTES: Defaults to 5
+- PREFACTOR_SESSION_TIMEOUT_HOURS: Defaults to 24
+- PREFACTOR_MAX_INPUT_LENGTH: Defaults to 10000 chars
+- PREFACTOR_MAX_OUTPUT_LENGTH: Defaults to 10000 chars
+- PREFACTOR_CAPTURE_THINKING: Defaults to true
+- PREFACTOR_CAPTURE_TOOL_INPUTS: Defaults to true
+- PREFACTOR_CAPTURE_TOOL_OUTPUTS: Defaults to true
+- PREFACTOR_SAMPLE_RATE: Defaults to 1.0
+- PREFACTOR_ENABLED: Defaults to true
+
+## Span Hierarchy
+```
+pi:session (root, 24hr)
+  └─ pi:user_interaction (5min idle)
+      ├─ pi:user_message
+      └─ pi:agent_run
+          ├─ pi:agent_thinking
+          ├─ pi:tool_call
+          └─ pi:assistant_response
+```
+
+## Troubleshooting
+- Missing config: Set required env vars and reload
+- No spans: Verify credentials, check logs, use CLI
+- Thinking not captured: Check pattern matching, enable debug logs
+- Tool span warnings: Race condition fixed in v0.0.1-mvp
+
+## Development
+- See DEVELOPMENT-GUIDE.md for detailed workflow

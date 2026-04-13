@@ -36,6 +36,7 @@ interface SessionSpanState {
   // Individual span references for direct close methods
   userMessageSpanId: string | null;
   assistantResponseSpanId: string | null;
+  agentThinkingSpanId: string | null; // P0 Critical: Track thinking span
 
   // File and activity tracking (P0 Critical Fix #5)
   filesModified: Set<string>;
@@ -48,7 +49,6 @@ interface SessionSpanState {
   userRequest?: string; // First user message
   skillsLoaded?: string[]; // Skills loaded for this session
   toolsAvailable?: string[]; // Tools available
-  messageCount?: number; // Track actual message count
 }
 
 interface SessionManagerConfig {
@@ -90,6 +90,7 @@ export class SessionStateManager {
         openSpans: new Map(),
         userMessageSpanId: null,
         assistantResponseSpanId: null,
+        agentThinkingSpanId: null, // P0 Critical: Track thinking span
         // File and activity tracking (P0 Critical Fix #5)
         filesModified: new Set(),
         filesRead: new Set(),
@@ -100,7 +101,6 @@ export class SessionStateManager {
         userRequest: undefined,
         skillsLoaded: undefined,
         toolsAvailable: undefined,
-        messageCount: undefined,
       };
       this.sessions.set(sessionKey, state);
       this.logger.debug('session_state_created', { sessionKey });
@@ -222,10 +222,7 @@ export class SessionStateManager {
   async createAgentRunSpan(
     sessionKey: string,
     payload: {
-      messageCount: number;
-      startTime: number;
       model?: string;
-      provider?: string;
       temperature?: number;
       systemPromptHash?: string;
     }
@@ -271,11 +268,10 @@ export class SessionStateManager {
       spanEntry.status = 'closed';
     }
 
-    // P0 Critical Fix #3: Add duration if we have start time
+    // P0 Critical Fix #3: Calculate duration from locally tracked start time
     const finalPayload = resultPayload ? { ...resultPayload } : {};
-    if (state.agentRunStartTime && resultPayload?.endTime) {
-      const endTime = resultPayload.endTime as number;
-      finalPayload.durationMs = endTime - state.agentRunStartTime;
+    if (state.agentRunStartTime) {
+      finalPayload.durationMs = Date.now() - state.agentRunStartTime;
     }
 
     this.logger.debug('agent_run_closing', { sessionKey, spanId, status });
@@ -383,7 +379,6 @@ export class SessionStateManager {
     sessionKey: string,
     payload: {
       text: string;
-      thinking?: string;
       model?: string;
       provider?: string;
       startTime: number;
@@ -446,16 +441,81 @@ export class SessionStateManager {
     });
   }
 
-  // Thinking spans - REMOVED (low debugging value)
+  // Agent thinking spans - P0 Critical: Restore thinking span creation
+  async createAgentThinkingSpan(
+    sessionKey: string,
+    payload: {
+      thinking: string;
+      model?: string;
+      provider?: string;
+      startTime: number;
+    },
+    parentSpanId: string | null
+  ): Promise<string | null> {
+    if (!this.agent) return null;
+    const state = this.getOrCreateSessionState(sessionKey);
+
+    const spanId = await this.agent.createSpan(
+      sessionKey,
+      'pi:agent_thinking',
+      {
+        thinking: payload.thinking,
+        model: payload.model,
+        provider: payload.provider,
+        startTime: new Date(payload.startTime).toISOString(),
+      },
+      parentSpanId
+    );
+    if (spanId) {
+      state.agentThinkingSpanId = spanId;
+      // Register in openSpans map
+      state.openSpans.set(spanId, {
+        spanId,
+        schemaName: 'pi:agent_thinking',
+        createdAt: Date.now(),
+        status: 'open',
+      });
+      this.logger.debug('agent_thinking_span_created', { sessionKey, spanId, parentSpanId });
+    }
+    return spanId;
+  }
+
+  async closeAgentThinkingSpan(
+    sessionKey: string,
+    resultPayload?: Record<string, unknown>
+  ): Promise<void> {
+    if (!this.agent) return;
+    const state = this.sessions.get(sessionKey);
+    if (!state || !state.agentThinkingSpanId) return;
+
+    const spanId = state.agentThinkingSpanId;
+    state.agentThinkingSpanId = null;
+
+    // Mark as closed in openSpans map
+    const spanEntry = state.openSpans.get(spanId);
+    if (spanEntry) {
+      spanEntry.status = 'closed';
+    }
+
+    const finalPayload = resultPayload ? { ...resultPayload } : {};
+
+    this.logger.debug('agent_thinking_closing', {
+      sessionKey,
+      spanId,
+      status: 'complete',
+    });
+
+    await this.agent.finishSpan(sessionKey, spanId, 'complete', finalPayload);
+
+    this.logger.debug('agent_thinking_span_closed', {
+      sessionKey,
+      spanId,
+    });
+  }
 
   // Cleanup methods for removed spans - NOOPs
   async closeInteractionSpan(_sessionKey: string): Promise<void> {
     // Removed: pi:user_interaction span no longer exists
-    return Promise.resolve();
-  }
-
-  async closeAgentThinkingSpan(_sessionKey: string): Promise<void> {
-    // Removed: pi:agent_thinking span no longer exists
     return Promise.resolve();
   }
 
