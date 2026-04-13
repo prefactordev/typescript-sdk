@@ -103,6 +103,50 @@ export default function prefactorExtension(pi: ExtensionAPI) {
     sessionTimeoutMs: config.sessionTimeoutHours * 60 * 60 * 1000,
   });
   
+  // ==================== PROCESS EXIT HANDLERS ====================
+  
+  // Graceful shutdown handlers
+  const gracefulShutdown = async (signal: string) => {
+    logger.info('graceful_shutdown', { signal });
+    try {
+      await sessionManager.cleanupAllSessions();
+      await agent.finishAgentInstance('*', 'complete');
+    } catch (err) {
+      logger.error('shutdown_error', { error: err });
+    }
+    process.exit(0);
+  };
+  
+  process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+  process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+  
+  // Error handlers
+  process.on('uncaughtException', async (err) => {
+    logger.error('uncaught_exception', { error: err.message });
+    try {
+      await sessionManager.cleanupAllSessions();
+    } catch (cleanupErr) {
+      logger.error('cleanup_during_error_failed', { error: cleanupErr });
+    }
+    process.exit(1);
+  });
+  
+  process.on('unhandledRejection', async (reason) => {
+    logger.error('unhandled_rejection', { reason: String(reason) });
+    try {
+      await sessionManager.cleanupAllSessions();
+    } catch (cleanupErr) {
+      logger.error('cleanup_during_error_failed', { error: cleanupErr });
+    }
+    process.exit(1);
+  });
+  
+  // Note: 'exit' event is synchronous, async cleanup won't complete
+  // But we can at least log
+  process.on('exit', (code) => {
+    logger.info('process_exit', { code });
+  });
+  
   // ==================== SESSION HOOKS ====================
   
   pi.on("session_start", async (event, ctx) => {

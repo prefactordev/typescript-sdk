@@ -555,11 +555,22 @@ export class SessionStateManager {
     });
   }
 
+  /**
+   * Get the count of active sessions.
+   */
+  getActiveSessionCount(): number {
+    return this.sessions.size;
+  }
+
   // Cleanup
   async cleanupAllSessions(): Promise<void> {
     this.logger.info('cleanup_all_sessions_start', { count: this.sessions.size });
     for (const [sessionKey, state] of this.sessions.entries()) {
+      // Close ALL open spans with 'complete' status
+      // (they're not failed, just interrupted by process exit)
       await this.closeAllOpenSpans(sessionKey, 'complete');
+      
+      // Close session span
       if (state.sessionSpanId) {
         const spanEntry = state.openSpans.get(state.sessionSpanId);
         if (spanEntry) {
