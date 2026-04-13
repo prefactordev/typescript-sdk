@@ -37,6 +37,20 @@ export const configSchema = z.object({
     .describe('Maximum input payload length to capture (characters)'),
   maxOutputLength: z.number().positive().default(10000)
     .describe('Maximum output payload length to capture (characters)'),
+  
+  // Optional - Capture flags
+  captureThinking: z.boolean().default(true)
+    .describe('Whether to capture agent thinking/reasoning traces'),
+  captureToolInputs: z.boolean().default(true)
+    .describe('Whether to capture tool call inputs'),
+  captureToolOutputs: z.boolean().default(true)
+    .describe('Whether to capture tool call outputs'),
+  
+  // Optional - Sampling and enablement
+  samplingRate: z.number().min(0).max(1).default(1)
+    .describe('Sampling rate for traces (0-1, where 1 = 100%)'),
+  enabled: z.boolean().default(true)
+    .describe('Whether the extension is enabled'),
 });
 
 /**
@@ -97,6 +111,30 @@ export function loadConfig(packageConfig?: Record<string, unknown>): PrefactorCo
       (process.env.PREFACTOR_MAX_OUTPUT_LENGTH 
         ? parseInt(process.env.PREFACTOR_MAX_OUTPUT_LENGTH, 10) 
         : 10000),
+    
+    // Capture flags
+    captureThinking: packageConfig?.captureThinking ?? 
+      (process.env.PREFACTOR_CAPTURE_THINKING 
+        ? process.env.PREFACTOR_CAPTURE_THINKING === 'true' 
+        : true),
+    captureToolInputs: packageConfig?.captureToolInputs ?? 
+      (process.env.PREFACTOR_CAPTURE_TOOL_INPUTS 
+        ? process.env.PREFACTOR_CAPTURE_TOOL_INPUTS === 'true' 
+        : true),
+    captureToolOutputs: packageConfig?.captureToolOutputs ?? 
+      (process.env.PREFACTOR_CAPTURE_TOOL_OUTPUTS 
+        ? process.env.PREFACTOR_CAPTURE_TOOL_OUTPUTS === 'true' 
+        : true),
+    
+    // Sampling and enablement
+    samplingRate: packageConfig?.samplingRate ?? 
+      (process.env.PREFACTOR_SAMPLE_RATE 
+        ? parseFloat(process.env.PREFACTOR_SAMPLE_RATE) 
+        : 1),
+    enabled: packageConfig?.enabled ?? 
+      (process.env.PREFACTOR_ENABLED 
+        ? process.env.PREFACTOR_ENABLED === 'true' 
+        : true),
   };
 
   return configSchema.parse(merged);

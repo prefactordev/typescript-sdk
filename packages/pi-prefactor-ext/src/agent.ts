@@ -268,6 +268,18 @@ export class Agent {
             },
           },
         },
+        {
+          name: 'pi:agent_thinking',
+          description: 'Agent thinking/reasoning trace',
+          template: null,
+          params_schema: {
+            type: 'object',
+            properties: {
+              thought: { type: 'string', description: 'Thinking/reasoning content' },
+              timestamp: { type: 'string', description: 'Thinking timestamp' },
+            },
+          },
+        },
       ],
     };
 
