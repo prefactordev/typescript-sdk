@@ -42,6 +42,12 @@ interface SessionSpanState {
   filesCreated: string[];
   commandsRun: number;
   toolCalls: number;
+  
+  // P0 Agent Run Improvements: Track user request, skills, and tools
+  userRequest?: string;  // First user message
+  skillsLoaded?: string[];  // Skills loaded for this session
+  toolsAvailable?: string[];  // Tools available
+  messageCount?: number;  // Track actual message count
 }
 
 interface SessionManagerConfig {
@@ -92,6 +98,11 @@ export class SessionStateManager {
         filesCreated: [],
         commandsRun: 0,
         toolCalls: 0,
+        // P0 Agent Run Improvements
+        userRequest: undefined,
+        skillsLoaded: undefined,
+        toolsAvailable: undefined,
+        messageCount: undefined,
       };
       this.sessions.set(sessionKey, state);
       this.logger.debug('session_state_created', { sessionKey });

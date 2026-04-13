@@ -206,12 +206,12 @@ export default function prefactorExtension(pi: ExtensionAPI) {
       await sessionManager.closeAgentRunSpan(sessionKey, 'complete', {
         endTime,
         success: true,  // Session shutdown is normal completion
+        terminationReason: 'session_shutdown',  // Use new terminationReason field
         filesModified: state.filesModified ? Array.from(state.filesModified) : [],
         filesRead: state.filesRead ? Array.from(state.filesRead) : [],
         filesCreated: state.filesCreated || [],
         commandsRun: state.commandsRun || 0,
         toolCalls: state.toolCalls || 0,
-        reason: 'session_shutdown',
       });
     }
     
@@ -243,6 +243,16 @@ export default function prefactorExtension(pi: ExtensionAPI) {
     
     // Close the span immediately (message is complete once sent)
     await sessionManager.closeUserMessageSpan(sessionKey);
+    
+    // P0 Agent Run Improvement #7: Capture first user message as userRequest
+    const state = sessionManager.getSessionState(sessionKey);
+    if (state && !state.userRequest && event.source === 'user') {
+      state.userRequest = event.text;
+      logger.debug('user_request_captured', {
+        sessionKey,
+        userRequestPreview: event.text.slice(0, 50),
+      });
+    }
   });
   
   // ==================== AGENT HOOKS ====================
@@ -261,22 +271,53 @@ export default function prefactorExtension(pi: ExtensionAPI) {
       pendingUserMessage = null;
     }
     
-    // P0 Critical Fix #4: Capture agent run with comprehensive data for auditing
-    const systemPromptHash = event.prompt ? createHash('sha256').update(event.prompt).digest('hex').slice(0, 16) : undefined;
+    // P0 Agent Run Improvements: Capture comprehensive agent run data
+    // Task 1: Capture systemPrompt (actual text from ctx, not user prompt)
+    const systemPrompt = ctx.systemPrompt || '';
+    const maxSystemPromptLength = config.maxSystemPromptLength || 2000;
+    
+    const systemPromptHash = systemPrompt 
+      ? createHash('sha256').update(systemPrompt).digest('hex').slice(0, 16) 
+      : undefined;
+    
+    // Task 2: Capture skillsLoaded
+    const skillsLoaded = (ctx.skills || []).map((s: any) => s.name || s).filter(Boolean);
+    
+    // Task 3: Capture toolsAvailable
+    const toolsAvailable = (ctx.tools || []).map((t: any) => t.name || t).filter(Boolean);
+    
+    // Task 6: Fix messageCount (actual count, not zero)
+    // event.messages may be empty, so track in session state
+    const state = sessionManager.getSessionState(sessionKey);
+    if (state) {
+      state.messageCount = (state.messageCount || 0) + 1;
+    }
+    const messageCount = state?.messageCount || event.messages?.length || 0;
+    
+    // Task 7: Capture userRequest - use event.prompt (user's message) or state.userRequest
+    const userRequest = event.prompt || state?.userRequest;
     
     await sessionManager.createAgentRunSpan(sessionKey, {
-      messageCount: event.messages?.length || 0,
+      messageCount,
       startTime: startTime,
       model: (ctx.model as any)?.id || 'unknown',
       provider: (ctx.model as any)?.provider || 'unknown',
       temperature: (ctx.model as any)?.temperature,
+      systemPrompt: systemPrompt.slice(0, maxSystemPromptLength),
       systemPromptHash: systemPromptHash,
+      systemPromptLength: systemPrompt.length,
+      skillsLoaded,
+      toolsAvailable,
+      userRequest,
     });
     
     // Track start time in session state for duration calculation
-    const state = sessionManager.getSessionState(sessionKey);
-    if (state) {
-      (state as any).agentRunStartTime = startTime;
+    const sessionState = sessionManager.getSessionState(sessionKey);
+    if (sessionState) {
+      (sessionState as any).agentRunStartTime = startTime;
+      // Also store skills and tools in session state for reference
+      sessionState.skillsLoaded = skillsLoaded;
+      sessionState.toolsAvailable = toolsAvailable;
     }
   });
   
@@ -293,18 +334,47 @@ export default function prefactorExtension(pi: ExtensionAPI) {
     // P0 Critical Fix #4: Get session state for comprehensive agent run payload
     const state = sessionManager.getSessionState(sessionKey);
     
+    // P0 Agent Run Improvement #4: Add token tracking
+    const usage = event.usage || (event.result as any)?.usage;
+    let tokens: { input: number; output: number; total: number } | undefined;
+    
+    if (usage) {
+      tokens = {
+        input: usage.promptTokens || usage.input_tokens || 0,
+        output: usage.completionTokens || usage.output_tokens || 0,
+        total: usage.totalTokens || (usage.promptTokens + usage.completionTokens) || 0,
+      };
+    }
+    
+    // P0 Agent Run Improvement #5: Fix terminationReason (no contradictions)
+    let terminationReason: 'completed' | 'error' | 'user_cancel' | 'timeout' | 'session_shutdown';
+    
+    if (event.success === true) {
+      terminationReason = 'completed';
+    } else if (event.error) {
+      terminationReason = 'error';
+    } else if ((event as any).reason === 'user_cancel') {
+      terminationReason = 'user_cancel';
+    } else if ((event as any).reason === 'timeout') {
+      terminationReason = 'timeout';
+    } else {
+      terminationReason = 'session_shutdown';  // Clean shutdown
+    }
+    
     // P0 Critical Fix #3, #4: Close agent run span with duration and comprehensive data
     // Only close if agent_run span still exists (session_shutdown may have already closed it)
     if (state && state.agentRunSpanId) {
       await sessionManager.closeAgentRunSpan(sessionKey, 'complete', {
         endTime,
         success: event.success ?? true,
+        terminationReason,
+        error: event.error || undefined,
+        tokens,
         filesModified: state?.filesModified ? Array.from(state.filesModified) : [],
         filesRead: state?.filesRead ? Array.from(state.filesRead) : [],
         filesCreated: state?.filesCreated || [],
         commandsRun: state?.commandsRun || 0,
         toolCalls: state?.toolCalls || 0,
-        reason: event.success ? 'completed' : 'failed',
       });
       logger.info('agent_run_span_closed', { sessionKey });
     } else {

@@ -37,6 +37,8 @@ export const configSchema = z.object({
     .describe('Maximum input payload length to capture (characters)'),
   maxOutputLength: z.number().positive().default(10000)
     .describe('Maximum output payload length to capture (characters)'),
+  maxSystemPromptLength: z.number().positive().default(2000)
+    .describe('Maximum system prompt length to capture (characters)'),
   
   // Optional - Capture flags
   captureThinking: z.boolean().default(true)
@@ -111,6 +113,10 @@ export function loadConfig(packageConfig?: Record<string, unknown>): PrefactorCo
       (process.env.PREFACTOR_MAX_OUTPUT_LENGTH 
         ? parseInt(process.env.PREFACTOR_MAX_OUTPUT_LENGTH, 10) 
         : 10000),
+    maxSystemPromptLength: packageConfig?.maxSystemPromptLength ?? 
+      (process.env.PREFACTOR_MAX_SYSTEM_PROMPT_LENGTH 
+        ? parseInt(process.env.PREFACTOR_MAX_SYSTEM_PROMPT_LENGTH, 10) 
+        : 2000),
     
     // Capture flags
     captureThinking: packageConfig?.captureThinking ?? 
