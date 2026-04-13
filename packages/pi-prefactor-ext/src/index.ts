@@ -8,6 +8,7 @@
 
 import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
 import packageJson from '../../package.json' with { type: 'json' };
+import { createHash } from 'node:crypto';
 import { loadConfig, validateConfig, getConfigSummary, getConfigErrorMessage } from './config.js';
 import { createLogger } from './logger.js';
 import { createAgent } from './agent.js';
@@ -37,6 +38,36 @@ function extractTextFromContent(content: unknown): string {
     }
   }
   return textParts.join('\n');
+}
+
+/**
+ * Extract file path from tool result content (P0 Critical Fix #5)
+ * Parses paths from result messages like "Successfully wrote to /path/to/file.txt"
+ */
+function extractPathFromToolResult(resultText: string, toolName: string): string | undefined {
+  if (!resultText) return undefined;
+  
+  if (toolName === 'write') {
+    // Pattern: "Successfully wrote X bytes to /path/to/file.txt"
+    const writeMatch = resultText.match(/to\s+([\/\w\-.]+\.[\w-]+)/i);
+    if (writeMatch && writeMatch[1]) {
+      return writeMatch[1];
+    }
+  } else if (toolName === 'read') {
+    // Pattern: "Read X bytes from /path/to/file.txt" or "File: /path/to/file.txt"
+    const readMatch = resultText.match(/(?:from|File:)\s+([\/\w\-.]+\.[\w-]+)/i);
+    if (readMatch && readMatch[1]) {
+      return readMatch[1];
+    }
+  } else if (toolName === 'edit') {
+    // Pattern: "Edited /path/to/file.txt" or "Modified /path/to/file.txt"
+    const editMatch = resultText.match(/(?:Edited|Modified)\s+([\/\w\-.]+\.[\w-]+)/i);
+    if (editMatch && editMatch[1]) {
+      return editMatch[1];
+    }
+  }
+  
+  return undefined;
 }
 
 /**
@@ -159,6 +190,31 @@ export default function prefactorExtension(pi: ExtensionAPI) {
     const sessionKey = getSessionKey(ctx);
     logger.debug('session_shutdown', { sessionKey });
     
+    // P0 Critical Fix: Close agent_run span FIRST with comprehensive data before cleanup
+    const state = sessionManager.getSessionState(sessionKey);
+    const endTime = Date.now();
+    
+    if (state && state.agentRunSpanId) {
+      logger.debug('session_shutdown_closing_agent_run', {
+        sessionKey,
+        hasState: true,
+        filesModified: state.filesModified.size,
+        toolCalls: state.toolCalls,
+        commandsRun: state.commandsRun,
+      });
+      
+      await sessionManager.closeAgentRunSpan(sessionKey, 'complete', {
+        endTime,
+        success: true,  // Session shutdown is normal completion
+        filesModified: state.filesModified ? Array.from(state.filesModified) : [],
+        filesRead: state.filesRead ? Array.from(state.filesRead) : [],
+        filesCreated: state.filesCreated || [],
+        commandsRun: state.commandsRun || 0,
+        toolCalls: state.toolCalls || 0,
+        reason: 'session_shutdown',
+      });
+    }
+    
     // Close ALL remaining open spans with 'complete' status
     // (they're not failed, just not closed by their handlers)
     await sessionManager.closeAllOpenSpans(sessionKey, 'complete');
@@ -193,6 +249,7 @@ export default function prefactorExtension(pi: ExtensionAPI) {
   
   pi.on("before_agent_start", async (event, ctx) => {
     const sessionKey = getSessionKey(ctx);
+    const startTime = Date.now();
     
     logger.debug('before_agent_start', {
       sessionKey,
@@ -204,13 +261,28 @@ export default function prefactorExtension(pi: ExtensionAPI) {
       pendingUserMessage = null;
     }
     
+    // P0 Critical Fix #4: Capture agent run with comprehensive data for auditing
+    const systemPromptHash = event.prompt ? createHash('sha256').update(event.prompt).digest('hex').slice(0, 16) : undefined;
+    
     await sessionManager.createAgentRunSpan(sessionKey, {
       messageCount: event.messages?.length || 0,
+      startTime: startTime,
+      model: (ctx.model as any)?.id || 'unknown',
+      provider: (ctx.model as any)?.provider || 'unknown',
+      temperature: (ctx.model as any)?.temperature,
+      systemPromptHash: systemPromptHash,
     });
+    
+    // Track start time in session state for duration calculation
+    const state = sessionManager.getSessionState(sessionKey);
+    if (state) {
+      (state as any).agentRunStartTime = startTime;
+    }
   });
   
   pi.on("agent_end", async (event, ctx) => {
     const sessionKey = getSessionKey(ctx);
+    const endTime = Date.now();
     
     logger.info('agent_end', {
       sessionKey,
@@ -218,10 +290,26 @@ export default function prefactorExtension(pi: ExtensionAPI) {
       messageCount: event.messages?.length,
     });
     
-    // Always use 'complete' for normal agent exit
-    // (failed status is only for explicit errors, not cleanup)
-    await sessionManager.closeAgentRunSpan(sessionKey, 'complete');
-    logger.info('agent_run_span_closed', { sessionKey });
+    // P0 Critical Fix #4: Get session state for comprehensive agent run payload
+    const state = sessionManager.getSessionState(sessionKey);
+    
+    // P0 Critical Fix #3, #4: Close agent run span with duration and comprehensive data
+    // Only close if agent_run span still exists (session_shutdown may have already closed it)
+    if (state && state.agentRunSpanId) {
+      await sessionManager.closeAgentRunSpan(sessionKey, 'complete', {
+        endTime,
+        success: event.success ?? true,
+        filesModified: state?.filesModified ? Array.from(state.filesModified) : [],
+        filesRead: state?.filesRead ? Array.from(state.filesRead) : [],
+        filesCreated: state?.filesCreated || [],
+        commandsRun: state?.commandsRun || 0,
+        toolCalls: state?.toolCalls || 0,
+        reason: event.success ? 'completed' : 'failed',
+      });
+      logger.info('agent_run_span_closed', { sessionKey });
+    } else {
+      logger.debug('agent_run_span_already_closed', { sessionKey });
+    }
   });
   
   // ==================== TURN HOOKS ====================
@@ -372,6 +460,7 @@ export default function prefactorExtension(pi: ExtensionAPI) {
   
   pi.on("tool_execution_start", async (event, ctx) => {
     const sessionKey = getSessionKey(ctx);
+    const startTime = Date.now();
     
     logger.debug('tool_execution_start', {
       sessionKey,
@@ -379,37 +468,50 @@ export default function prefactorExtension(pi: ExtensionAPI) {
       toolCallId: event.toolCallId,
     });
     
-    // Determine schema name based on tool name
-    const schemaName = `pi:tool:${event.toolName}` as 
-      | 'pi:tool:bash'
-      | 'pi:tool:read'
-      | 'pi:tool:write'
-      | 'pi:tool:edit'
-      | 'pi:tool_call';  // Fallback for unknown tools
+    // P0 Critical Fix #1: Determine schema name based on tool name - use SPECIFIC tool types
+    let schemaName: 'pi:tool:bash' | 'pi:tool:read' | 'pi:tool:write' | 'pi:tool:edit' | 'pi:tool_call' = 'pi:tool_call';
     
-    // Build tool-specific payload
+    if (event.toolName === 'bash') {
+      schemaName = 'pi:tool:bash';
+    } else if (event.toolName === 'read') {
+      schemaName = 'pi:tool:read';
+    } else if (event.toolName === 'write') {
+      schemaName = 'pi:tool:write';
+    } else if (event.toolName === 'edit') {
+      schemaName = 'pi:tool:edit';
+    }
+    
+    // P0 Critical Fix #2: Build tool-specific payload with start time for duration tracking
     const payload: Record<string, unknown> = {
       toolCallId: event.toolCallId,
+      startTime: startTime,  // CRITICAL: Track start time for duration
     };
+    
+    // P0 Critical Fix #5: Track file path at tool_execution_start time (args available here)
+    const state = sessionManager.getSessionState(sessionKey);
+    let toolPath: string | undefined;
     
     if (config.captureToolInputs) {
       if (event.toolName === 'bash') {
         const args = event.args as { command?: string; timeout?: number; cwd?: string };
         payload.command = args.command;
         payload.timeout = args.timeout;
-        payload.cwd = args.cwd;
+        payload.cwd = args.cwd || process.cwd();
       } else if (event.toolName === 'read') {
         const args = event.args as { path?: string; offset?: number; limit?: number };
+        toolPath = args.path;
         payload.path = args.path;
         payload.offset = args.offset;
         payload.limit = args.limit;
       } else if (event.toolName === 'write') {
         const args = event.args as { path?: string; content?: string };
+        toolPath = args.path;
         payload.path = args.path;
         payload.contentLength = args.content?.length;
         payload.created = (event as any).created;  // If available
       } else if (event.toolName === 'edit') {
         const args = event.args as { path?: string; edits?: any[] };
+        toolPath = args.path;
         payload.path = args.path;
         payload.editCount = args.edits?.length;
       }
@@ -418,9 +520,28 @@ export default function prefactorExtension(pi: ExtensionAPI) {
     // CRITICAL: Await span creation to prevent race condition with tool_result
     await sessionManager.createToolCallSpan(sessionKey, event.toolName, payload, schemaName);
     
+    // P0 Critical Fix #5: Store tool path in session state for later tracking in tool_result
+    if (state && toolPath && (event.toolName === 'write' || event.toolName === 'read' || event.toolName === 'edit')) {
+      // Store in a temporary map for tool_result to access
+      if (!state.pendingToolSpans.has(event.toolCallId)) {
+        state.pendingToolSpans.set(event.toolCallId, Promise.resolve(null));
+      }
+      // Add path tracking to pendingToolSpans metadata
+      (state.pendingToolSpans as any).toolPaths = (state.pendingToolSpans as any).toolPaths || new Map();
+      (state.pendingToolSpans as any).toolPaths.set(event.toolCallId, { path: toolPath, toolName: event.toolName });
+      
+      logger.info('tool_path_stored', {
+        sessionKey,
+        toolCallId: event.toolCallId,
+        toolName: event.toolName,
+        path: toolPath,
+      });
+    }
+    
     logger.debug('tool_span_creation_complete', {
       sessionKey,
       toolCallId: event.toolCallId,
+      schemaName,
     });
   });
   
@@ -428,47 +549,138 @@ export default function prefactorExtension(pi: ExtensionAPI) {
     const sessionKey = getSessionKey(ctx);
     const resultText = extractTextFromContent(event.content);
     const isError = event.isError ?? false;
+    const endTime = Date.now();
     
     logger.debug('tool_result', {
       sessionKey,
       toolName: event.toolName,
       toolCallId: event.toolCallId,
       isError,
+      resultTextPreview: resultText.slice(0, 100),
     });
     
-    // Build result payload based on tool type
+    // P0 Critical Fix #5: Track file operations and activity in session state
+    const state = sessionManager.getSessionState(sessionKey);
+    if (state) {
+      // Track tool call count
+      state.toolCalls++;
+      
+      // P0 CRITICAL: Extract path from result text (args not available in tool_result!)
+      const extractedPath = extractPathFromToolResult(resultText, event.toolName);
+      
+      // Also try direct args as backup
+      const args = event.args as { path?: string } | undefined;
+      const directPath = args?.path;
+      
+      // Use extracted path from result text, fallback to direct path
+      const path = extractedPath || directPath;
+      
+      logger.info('tool_result_state_tracking', {
+        sessionKey,
+        toolName: event.toolName,
+        toolCallId: event.toolCallId,
+        path,
+        extractedPath,
+        directPath,
+        isError,
+        hasState: true,
+        hasExtractedPath: !!extractedPath,
+        hasDirectPath: !!directPath,
+      });
+      
+      // Track file modifications
+      if ((event.toolName === 'write' || event.toolName === 'edit') && path) {
+        if (!isError) {
+          state.filesModified.add(path);
+          logger.info('file_modified_tracked', {
+            sessionKey,
+            path,
+            toolName: event.toolName,
+            filesModifiedCount: state.filesModified.size,
+          });
+          
+          if (event.toolName === 'write' && (event as any).created) {
+            state.filesCreated.push(path);
+            logger.info('file_created_tracked', {
+              sessionKey,
+              path,
+              filesCreatedCount: state.filesCreated.length,
+            });
+          }
+        }
+      }
+      
+      if (event.toolName === 'read' && path) {
+        if (!isError) {
+          state.filesRead.add(path);
+          logger.info('file_read_tracked', {
+            sessionKey,
+            path,
+            filesReadCount: state.filesRead.size,
+          });
+        }
+      }
+      
+      if (event.toolName === 'bash') {
+        state.commandsRun++;
+        logger.info('command_tracked', {
+          sessionKey,
+          commandsRun: state.commandsRun,
+        });
+      }
+    } else {
+      logger.warn('tool_result_no_state', {
+        sessionKey,
+        toolName: event.toolName,
+      });
+    }
+    
+    // P0 Critical Fix #2: Build result payload based on tool type - ALWAYS capture outputs for auditing
     const resultPayload: Record<string, unknown> = {
       isError,
+      endTime: endTime,  // CRITICAL: Track end time for duration
     };
     
-    if (config.captureToolOutputs && !isError) {
-      if (event.toolName === 'bash') {
-        const result = event.result as { exitCode?: number; stdout?: string; stderr?: string; durationMs?: number } | undefined;
-        if (result) {
-          resultPayload.exitCode = result.exitCode;
-          resultPayload.stdout = result.stdout?.slice(0, config.maxOutputLength);
-          resultPayload.stderr = result.stderr?.slice(0, config.maxOutputLength);
-          resultPayload.durationMs = result.durationMs;
-        }
-      } else if (event.toolName === 'read') {
-        const result = event.result as { content?: string; lineCount?: number; encoding?: string } | undefined;
-        if (result) {
-          resultPayload.contentLength = result.content?.length;
-          resultPayload.lineCount = result.lineCount;
-          resultPayload.encoding = result.encoding;
-        }
-      } else if (event.toolName === 'write') {
-        const result = event.result as { success?: boolean; backupPath?: string } | undefined;
-        if (result) {
-          resultPayload.success = result.success;
-          resultPayload.backupPath = result.backupPath;
-        }
-      } else if (event.toolName === 'edit') {
-        const result = event.result as { successCount?: number; failedCount?: number } | undefined;
-        if (result) {
-          resultPayload.successCount = result.successCount;
-          resultPayload.failedCount = result.failedCount;
-        }
+    // Capture tool outputs - critical for auditing even on errors
+    if (event.toolName === 'bash') {
+      // Debug: log what's in event.result
+      logger.debug('tool_result_bash_debug', {
+        sessionKey,
+        hasResult: !!event.result,
+        resultType: typeof event.result,
+        resultKeys: event.result ? Object.keys(event.result) : [],
+      });
+      
+      const result = event.result as { exitCode?: number; stdout?: string; stderr?: string; durationMs?: number } | undefined;
+      if (result) {
+        resultPayload.exitCode = result.exitCode;
+        resultPayload.stdout = result.stdout?.slice(0, config.maxOutputLength);
+        resultPayload.stderr = result.stderr?.slice(0, config.maxOutputLength);
+        resultPayload.durationMs = result.durationMs;
+      }
+      // If no result object, try to extract from content
+      if (!result && resultText) {
+        // Bash output is in the content, exit code may not be available
+        resultPayload.stdout = resultText.slice(0, config.maxOutputLength);
+      }
+    } else if (event.toolName === 'read') {
+      const result = event.result as { content?: string; lineCount?: number; encoding?: string } | undefined;
+      if (result) {
+        resultPayload.contentLength = result.content?.length;
+        resultPayload.lineCount = result.lineCount;
+        resultPayload.encoding = result.encoding;
+      }
+    } else if (event.toolName === 'write') {
+      const result = event.result as { success?: boolean; backupPath?: string } | undefined;
+      if (result) {
+        resultPayload.success = result.success;
+        resultPayload.backupPath = result.backupPath;
+      }
+    } else if (event.toolName === 'edit') {
+      const result = event.result as { successCount?: number; failedCount?: number } | undefined;
+      if (result) {
+        resultPayload.successCount = result.successCount;
+        resultPayload.failedCount = result.failedCount;
       }
     }
     

@@ -234,6 +234,18 @@ export class Agent {
             type: 'object',
             properties: {
               messageCount: { type: 'number', description: 'Number of messages' },
+              startTime: { type: 'number', description: 'Start timestamp (ms)' },
+              model: { type: 'string', description: 'Model used' },
+              provider: { type: 'string', description: 'Provider name' },
+              temperature: { type: 'number', description: 'Temperature setting' },
+              systemPromptHash: { type: 'string', description: 'System prompt hash' },
+              // Result fields (on finish)
+              durationMs: { type: 'number', description: 'Execution duration' },
+              success: { type: 'boolean', description: 'Success status' },
+              filesModified: { type: 'array', items: { type: 'string' }, description: 'Files modified' },
+              commandsRun: { type: 'number', description: 'Commands executed' },
+              toolCalls: { type: 'number', description: 'Tool calls made' },
+              error: { type: 'string', description: 'Error message if failed' },
             },
           },
         },
@@ -299,6 +311,8 @@ export class Agent {
           params_schema: {
             type: 'object',
             properties: {
+              toolCallId: { type: 'string', description: 'Tool call ID' },
+              startTime: { type: 'number', description: 'Start timestamp (ms)' },
               command: { type: 'string', description: 'Bash command to execute' },
               timeout: { type: 'number', description: 'Timeout in milliseconds' },
               cwd: { type: 'string', description: 'Working directory' },
@@ -307,6 +321,7 @@ export class Agent {
               stdout: { type: 'string', description: 'Standard output (truncated)' },
               stderr: { type: 'string', description: 'Standard error (truncated)' },
               durationMs: { type: 'number', description: 'Execution duration' },
+              isError: { type: 'boolean', description: 'Whether tool failed' },
             },
           },
         },
@@ -317,6 +332,8 @@ export class Agent {
           params_schema: {
             type: 'object',
             properties: {
+              toolCallId: { type: 'string', description: 'Tool call ID' },
+              startTime: { type: 'number', description: 'Start timestamp (ms)' },
               path: { type: 'string', description: 'File path to read' },
               offset: { type: 'number', description: 'Start line number' },
               limit: { type: 'number', description: 'Maximum lines to read' },
@@ -324,6 +341,7 @@ export class Agent {
               contentLength: { type: 'number', description: 'Bytes read' },
               lineCount: { type: 'number', description: 'Lines read' },
               encoding: { type: 'string', description: 'File encoding' },
+              isError: { type: 'boolean', description: 'Whether tool failed' },
             },
           },
         },
@@ -334,12 +352,15 @@ export class Agent {
           params_schema: {
             type: 'object',
             properties: {
+              toolCallId: { type: 'string', description: 'Tool call ID' },
+              startTime: { type: 'number', description: 'Start timestamp (ms)' },
               path: { type: 'string', description: 'File path to write' },
               contentLength: { type: 'number', description: 'Bytes written' },
               created: { type: 'boolean', description: 'Whether file was created (vs updated)' },
               // Result fields
               backupPath: { type: 'string', description: 'Backup file path if created' },
               success: { type: 'boolean', description: 'Write success' },
+              isError: { type: 'boolean', description: 'Whether tool failed' },
             },
           },
         },
@@ -350,6 +371,8 @@ export class Agent {
           params_schema: {
             type: 'object',
             properties: {
+              toolCallId: { type: 'string', description: 'Tool call ID' },
+              startTime: { type: 'number', description: 'Start timestamp (ms)' },
               path: { type: 'string', description: 'File path to edit' },
               editCount: { type: 'number', description: 'Number of edit blocks' },
               // Result fields
@@ -365,6 +388,7 @@ export class Agent {
                 items: { type: 'number' },
                 description: 'Lengths of replacement text',
               },
+              isError: { type: 'boolean', description: 'Whether tool failed' },
             },
           },
         },
