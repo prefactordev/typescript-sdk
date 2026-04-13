@@ -63,11 +63,17 @@ Status: ✅ Valid
 |----------|---------|-------------|
 | `PREFACTOR_API_URL` | `https://app.prefactorai.com` | Prefactor API endpoint |
 | `PREFACTOR_AGENT_NAME` | `Pi Agent` | Human-readable agent name |
+| `PREFACTOR_AGENT_VERSION` | `default` | Version suffix for tracking |
 | `PREFACTOR_LOG_LEVEL` | `info` | Logging level (debug/info/warn/error) |
 | `PREFACTOR_USER_INTERACTION_TIMEOUT_MINUTES` | `5` | Interaction span timeout |
 | `PREFACTOR_SESSION_TIMEOUT_HOURS` | `24` | Session span timeout |
 | `PREFACTOR_MAX_INPUT_LENGTH` | `10000` | Max input chars to capture |
 | `PREFACTOR_MAX_OUTPUT_LENGTH` | `10000` | Max output chars to capture |
+| `PREFACTOR_CAPTURE_THINKING` | `true` | Capture agent reasoning |
+| `PREFACTOR_CAPTURE_TOOL_INPUTS` | `true` | Capture tool call inputs |
+| `PREFACTOR_CAPTURE_TOOL_OUTPUTS` | `true` | Capture tool call outputs |
+| `PREFACTOR_SAMPLE_RATE` | `1.0` | Sampling rate (0.0-1.0) |
+| `PREFACTOR_ENABLED` | `true` | Enable/disable extension |
 
 ## Span Hierarchy
 
@@ -75,11 +81,20 @@ Status: ✅ Valid
 pi:session (root, 24hr lifetime)
   └─ pi:user_interaction (5min idle timeout)
       ├─ pi:user_message (user input)
-      ├─ pi:agent_run (agent execution)
-      │   └─ pi:tool_call (tool executions)
-      └─ pi:assistant_response (LLM response)
-      └─ pi:agent_thinking (reasoning, when available)
+      └─ pi:agent_run (agent execution)
+          ├─ pi:agent_thinking (reasoning, extracted from content)
+          ├─ pi:tool_call (tool executions)
+          └─ pi:assistant_response (LLM response)
 ```
+
+**Span Types**:
+- `pi:session` - Root span for pi session
+- `pi:user_interaction` - User interaction context
+- `pi:user_message` - Inbound user message
+- `pi:agent_run` - Agent execution run
+- `pi:agent_thinking` - Agent reasoning (extracted from content)
+- `pi:tool_call` - Tool execution
+- `pi:assistant_response` - Assistant response
 
 ## Commands
 
@@ -104,6 +119,25 @@ Then reload pi: `/reload`
 1. Verify credentials are correct
 2. Check logs for errors: `[pi-prefactor:*]`
 3. Use CLI to verify agent registration
+
+### Thinking spans not appearing
+
+Some models (e.g., qwen3.5:cloud) output thinking as formatted text, not structured data. The extension extracts thinking using pattern matching. If thinking isn't captured:
+
+1. Ensure `PREFACTOR_CAPTURE_THINKING=true`
+2. Check debug logs: `export PREFACTOR_LOG_LEVEL=debug`
+3. Look for: `thinking_extracted_from_content` in logs
+
+### Tool spans showing "not found" warnings
+
+This was a race condition fixed in v0.0.1-mvp. If you see `tool_call_span_not_found`:
+
+1. Update to latest version
+2. Check that `tool_execution_start` fires before `tool_result`
+
+## Development
+
+For development guide, debugging methodology, and tmux workflow, see [`DEVELOPMENT-GUIDE.md`](./DEVELOPMENT-GUIDE.md).
 
 ## License
 
