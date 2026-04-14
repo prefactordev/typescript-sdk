@@ -10,6 +10,17 @@
 import type { Config } from './config.js';
 import type { Logger } from './logger.js';
 import type { SpanSchemaName, AnySpanPayload, AnySpanResult } from './schemas.js';
+import { PACKAGE_NAME, PACKAGE_VERSION } from './version.js';
+
+/**
+ * X-Prefactor-SDK header value.
+ *
+ * Follows the convention from @prefactor/core: each SDK component
+ * includes its own entry (`name@version`), and the core appends its own.
+ * Since this extension makes direct HTTP calls (no core HttpClient),
+ * we include both entries manually.
+ */
+const SDK_HEADER = `${PACKAGE_NAME}@${PACKAGE_VERSION} @prefactor/core@0.3.3`;
 
 /**
  * Prefactor API client configuration
@@ -127,11 +138,13 @@ export class PrefactorClient {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${config.apiToken!}`,
       'X-Agent-ID': config.agentId!,
+      'X-Prefactor-SDK': SDK_HEADER,
     };
 
     logger.debug('prefactor_client_init', {
       apiUrl: this.baseUrl,
       agentId: config.agentId,
+      sdkHeader: SDK_HEADER,
     });
   }
 
@@ -192,7 +205,7 @@ export class PrefactorClient {
     const request: RegisterInstanceRequest = {
       agent_id: this.config.agentId,
       agent_version: {
-        external_identifier: 'pi-prefactor-ext@0.0.1',
+        external_identifier: `${PACKAGE_NAME}@${PACKAGE_VERSION}`,
         name: 'Pi Prefactor Extension',
         description: 'Prefactor instrumentation for pi coding agent',
       },

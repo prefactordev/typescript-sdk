@@ -23,9 +23,9 @@ export const configSchema = z.object({
 
   // Optional - Logging
   logLevel: z
-    .enum(['debug', 'info', 'warn', 'error'])
-    .default('error')
-    .describe('Logging verbosity level (only effective when PREFACTOR_LOG_LEVEL env var is set)'),
+    .enum(['debug', 'info', 'warn', 'error', 'silent'])
+    .default('silent')
+    .describe('Logging verbosity level (silent = disabled unless PREFACTOR_LOG_LEVEL is set)'),
 
   // Optional - Capture flags
   captureInputs: z.boolean().default(true).describe('Whether to capture LLM inputs'),
@@ -56,7 +56,7 @@ export type Config = z.infer<typeof configSchema> & { isConfigured: boolean };
  * - PREFACTOR_API_URL (optional, defaults to https://app.prefactorai.com)
  * - PREFACTOR_API_TOKEN (required for telemetry)
  * - PREFACTOR_AGENT_ID (required for telemetry)
- * - PREFACTOR_LOG_LEVEL (optional, defaults to 'error')
+ * - PREFACTOR_LOG_LEVEL (optional, defaults to 'silent' — set to 'debug'/'info'/'warn'/'error' to enable logging)
  * - PREFACTOR_CAPTURE_INPUTS (optional, defaults to 'true')
  * - PREFACTOR_CAPTURE_OUTPUTS (optional, defaults to 'true')
  * - PREFACTOR_MAX_OUTPUT_LENGTH (optional, defaults to '10000')
@@ -64,11 +64,16 @@ export type Config = z.infer<typeof configSchema> & { isConfigured: boolean };
  * @returns Validated configuration object with `isConfigured` flag
  */
 export function loadConfig(): Config {
+  // Valid log levels — used to sanitize env var before Zod validation
+  const VALID_LOG_LEVELS = new Set(['debug', 'info', 'warn', 'error', 'silent']);
+  const rawLogLevel = process.env.PREFACTOR_LOG_LEVEL?.trim();
+  const logLevel = rawLogLevel && VALID_LOG_LEVELS.has(rawLogLevel) ? rawLogLevel : 'silent';
+
   const merged = {
     apiUrl: process.env.PREFACTOR_API_URL ?? 'https://app.prefactorai.com',
     apiToken: process.env.PREFACTOR_API_TOKEN || undefined,
     agentId: process.env.PREFACTOR_AGENT_ID || undefined,
-    logLevel: process.env.PREFACTOR_LOG_LEVEL ?? 'error',
+    logLevel,
     captureInputs: process.env.PREFACTOR_CAPTURE_INPUTS !== 'false',
     captureOutputs: process.env.PREFACTOR_CAPTURE_OUTPUTS !== 'false',
     maxOutputLength: process.env.PREFACTOR_MAX_OUTPUT_LENGTH
@@ -85,7 +90,7 @@ export function loadConfig(): Config {
       apiUrl: 'https://app.prefactorai.com',
       apiToken: undefined,
       agentId: undefined,
-      logLevel: 'error',
+      logLevel: 'silent',
       captureInputs: true,
       captureOutputs: true,
       maxOutputLength: 10000,

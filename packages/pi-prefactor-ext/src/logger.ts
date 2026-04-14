@@ -9,9 +9,9 @@
 
 import type { Config } from './config.js';
 
-export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
+export type LogLevel = 'debug' | 'info' | 'warn' | 'error' | 'silent';
 
-const LOG_LEVELS: LogLevel[] = ['debug', 'info', 'warn', 'error'];
+const LOG_LEVELS: LogLevel[] = ['debug', 'info', 'warn', 'error', 'silent'];
 
 /**
  * Get numeric level for comparison
@@ -39,7 +39,7 @@ export class PrefactorLogger implements Logger {
   private namespace: string;
   private agentId?: string;
 
-  constructor(namespace: string, level: LogLevel = 'error', agentId?: string) {
+  constructor(namespace: string, level: LogLevel = 'silent', agentId?: string) {
     this.namespace = namespace;
     this.level = level;
     this.agentId = agentId;
@@ -121,7 +121,7 @@ export class PrefactorLogger implements Logger {
  * @returns Logger instance
  */
 export function getLogger(namespace: string, config?: Partial<Config>): Logger {
-  const level = config?.logLevel ?? 'error';
+  const level = config?.logLevel ?? 'silent';
   const agentId = config?.agentId;
   return new PrefactorLogger(namespace, level, agentId);
 }

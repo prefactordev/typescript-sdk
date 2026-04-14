@@ -17,6 +17,7 @@ import { createPrefactorClient } from './prefactor-client.js';
 import { createSpanManager } from './span-manager.js';
 import { createSessionTracker } from './session-tracker.js';
 import { createFileTracker } from './file-tracker.js';
+import { PACKAGE_VERSION } from './version.js';
 
 // Export types and interfaces
 export type { Config } from './config.js';
@@ -1048,5 +1049,5 @@ export default function extension(api: ExtensionAPI): void {
     }
   });
 
-  logger.info('extension_loaded', { version: '0.0.1', isConfigured: config.isConfigured });
+  logger.info('extension_loaded', { version: PACKAGE_VERSION, isConfigured: config.isConfigured });
 }
