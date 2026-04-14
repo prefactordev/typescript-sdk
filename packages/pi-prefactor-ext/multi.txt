@@ -1,6 +1,0 @@
-This is the initial content of multi.txt.
-Created for demonstration purposes.
-
-This is additional content added later.
-Line 4 of the file.
-Line 5 of the file.

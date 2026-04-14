@@ -1,3 +1,0 @@
-This is file1.txt
-Created for demonstration purposes.
-Line 3 of content.
