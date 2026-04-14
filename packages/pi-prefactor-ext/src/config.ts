@@ -1,8 +1,8 @@
 /**
  * Prefactor Extension Configuration
  *
- * Supports both environment variables and package configuration.
- * Priority: package config > environment variables > defaults
+ * Loads configuration from environment variables with PREFACTOR_ prefix.
+ * All fields are validated with Zod for type safety.
  *
  * @module
  */
@@ -10,193 +10,106 @@
 import { z } from 'zod';
 
 /**
- * Prefactor extension configuration schema.
- * All fields are validated with Zod for type safety.
+ * Configuration schema for Prefactor Extension.
+ * API credentials (apiToken, agentId) are optional to allow graceful
+ * degradation when Prefactor is not configured. Use `isConfigured`
+ * on the returned config to check availability.
  */
 export const configSchema = z.object({
-  // Required - Prefactor API credentials
-  apiUrl: z
-    .string()
-    .url()
-    .default('https://app.prefactorai.com')
-    .describe('Prefactor API URL (e.g., https://app.prefactorai.com)'),
-  apiToken: z.string().min(1).describe('Prefactor API token for authentication'),
-  agentId: z.string().min(1).describe('Agent ID registered in Prefactor'),
-
-  // Optional - Agent identification
-  agentName: z
-    .string()
-    .default('Pi Agent')
-    .describe('Human-readable agent name shown in Prefactor UI'),
-  agentVersion: z
-    .string()
-    .default('default')
-    .describe('Agent version suffix for tracking deployments'),
+  // API credentials (optional — extension degrades gracefully when missing)
+  apiUrl: z.string().url().default('https://app.prefactorai.com').describe('Prefactor API URL'),
+  apiToken: z.string().min(1).optional().describe('Prefactor API token for authentication'),
+  agentId: z.string().min(1).optional().describe('Agent ID registered in Prefactor'),
 
   // Optional - Logging
   logLevel: z
     .enum(['debug', 'info', 'warn', 'error'])
-    .default('warn')
-    .describe('Logging verbosity level'),
+    .default('error')
+    .describe('Logging verbosity level (only effective when PREFACTOR_LOG_LEVEL env var is set)'),
 
-  // Optional - Timeouts
-  userInteractionTimeoutMinutes: z
-    .number()
-    .positive()
-    .default(5)
-    .describe('Timeout for user interaction spans (minutes)'),
-  sessionTimeoutHours: z
-    .number()
-    .positive()
-    .default(24)
-    .describe('Timeout for session spans (hours)'),
+  // Optional - Capture flags
+  captureInputs: z.boolean().default(true).describe('Whether to capture LLM inputs'),
+  captureOutputs: z.boolean().default(true).describe('Whether to capture LLM outputs'),
 
   // Optional - Payload limits
-  maxInputLength: z
-    .number()
-    .positive()
-    .default(10000)
-    .describe('Maximum input payload length to capture (characters)'),
   maxOutputLength: z
     .number()
     .positive()
     .default(10000)
-    .describe('Maximum output payload length to capture (characters)'),
-  maxSystemPromptLength: z
-    .number()
-    .positive()
-    .default(2000)
-    .describe('Maximum system prompt length to capture (characters)'),
-
-  // Optional - Capture flags
-  captureThinking: z
-    .boolean()
-    .default(true)
-    .describe('Whether to capture agent thinking/reasoning traces'),
-  captureToolInputs: z.boolean().default(true).describe('Whether to capture tool call inputs'),
-  captureToolOutputs: z.boolean().default(true).describe('Whether to capture tool call outputs'),
-
-  // Optional - Sampling and enablement
-  samplingRate: z
-    .number()
-    .min(0)
-    .max(1)
-    .default(1)
-    .describe('Sampling rate for traces (0-1, where 1 = 100%)'),
-  enabled: z.boolean().default(true).describe('Whether the extension is enabled'),
+    .describe('Maximum output length to capture (characters)'),
 });
 
 /**
- * Prefactor configuration type (inferred from schema).
+ * Configuration type inferred from schema.
  */
-export type PrefactorConfig = z.infer<typeof configSchema>;
+export type Config = z.infer<typeof configSchema> & { isConfigured: boolean };
 
 /**
- * Load configuration from environment variables and/or package config.
+ * Load configuration from environment variables.
  *
- * Priority order:
- * 1. Package config (from settings.json packages[].config)
- * 2. Environment variables
- * 3. Default values
+ * This function never throws. When Prefactor credentials are missing,
+ * the returned config has `isConfigured: false` and `apiToken`/`agentId`
+ * set to `undefined`. The extension uses this to degrade gracefully
+ * (show a TUI notification instead of crashing).
  *
- * @param packageConfig - Optional configuration from pi package system
- * @returns Validated configuration object
+ * Environment variables:
+ * - PREFACTOR_API_URL (optional, defaults to https://app.prefactorai.com)
+ * - PREFACTOR_API_TOKEN (required for telemetry)
+ * - PREFACTOR_AGENT_ID (required for telemetry)
+ * - PREFACTOR_LOG_LEVEL (optional, defaults to 'error')
+ * - PREFACTOR_CAPTURE_INPUTS (optional, defaults to 'true')
+ * - PREFACTOR_CAPTURE_OUTPUTS (optional, defaults to 'true')
+ * - PREFACTOR_MAX_OUTPUT_LENGTH (optional, defaults to '10000')
  *
- * @example
- * ```typescript
- * // In extension entry point
- * const packageConfig = pi.getPackageConfig?.('pi-prefactor') ?? {};
- * const config = loadConfig(packageConfig);
- * ```
+ * @returns Validated configuration object with `isConfigured` flag
  */
-export function loadConfig(packageConfig?: Record<string, unknown>): PrefactorConfig {
+export function loadConfig(): Config {
   const merged = {
-    // Required fields (apiUrl has default)
-    apiUrl: packageConfig?.apiUrl ?? process.env.PREFACTOR_API_URL ?? 'https://app.prefactorai.com',
-    apiToken: packageConfig?.apiToken ?? process.env.PREFACTOR_API_TOKEN,
-    agentId: packageConfig?.agentId ?? process.env.PREFACTOR_AGENT_ID,
-
-    // Agent identification
-    agentName: packageConfig?.agentName ?? process.env.PREFACTOR_AGENT_NAME ?? 'Pi Agent',
-    agentVersion: packageConfig?.agentVersion ?? process.env.PREFACTOR_AGENT_VERSION ?? 'default',
-
-    // Logging
-    logLevel: packageConfig?.logLevel ?? process.env.PREFACTOR_LOG_LEVEL ?? 'warn',
-
-    // Timeouts (parse from string env vars)
-    userInteractionTimeoutMinutes:
-      packageConfig?.userInteractionTimeoutMinutes ??
-      (process.env.PREFACTOR_USER_INTERACTION_TIMEOUT_MINUTES
-        ? parseInt(process.env.PREFACTOR_USER_INTERACTION_TIMEOUT_MINUTES, 10)
-        : 5),
-    sessionTimeoutHours:
-      packageConfig?.sessionTimeoutHours ??
-      (process.env.PREFACTOR_SESSION_TIMEOUT_HOURS
-        ? parseInt(process.env.PREFACTOR_SESSION_TIMEOUT_HOURS, 10)
-        : 24),
-
-    // Payload limits
-    maxInputLength:
-      packageConfig?.maxInputLength ??
-      (process.env.PREFACTOR_MAX_INPUT_LENGTH
-        ? parseInt(process.env.PREFACTOR_MAX_INPUT_LENGTH, 10)
-        : 10000),
-    maxOutputLength:
-      packageConfig?.maxOutputLength ??
-      (process.env.PREFACTOR_MAX_OUTPUT_LENGTH
-        ? parseInt(process.env.PREFACTOR_MAX_OUTPUT_LENGTH, 10)
-        : 10000),
-    maxSystemPromptLength:
-      packageConfig?.maxSystemPromptLength ??
-      (process.env.PREFACTOR_MAX_SYSTEM_PROMPT_LENGTH
-        ? parseInt(process.env.PREFACTOR_MAX_SYSTEM_PROMPT_LENGTH, 10)
-        : 2000),
-
-    // Capture flags
-    captureThinking:
-      packageConfig?.captureThinking ??
-      (process.env.PREFACTOR_CAPTURE_THINKING
-        ? process.env.PREFACTOR_CAPTURE_THINKING === 'true'
-        : true),
-    captureToolInputs:
-      packageConfig?.captureToolInputs ??
-      (process.env.PREFACTOR_CAPTURE_TOOL_INPUTS
-        ? process.env.PREFACTOR_CAPTURE_TOOL_INPUTS === 'true'
-        : true),
-    captureToolOutputs:
-      packageConfig?.captureToolOutputs ??
-      (process.env.PREFACTOR_CAPTURE_TOOL_OUTPUTS
-        ? process.env.PREFACTOR_CAPTURE_TOOL_OUTPUTS === 'true'
-        : true),
-
-    // Sampling and enablement
-    samplingRate:
-      packageConfig?.samplingRate ??
-      (process.env.PREFACTOR_SAMPLE_RATE ? parseFloat(process.env.PREFACTOR_SAMPLE_RATE) : 1),
-    enabled:
-      packageConfig?.enabled ??
-      (process.env.PREFACTOR_ENABLED ? process.env.PREFACTOR_ENABLED === 'true' : true),
+    apiUrl: process.env.PREFACTOR_API_URL ?? 'https://app.prefactorai.com',
+    apiToken: process.env.PREFACTOR_API_TOKEN || undefined,
+    agentId: process.env.PREFACTOR_AGENT_ID || undefined,
+    logLevel: process.env.PREFACTOR_LOG_LEVEL ?? 'error',
+    captureInputs: process.env.PREFACTOR_CAPTURE_INPUTS !== 'false',
+    captureOutputs: process.env.PREFACTOR_CAPTURE_OUTPUTS !== 'false',
+    maxOutputLength: process.env.PREFACTOR_MAX_OUTPUT_LENGTH
+      ? parseInt(process.env.PREFACTOR_MAX_OUTPUT_LENGTH, 10)
+      : 10000,
   };
 
-  return configSchema.parse(merged);
+  const parsed = configSchema.safeParse(merged);
+
+  if (!parsed.success) {
+    // Return a minimal config that marks the extension as not configured.
+    // This prevents ZodError from crashing the extension / pi.
+    return {
+      apiUrl: 'https://app.prefactorai.com',
+      apiToken: undefined,
+      agentId: undefined,
+      logLevel: 'error',
+      captureInputs: true,
+      captureOutputs: true,
+      maxOutputLength: 10000,
+      isConfigured: false,
+    };
+  }
+
+  const data = parsed.data;
+  const isConfigured = !!(data.apiToken && data.agentId);
+
+  return { ...data, isConfigured };
 }
 
 /**
  * Validate that required configuration is present.
  *
+ * When credentials are missing, returns `{ ok: false, ... }` with details
+ * about what's missing — but the caller should use this to decide whether
+ * to send telemetry, NOT to crash the extension.
+ *
  * @param config - Configuration object to validate
  * @returns Validation result with error details if invalid
- *
- * @example
- * ```typescript
- * const validation = validateConfig(config);
- * if (!validation.ok) {
- *   console.error('Configuration error:', validation.error);
- *   console.error('Missing:', validation.missing?.join(', '));
- * }
- * ```
  */
-export function validateConfig(config: PrefactorConfig): {
+export function validateConfig(config: Config): {
   ok: boolean;
   error?: string;
   missing?: string[];
@@ -218,80 +131,33 @@ export function validateConfig(config: PrefactorConfig): {
 }
 
 /**
- * Get configuration summary for logging/debugging.
- * Hides sensitive values (apiToken) for security.
+ * Get the list of missing credential env var names.
  *
  * @param config - Configuration object
- * @returns Safe-to-log summary object
- *
- * @example
- * ```typescript
- * logger.info('config_loaded', getConfigSummary(config));
- * // Output: { apiUrl: 'https://...', agentId: '...', apiToken: '***xyz' }
- * ```
+ * @returns Array of missing env var names (empty if fully configured)
  */
-export function getConfigSummary(config: PrefactorConfig): Record<string, unknown> {
-  return {
-    // Identity
-    apiUrl: config.apiUrl,
-    agentId: config.agentId,
-    agentName: config.agentName,
-    agentVersion: config.agentVersion,
-
-    // Settings
-    logLevel: config.logLevel,
-    userInteractionTimeoutMinutes: config.userInteractionTimeoutMinutes,
-    sessionTimeoutHours: config.sessionTimeoutHours,
-
-    // Capture flags
-    captureThinking: config.captureThinking,
-    captureToolInputs: config.captureToolInputs,
-    captureToolOutputs: config.captureToolOutputs,
-
-    // Payload limits
-    maxInputLength: config.maxInputLength,
-    maxOutputLength: config.maxOutputLength,
-
-    // Token (masked for security)
-    apiToken: config.apiToken ? '***' + config.apiToken.slice(-4) : undefined,
-  };
+export function getMissingCredentials(config: Config): string[] {
+  const missing: string[] = [];
+  if (!config.apiToken) missing.push('PREFACTOR_API_TOKEN');
+  if (!config.agentId) missing.push('PREFACTOR_AGENT_ID');
+  return missing;
 }
 
 /**
- * Create a configuration error message for user display.
+ * Get configuration summary for logging (hides sensitive values).
  *
- * @param validation - Validation result from validateConfig()
- * @returns Formatted error message with setup instructions
+ * @param config - Configuration object
+ * @returns Safe-to-log summary object
  */
-export function getConfigErrorMessage(validation: ReturnType<typeof validateConfig>): string {
-  if (validation.ok) {
-    return '';
-  }
-
-  let msg = `Prefactor Extension Configuration Error\n\n`;
-  msg += `Missing required configuration:\n`;
-
-  if (validation.missing) {
-    for (const field of validation.missing) {
-      msg += `  - ${field}\n`;
-    }
-  }
-
-  msg += `\nSet environment variables:\n`;
-  msg += `  export PREFACTOR_API_TOKEN=your-token\n`;
-  msg += `  export PREFACTOR_AGENT_ID=your-agent-id\n`;
-  msg += `  # Optional: PREFACTOR_API_URL defaults to https://app.prefactorai.com\n`;
-  msg += `\nOr configure in settings.json:\n`;
-  msg += `  {\n`;
-  msg += `    "packages": [{\n`;
-  msg += `      "id": "pi-prefactor",\n`;
-  msg += `      "config": {\n`;
-  msg += `        "apiToken": "...",\n`;
-  msg += `        "agentId": "..."\n`;
-  msg += `        # apiUrl optional, defaults to https://app.prefactorai.com\n`;
-  msg += `      }\n`;
-  msg += `    }]\n`;
-  msg += `  }\n`;
-
-  return msg;
+export function getConfigSummary(config: Config): Record<string, unknown> {
+  return {
+    apiUrl: config.apiUrl,
+    agentId: config.agentId ?? '(not set)',
+    isConfigured: config.isConfigured,
+    logLevel: config.logLevel,
+    captureInputs: config.captureInputs,
+    captureOutputs: config.captureOutputs,
+    maxOutputLength: config.maxOutputLength,
+    apiToken: config.apiToken ? `***${config.apiToken.slice(-4)}` : '(not set)',
+  };
 }

@@ -1,86 +1,127 @@
 /**
- * Simple structured logger for pi-prefactor extension
- * Logs to console with [pi-prefactor:<event>] prefix - captured in pi logs
+ * Structured logger for pi-prefactor-ext
+ *
+ * Provides level-based logging with namespace support.
+ * Logger never throws - graceful degradation on errors.
  *
  * @module
  */
 
+import type { Config } from './config.js';
+
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 
-/**
- * Structured logger for diagnostic output.
- * Uses consistent format: [timestamp] [pi-prefactor:event] key=value pairs
- */
-export class Logger {
-  private level: LogLevel;
+const LOG_LEVELS: LogLevel[] = ['debug', 'info', 'warn', 'error'];
 
-  constructor(level: LogLevel = 'info') {
+/**
+ * Get numeric level for comparison
+ */
+function getLevelIndex(level: LogLevel): number {
+  return LOG_LEVELS.indexOf(level);
+}
+
+/**
+ * Logger interface for structured logging
+ */
+export interface Logger {
+  debug(event: string, data?: Record<string, unknown>): void;
+  info(event: string, data?: Record<string, unknown>): void;
+  warn(event: string, data?: Record<string, unknown>): void;
+  error(event: string, data?: Record<string, unknown>): void;
+  setLevel(level: LogLevel): void;
+}
+
+/**
+ * Structured logger implementation
+ */
+export class PrefactorLogger implements Logger {
+  private level: LogLevel;
+  private namespace: string;
+  private agentId?: string;
+
+  constructor(namespace: string, level: LogLevel = 'error', agentId?: string) {
+    this.namespace = namespace;
     this.level = level;
+    this.agentId = agentId;
   }
 
   private shouldLog(level: LogLevel): boolean {
-    const levels: LogLevel[] = ['debug', 'info', 'warn', 'error'];
-    return levels.indexOf(level) >= levels.indexOf(this.level);
+    return getLevelIndex(level) >= getLevelIndex(this.level);
   }
 
-  private format(event: string, data: Record<string, unknown>): string {
+  private format(level: LogLevel, event: string, data: Record<string, unknown>): string {
     const timestamp = new Date().toISOString();
-    const dataStr = Object.entries(data)
-      .map(([k, v]) => `${k}=${v}`)
-      .join(' ');
-    return `[${timestamp}] [pi-prefactor:${event}] ${dataStr}`;
+    const parts = [`[${timestamp}]`, `[${this.namespace}:${level}]`, event];
+
+    if (this.agentId) {
+      parts.unshift(`[agent:${this.agentId}]`);
+    }
+
+    const dataEntries = Object.entries(data);
+    if (dataEntries.length > 0) {
+      const dataStr = dataEntries
+        .map(([k, v]) => `${k}=${typeof v === 'object' ? JSON.stringify(v) : v}`)
+        .join(' ');
+      parts.push(dataStr);
+    }
+
+    return parts.join(' ');
   }
 
-  /**
-   * Log debug message (only when level is 'debug')
-   */
   debug(event: string, data: Record<string, unknown> = {}): void {
-    if (this.shouldLog('debug')) {
-      console.log(this.format(event, data));
+    try {
+      if (this.shouldLog('debug')) {
+        console.log(this.format('debug', event, data));
+      }
+    } catch {
+      // Logger never throws - graceful degradation
     }
   }
 
-  /**
-   * Log info message (when level is 'debug' or 'info')
-   */
   info(event: string, data: Record<string, unknown> = {}): void {
-    if (this.shouldLog('info')) {
-      console.log(this.format(event, data));
+    try {
+      if (this.shouldLog('info')) {
+        console.log(this.format('info', event, data));
+      }
+    } catch {
+      // Logger never throws - graceful degradation
     }
   }
 
-  /**
-   * Log warning message (when level is 'debug', 'info', or 'warn')
-   */
   warn(event: string, data: Record<string, unknown> = {}): void {
-    if (this.shouldLog('warn')) {
-      console.warn(this.format(event, data));
+    try {
+      if (this.shouldLog('warn')) {
+        console.warn(this.format('warn', event, data));
+      }
+    } catch {
+      // Logger never throws - graceful degradation
     }
   }
 
-  /**
-   * Log error message (always logged)
-   */
   error(event: string, data: Record<string, unknown> = {}): void {
-    if (this.shouldLog('error')) {
-      console.error(this.format(event, data));
+    try {
+      if (this.shouldLog('error')) {
+        console.error(this.format('error', event, data));
+      }
+    } catch {
+      // Logger never throws - graceful degradation
     }
   }
 
-  /**
-   * Change log level dynamically
-   */
   setLevel(level: LogLevel): void {
     this.level = level;
   }
 }
 
 /**
- * Create a logger instance with specified log level
+ * Create a logger instance
  *
- * @param level - Minimum log level to output (default: 'info')
+ * @param namespace - Logger namespace (e.g., 'config', 'tracer')
+ * @param config - Configuration object (optional, for log level and agent ID)
  * @returns Logger instance
  */
-export function createLogger(level: LogLevel = 'warn'): Logger {
-  return new Logger(level);
+export function getLogger(namespace: string, config?: Partial<Config>): Logger {
+  const level = config?.logLevel ?? 'error';
+  const agentId = config?.agentId;
+  return new PrefactorLogger(namespace, level, agentId);
 }

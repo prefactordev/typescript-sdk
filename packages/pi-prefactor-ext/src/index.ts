@@ -1,31 +1,73 @@
 /**
- * Pi Prefactor Extension - MVP
+ * pi-prefactor-ext: Prefactor instrumentation for pi coding agent
  *
- * Instruments pi coding agent with Prefactor spans for distributed tracing.
+ * This extension integrates with the pi coding agent to capture traces
+ * from ai coding agent operations.
  *
  * @module
  */
 
 import type { ExtensionAPI, ExtensionContext } from '@mariozechner/pi-coding-agent';
-import packageJson from '../package.json' with { type: 'json' };
+import type { SpanSchemaName, AnySpanPayload, AnySpanResult } from './schemas.js';
+import type { FileOperation } from './file-tracker.js';
 import { createHash } from 'node:crypto';
-import { loadConfig, validateConfig, getConfigSummary, getConfigErrorMessage } from './config.js';
-import { createLogger } from './logger.js';
-import { createAgent } from './agent.js';
-import { createSessionStateManager } from './session-state.js';
+import { getConfigSummary, getMissingCredentials, loadConfig, validateConfig } from './config.js';
+import { getLogger } from './logger.js';
+import { createPrefactorClient } from './prefactor-client.js';
+import { createSpanManager } from './span-manager.js';
+import { createSessionTracker } from './session-tracker.js';
+import { createFileTracker } from './file-tracker.js';
 
-// Global state for pending user message
-let pendingUserMessage: { text: string; timestamp: number } | null = null;
+// Export types and interfaces
+export type { Config } from './config.js';
+export type { Logger, LogLevel } from './logger.js';
+export type { PrefactorClient, PrefactorClientConfig } from './prefactor-client.js';
+export type { SpanManager, SpanManagerImpl } from './span-manager.js';
+export type { SessionTracker, SessionTrackerImpl } from './session-tracker.js';
+export type { FileTracker, FileOperation } from './file-tracker.js';
+export type {
+  SessionPayload,
+  SessionResult,
+  UserMessagePayload,
+  UserMessageResult,
+  AgentRunPayload,
+  AgentRunResult,
+  ToolCallPayload,
+  ToolCallResult,
+  BashToolPayload,
+  BashToolResult,
+  ReadToolPayload,
+  ReadToolResult,
+  WriteToolPayload,
+  WriteToolResult,
+  EditToolPayload,
+  EditToolResult,
+  AssistantResponsePayload,
+  AssistantResponseResult,
+  AssistantThinkingPayload,
+  AssistantThinkingResult,
+  AnySpanPayload,
+  AnySpanResult,
+  SpanSchemaName,
+  SpanSchemaMetadata,
+} from './schemas.js';
+
+// Export factory functions
+export { createPrefactorClient } from './prefactor-client.js';
+export { createSpanManager } from './span-manager.js';
+export { createSessionTracker } from './session-tracker.js';
+export { createFileTracker } from './file-tracker.js';
+
+// Export config and logger
+export { loadConfig, validateConfig, getConfigSummary } from './config.js';
+export { getLogger } from './logger.js';
+
+// Export schemas
+export * from './schemas.js';
 
 /**
- * Get stable session key from context
- */
-function getSessionKey(ctx: ExtensionContext): string {
-  return ctx.sessionManager.getSessionFile() ?? `ephemeral-${Date.now()}`;
-}
-
-/**
- * Extract text from message content
+ * Extract text from message content (type: "text" blocks only).
+ * Thinking content is extracted separately by extractThinkingFromContent().
  */
 function extractTextFromContent(content: unknown): string {
   if (typeof content === 'string') return content;
@@ -41,61 +83,53 @@ function extractTextFromContent(content: unknown): string {
 }
 
 /**
- * Extract thinking/reasoning from assistant message content
- * Looks for common thinking patterns: <thinking>, <think>, <reasoning>, etc.
+ * Extract thinking content from an AssistantMessage's content array.
+ *
+ * Follows the same pattern as pi-coding-agent's compaction/utils.js
+ * and providers/transform-messages.js: iterate content[] checking for
+ * block.type === "thinking" and read block.thinking for the text.
+ *
+ * Skips redacted blocks (Anthropic safety filter) and empty thinking.
+ * Joins multiple thinking blocks with double newline separator.
+ *
+ * @param content - The message content array or string
+ * @returns Thinking text if found, undefined otherwise
  */
 function extractThinkingFromContent(content: unknown): string | undefined {
-  const text = extractTextFromContent(content);
-  if (!text) return undefined;
+  if (typeof content === 'string') return undefined;
+  if (!Array.isArray(content)) return undefined;
 
-  // Pattern 1: <thinking>...</thinking>
-  const thinkingTagMatch = text.match(/<thinking>[\s\S]*?<\/thinking>/i);
-  if (thinkingTagMatch) {
-    return thinkingTagMatch[0]
-      .replace(/<thinking>[\s\S]*?>([\s\S]*?)<\/thinking>/i, '$1')
-      .trim();
+  const thinkingParts: string[] = [];
+  for (const block of content) {
+    if (block?.type === 'thinking' && typeof block.thinking === 'string') {
+      // Skip redacted blocks — they contain "[Reasoning redacted]", not actual thinking
+      if (block.redacted) continue;
+      // Skip empty thinking blocks
+      if (!block.thinking.trim()) continue;
+      thinkingParts.push(block.thinking);
+    }
   }
 
-  // Pattern 2: <think>...</think>
-  const thinkTagMatch = text.match(/<think>[\s\S]*?<\/think>/i);
-  if (thinkTagMatch) {
-    return thinkTagMatch[0]
-      .replace(/<think>[\s\S]*?>([\s\S]*?)<\/think>/i, '$1')
-      .trim();
-  }
-
-  // Pattern 3: <reasoning>...</reasoning>
-  const reasoningTagMatch = text.match(/<reasoning>[\s\S]*?<\/reasoning>/i);
-  if (reasoningTagMatch) {
-    return reasoningTagMatch[0]
-      .replace(/<reasoning>[\s\S]*?>([\s\S]*?)<\/reasoning>/i, '$1')
-      .trim();
-  }
-
-  return undefined;
+  return thinkingParts.length > 0 ? thinkingParts.join('\n\n') : undefined;
 }
 
 /**
- * Extract file path from tool result content (P0 Critical Fix #5)
- * Parses paths from result messages like "Successfully wrote to /path/to/file.txt"
+ * Extract file path from tool result content
  */
 function extractPathFromToolResult(resultText: string, toolName: string): string | undefined {
   if (!resultText) return undefined;
 
   if (toolName === 'write') {
-    // Pattern: "Successfully wrote X bytes to /path/to/file.txt"
     const writeMatch = resultText.match(/to\s+([\/\w\-.]+\.[\w-]+)/i);
     if (writeMatch && writeMatch[1]) {
       return writeMatch[1];
     }
   } else if (toolName === 'read') {
-    // Pattern: "Read X bytes from /path/to/file.txt" or "File: /path/to/file.txt"
     const readMatch = resultText.match(/(?:from|File:)\s+([\/\w\-.]+\.[\w-]+)/i);
     if (readMatch && readMatch[1]) {
       return readMatch[1];
     }
   } else if (toolName === 'edit') {
-    // Pattern: "Edited /path/to/file.txt" or "Modified /path/to/file.txt"
     const editMatch = resultText.match(/(?:Edited|Modified)\s+([\/\w\-.]+\.[\w-]+)/i);
     if (editMatch && editMatch[1]) {
       return editMatch[1];
@@ -106,357 +140,495 @@ function extractPathFromToolResult(resultText: string, toolName: string): string
 }
 
 /**
- * Register configuration command
+ * Extension entry point
+ *
+ * @param api - Extension API provided by pi
  */
-function registerConfigCommand(pi: ExtensionAPI, config: any) {
-  pi.registerCommand('prefactor-config', {
-    description: 'Show Prefactor extension configuration status',
+export default function extension(api: ExtensionAPI): void {
+  // Load configuration — never throws, returns isConfigured: false when
+  // credentials are missing so the extension degrades gracefully.
+  const config = loadConfig();
+  const logger = getLogger('extension', config);
+
+  // Runtime toggle for tracing. Starts as true when credentials are present,
+  // false when they're missing. Can be toggled with /prefactor-enable and
+  // /prefactor-disable commands regardless of initial state.
+  let tracingEnabled = config.isConfigured;
+
+  const missing = getMissingCredentials(config);
+  const missingList = missing.join(', ');
+
+  // ==================== COMMANDS ====================
+
+  api.registerCommand('prefactor-enable', {
+    description: 'Enable Prefactor telemetry tracing',
     handler: async (_args, ctx) => {
-      const validation = validateConfig(config);
-      const summary = validation.ok ? getConfigSummary(config) : { status: 'invalid' };
-
-      const msg =
-        `Prefactor Extension Configuration:\n\n` +
-        `Status: ${validation.ok ? '✅ Valid' : '❌ Invalid'}\n\n` +
-        (validation.ok
-          ? Object.entries(summary)
-              .map(([k, v]) => `- ${k}: ${v}`)
-              .join('\n')
-          : getConfigErrorMessage(validation));
-
-      if (ctx.hasUI) {
-        ctx.ui.notify(msg, validation.ok ? 'info' : 'error');
-      } else {
-        console.log(msg);
+      if (!config.isConfigured) {
+        ctx.ui.notify(
+          `Cannot enable Prefactor — missing credentials: ${missingList}. Set these environment variables and restart pi.`,
+          'error',
+        );
+        return;
       }
+      if (tracingEnabled) {
+        ctx.ui.notify('Prefactor tracing is already enabled.', 'info');
+        return;
+      }
+      tracingEnabled = true;
+      if (ctx.hasUI) {
+        ctx.ui.setStatus('prefactor', ctx.ui.theme.fg('dim', 'Prefactor (active)'));
+        ctx.ui.notify('Prefactor tracing enabled.', 'info');
+      }
+      logger.info('tracing_enabled_by_command');
     },
   });
-}
 
-/**
- * Main extension entry point
- */
-export default function prefactorExtension(pi: ExtensionAPI) {
-  // Load configuration
-  const packageConfig = pi.getPackageConfig?.('pi-prefactor') ?? {};
-  const config = loadConfig(packageConfig);
-  const validation = validateConfig(config);
-
-  // Validate configuration
-  if (!validation.ok) {
-    console.error('[pi-prefactor] Configuration error:', validation.error);
-    console.error('[pi-prefactor] Required:', validation.missing?.join(', '));
-    console.error('[pi-prefactor] Extension will not instrument spans');
-    registerConfigCommand(pi, config);
-    return;
-  }
-
-  // Initialize logger
-  const logger = createLogger(config.logLevel);
-  logger.debug('config_loaded', getConfigSummary(config));
-
-  // Initialize Prefactor agent HTTP client
-  const agent = createAgent(
-    {
-      apiUrl: config.apiUrl,
-      apiToken: config.apiToken,
-      agentId: config.agentId,
-      agentName: config.agentName,
-      agentVersion: config.agentVersion,
-      piVersion: '0.66.0', // Pi version
-      pluginVersion: packageJson.version || '0.0.1',
+  api.registerCommand('prefactor-disable', {
+    description: 'Disable Prefactor telemetry tracing',
+    handler: async (_args, ctx) => {
+      if (!tracingEnabled) {
+        ctx.ui.notify('Prefactor tracing is already disabled.', 'info');
+        return;
+      }
+      tracingEnabled = false;
+      if (ctx.hasUI) {
+        ctx.ui.setStatus('prefactor', ctx.ui.theme.fg('dim', 'Prefactor (inactive)'));
+        ctx.ui.notify('Prefactor tracing disabled. Spans in flight will finish, but no new spans will be created.', 'info');
+      }
+      logger.info('tracing_disabled_by_command');
     },
-    logger
-  );
-
-  // Initialize session state manager
-  const sessionManager = createSessionStateManager(agent, logger, {
-    userInteractionTimeoutMs: config.userInteractionTimeoutMinutes * 60 * 1000,
-    sessionTimeoutMs: config.sessionTimeoutHours * 60 * 60 * 1000,
   });
 
-  // ==================== PROCESS EXIT HANDLERS ====================
+  // ==================== TRACKERS & CLIENTS ====================
 
-  // Graceful shutdown handlers
-  const gracefulShutdown = async (signal: string) => {
-    logger.debug('graceful_shutdown', { signal });
-    try {
-      await sessionManager.cleanupAllSessions();
-      await agent.finishAgentInstance('*', 'complete');
-    } catch (err) {
-      logger.error('shutdown_error', { error: err });
-    }
-    process.exit(0);
-  };
+  // Only create the Prefactor client and span manager when credentials are present.
+  // When not configured, all telemetry hooks early-return and these are never used.
+  const client = config.isConfigured ? createPrefactorClient(config, logger) : (undefined as any);
+  const spanManager = config.isConfigured ? createSpanManager(client, logger) : (undefined as any);
+  const sessionTracker = createSessionTracker(logger);
+  const fileTracker = createFileTracker(logger);
 
-  process.on('SIGINT', () => gracefulShutdown('SIGINT'));
-  process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+  // Track pending tool results
+  const pendingToolResults = new Map<string, { resultText: string; isError: boolean; path?: string }>();
 
-  // Error handlers
-  process.on('uncaughtException', async (err) => {
-    logger.error('uncaught_exception', { error: err.message });
-    try {
-      await sessionManager.cleanupAllSessions();
-    } catch (cleanupErr) {
-      logger.error('cleanup_during_error_failed', { error: cleanupErr });
-    }
-    process.exit(1);
-  });
+  // Map toolCallId → spanId so tool_execution_end can finish the span
+  const toolCallSpanMap = new Map<string, string>();
 
-  process.on('unhandledRejection', async (reason) => {
-    logger.error('unhandled_rejection', { reason: String(reason) });
-    try {
-      await sessionManager.cleanupAllSessions();
-    } catch (cleanupErr) {
-      logger.error('cleanup_during_error_failed', { error: cleanupErr });
-    }
-    process.exit(1);
-  });
+  // Track user_message span ID so it can be finished at agent_start
+  let userMessageSpanId: string | null = null;
 
-  // Note: 'exit' event is synchronous, async cleanup won't complete
-  // But we can at least log
-  process.on('exit', (code) => {
-    logger.debug('process_exit', { code });
-  });
+  // Track assistant response span per message
+  let assistantResponseSpanId: string | null = null;
+
+  // Track whether session has been shut down (late events may arrive after shutdown)
+  let sessionShuttingDown = false;
+
+  // Track tool call count for the current agent run
+  let toolCallCount = 0;
 
   // ==================== SESSION HOOKS ====================
 
-  pi.on('session_start', async (event, ctx) => {
-    const sessionKey = getSessionKey(ctx);
-    logger.debug('session_start', { reason: event.reason, sessionKey });
-    await sessionManager.createSessionSpan(sessionKey);
-  });
-
-  pi.on('session_shutdown', async (_event, ctx) => {
-    const sessionKey = getSessionKey(ctx);
-    logger.debug('session_shutdown', { sessionKey });
-
-    // P0 Critical Fix: Close agent_run span FIRST with comprehensive data before cleanup
-    const state = sessionManager.getSessionState(sessionKey);
-
-    if (state && state.agentRunSpanId) {
-      logger.debug('session_shutdown_closing_agent_run', {
-        sessionKey,
-        hasState: true,
-        filesModified: state.filesModified.size,
-        toolCalls: state.toolCalls,
-        commandsRun: state.commandsRun,
-      });
-
-      await sessionManager.closeAgentRunSpan(sessionKey, 'complete', {
-        success: true, // Session shutdown is normal completion
-        terminationReason: 'session_shutdown', // Use new terminationReason field
-        filesModified: state.filesModified ? Array.from(state.filesModified) : [],
-        filesRead: state.filesRead ? Array.from(state.filesRead) : [],
-        filesCreated: state.filesCreated || [],
-        commandsRun: state.commandsRun || 0,
-        toolCalls: state.toolCalls || 0,
-      });
+  api.on('session_start', async (event, ctx) => {
+    if (ctx.hasUI) {
+      const status = tracingEnabled
+        ? ctx.ui.theme.fg('dim', 'Prefactor (active)')
+        : ctx.ui.theme.fg('dim', 'Prefactor (inactive)');
+      ctx.ui.setStatus('prefactor', status);
     }
 
-    // Close ALL remaining open spans with 'complete' status
-    // (they're not failed, just not closed by their handlers)
-    await sessionManager.closeAllOpenSpans(sessionKey, 'complete');
+    // When not configured, show a one-time warning and skip telemetry
+    if (!config.isConfigured) {
+      if (ctx.hasUI) {
+        ctx.ui.notify(
+          `Prefactor inactive — set ${missingList} to enable.`,
+          'warning',
+        );
+      }
+      logger.info('session_start_unconfigured', { missing });
+      return;
+    }
 
-    // Then close session span
-    await sessionManager.closeSessionSpan(sessionKey);
+    // When configured but tracing disabled, skip telemetry setup
+    if (!tracingEnabled) {
+      logger.info('session_start_tracing_disabled');
+      // Still track session locally so re-enabling mid-session can work
+      const sessionId = `session-${Date.now()}`;
+      sessionTracker.startSession(sessionId);
+      fileTracker.reset();
+      return;
+    }
 
-    // Finally finish agent instance
-    await agent.finishAgentInstance(sessionKey, 'complete');
+    const sessionId = `session-${Date.now()}`;
+    logger.info('session_started', { sessionId, reason: event.reason });
+
+    try {
+      // Start new session tracking
+      sessionTracker.startSession(sessionId);
+
+      // Create Prefactor instance
+      const instance = await client.createInstance();
+      if (instance?.instanceId) {
+        sessionTracker.startInstance(instance.instanceId);
+        spanManager.setInstanceId(instance.instanceId);
+
+        // Create session span
+        const sessionSpanId = await spanManager.createSpan('pi:session', {
+          createdAt: new Date().toISOString(),
+        });
+
+        // Store session span ID for child spans
+        if (sessionSpanId) {
+          sessionTracker.setSessionSpanId(sessionSpanId);
+        }
+
+        logger.debug('session_span_created', { sessionId, sessionSpanId });
+      }
+
+      // Reset file tracker for new session
+      fileTracker.reset();
+    } catch (err) {
+      const error = err instanceof Error ? err.message : String(err);
+      logger.error('session_start_error', { error });
+    }
+  });
+
+  api.on('session_shutdown', async (event, ctx) => {
+    const sessionId = sessionTracker.getSessionId();
+    const hasAgentRun = !!sessionTracker.getAgentRunSpanId();
+    logger.info('session_shutdown', { sessionId, hasAgentRun });
+
+    sessionShuttingDown = true;
+
+    try {
+      // Clear the footer status indicator
+      if (ctx.hasUI) {
+        ctx.ui.setStatus('prefactor', undefined);
+      }
+
+      // If the agent never started (no agent_run span), there are no spans
+      // to wait for — clean up the instance now.
+      // Otherwise, agent_end will handle cleanup (even if it hasn't fired yet).
+      if (!hasAgentRun && tracingEnabled) {
+        await spanManager.finishAllSpans('complete');
+
+        const instanceId = sessionTracker.getInstanceId();
+        if (instanceId) {
+          await client.finishInstance(instanceId, 'complete');
+          logger.info('instance_finished_no_agent', { instanceId });
+        }
+
+        // Log session end
+        const startTime = sessionTracker.getStartTime();
+        const endTime = Date.now();
+        logger.info('session_ended', {
+          sessionId,
+          startTime,
+          endTime,
+          duration: startTime ? endTime - startTime : null,
+        });
+
+        // Reset state
+        fileTracker.reset();
+        sessionTracker.endSession();
+        assistantResponseSpanId = null;
+        userMessageSpanId = null;
+        toolCallSpanMap.clear();
+        toolCallCount = 0;
+      }
+      // If the agent DID start, agent_end will handle the cleanup when it fires.
+      // In interactive mode, agent_end fires before session_shutdown.
+      // In print mode, agent_end may fire after session_shutdown but it still works
+      // because the spans and session state are intact.
+    } catch (err) {
+      const error = err instanceof Error ? err.message : String(err);
+      logger.error('session_shutdown_error', { error });
+    }
   });
 
   // ==================== INPUT HOOK ====================
 
-  pi.on('input', async (event, ctx) => {
-    const sessionKey = getSessionKey(ctx);
-    pendingUserMessage = { text: event.text, timestamp: Date.now() };
+  api.on('input', async (event, ctx) => {
+    if (!tracingEnabled) return;
+
+    const sessionId = sessionTracker.getSessionId();
+    if (!sessionId) {
+      logger.warn('input_no_session', { textPreview: event.text.slice(0, 50) });
+      return;
+    }
 
     logger.debug('input', {
-      sessionKey,
+      sessionId,
       textPreview: event.text.slice(0, 50),
       source: event.source,
     });
 
-    // Create user_message span directly (no interaction span)
-    await sessionManager.createUserMessageSpan(sessionKey, pendingUserMessage);
+    try {
+      // Store user request in session tracker
+      sessionTracker.setUserRequest(event.text);
 
-    // Close the span immediately (message is complete once sent)
-    await sessionManager.closeUserMessageSpan(sessionKey);
+      // Create user_message span with session as parent
+      const sessionSpanId = sessionTracker.getSessionSpanId();
+      const createdSpanId = await spanManager.createSpan(
+        'pi:user_message',
+        {
+          text: event.text,
+          timestamp: new Date().toISOString(),
+        },
+        sessionSpanId || undefined
+      );
 
-    // P0 Agent Run Improvement #7: Capture first user message as userRequest
-    const state = sessionManager.getSessionState(sessionKey);
-    if (state && !state.userRequest && event.source === 'user') {
-      state.userRequest = event.text;
-      logger.debug('user_request_captured', {
-        sessionKey,
-        userRequestPreview: event.text.slice(0, 50),
-      });
+      if (createdSpanId) {
+        userMessageSpanId = createdSpanId;
+      }
+
+      logger.debug('user_message_span_created', { sessionId });
+    } catch (err) {
+      const error = err instanceof Error ? err.message : String(err);
+      logger.error('input_error', { error });
     }
   });
+
+  /**
+   * Perform final cleanup after the agent has finished.
+   * Called by agent_end when it detects session_shutdown already ran (print mode).
+   * Finishes all remaining spans, attempts to finish the instance (409 is fine),
+   * and resets local state.
+   */
+  async function performFinalCleanup(): Promise<void> {
+    try {
+      // Finish any remaining active spans (from late events)
+      await spanManager.finishAllSpans('complete');
+
+      // Finish Prefactor instance (may 409 if session_shutdown already finished it — that's fine)
+      const instanceId = sessionTracker.getInstanceId();
+      if (instanceId) {
+        try {
+          await client.finishInstance(instanceId, 'complete');
+          logger.info('instance_finished_late', { instanceId });
+        } catch {
+          // 409 expected if already finished by session_shutdown
+        }
+      }
+
+      // Reset state
+      fileTracker.reset();
+      sessionTracker.endSession();
+      assistantResponseSpanId = null;
+      userMessageSpanId = null;
+      toolCallSpanMap.clear();
+      toolCallCount = 0;
+    } catch (err) {
+      const error = err instanceof Error ? err.message : String(err);
+      logger.error('final_cleanup_error', { error });
+    }
+  }
 
   // ==================== AGENT HOOKS ====================
 
-  pi.on('before_agent_start', async (event, ctx) => {
-    const sessionKey = getSessionKey(ctx);
-    const startTime = Date.now();
+  api.on('agent_start', async (event, ctx) => {
+    if (!tracingEnabled) return;
 
-    logger.debug('before_agent_start', {
-      sessionKey,
-      promptPreview: event.prompt?.slice(0, 50),
-      messageCount: event.messages?.length,
-    });
-
-    if (pendingUserMessage) {
-      pendingUserMessage = null;
+    const sessionId = sessionTracker.getSessionId();
+    if (!sessionId) {
+      logger.warn('agent_start_no_session');
+      return;
     }
 
-    // P0 Agent Run Improvements: Capture comprehensive agent run data
-    // Task 1: Capture systemPrompt (actual text from ctx, not user prompt)
-    const systemPrompt = ctx.systemPrompt || '';
-    const maxSystemPromptLength = config.maxSystemPromptLength || 2000;
+    const agentRunStartTime = Date.now();
 
-    const systemPromptHash = systemPrompt
-      ? createHash('sha256').update(systemPrompt).digest('hex').slice(0, 16)
-      : undefined;
-
-    // Task 2: Capture skillsLoaded
-    const skillsLoaded = (ctx.skills || []).map((s: any) => s.name || s).filter(Boolean);
-
-    // Task 3: Capture toolsAvailable
-    const toolsAvailable = (ctx.tools || []).map((t: any) => t.name || t).filter(Boolean);
-
-    // Task 7: Capture userRequest - use event.prompt (user's message) or state.userRequest
-    const state = sessionManager.getSessionState(sessionKey);
-    const userRequest = event.prompt || state?.userRequest;
-
-    await sessionManager.createAgentRunSpan(sessionKey, {
-      model: (ctx.model as any)?.id || 'unknown',
-      temperature: (ctx.model as any)?.temperature,
-      systemPrompt: systemPrompt.slice(0, maxSystemPromptLength),
-      systemPromptHash: systemPromptHash,
-      systemPromptLength: systemPrompt.length,
-      skillsLoaded,
-      toolsAvailable,
-      userRequest,
+    logger.debug('agent_start', {
+      sessionId,
     });
 
-    // Track start time in session state for duration calculation
-    const sessionState = sessionManager.getSessionState(sessionKey);
-    if (sessionState) {
-      (sessionState as any).agentRunStartTime = startTime;
-      // Also store skills and tools in session state for reference
-      sessionState.skillsLoaded = skillsLoaded;
-      sessionState.toolsAvailable = toolsAvailable;
-    }
+    try {
+      // Finish user_message span now that we're entering the agent run
+      if (userMessageSpanId) {
+        await spanManager.finishSpan(userMessageSpanId, {
+          text: sessionTracker.getUserRequest() || '',
+          acknowledged: true,
+          isError: false,
+          durationMs: Date.now() - ((spanManager as any).getSpan(userMessageSpanId)?.startTime || Date.now()),
+        } as any);
+        logger.debug('user_message_span_finished', { sessionId, userMessageSpanId });
+        userMessageSpanId = null;
+      }
 
-    // Track startTime locally for duration calculation (don't send to backend)
-    (sessionState as any).agentRunStartTime = startTime;
+      // Get model info from context
+      const model = (ctx.model as any)?.id || 'unknown';
+      const temperature = (ctx.model as any)?.temperature;
+
+      // Get system prompt via ctx.getSystemPrompt()
+      const systemPrompt = ctx.getSystemPrompt?.() || '';
+      const maxSystemPromptLength = 2000;
+      const systemPromptHash = systemPrompt
+        ? createHash('sha256').update(systemPrompt).digest('hex').slice(0, 16)
+        : undefined;
+
+      // Get thinking level from Pi
+      const thinkingLevel = (ctx as any).thinkingLevel || 'none';
+
+      // Get available tools
+      const toolsAvailable: string[] = [];
+
+      // Get skills loaded
+      const skillsLoaded: string[] = [];
+
+      // Get user request from session tracker
+      const userRequest = sessionTracker.getUserRequest() || '';
+
+      // Create agent_run span with session as parent
+      const sessionSpanId = sessionTracker.getSessionSpanId();
+      const agentRunSpanId = await spanManager.createSpan(
+        'pi:agent_run',
+        {
+          model,
+          temperature,
+          systemPrompt: systemPrompt.slice(0, maxSystemPromptLength),
+          systemPromptHash,
+          systemPromptLength: systemPrompt.length,
+          skillsLoaded,
+          toolsAvailable,
+          userRequest,
+          thinkingLevel,
+        } as any,
+        sessionSpanId || undefined
+      );
+
+      if (agentRunSpanId) {
+        sessionTracker.setAgentRunSpan(agentRunSpanId);
+        sessionTracker.setAgentRunStartTime(agentRunStartTime);
+        toolCallCount = 0; // Reset for new agent run
+        logger.debug('agent_run_span_created', { sessionId, agentRunSpanId });
+      }
+    } catch (err) {
+      const error = err instanceof Error ? err.message : String(err);
+      logger.error('agent_start_error', { error });
+    }
   });
 
-  pi.on('agent_end', async (event, ctx) => {
-    const sessionKey = getSessionKey(ctx);
+  api.on('agent_end', async (event, ctx) => {
+    if (!tracingEnabled) return;
+
+    const sessionId = sessionTracker.getSessionId();
+    const agentRunSpanId = sessionTracker.getAgentRunSpanId();
     const endTime = Date.now();
 
     logger.info('agent_end', {
-      sessionKey,
-      success: event.success,
-      messageCount: event.messages?.length,
+      sessionId,
+      agentRunSpanId,
+      messageCount: event.messages.length,
+      sessionShuttingDown,
     });
 
-    // P0 Critical Fix #4: Get session state for comprehensive agent run payload
-    const state = sessionManager.getSessionState(sessionKey);
+    try {
+      if (!agentRunSpanId) {
+        logger.warn('agent_end_no_agent_run_span');
+        return;
+      }
 
-    // P0 Agent Run Improvement #4: Add token tracking
-    const usage = event.usage || (event.result as any)?.usage;
-    let tokens: { input: number; output: number; total: number } | undefined;
+      // Check if the span is still active (may have been finished by session_shutdown)
+      const spanInfo = (spanManager as any).getSpan(agentRunSpanId);
+      if (!spanInfo) {
+        logger.info('agent_end_span_already_finished', { agentRunSpanId });
+        // Span already finished by session_shutdown. But we may still need to
+        // finish remaining spans and the instance if session_shutdown deferred that.
+        if (sessionShuttingDown) {
+          await performFinalCleanup();
+        }
+        return;
+      }
 
-    if (usage) {
-      tokens = {
-        input: usage.promptTokens || usage.input_tokens || 0,
-        output: usage.completionTokens || usage.output_tokens || 0,
-        total: usage.totalTokens || usage.promptTokens + usage.completionTokens || 0,
-      };
-    }
+      // Calculate duration from start time
+      const startTime = sessionTracker.getAgentRunStartTime() || endTime;
+      const durationMs = endTime - startTime;
 
-    // P0 Agent Run Improvement #5: Fix terminationReason (no contradictions)
-    let terminationReason: 'completed' | 'error' | 'user_cancel' | 'timeout' | 'session_shutdown';
+      // Get files modified from file tracker
+      const filesModified = fileTracker.getAllPaths();
+      const filesCreated = fileTracker.getFilesCreated();
+      const filesRead: string[] = []; // Track if needed
 
-    if (event.success === true) {
-      terminationReason = 'completed';
-    } else if (event.error) {
-      terminationReason = 'error';
-    } else if ((event as any).reason === 'user_cancel') {
-      terminationReason = 'user_cancel';
-    } else if ((event as any).reason === 'timeout') {
-      terminationReason = 'timeout';
-    } else {
-      terminationReason = 'session_shutdown'; // Clean shutdown
-    }
+      // AgentEndEvent only has messages — infer completion status
+      const terminationReason: 'completed' | 'error' | 'user_cancel' | 'timeout' | 'session_shutdown' = 'completed';
 
-    // P0 Critical Fix #3, #4: Close agent run span with duration and comprehensive data
-    // Only close if agent_run span still exists (session_shutdown may have already closed it)
-    if (state && state.agentRunSpanId) {
-      await sessionManager.closeAgentRunSpan(sessionKey, 'complete', {
-        success: event.success ?? true,
-        terminationReason,
-        error: event.error || undefined,
-        tokens,
-        filesModified: state?.filesModified ? Array.from(state.filesModified) : [],
-        filesRead: state?.filesRead ? Array.from(state.filesRead) : [],
-        filesCreated: state?.filesCreated || [],
-        commandsRun: state?.commandsRun || 0,
-        toolCalls: state?.toolCalls || 0,
+      // Token usage is not available on AgentEndEvent
+      const tokens: { input: number; output: number; total: number } | undefined = undefined;
+
+      // Finish agent_run span with comprehensive result payload
+      await spanManager.finishSpan(
+        agentRunSpanId,
+        {
+          success: true,
+          terminationReason,
+          tokens,
+          filesModified,
+          filesCreated,
+          filesRead,
+          commandsRun: 0,
+          toolCalls: toolCallCount,
+          durationMs,
+        } as any,
+        durationMs
+      );
+
+      logger.info('agent_run_span_finished', {
+        sessionId,
+        agentRunSpanId,
+        durationMs,
+        toolCallCount,
+        filesModifiedCount: filesModified.length,
       });
-      logger.info('agent_run_span_closed', { sessionKey });
-    } else {
-      logger.debug('agent_run_span_already_closed', { sessionKey });
+
+      // If session is shutting down, perform final cleanup (finish remaining
+      // spans + instance). session_shutdown defers this to us when the agent
+      // started after shutdown (common in print mode).
+      if (sessionShuttingDown) {
+        await performFinalCleanup();
+      }
+    } catch (err) {
+      const error = err instanceof Error ? err.message : String(err);
+      logger.error('agent_end_error', { error });
     }
   });
 
-  // ==================== TURN HOOKS - REMOVED ====================
-  // pi:turn spans removed as low-value clutter (P0 Cleanup Task)
-
   // ==================== TOOL HOOKS ====================
 
-  pi.on('tool_execution_start', async (event, ctx) => {
-    const sessionKey = getSessionKey(ctx);
-    const startTime = Date.now();
+  api.on('tool_execution_start', async (event, ctx) => {
+    if (!tracingEnabled) return;
+
+    const sessionId = sessionTracker.getSessionId();
+    const agentRunSpanId = sessionTracker.getAgentRunSpanId();
 
     logger.debug('tool_execution_start', {
-      sessionKey,
+      sessionId,
       toolName: event.toolName,
       toolCallId: event.toolCallId,
     });
 
-    // P0 Critical Fix #1: Determine schema name based on tool name - use SPECIFIC tool types
-    let schemaName:
-      | 'pi:tool:bash'
-      | 'pi:tool:read'
-      | 'pi:tool:write'
-      | 'pi:tool:edit'
-      | 'pi:tool_call' = 'pi:tool_call';
+    try {
+      if (!agentRunSpanId) {
+        logger.warn('tool_execution_start_no_agent_run_span');
+        return;
+      }
 
-    if (event.toolName === 'bash') {
-      schemaName = 'pi:tool:bash';
-    } else if (event.toolName === 'read') {
-      schemaName = 'pi:tool:read';
-    } else if (event.toolName === 'write') {
-      schemaName = 'pi:tool:write';
-    } else if (event.toolName === 'edit') {
-      schemaName = 'pi:tool:edit';
-    }
+      // Determine schema name based on tool name
+      let schemaName: SpanSchemaName = 'pi:tool_call';
 
-    // P0 Critical Fix #2: Build tool-specific payload with start time for duration tracking
-    const payload: Record<string, unknown> = {
-      toolCallId: event.toolCallId,
-      startTime: startTime, // CRITICAL: Track start time for duration
-    };
+      if (event.toolName === 'bash') {
+        schemaName = 'pi:tool:bash';
+      } else if (event.toolName === 'read') {
+        schemaName = 'pi:tool:read';
+      } else if (event.toolName === 'write') {
+        schemaName = 'pi:tool:write';
+      } else if (event.toolName === 'edit') {
+        schemaName = 'pi:tool:edit';
+      }
 
-    // P0 Critical Fix #5: Track file path at tool_execution_start time (args available here)
-    const state = sessionManager.getSessionState(sessionKey);
-    let toolPath: string | undefined;
+      // Build tool-specific payload
+      const payload: Record<string, unknown> = {
+        toolCallId: event.toolCallId,
+        startTime: new Date().toISOString(),
+      };
 
-    if (config.captureToolInputs) {
       if (event.toolName === 'bash') {
         const args = event.args as { command?: string; timeout?: number; cwd?: string };
         payload.command = args.command;
@@ -464,321 +636,417 @@ export default function prefactorExtension(pi: ExtensionAPI) {
         payload.cwd = args.cwd || process.cwd();
       } else if (event.toolName === 'read') {
         const args = event.args as { path?: string; offset?: number; limit?: number };
-        toolPath = args.path;
         payload.path = args.path;
         payload.offset = args.offset;
         payload.limit = args.limit;
       } else if (event.toolName === 'write') {
         const args = event.args as { path?: string; content?: string };
-        toolPath = args.path;
         payload.path = args.path;
         payload.contentLength = args.content?.length;
-        payload.created = (event as any).created; // If available
+        payload.operation = 'create'; // Will be updated in tool_result if needed
       } else if (event.toolName === 'edit') {
         const args = event.args as { path?: string; edits?: any[] };
-        toolPath = args.path;
         payload.path = args.path;
         payload.editCount = args.edits?.length;
       }
-    }
 
-    // CRITICAL: Await span creation to prevent race condition with tool_result
-    await sessionManager.createToolCallSpan(sessionKey, event.toolName, payload, schemaName);
-
-    // P0 Critical Fix #5: Store tool path in session state for later tracking in tool_result
-    if (
-      state &&
-      toolPath &&
-      (event.toolName === 'write' || event.toolName === 'read' || event.toolName === 'edit')
-    ) {
-      // Store in a temporary map for tool_result to access
-      if (!state.pendingToolSpans.has(event.toolCallId)) {
-        state.pendingToolSpans.set(event.toolCallId, Promise.resolve(null));
+      // Create tool span with agent_run as parent
+      // Increment count synchronously (before async createSpan) to avoid race
+      toolCallCount++;
+      const toolSpanId = await spanManager.createSpan(schemaName, payload as any, agentRunSpanId);
+      if (!toolSpanId) {
+        // Span creation failed — roll back the count
+        toolCallCount--;
+      } else {
+        toolCallSpanMap.set(event.toolCallId, toolSpanId);
       }
-      // Add path tracking to pendingToolSpans metadata
-      (state.pendingToolSpans as any).toolPaths =
-        (state.pendingToolSpans as any).toolPaths || new Map();
-      (state.pendingToolSpans as any).toolPaths.set(event.toolCallId, {
-        path: toolPath,
-        toolName: event.toolName,
-      });
 
-      logger.info('tool_path_stored', {
-        sessionKey,
+      logger.debug('tool_span_created', {
+        sessionId,
         toolCallId: event.toolCallId,
-        toolName: event.toolName,
-        path: toolPath,
+        schemaName,
+        toolSpanId,
       });
+    } catch (err) {
+      const error = err instanceof Error ? err.message : String(err);
+      logger.error('tool_execution_start_error', { error });
     }
-
-    logger.debug('tool_span_creation_complete', {
-      sessionKey,
-      toolCallId: event.toolCallId,
-      schemaName,
-    });
   });
 
-  pi.on('tool_result', async (event, ctx) => {
-    const sessionKey = getSessionKey(ctx);
+  api.on('tool_result', async (event, ctx) => {
+    // File tracking runs even when tracing is disabled
+    const sessionId = sessionTracker.getSessionId();
     const resultText = extractTextFromContent(event.content);
     const isError = event.isError ?? false;
-    const endTime = Date.now();
 
     logger.debug('tool_result', {
-      sessionKey,
+      sessionId,
       toolName: event.toolName,
       toolCallId: event.toolCallId,
       isError,
       resultTextPreview: resultText.slice(0, 100),
     });
 
-    // P0 Critical Fix #5: Track file operations and activity in session state
-    const state = sessionManager.getSessionState(sessionKey);
-    if (state) {
-      // Track tool call count
-      state.toolCalls++;
-
-      // P0 CRITICAL: Extract path from result text (args not available in tool_result!)
+    try {
+      // Extract path from result text
       const extractedPath = extractPathFromToolResult(resultText, event.toolName);
+      const args = event.input as { path?: string } | undefined;
+      const path = extractedPath || args?.path;
 
-      // Also try direct args as backup
-      const args = event.args as { path?: string } | undefined;
-      const directPath = args?.path;
+      // Track file modifications for write/edit (always, regardless of tracing)
+      if ((event.toolName === 'write' || event.toolName === 'edit') && path && !isError) {
+        // Determine if create or update
+        const operation: FileOperation =
+          event.toolName === 'write' && (event as any).created ? 'create' : 'update';
+        fileTracker.trackFileModified(path, operation);
 
-      // Use extracted path from result text, fallback to direct path
-      const path = extractedPath || directPath;
-
-      logger.info('tool_result_state_tracking', {
-        sessionKey,
-        toolName: event.toolName,
-        toolCallId: event.toolCallId,
-        path,
-        extractedPath,
-        directPath,
-        isError,
-        hasState: true,
-        hasExtractedPath: !!extractedPath,
-        hasDirectPath: !!directPath,
-      });
-
-      // Track file modifications
-      if ((event.toolName === 'write' || event.toolName === 'edit') && path) {
-        if (!isError) {
-          state.filesModified.add(path);
-          logger.info('file_modified_tracked', {
-            sessionKey,
-            path,
-            toolName: event.toolName,
-            filesModifiedCount: state.filesModified.size,
-          });
-
-          if (event.toolName === 'write' && (event as any).created) {
-            state.filesCreated.push(path);
-            logger.info('file_created_tracked', {
-              sessionKey,
-              path,
-              filesCreatedCount: state.filesCreated.length,
-            });
-          }
-        }
-      }
-
-      if (event.toolName === 'read' && path) {
-        if (!isError) {
-          state.filesRead.add(path);
-          logger.info('file_read_tracked', {
-            sessionKey,
-            path,
-            filesReadCount: state.filesRead.size,
-          });
-        }
-      }
-
-      if (event.toolName === 'bash') {
-        state.commandsRun++;
-        logger.info('command_tracked', {
-          sessionKey,
-          commandsRun: state.commandsRun,
+        logger.info('file_modified_tracked', {
+          sessionId,
+          path,
+          operation,
+          toolName: event.toolName,
         });
       }
-    } else {
-      logger.warn('tool_result_no_state', {
-        sessionKey,
-        toolName: event.toolName,
-      });
-    }
 
-    // P0 Critical Fix #2: Build result payload based on tool type - ALWAYS capture outputs for auditing
-    const resultPayload: Record<string, unknown> = {
-      isError,
-      endTime: endTime, // CRITICAL: Track end time for duration
-    };
+      if (!tracingEnabled) return;
 
-    // Capture tool outputs - critical for auditing even on errors
-    if (event.toolName === 'bash') {
-      // Debug: log what's in event.result
-      logger.debug('tool_result_bash_debug', {
-        sessionKey,
-        hasResult: !!event.result,
-        resultType: typeof event.result,
-        resultKeys: event.result ? Object.keys(event.result) : [],
+      // Store result for tool_execution_end
+      pendingToolResults.set(event.toolCallId, {
+        resultText,
+        isError,
+        path,
       });
 
-      const result = event.result as
-        | { exitCode?: number; stdout?: string; stderr?: string; durationMs?: number }
-        | undefined;
-      if (result) {
-        resultPayload.exitCode = result.exitCode;
-        resultPayload.stdout = result.stdout?.slice(0, config.maxOutputLength);
-        resultPayload.stderr = result.stderr?.slice(0, config.maxOutputLength);
-        resultPayload.durationMs = result.durationMs;
-      }
-      // If no result object, try to extract from content
-      if (!result && resultText) {
-        // Bash output is in the content, exit code may not be available
-        resultPayload.stdout = resultText.slice(0, config.maxOutputLength);
-      }
-    } else if (event.toolName === 'read') {
-      const result = event.result as
-        | { content?: string; lineCount?: number; encoding?: string }
-        | undefined;
-      if (result) {
-        resultPayload.contentLength = result.content?.length;
-        resultPayload.lineCount = result.lineCount;
-        resultPayload.encoding = result.encoding;
-      }
-    } else if (event.toolName === 'write') {
-      const result = event.result as { success?: boolean; backupPath?: string } | undefined;
-      if (result) {
-        resultPayload.success = result.success;
-        resultPayload.backupPath = result.backupPath;
-      }
-    } else if (event.toolName === 'edit') {
-      const result = event.result as { successCount?: number; failedCount?: number } | undefined;
-      if (result) {
-        resultPayload.successCount = result.successCount;
-        resultPayload.failedCount = result.failedCount;
-      }
+      logger.debug('tool_result_stored', {
+        sessionId,
+        toolCallId: event.toolCallId,
+      });
+    } catch (err) {
+      const error = err instanceof Error ? err.message : String(err);
+      logger.error('tool_result_error', { error });
     }
+  });
 
-    await sessionManager.closeToolCallSpanWithResult(
-      sessionKey,
-      event.toolCallId,
-      event.toolName,
-      resultText,
-      isError,
-      resultPayload
-    );
+  api.on('tool_execution_end', async (event, ctx) => {
+    if (!tracingEnabled) return;
+
+    const sessionId = sessionTracker.getSessionId();
+    const endTime = Date.now();
+
+    logger.debug('tool_execution_end', {
+      sessionId,
+      toolName: event.toolName,
+      toolCallId: event.toolCallId,
+    });
+
+    try {
+      // Get stored result
+      const storedResult = pendingToolResults.get(event.toolCallId);
+      if (!storedResult) {
+        logger.warn('tool_execution_end_no_result', {
+          sessionId,
+          toolCallId: event.toolCallId,
+        });
+        return;
+      }
+
+      // Build result payload based on tool type
+      const resultPayload: Record<string, unknown> = {
+        output: storedResult.resultText,
+        isError: storedResult.isError,
+        endTime,
+      };
+
+      if (event.toolName === 'bash') {
+        const result = event.result as { exitCode?: number; stdout?: string; stderr?: string } | undefined;
+        if (result) {
+          resultPayload.exitCode = result.exitCode;
+          resultPayload.stdout = result.stdout;
+          resultPayload.stderr = result.stderr;
+        }
+      } else if (event.toolName === 'read') {
+        const result = event.result as { contentLength?: number; lineCount?: number } | undefined;
+        if (result) {
+          resultPayload.contentLength = result.contentLength;
+          resultPayload.lineCount = result.lineCount;
+        }
+      } else if (event.toolName === 'write') {
+        const result = event.result as { success?: boolean; backupPath?: string } | undefined;
+        if (result) {
+          resultPayload.success = result.success;
+          resultPayload.backupPath = result.backupPath;
+        }
+      } else if (event.toolName === 'edit') {
+        const result = event.result as { successCount?: number; failedCount?: number } | undefined;
+        if (result) {
+          resultPayload.successCount = result.successCount;
+          resultPayload.failedCount = result.failedCount;
+        }
+      }
+
+      // Calculate duration from the tool span's start time
+      const toolSpanId = toolCallSpanMap.get(event.toolCallId);
+      const toolSpan = toolSpanId ? (spanManager as any).getSpan(toolSpanId) : undefined;
+      const toolStartTime: number = toolSpan?.startTime || endTime;
+      const durationMs = endTime - toolStartTime;
+      resultPayload.durationMs = durationMs;
+
+      // Finish the tool span via the Prefactor API
+      if (toolSpanId) {
+        await spanManager.finishSpan(toolSpanId, resultPayload as any, durationMs);
+        toolCallSpanMap.delete(event.toolCallId);
+        logger.debug('tool_span_finished', {
+          sessionId,
+          toolCallId: event.toolCallId,
+          toolSpanId,
+          durationMs,
+          isError: storedResult.isError,
+        });
+      } else {
+        logger.warn('tool_execution_end_no_span_id', {
+          sessionId,
+          toolCallId: event.toolCallId,
+        });
+      }
+
+      // Clean up pending result
+      pendingToolResults.delete(event.toolCallId);
+    } catch (err) {
+      const error = err instanceof Error ? err.message : String(err);
+      logger.error('tool_execution_end_error', { error });
+    }
   });
 
   // ==================== MESSAGE HOOKS ====================
 
-  pi.on('message_start', async (event, ctx) => {
-    logger.debug('message_start', {
-      sessionKey: getSessionKey(ctx),
-      role: event.message.role,
-    });
-  });
+  api.on('message_start', async (event, ctx) => {
+    if (!tracingEnabled) return;
 
-  pi.on('message_end', async (event, ctx) => {
-    const sessionKey = getSessionKey(ctx);
+    const sessionId = sessionTracker.getSessionId();
+    const agentRunSpanId = sessionTracker.getAgentRunSpanId();
     const role = event.message.role;
 
-    logger.debug('message_end', {
-      sessionKey,
+    logger.debug('message_start', {
+      sessionId,
       role,
     });
 
-    // P0 CRITICAL: Capture assistant response (assistant role messages)
-    if (role === 'assistant') {
-      const state = sessionManager.getSessionState(sessionKey);
-      const parentSpanId = state?.agentRunSpanId || null;
-
-      // Extract response text from message content
-      const responseText = extractTextFromContent(event.message.content);
-      
-      // Try to extract thinking from structured properties first, then from content
-      const structuredThinking = (event as any)?.thinking || (event as any)?.reasoning || '';
-      const contentThinking = extractThinkingFromContent(event.message.content);
-      const thinking = structuredThinking || contentThinking || '';
-
-      logger.debug('message_end_assistant', {
-        sessionKey,
-        hasResponse: !!responseText,
-        hasThinking: !!thinking,
-        thinkingSource: structuredThinking ? 'structured' : contentThinking ? 'content' : 'none',
-        parentSpanId,
-      });
-
-      // P0 Critical: Create pi:agent_thinking span if thinking content exists
-      if (thinking && responseText) {
-        const thinkingStartTime = Date.now();
-
-        // Create agent_thinking span as child of agent_run
-        await sessionManager.createAgentThinkingSpan(
-          sessionKey,
-          {
-            thinking: thinking,
-            model: (ctx.model as any)?.id,
-          },
-          parentSpanId
-        );
-
-        // Close thinking span immediately
-        await sessionManager.closeAgentThinkingSpan(sessionKey, {
-          durationMs: Date.now() - thinkingStartTime,
-          isError: false,
-        });
-
-        logger.info('agent_thinking_captured', {
-          sessionKey,
-          thinkingSource: structuredThinking ? 'structured' : 'content',
-          thinkingPreview: thinking.slice(0, 50),
-        });
+    try {
+      if (role === 'assistant' && agentRunSpanId) {
+        // Reset per-message state for new assistant message
+        sessionTracker.setThinkingSpanId(null);
+        sessionTracker.setThinkingStartTime(null);
+        // Don't create assistant_response span here — it will be created
+        // on text_start / first text_delta so it appears AFTER the
+        // assistant_thinking span in the timeline.
       }
-
-      if (responseText) {
-        const startTime = Date.now();
-
-        // Create assistant_response span
-        await sessionManager.createAssistantResponseSpan(
-          sessionKey,
-          {
-            text: responseText,
-            model: (ctx.model as any)?.id,
-          },
-          parentSpanId
-        );
-
-        // Close the span immediately
-        await sessionManager.closeAssistantResponseSpan(sessionKey, {
-          durationMs: Date.now() - startTime,
-          isError: false,
-        });
-
-        logger.info('assistant_response_captured', {
-          sessionKey,
-          textPreview: responseText.slice(0, 50),
-        });
-      }
+    } catch (err) {
+      const error = err instanceof Error ? err.message : String(err);
+      logger.error('message_start_error', { error });
     }
   });
 
-  // Register configuration command
-  registerConfigCommand(pi, config);
+  api.on('message_update', async (event, ctx) => {
+    if (!tracingEnabled) return;
 
-  logger.info('extension_initialized', {
-    hooks: 10, // After P0 cleanup: removed turn_start, turn_end, interaction span creation
-    sessionTimeoutHours: config.sessionTimeoutHours,
-    interactionTimeoutMinutes: config.userInteractionTimeoutMinutes,
+    const sessionId = sessionTracker.getSessionId();
+    const role = event.message.role;
+    const assistantEvent = event.assistantMessageEvent;
+
+    logger.debug('message_update', {
+      sessionId,
+      role,
+      eventType: assistantEvent?.type,
+    });
+
+    try {
+      if (role === 'assistant' && assistantEvent) {
+        // Create thinking span on thinking_start for accurate timing
+        if (assistantEvent.type === 'thinking_start') {
+          const agentRunSpanId = sessionTracker.getAgentRunSpanId();
+          const existingThinkingSpanId = sessionTracker.getThinkingSpanId();
+
+          if (agentRunSpanId && !existingThinkingSpanId) {
+            const thinkingSpanId = await spanManager.createSpan(
+              'pi:assistant_thinking',
+              {
+                model: (ctx.model as any)?.id,
+                startTime: new Date().toISOString(),
+              } as any,
+              agentRunSpanId
+            );
+
+            if (thinkingSpanId) {
+              sessionTracker.setThinkingSpanId(thinkingSpanId);
+              sessionTracker.setThinkingStartTime(Date.now());
+              logger.debug('assistant_thinking_span_created_on_start', {
+                sessionId,
+                thinkingSpanId,
+              });
+            }
+          }
+        }
+
+        // Create assistant_response span on first text_delta (not text_start).
+        // Waiting for actual content avoids creating an empty span for tool-call-only
+        // responses where the model emits text_start with no content.
+        if (assistantEvent.type === 'text_delta'
+            && !assistantResponseSpanId) {
+          const agentRunSpanId = sessionTracker.getAgentRunSpanId();
+
+          if (agentRunSpanId) {
+            const responseSpanId = await spanManager.createSpan(
+              'pi:assistant_response',
+              {
+                model: (ctx.model as any)?.id,
+                startTime: new Date().toISOString(),
+              } as any,
+              agentRunSpanId
+            );
+
+            assistantResponseSpanId = responseSpanId;
+            logger.debug('assistant_response_span_created', { sessionId, responseSpanId });
+          }
+        }
+      }
+    } catch (err) {
+      const error = err instanceof Error ? err.message ? String(err) : String(err) : String(err);
+      logger.error('message_update_error', { error });
+    }
   });
-}
 
-// Re-export types for documentation
-export type { AgentConfig } from './agent.js';
-export { createAgent } from './agent.js';
-export type { LogLevel } from './logger.js';
-export { createLogger } from './logger.js';
-export type { PrefactorConfig } from './config.js';
-export { loadConfig, validateConfig, getConfigSummary } from './config.js';
-export { createSessionStateManager } from './session-state.js';
+  api.on('message_end', async (event, ctx) => {
+    if (!tracingEnabled) return;
+
+    const sessionId = sessionTracker.getSessionId();
+    const role = event.message.role;
+    const endTime = Date.now();
+
+    logger.debug('message_end', {
+      sessionId,
+      role,
+    });
+
+    try {
+      if (role === 'assistant') {
+        const agentRunSpanId = sessionTracker.getAgentRunSpanId();
+
+        // Extract response text from message content (type: "text" blocks)
+        const responseText = extractTextFromContent(event.message.content);
+
+        // Extract thinking from message content (type: "thinking" blocks)
+        // This is the canonical extraction - structured data, not regex
+        const thinking = extractThinkingFromContent(event.message.content);
+
+        logger.debug('message_end_assistant', {
+          sessionId,
+          hasResponse: !!responseText,
+          hasThinking: !!thinking,
+          thinkingLength: thinking?.length,
+        });
+
+        // Finish thinking span if one was created during streaming
+        const thinkingSpanId = sessionTracker.getThinkingSpanId();
+        if (thinkingSpanId) {
+          const thinkingStartTime = sessionTracker.getThinkingStartTime();
+          const durationMs = thinkingStartTime ? endTime - thinkingStartTime : 0;
+          const thinkingResult = {
+            thinking: thinking || '',
+            durationMs,
+            isError: false,
+          };
+
+          // Set pending result BEFORE async finish (guards against finishAllSpans race)
+          spanManager.setPendingResult(thinkingSpanId, thinkingResult);
+          await spanManager.finishSpan(thinkingSpanId, thinkingResult, durationMs);
+
+          logger.debug('assistant_thinking_span_finished', {
+            sessionId,
+            thinkingSpanId,
+            durationMs,
+          });
+
+          sessionTracker.setThinkingSpanId(null);
+          sessionTracker.setThinkingStartTime(null);
+        } else if (thinking) {
+          // No streaming span was created, but we have thinking from message_end
+          // Create and immediately finish a thinking span
+          if (agentRunSpanId) {
+            const newThinkingSpanId = await spanManager.createSpan(
+              'pi:assistant_thinking',
+              {
+                model: (ctx.model as any)?.id,
+                startTime: new Date().toISOString(),
+              },
+              agentRunSpanId
+            );
+
+            if (newThinkingSpanId) {
+              await spanManager.finishSpan(newThinkingSpanId, {
+                thinking,
+                durationMs: 0,
+                isError: false,
+              });
+              logger.debug('assistant_thinking_span_created_retroactive', {
+                sessionId,
+                thinkingSpanId: newThinkingSpanId,
+              });
+            }
+          }
+        }
+
+        // Create assistant_response span if the model produced text.
+        // Tool-call-only responses (no text) are represented by their tool spans —
+        // creating an empty assistant_response would be misleading.
+        if (!assistantResponseSpanId && responseText && agentRunSpanId) {
+          const responseSpanId = await spanManager.createSpan(
+            'pi:assistant_response',
+            {
+              model: (ctx.model as any)?.id,
+              startTime: new Date().toISOString(),
+            },
+            agentRunSpanId
+          );
+          assistantResponseSpanId = responseSpanId;
+          logger.debug('assistant_response_span_created_fallback', { sessionId, responseSpanId });
+        }
+
+        // Finish assistant_response span if one was created (during streaming or fallback)
+        if (assistantResponseSpanId) {
+          // Use current time, not the endTime captured at the top of the handler,
+          // because the fallback path may have created this span after endTime was set.
+          const finishTime = Date.now();
+          const spanStartTime = (spanManager as any).getSpan(assistantResponseSpanId)?.startTime || finishTime;
+          const durationMs = finishTime - spanStartTime;
+          const responseResult = {
+            text: responseText,
+            model: (ctx.model as any)?.id,
+            durationMs,
+            isError: false,
+          };
+
+          // Set pending result BEFORE async finish (guards against finishAllSpans race)
+          spanManager.setPendingResult(assistantResponseSpanId, responseResult);
+          await spanManager.finishSpan(
+            assistantResponseSpanId,
+            responseResult as any,
+            durationMs
+          );
+
+          logger.debug('assistant_response_span_finished', {
+            sessionId,
+            assistantResponseSpanId,
+            durationMs,
+          });
+
+          assistantResponseSpanId = null;
+        }
+      }
+    } catch (err) {
+      const error = err instanceof Error ? err.message : String(err);
+      logger.error('message_end_error', { error });
+    }
+  });
+
+  logger.info('extension_loaded', { version: '0.0.1', isConfigured: config.isConfigured });
+}
