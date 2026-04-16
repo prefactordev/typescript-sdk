@@ -563,13 +563,7 @@ export async function updateManagedBinary(
     await mkdir(extractedDir, { recursive: true });
     const childBinaryPath = await extractArchive(archivePath, extractedDir, platform.platform);
 
-    await runChildInstaller(
-      childBinaryPath,
-      spec,
-      resolvedTag,
-      deps,
-      platform.platform
-    );
+    await runChildInstaller(childBinaryPath, spec, resolvedTag, deps, platform.platform);
 
     if (platform.platform !== 'windows') {
       deps.stdout.log(`Updated Prefactor CLI to ${resolvedTag}.`);

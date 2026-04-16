@@ -1,6 +1,8 @@
 param(
   [Parameter(Position = 0)]
-  [string]$Release = "stable"
+  [string]$Release = "stable",
+  [Alias("h")]
+  [switch]$Help
 )
 
 $ErrorActionPreference = "Stop"
@@ -77,7 +79,7 @@ function Verify-Checksum {
   }
 }
 
-if ($Release -eq "--help" -or $Release -eq "-h") {
+if ($Help -or $Release -eq "--help" -or $Release -eq "-h") {
   Write-Host "Install the Prefactor CLI from GitHub Releases."
   Write-Host ""
   Write-Host "Usage:"

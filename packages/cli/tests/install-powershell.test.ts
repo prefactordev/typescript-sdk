@@ -72,7 +72,7 @@ describe.if(process.platform === 'win32')('install.ps1', () => {
   });
 
   test('prints help', async () => {
-    const result = await runPwsh(['-NoProfile', '-File', scriptPath, '--help']);
+    const result = await runPwsh(['-NoProfile', '-File', scriptPath, '-Help']);
 
     expect(result.code).toBe(0);
     expect(result.stdout).toContain('Install the Prefactor CLI from GitHub Releases.');
@@ -175,28 +175,19 @@ describe.if(process.platform === 'win32')('install.ps1', () => {
         PREFACTOR_RELEASE_LATEST_BASE_URL: `${server.url}/releases/latest/download`,
       };
 
-      let result = await runPwsh(
-        ['-NoProfile', '-File', scriptPath, 'stable'],
-        env
-      );
+      let result = await runPwsh(['-NoProfile', '-File', scriptPath, 'stable'], env);
       expect(result.code).toBe(0);
       expect(requests).toContain('/releases/latest/download/prefactor-windows-x64.zip');
       expect(readFileSync(capturePath, 'utf8')).toContain('--channel');
 
       requests.length = 0;
-      result = await runPwsh(
-        ['-NoProfile', '-File', scriptPath, 'latest'],
-        env
-      );
+      result = await runPwsh(['-NoProfile', '-File', scriptPath, 'latest'], env);
       expect(result.code).toBe(0);
       expect(requests).toContain('/releases/download/canary/prefactor-windows-x64.zip');
       expect(readFileSync(capturePath, 'utf8')).toContain('canary');
 
       requests.length = 0;
-      result = await runPwsh(
-        ['-NoProfile', '-File', scriptPath, '0.0.4'],
-        env
-      );
+      result = await runPwsh(['-NoProfile', '-File', scriptPath, '0.0.4'], env);
       expect(result.code).toBe(0);
       expect(requests).toContain('/releases/download/v0.0.4/prefactor-windows-x64.zip');
       expect(readFileSync(capturePath, 'utf8')).toContain('--version');

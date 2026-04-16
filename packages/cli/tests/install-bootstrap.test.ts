@@ -74,13 +74,9 @@ describe('install.sh', () => {
   });
 
   test('prints help', () => {
-    const result = spawnSync(
-      'bash',
-      [scriptPath, '--help'],
-      {
-        encoding: 'utf8',
-      }
-    );
+    const result = spawnSync('bash', [scriptPath, '--help'], {
+      encoding: 'utf8',
+    });
 
     expect(result.status).toBe(0);
     expect(result.stdout).toContain('Install the Prefactor CLI from GitHub Releases.');
@@ -138,18 +134,14 @@ describe('install.sh', () => {
     });
 
     try {
-      const result = await runCommand(
-        'bash',
-        [scriptPath],
-        {
-          ...process.env,
-          PREFACTOR_INSTALL_TEST_UNAME_S: 'Linux',
-          PREFACTOR_INSTALL_TEST_UNAME_M: 'x86_64',
-          PREFACTOR_INSTALL_TEST_LIBC: 'glibc',
-          PREFACTOR_RELEASE_BASE_URL: `${server.url}/releases/download`,
-          PREFACTOR_RELEASE_LATEST_BASE_URL: `${server.url}/releases/latest/download`,
-        }
-      );
+      const result = await runCommand('bash', [scriptPath], {
+        ...process.env,
+        PREFACTOR_INSTALL_TEST_UNAME_S: 'Linux',
+        PREFACTOR_INSTALL_TEST_UNAME_M: 'x86_64',
+        PREFACTOR_INSTALL_TEST_LIBC: 'glibc',
+        PREFACTOR_RELEASE_BASE_URL: `${server.url}/releases/download`,
+        PREFACTOR_RELEASE_LATEST_BASE_URL: `${server.url}/releases/latest/download`,
+      });
 
       expect(result.code).not.toBe(0);
       expect(result.stderr).toContain('Checksum mismatch');
@@ -202,31 +194,19 @@ describe('install.sh', () => {
         PREFACTOR_RELEASE_LATEST_BASE_URL: `${server.url}/releases/latest/download`,
       };
 
-      let result = await runCommand(
-        'bash',
-        [scriptPath, 'stable'],
-        env
-      );
+      let result = await runCommand('bash', [scriptPath, 'stable'], env);
       expect(result.code).toBe(0);
       expect(requests).toContain('/releases/latest/download/prefactor-linux-x64.tar.gz');
       expect(readFileSync(childLog, 'utf8')).toContain('--channel');
 
       requests.length = 0;
-      result = await runCommand(
-        'bash',
-        [scriptPath, 'latest'],
-        env
-      );
+      result = await runCommand('bash', [scriptPath, 'latest'], env);
       expect(result.code).toBe(0);
       expect(requests).toContain('/releases/download/canary/prefactor-linux-x64.tar.gz');
       expect(readFileSync(childLog, 'utf8')).toContain('canary');
 
       requests.length = 0;
-      result = await runCommand(
-        'bash',
-        [scriptPath, '0.0.4'],
-        env
-      );
+      result = await runCommand('bash', [scriptPath, '0.0.4'], env);
       expect(result.code).toBe(0);
       expect(requests).toContain('/releases/download/v0.0.4/prefactor-linux-x64.tar.gz');
       expect(readFileSync(childLog, 'utf8')).toContain('--version');
