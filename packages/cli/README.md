@@ -92,9 +92,9 @@ prefactor agents list --environment_id <environment_id>
 
 The CLI reads credentials from profiles stored in `prefactor.json`:
 
-- Uses `./prefactor.json` when present in the current directory.
-- Otherwise uses `~/.prefactor/prefactor.json` when available.
-- If neither exists, creating a profile writes `./prefactor.json`.
+- Uses `<repo-root>/prefactor.json` when one exists at the current git/worktree root.
+- Otherwise uses `<executable-root>/prefactor.json`.
+- If neither exists, creating a profile writes `<executable-root>/prefactor.json`.
 
 Select a profile with either:
 
