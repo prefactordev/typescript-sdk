@@ -11,34 +11,67 @@ jobs:
     strategy:
       matrix:
         include:
-          - target: bun-linux-x64
-            outfile: prefactor-linux-x64
+          - target: bun-linux-x64-baseline
+            asset: prefactor-linux-x64.tar.gz
+            binary_name: prefactor
+            archive_format: tar.gz
           - target: bun-linux-arm64
-            outfile: prefactor-linux-arm64
-          - target: bun-darwin-x64
-            outfile: prefactor-macos-x64
+            asset: prefactor-linux-arm64.tar.gz
+            binary_name: prefactor
+            archive_format: tar.gz
+          - target: bun-linux-x64-musl
+            asset: prefactor-linux-x64-musl.tar.gz
+            binary_name: prefactor
+            archive_format: tar.gz
+          - target: bun-linux-arm64-musl
+            asset: prefactor-linux-arm64-musl.tar.gz
+            binary_name: prefactor
+            archive_format: tar.gz
+          - target: bun-darwin-x64-baseline
+            asset: prefactor-darwin-x64.tar.gz
+            binary_name: prefactor
+            archive_format: tar.gz
           - target: bun-darwin-arm64
-            outfile: prefactor-macos-arm64
-          - target: bun-windows-x64
-            outfile: prefactor-windows-x64.exe
+            asset: prefactor-darwin-arm64.tar.gz
+            binary_name: prefactor
+            archive_format: tar.gz
+          - target: bun-windows-x64-baseline
+            asset: prefactor-windows-x64.zip
+            binary_name: prefactor.exe
+            archive_format: zip
           - target: bun-windows-arm64
-            outfile: prefactor-windows-arm64.exe
+            asset: prefactor-windows-arm64.zip
+            binary_name: prefactor.exe
+            archive_format: zip
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
       - run: bun install --frozen-lockfile
       - run: bun run build
       - run: |
+          mkdir -p dist/cli/raw dist/cli/stage
           bun build \
             --compile \
             --target=${{ matrix.target }} \
             --minify \
             packages/cli/src/bin/cli.ts \
-            --outfile dist/cli/${{ matrix.outfile }}
+            --outfile dist/cli/raw/${{ matrix.binary_name }}
+      - name: Package archive
+        run: |
+          rm -rf dist/cli/stage/*
+          cp dist/cli/raw/${{ matrix.binary_name }} dist/cli/stage/${{ matrix.binary_name }}
+          if [ "${{ matrix.archive_format }}" = "zip" ]; then
+            (
+              cd dist/cli/stage
+              zip -q ../${{ matrix.asset }} ${{ matrix.binary_name }}
+            )
+          else
+            tar -czf dist/cli/${{ matrix.asset }} -C dist/cli/stage ${{ matrix.binary_name }}
+          fi
       - uses: actions/upload-artifact@v4
         with:
-          name: prefactor-${{ matrix.target }}
-          path: dist/cli/${{ matrix.outfile }}
+          name: ${{ matrix.asset }}
+          path: dist/cli/${{ matrix.asset }}
 
   smoke-test:
     needs: build
@@ -46,23 +79,37 @@ jobs:
       matrix:
         include:
           - os: ubuntu-latest
-            artifact: prefactor-bun-linux-x64
-            bin: prefactor-linux-x64
+            artifact: prefactor-linux-x64.tar.gz
+            archive: prefactor-linux-x64.tar.gz
+            extracted_bin: prefactor
+          - os: ubuntu-latest
+            artifact: prefactor-linux-x64-musl.tar.gz
+            archive: prefactor-linux-x64-musl.tar.gz
+            extracted_bin: prefactor
           - os: ubuntu-24.04-arm
-            artifact: prefactor-bun-linux-arm64
-            bin: prefactor-linux-arm64
+            artifact: prefactor-linux-arm64.tar.gz
+            archive: prefactor-linux-arm64.tar.gz
+            extracted_bin: prefactor
+          - os: ubuntu-24.04-arm
+            artifact: prefactor-linux-arm64-musl.tar.gz
+            archive: prefactor-linux-arm64-musl.tar.gz
+            extracted_bin: prefactor
           - os: macos-latest
-            artifact: prefactor-bun-darwin-arm64
-            bin: prefactor-macos-arm64
+            artifact: prefactor-darwin-arm64.tar.gz
+            archive: prefactor-darwin-arm64.tar.gz
+            extracted_bin: prefactor
           - os: macos-15-intel
-            artifact: prefactor-bun-darwin-x64
-            bin: prefactor-macos-x64
+            artifact: prefactor-darwin-x64.tar.gz
+            archive: prefactor-darwin-x64.tar.gz
+            extracted_bin: prefactor
           - os: windows-latest
-            artifact: prefactor-bun-windows-x64
-            bin: prefactor-windows-x64.exe
+            artifact: prefactor-windows-x64.zip
+            archive: prefactor-windows-x64.zip
+            extracted_bin: prefactor.exe
           - os: windows-11-arm
-            artifact: prefactor-bun-windows-arm64
-            bin: prefactor-windows-arm64.exe
+            artifact: prefactor-windows-arm64.zip
+            archive: prefactor-windows-arm64.zip
+            extracted_bin: prefactor.exe
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/download-artifact@v4
@@ -71,11 +118,26 @@ jobs:
       - name: Run smoke test (unix)
         if: runner.os != 'Windows'
         run: |
-          chmod +x ${{ matrix.bin }}
-          ./${{ matrix.bin }} --version
+          export HOME="${RUNNER_TEMP}/prefactor-home"
+          rm -rf "$HOME" && mkdir -p "$HOME"
+          rm -rf smoke && mkdir smoke
+          tar -xzf ${{ matrix.archive }} -C smoke
+          chmod +x smoke/${{ matrix.extracted_bin }}
+          smoke/${{ matrix.extracted_bin }} --version
+          smoke/${{ matrix.extracted_bin }} install --channel stable
+          "$HOME/.prefactor/bin/prefactor" doctor
       - name: Run smoke test (windows)
         if: runner.os == 'Windows'
-        run: .\${{ matrix.bin }} --version
+        shell: pwsh
+        run: |
+          $env:USERPROFILE = Join-Path $env:RUNNER_TEMP 'prefactor-home'
+          New-Item -ItemType Directory -Path $env:USERPROFILE -Force | Out-Null
+          Remove-Item -LiteralPath smoke -Recurse -Force -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Path smoke | Out-Null
+          Expand-Archive -LiteralPath ${{ matrix.archive }} -DestinationPath smoke -Force
+          .\smoke\${{ matrix.extracted_bin }} --version
+          .\smoke\${{ matrix.extracted_bin }} install --channel stable
+          & "$env:USERPROFILE\.prefactor\bin\prefactor.exe" doctor
 
   release:
     runs-on: ubuntu-latest
@@ -91,6 +153,10 @@ jobs:
         with:
           path: dist/cli
           merge-multiple: true
+      - name: Generate checksums
+        run: |
+          cd dist/cli
+          sha256sum *.tar.gz *.zip > SHA256SUMS
       - name: Create versioned release
         if: github.ref_type == 'tag'
         uses: softprops/action-gh-release@v2

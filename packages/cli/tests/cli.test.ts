@@ -68,6 +68,10 @@ describe('CLI profiles command', () => {
       'pfid',
       'bulk',
       'version',
+      'install',
+      'update',
+      'uninstall',
+      'doctor',
     ]);
   });
 
