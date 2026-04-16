@@ -6,6 +6,9 @@ import { createServer, type IncomingMessage, type ServerResponse } from 'node:ht
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
+const PWSH = 'pwsh.exe';
+const PWSH_BASE_ARGS = ['-NoLogo', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass'];
+
 function sha256Hex(contents: Buffer): string {
   return new Bun.CryptoHasher('sha256').update(contents).digest('hex');
 }
@@ -33,12 +36,16 @@ async function withServer(
 
 async function runPwsh(
   args: string[],
-  env?: NodeJS.ProcessEnv
+  envOverrides?: NodeJS.ProcessEnv
 ): Promise<{ code: number | null; stdout: string; stderr: string }> {
   return await new Promise((resolvePromise, reject) => {
-    const child = spawn('pwsh', args, {
-      env,
+    const child = spawn(PWSH, [...PWSH_BASE_ARGS, ...args], {
+      env: {
+        ...process.env,
+        ...envOverrides,
+      },
       stdio: ['ignore', 'pipe', 'pipe'],
+      windowsHide: true,
     });
 
     let stdout = '';
@@ -51,10 +58,26 @@ async function runPwsh(
       stderr += chunk.toString('utf8');
     });
     child.on('error', reject);
-    child.on('exit', (code) => {
+    child.on('close', (code) => {
       resolvePromise({ code, stdout, stderr });
     });
   });
+}
+
+function escapePowerShellLiteral(value: string): string {
+  return value.replace(/'/g, "''");
+}
+
+function createZipArchive(inputPath: string, outputPath: string): void {
+  const command = `Compress-Archive -LiteralPath '${escapePowerShellLiteral(inputPath)}' -DestinationPath '${escapePowerShellLiteral(outputPath)}' -Force`;
+  const result = spawnSync(PWSH, [...PWSH_BASE_ARGS, '-Command', command], {
+    encoding: 'utf8',
+    windowsHide: true,
+  });
+
+  if (result.status !== 0) {
+    throw new Error(`Failed to create zip archive: ${result.stdout}\n${result.stderr}`.trim());
+  }
 }
 
 describe.if(process.platform === 'win32')('install.ps1', () => {
@@ -72,20 +95,19 @@ describe.if(process.platform === 'win32')('install.ps1', () => {
   });
 
   test('prints help', async () => {
-    const result = await runPwsh(['-NoProfile', '-File', scriptPath, '-Help']);
+    const result = await runPwsh(['-File', scriptPath, '-Help']);
 
     expect(result.code).toBe(0);
     expect(result.stdout).toContain('Install the Prefactor CLI from GitHub Releases.');
   });
 
   test('fails clearly for unsupported architecture', async () => {
-    const result = await runPwsh(['-NoProfile', '-File', scriptPath], {
-      ...process.env,
+    const result = await runPwsh(['-File', scriptPath], {
       PREFACTOR_INSTALL_TEST_ARCH: 'sparc',
     });
 
     expect(result.code).not.toBe(0);
-    expect(result.stderr).toContain('Unsupported architecture');
+    expect(`${result.stdout}\n${result.stderr}`).toContain('Unsupported architecture');
   });
 
   test('fails on checksum mismatch before running the installer', async () => {
@@ -94,11 +116,7 @@ describe.if(process.platform === 'win32')('install.ps1', () => {
     await mkdir(archiveDir, { recursive: true });
     writeFileSync(join(archiveDir, 'prefactor.exe'), 'fake exe');
     const archivePath = join(tempRoot, assetName);
-    spawnSync('pwsh', [
-      '-NoProfile',
-      '-Command',
-      `Compress-Archive -LiteralPath '${join(archiveDir, 'prefactor.exe')}' -DestinationPath '${archivePath}' -Force`,
-    ]);
+    createZipArchive(join(archiveDir, 'prefactor.exe'), archivePath);
     const archiveBuffer = Buffer.from(readFileSync(archivePath));
 
     const server = await withServer((req, res) => {
@@ -118,15 +136,14 @@ describe.if(process.platform === 'win32')('install.ps1', () => {
     });
 
     try {
-      const result = await runPwsh(['-NoProfile', '-File', scriptPath], {
-        ...process.env,
+      const result = await runPwsh(['-File', scriptPath], {
         PREFACTOR_INSTALL_TEST_ARCH: 'x64',
         PREFACTOR_RELEASE_BASE_URL: `${server.url}/releases/download`,
         PREFACTOR_RELEASE_LATEST_BASE_URL: `${server.url}/releases/latest/download`,
       });
 
       expect(result.code).not.toBe(0);
-      expect(result.stderr).toContain('Checksum mismatch');
+      expect(`${result.stdout}\n${result.stderr}`).toContain('Checksum mismatch');
     } finally {
       await server.close();
     }
@@ -141,11 +158,7 @@ describe.if(process.platform === 'win32')('install.ps1', () => {
     await mkdir(archiveDir, { recursive: true });
     writeFileSync(join(archiveDir, 'prefactor.exe'), 'fake exe');
     const archivePath = join(tempRoot, assetName);
-    spawnSync('pwsh', [
-      '-NoProfile',
-      '-Command',
-      `Compress-Archive -LiteralPath '${join(archiveDir, 'prefactor.exe')}' -DestinationPath '${archivePath}' -Force`,
-    ]);
+    createZipArchive(join(archiveDir, 'prefactor.exe'), archivePath);
     const archiveBuffer = Buffer.from(readFileSync(archivePath));
     const checksum = `${sha256Hex(archiveBuffer)}  ${assetName}\n`;
 
@@ -168,26 +181,25 @@ describe.if(process.platform === 'win32')('install.ps1', () => {
 
     try {
       const env = {
-        ...process.env,
         PREFACTOR_INSTALL_TEST_ARCH: 'x64',
         PREFACTOR_INSTALL_TEST_CAPTURE_ARGS: capturePath,
         PREFACTOR_RELEASE_BASE_URL: `${server.url}/releases/download`,
         PREFACTOR_RELEASE_LATEST_BASE_URL: `${server.url}/releases/latest/download`,
       };
 
-      let result = await runPwsh(['-NoProfile', '-File', scriptPath, 'stable'], env);
+      let result = await runPwsh(['-File', scriptPath, 'stable'], env);
       expect(result.code).toBe(0);
       expect(requests).toContain('/releases/latest/download/prefactor-windows-x64.zip');
       expect(readFileSync(capturePath, 'utf8')).toContain('--channel');
 
       requests.length = 0;
-      result = await runPwsh(['-NoProfile', '-File', scriptPath, 'latest'], env);
+      result = await runPwsh(['-File', scriptPath, 'latest'], env);
       expect(result.code).toBe(0);
       expect(requests).toContain('/releases/download/canary/prefactor-windows-x64.zip');
       expect(readFileSync(capturePath, 'utf8')).toContain('canary');
 
       requests.length = 0;
-      result = await runPwsh(['-NoProfile', '-File', scriptPath, '0.0.4'], env);
+      result = await runPwsh(['-File', scriptPath, '0.0.4'], env);
       expect(result.code).toBe(0);
       expect(requests).toContain('/releases/download/v0.0.4/prefactor-windows-x64.zip');
       expect(readFileSync(capturePath, 'utf8')).toContain('--version');
