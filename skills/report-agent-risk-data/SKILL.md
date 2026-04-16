@@ -159,14 +159,38 @@ const spanTypeSchemas: SpanTypeSchema[] = [
       result_data_categories: {
         classification: 'internal',
         personal_identifiers: 'excluded',
-        // ... set remaining fields
+        contact_information: 'excluded',
+        financial_information: 'excluded',
+        health_and_medical: 'excluded',
+        criminal_justice: 'excluded',
+        authentication_and_secrets: 'excluded',
+        organisational_confidential: 'excluded',
+        minors_data: 'excluded',
+        location_and_tracking: 'excluded',
+        behavioural_and_inferred: 'excluded',
+        gdpr_racial_or_ethnic_origin: 'excluded',
+        gdpr_political_opinions: 'excluded',
+        gdpr_religious_or_philosophical_beliefs: 'excluded',
+        gdpr_trade_union_membership: 'excluded',
+        gdpr_genetic_data: 'excluded',
+        gdpr_biometric_for_identification: 'excluded',
+        gdpr_sex_life_or_sexual_orientation: 'excluded',
       },
     },
   },
 ];
 ```
 
-Pass `span_type_schemas` through `AgentInstanceRegisterPayload.agent_schema_version` when registering the agent instance, or via your provider package's schema configuration.
+Build a complete `AgentSchemaVersion` — `span_type_schemas` must be nested inside it along with `external_identifier` (and any other required fields) — then pass that object as `AgentInstanceRegisterPayload.agent_schema_version` when registering the agent instance, or configure the full `AgentSchemaVersion` via your provider package's schema configuration:
+
+```ts
+const agentSchemaVersion: AgentSchemaVersion = {
+  external_identifier: '<version-identifier>',
+  span_type_schemas: spanTypeSchemas,
+};
+
+// Pass to AgentInstanceRegisterPayload.agent_schema_version
+```
 
 ### CLI (all agent types)
 
@@ -244,10 +268,10 @@ Use these as a starting point and adjust based on what you find in the code.
 
 | Span type pattern | `action_profile` highlights | `classification` | Notable categories |
 |---|---|---|---|
-| `*:tool:read` | `read_data: allowed`, others `disallowed` | `confidential` | `authentication_and_secrets: included`, `organisational_confidential: included` |
-| `*:tool:write` | `create_data: allowed`, others `disallowed` | `confidential` | `organisational_confidential: included` |
-| `*:tool:edit` | `update_data: allowed`, others `disallowed` | `confidential` | `authentication_and_secrets: included`, `organisational_confidential: included` |
-| `*:tool:exec` | `read_data: allowed`, `external_communication: disallowed` | `restricted` | `authentication_and_secrets: included`, `organisational_confidential: included` |
+| `*:tool:read` | `read_data: allowed`, `financial_transactions: disallowed`, others `unknown` | `confidential` | `authentication_and_secrets: included`, `organisational_confidential: included` |
+| `*:tool:write` | `create_data: allowed`, `financial_transactions: disallowed`, others `unknown` | `confidential` | `organisational_confidential: included` |
+| `*:tool:edit` | `update_data: allowed`, `financial_transactions: disallowed`, others `unknown` | `confidential` | `authentication_and_secrets: included`, `organisational_confidential: included` |
+| `*:tool:exec` | `read_data: allowed`, `financial_transactions: disallowed`, others `unknown` | `restricted` | `authentication_and_secrets: included`, `organisational_confidential: included` |
 | `*:tool:web_search` / `*:tool:web_fetch` / `*:tool:browser` | `external_communication: allowed`, others `disallowed` | `public` | all categories `excluded` |
 | `*:user_message` / `*:user_interaction` | all `unknown` except `financial_transactions: disallowed` | `confidential` | all `unknown` |
 | `*:agent_run` / `*:session` | all `unknown` except `financial_transactions: disallowed` | `internal` | all `unknown` |
