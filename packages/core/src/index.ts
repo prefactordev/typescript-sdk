@@ -92,6 +92,14 @@ export {
   type ToolSchemaConfig,
 } from './tool-schema.js';
 export { SpanContext } from './tracing/context.js';
+export type {
+  ActionProfile,
+  ActionProfileValue,
+  DataCategories,
+  DataCategoryValue,
+  DataClassification,
+  DataRisk,
+} from './tracing/data-risk.js';
 export {
   createSpanTypePrefixer,
   type ErrorInfo,
@@ -100,6 +108,7 @@ export {
   SpanType,
   type TokenUsage,
 } from './tracing/span.js';
+export type { AgentSchemaVersion, SpanTypeSchema } from './tracing/span-schema.js';
 export { type EndSpanOptions, type StartSpanOptions, Tracer } from './tracing/tracer.js';
 export { withSpan } from './tracing/with-span.js';
 export {

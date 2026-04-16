@@ -1,3 +1,4 @@
+import type { AgentSchemaVersion } from '../../tracing/span-schema.js';
 import type { HttpRequester } from './http-client.js';
 import { ensureIdempotencyKey } from './idempotency.js';
 
@@ -8,7 +9,7 @@ export type AgentInstanceRegisterPayload = {
     name: string;
     description: string;
   };
-  agent_schema_version?: Record<string, unknown>;
+  agent_schema_version?: AgentSchemaVersion;
   idempotency_key?: string;
 };
 
