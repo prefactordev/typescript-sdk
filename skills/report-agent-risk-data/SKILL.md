@@ -88,7 +88,7 @@ Then set each of the 17 category fields to `included`, `excluded`, or `unknown`:
 
 Category fields:
 
-```
+```text
 personal_identifiers          — names, IDs, usernames
 contact_information           — email, phone, address
 financial_information         — payment details, account numbers
@@ -116,9 +116,61 @@ Outputs are often narrower than inputs. A span that reads confidential files may
 
 ## 5) Deliver Risk Data
 
-### Other SDK agents
+### TypeScript SDK agents
 
-Create a new `agent_schema_version` via CLI with `span_type_schemas` containing `data_risk` on each entry:
+For agents instrumented directly with `@prefactor/core` (or provider packages like `@prefactor/langchain` / `@prefactor/ai`), pass `data_risk` directly on each `SpanTypeSchema` entry when building the agent schema version. The types are available from core:
+
+```ts
+import type { DataRisk, SpanTypeSchema, AgentSchemaVersion } from '@prefactor/core';
+
+const spanTypeSchemas: SpanTypeSchema[] = [
+  {
+    name: 'myapp:ingest',
+    params_schema: { type: 'object', properties: { text: { type: 'string' } } },
+    data_risk: {
+      action_profile: {
+        create_data: 'unknown',
+        read_data: 'allowed',
+        update_data: 'unknown',
+        destroy_data: 'disallowed',
+        financial_transactions: 'disallowed',
+        external_communication: 'unknown',
+      },
+      params_data_categories: {
+        classification: 'confidential',
+        personal_identifiers: 'unknown',
+        contact_information: 'unknown',
+        financial_information: 'excluded',
+        health_and_medical: 'unknown',
+        criminal_justice: 'excluded',
+        authentication_and_secrets: 'excluded',
+        organisational_confidential: 'included',
+        minors_data: 'unknown',
+        location_and_tracking: 'unknown',
+        behavioural_and_inferred: 'unknown',
+        gdpr_racial_or_ethnic_origin: 'unknown',
+        gdpr_political_opinions: 'unknown',
+        gdpr_religious_or_philosophical_beliefs: 'unknown',
+        gdpr_trade_union_membership: 'unknown',
+        gdpr_genetic_data: 'unknown',
+        gdpr_biometric_for_identification: 'unknown',
+        gdpr_sex_life_or_sexual_orientation: 'unknown',
+      },
+      result_data_categories: {
+        classification: 'internal',
+        personal_identifiers: 'excluded',
+        // ... set remaining fields
+      },
+    },
+  },
+];
+```
+
+Pass `span_type_schemas` through `AgentInstanceRegisterPayload.agent_schema_version` when registering the agent instance, or via your provider package's schema configuration.
+
+### CLI (all agent types)
+
+Create or update a schema version via CLI when you cannot modify the instrumentation source:
 
 ```bash
 prefactor agent_schema_versions create \
@@ -162,7 +214,26 @@ Each element of the array should follow this shape:
       "gdpr_biometric_for_identification": "unknown",
       "gdpr_sex_life_or_sexual_orientation": "unknown"
     },
-    "result_data_categories": { }
+    "result_data_categories": {
+      "classification": "unknown",
+      "personal_identifiers": "unknown",
+      "contact_information": "unknown",
+      "financial_information": "unknown",
+      "health_and_medical": "unknown",
+      "criminal_justice": "unknown",
+      "authentication_and_secrets": "unknown",
+      "organisational_confidential": "unknown",
+      "minors_data": "unknown",
+      "location_and_tracking": "unknown",
+      "behavioural_and_inferred": "unknown",
+      "gdpr_racial_or_ethnic_origin": "unknown",
+      "gdpr_political_opinions": "unknown",
+      "gdpr_religious_or_philosophical_beliefs": "unknown",
+      "gdpr_trade_union_membership": "unknown",
+      "gdpr_genetic_data": "unknown",
+      "gdpr_biometric_for_identification": "unknown",
+      "gdpr_sex_life_or_sexual_orientation": "unknown"
+    }
   }
 }
 ```
