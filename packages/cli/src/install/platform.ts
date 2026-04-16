@@ -93,7 +93,9 @@ export function detectPlatformInfo(deps: PlatformDetectionDeps = {}): PlatformIn
     | { header?: { glibcVersionRuntime?: string | undefined } }
     | undefined;
   const reportHeader = report?.header;
-  const glibcVersionRuntime = deps.glibcVersionRuntime ?? reportHeader?.glibcVersionRuntime;
+  const glibcVersionRuntime = Object.hasOwn(deps, 'glibcVersionRuntime')
+    ? deps.glibcVersionRuntime
+    : reportHeader?.glibcVersionRuntime;
 
   return {
     platform,
