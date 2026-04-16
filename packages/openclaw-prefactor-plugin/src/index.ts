@@ -643,7 +643,8 @@ export default function register(api: OpenClawPluginApi) {
 }
 
 // Re-export types for TypeDoc visibility
-export type { ActionProfile, Agent, AgentConfig, DataCategories, DataRisk } from './agent.js';
+export type { ActionProfile, DataCategories, DataRisk } from '@prefactor/core';
+export type { Agent, AgentConfig } from './agent.js';
 export { createAgent } from './agent.js';
 
 // Data risk configuration exports

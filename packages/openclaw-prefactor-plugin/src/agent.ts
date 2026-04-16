@@ -4,11 +4,14 @@
 
 import {
   AgentInstanceClient,
+  type AgentSchemaVersion,
   AgentSpanClient,
   type AgentSpanCreatePayload,
+  type DataRisk,
   HttpClient,
   type HttpClientError,
   type HttpTransportConfig,
+  type SpanTypeSchema,
 } from '@prefactor/core';
 import packageJson from '../package.json' with { type: 'json' };
 import { defaultSpanTypeRiskConfigs } from './data-risk-config.js';
@@ -32,65 +35,6 @@ interface AgentVersionForRegister {
   description: string;
 }
 
-// Risk configuration types
-export type ActionProfile = {
-  create_data: 'unknown' | 'allowed' | 'disallowed';
-  read_data: 'unknown' | 'allowed' | 'disallowed';
-  update_data: 'unknown' | 'allowed' | 'disallowed';
-  destroy_data: 'unknown' | 'allowed' | 'disallowed';
-  financial_transactions: 'unknown' | 'allowed' | 'disallowed';
-  external_communication: 'unknown' | 'allowed' | 'disallowed';
-};
-
-export type DataCategories = {
-  classification: 'unknown' | 'public' | 'internal' | 'confidential' | 'restricted' | 'secret';
-  personal_identifiers: 'unknown' | 'included' | 'excluded';
-  contact_information: 'unknown' | 'included' | 'excluded';
-  financial_information: 'unknown' | 'included' | 'excluded';
-  health_and_medical: 'unknown' | 'included' | 'excluded';
-  criminal_justice: 'unknown' | 'included' | 'excluded';
-  authentication_and_secrets: 'unknown' | 'included' | 'excluded';
-  organisational_confidential: 'unknown' | 'included' | 'excluded';
-  minors_data: 'unknown' | 'included' | 'excluded';
-  location_and_tracking: 'unknown' | 'included' | 'excluded';
-  behavioural_and_inferred: 'unknown' | 'included' | 'excluded';
-  gdpr_racial_or_ethnic_origin: 'unknown' | 'included' | 'excluded';
-  gdpr_political_opinions: 'unknown' | 'included' | 'excluded';
-  gdpr_religious_or_philosophical_beliefs: 'unknown' | 'included' | 'excluded';
-  gdpr_trade_union_membership: 'unknown' | 'included' | 'excluded';
-  gdpr_genetic_data: 'unknown' | 'included' | 'excluded';
-  gdpr_biometric_for_identification: 'unknown' | 'included' | 'excluded';
-  gdpr_sex_life_or_sexual_orientation: 'unknown' | 'included' | 'excluded';
-};
-
-export type DataRisk = {
-  action_profile: ActionProfile;
-  params_data_categories: DataCategories;
-  result_data_categories: DataCategories;
-};
-
-// Agent schema version info for registration
-interface SpanTypeSchema {
-  name: string;
-  params_schema: {
-    type: 'object';
-    properties: Record<string, { type: string; description?: string }>;
-  };
-  result_schema?: {
-    type: 'object';
-    properties: Record<string, { type: string; description?: string }>;
-  };
-  template?: string | null;
-  result_template?: string | null;
-  description?: string;
-  data_risk?: DataRisk;
-}
-
-interface AgentSchemaVersionForRegister extends Record<string, unknown> {
-  external_identifier: string;
-  span_type_schemas: SpanTypeSchema[];
-}
-
 // Operation types for replay queue
 type SpanOperation =
   | { type: 'create_span'; sessionKey: string; spanId: string; request: AgentSpanCreatePayload }
@@ -110,7 +54,7 @@ type SpanOperation =
       request: {
         agent_id: string;
         agent_version: AgentVersionForRegister;
-        agent_schema_version: AgentSchemaVersionForRegister;
+        agent_schema_version: AgentSchemaVersion;
         idempotency_key?: string;
       };
     }
@@ -219,7 +163,7 @@ export class Agent {
   private replayQueue: ReplayQueue = new ReplayQueue();
   private flushInterval: NodeJS.Timeout | null = null;
   private agentVersion: AgentVersionForRegister;
-  private agentSchemaVersion: AgentSchemaVersionForRegister;
+  private agentSchemaVersion: AgentSchemaVersion;
 
   constructor(config: AgentConfig, logger: Logger) {
     this.config = config;

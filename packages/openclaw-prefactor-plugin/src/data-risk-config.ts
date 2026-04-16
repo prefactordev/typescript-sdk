@@ -8,7 +8,7 @@
  * @module @prefactor/openclaw-prefactor-plugin/data-risk
  */
 
-import type { DataRisk } from './agent.js';
+import type { DataRisk } from '@prefactor/core';
 
 /**
  * Helper to create a DataCategories object with all fields set to a specific value.
