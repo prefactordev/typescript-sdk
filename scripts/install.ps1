@@ -166,6 +166,11 @@ try {
 
   Write-Host "==> Running installer"
   & $binaryPath @installArgs
+  $installExitCode = $LASTEXITCODE
+  if ($installExitCode -ne 0) {
+    Write-Error "Installer failed with exit code $installExitCode."
+    exit $installExitCode
+  }
 } finally {
   Remove-Item -LiteralPath $tempRoot -Recurse -Force -ErrorAction SilentlyContinue
 }

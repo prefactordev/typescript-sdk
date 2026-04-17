@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { spawn, spawnSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { copyFileSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { mkdir } from 'node:fs/promises';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { tmpdir } from 'node:os';
@@ -191,6 +191,49 @@ describe.if(process.platform === 'win32')('install.ps1', () => {
 
       expect(result.code).not.toBe(0);
       expect(`${result.stdout}\n${result.stderr}`).toContain('Checksum mismatch');
+    } finally {
+      await server.close();
+    }
+  });
+
+  test('propagates installer exit failures', async () => {
+    const assetName = 'prefactor-windows-x64.zip';
+    const archiveDir = join(tempRoot, 'archive-failing-installer');
+    await mkdir(archiveDir, { recursive: true });
+    copyFileSync(
+      join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'where.exe'),
+      join(archiveDir, 'prefactor.exe')
+    );
+    const archivePath = join(tempRoot, assetName);
+    createZipArchive(join(archiveDir, 'prefactor.exe'), archivePath);
+    const archiveBuffer = Buffer.from(readFileSync(archivePath));
+    const checksum = `${sha256Hex(archiveBuffer)}  ${assetName}\n`;
+
+    const server = await withServer((req, res) => {
+      if (req.url?.endsWith(assetName)) {
+        res.writeHead(200, { 'Content-Type': 'application/zip' });
+        res.end(archiveBuffer);
+        return;
+      }
+      if (req.url?.endsWith('/SHA256SUMS')) {
+        res.writeHead(200, { 'Content-Type': 'text/plain' });
+        res.end(checksum);
+        return;
+      }
+
+      res.writeHead(404);
+      res.end();
+    });
+
+    try {
+      const result = await runPwsh(['-File', scriptPath], {
+        PREFACTOR_INSTALL_TEST_ARCH: 'x64',
+        PREFACTOR_RELEASE_BASE_URL: `${server.url}/releases/download`,
+        PREFACTOR_RELEASE_LATEST_BASE_URL: `${server.url}/releases/latest/download`,
+      });
+
+      expect(result.code).not.toBe(0);
+      expect(`${result.stdout}\n${result.stderr}`).toContain('Installer failed with exit code');
     } finally {
       await server.close();
     }
