@@ -117,3 +117,6 @@ Zod-validated config from `api.pluginConfig` with env var fallbacks:
 - **Operation queue over in-flight dedup**: A serial queue per session replaces the previous `inFlightOperations` map. It prevents all classes of race conditions, not just duplicates.
 - **Message buffering**: `message_received` buffers the message; `before_agent_start` consumes it. This solves the cross-context sessionKey problem without global state.
 - **Agent is stateless for hierarchy**: `Agent` only tracks instance registration state (`instanceId`, `instanceRegistered`, `instanceStarted`). All span parent-child relationships are managed by `SessionStateManager`.
+
+## Never do
+- Never use `additionalProperties: false` to block additional data - allow unknown fields to pass through.
