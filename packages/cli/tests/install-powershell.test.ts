@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { spawn, spawnSync } from 'node:child_process';
-import { copyFileSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { mkdir } from 'node:fs/promises';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { tmpdir } from 'node:os';
@@ -77,6 +77,26 @@ function createZipArchive(inputPath: string, outputPath: string): void {
 
   if (result.status !== 0) {
     throw new Error(`Failed to create zip archive: ${result.stdout}\n${result.stderr}`.trim());
+  }
+}
+
+function createFailingExecutable(outputPath: string, exitCode: number): void {
+  const command = `$source = @'
+using System;
+
+public class Program {
+  public static int Main(string[] args) {
+    return ${exitCode};
+  }
+}
+'@; Add-Type -TypeDefinition $source -Language CSharp -OutputAssembly '${escapePowerShellLiteral(outputPath)}' -OutputType ConsoleApplication`;
+  const result = spawnSync(PWSH, [...PWSH_BASE_ARGS, '-Command', command], {
+    encoding: 'utf8',
+    windowsHide: true,
+  });
+
+  if (result.status !== 0) {
+    throw new Error(`Failed to compile test executable: ${result.stdout}\n${result.stderr}`.trim());
   }
 }
 
@@ -199,11 +219,9 @@ describe.if(process.platform === 'win32')('install.ps1', () => {
   test('propagates installer exit failures', async () => {
     const assetName = 'prefactor-windows-x64.zip';
     const archiveDir = join(tempRoot, 'archive-failing-installer');
+    const expectedExitCode = 23;
     await mkdir(archiveDir, { recursive: true });
-    copyFileSync(
-      join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'where.exe'),
-      join(archiveDir, 'prefactor.exe')
-    );
+    createFailingExecutable(join(archiveDir, 'prefactor.exe'), expectedExitCode);
     const archivePath = join(tempRoot, assetName);
     createZipArchive(join(archiveDir, 'prefactor.exe'), archivePath);
     const archiveBuffer = Buffer.from(readFileSync(archivePath));
@@ -232,8 +250,10 @@ describe.if(process.platform === 'win32')('install.ps1', () => {
         PREFACTOR_RELEASE_LATEST_BASE_URL: `${server.url}/releases/latest/download`,
       });
 
-      expect(result.code).not.toBe(0);
-      expect(`${result.stdout}\n${result.stderr}`).toContain('Installer failed with exit code');
+      expect(result.code).toBe(expectedExitCode);
+      expect(`${result.stdout}\n${result.stderr}`).toContain(
+        `Installer failed with exit code ${expectedExitCode}`
+      );
     } finally {
       await server.close();
     }
