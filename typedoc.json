@@ -13,18 +13,17 @@
 
   "exclude": ["**/tests/**", "**/*.test.ts", "**/dist/**"],
 
-  "out": "docs/api",
+  "out": "docs/astro/api",
   "name": "Prefactor TypeScript SDK",
-  "readme": "docs/api-readme.md",
-  "projectDocuments": [
-    "docs/typedoc/concepts-schemas.md",
-    "docs/typedoc/configuration.md",
-    "docs/typedoc/cli-tool.md"
-  ],
+  "readme": "README.md",
 
   "excludePrivate": true,
   "excludeInternal": true,
   "excludeProtected": true,
+
+  "entryFileName": "index",
+  "modulesFileName": "modules",
+  "excludeScopesInPaths": true,
 
   "hideGenerator": true,
 

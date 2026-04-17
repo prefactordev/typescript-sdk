@@ -6,7 +6,7 @@ import { ProfileManager } from '../src/profile-manager.js';
 
 describe('ProfileManager', () => {
   const originalCwd = process.cwd();
-  const originalHome = process.env.HOME;
+  const originalSelfPath = process.env.PREFACTOR_CLI_SELF_PATH;
   let tempRoot = '';
 
   beforeEach(() => {
@@ -16,10 +16,10 @@ describe('ProfileManager', () => {
   afterEach(() => {
     process.chdir(originalCwd);
 
-    if (originalHome === undefined) {
-      delete process.env.HOME;
+    if (originalSelfPath === undefined) {
+      delete process.env.PREFACTOR_CLI_SELF_PATH;
     } else {
-      process.env.HOME = originalHome;
+      process.env.PREFACTOR_CLI_SELF_PATH = originalSelfPath;
     }
 
     if (tempRoot) {
@@ -27,45 +27,63 @@ describe('ProfileManager', () => {
     }
   });
 
-  test('prefers ./prefactor.json over $HOME fallback', async () => {
-    const cwd = join(tempRoot, 'cwd');
-    const home = join(tempRoot, 'home');
+  test('prefers root prefactor.json over executable-root fallback', async () => {
+    const root = join(tempRoot, 'workspace');
+    const cwd = join(root, 'packages', 'cli');
+    const executableRoot = join(tempRoot, 'install-root');
+    mkdirSync(join(root, '.git'), { recursive: true });
     mkdirSync(cwd, { recursive: true });
-    mkdirSync(join(home, '.prefactor'), { recursive: true });
+    mkdirSync(executableRoot, { recursive: true });
 
     writeFileSync(
-      join(cwd, 'prefactor.json'),
+      join(root, 'prefactor.json'),
       JSON.stringify({ local: { api_key: 'local-key', base_url: 'https://local.example' } })
     );
     writeFileSync(
-      join(home, '.prefactor', 'prefactor.json'),
-      JSON.stringify({ home: { api_key: 'home-key', base_url: 'https://home.example' } })
+      join(executableRoot, 'prefactor.json'),
+      JSON.stringify({ executable: { api_key: 'exec-key', base_url: 'https://exec.example' } })
     );
 
     process.chdir(cwd);
-    process.env.HOME = home;
+    process.env.PREFACTOR_CLI_SELF_PATH = join(executableRoot, 'bin', 'prefactor');
 
     const manager = await ProfileManager.create();
     expect(manager.getProfile('local')).not.toBeNull();
-    expect(manager.getProfile('home')).toBeNull();
+    expect(manager.getProfile('executable')).toBeNull();
   });
 
-  test('falls back to $HOME/.prefactor/prefactor.json when local file is absent', async () => {
-    const cwd = join(tempRoot, 'cwd');
-    const home = join(tempRoot, 'home');
+  test('falls back to executable-root prefactor.json when root file is absent', async () => {
+    const root = join(tempRoot, 'workspace');
+    const cwd = join(root, 'packages', 'cli');
+    const executableRoot = join(tempRoot, 'install-root');
+    mkdirSync(join(root, '.git'), { recursive: true });
     mkdirSync(cwd, { recursive: true });
-    mkdirSync(join(home, '.prefactor'), { recursive: true });
+    mkdirSync(executableRoot, { recursive: true });
 
     writeFileSync(
-      join(home, '.prefactor', 'prefactor.json'),
-      JSON.stringify({ home: { api_key: 'home-key', base_url: 'https://home.example' } })
+      join(executableRoot, 'prefactor.json'),
+      JSON.stringify({ executable: { api_key: 'exec-key', base_url: 'https://exec.example' } })
     );
 
     process.chdir(cwd);
-    process.env.HOME = home;
+    process.env.PREFACTOR_CLI_SELF_PATH = join(executableRoot, 'bin', 'prefactor');
 
     const manager = await ProfileManager.create();
-    expect(manager.getProfile('home')).not.toBeNull();
+    expect(manager.getProfile('executable')).not.toBeNull();
+  });
+
+  test('adds prefactor.json to the repository-root .gitignore when creating a root profile file', async () => {
+    const root = join(tempRoot, 'workspace');
+    const cwd = join(root, 'packages', 'cli');
+    mkdirSync(join(root, '.git'), { recursive: true });
+    mkdirSync(cwd, { recursive: true });
+    process.chdir(cwd);
+
+    const manager = await ProfileManager.create(join(root, 'prefactor.json'));
+    await manager.addProfile('default', 'token');
+
+    const gitignore = readFileSync(join(root, '.gitignore'), 'utf8');
+    expect(gitignore).toContain('prefactor.json');
   });
 
   test('uses default base URL when omitted on add', async () => {

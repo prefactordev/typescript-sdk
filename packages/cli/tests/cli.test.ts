@@ -6,28 +6,29 @@ import { createCli } from '../src/cli.js';
 
 describe('CLI profiles command', () => {
   const originalCwd = process.cwd();
-  const originalHome = process.env.HOME;
   const originalProfile = process.env.PREFACTOR_PROFILE;
+  const originalSelfPath = process.env.PREFACTOR_CLI_SELF_PATH;
   let tempRoot = '';
 
   beforeEach(() => {
     tempRoot = mkdtempSync(join(tmpdir(), 'prefactor-cli-test-'));
     delete process.env.PREFACTOR_PROFILE;
+    process.env.PREFACTOR_CLI_SELF_PATH = join(tempRoot, '.prefactor', 'bin', 'prefactor');
   });
 
   afterEach(() => {
     process.chdir(originalCwd);
 
-    if (originalHome === undefined) {
-      delete process.env.HOME;
-    } else {
-      process.env.HOME = originalHome;
-    }
-
     if (originalProfile === undefined) {
       delete process.env.PREFACTOR_PROFILE;
     } else {
       process.env.PREFACTOR_PROFILE = originalProfile;
+    }
+
+    if (originalSelfPath === undefined) {
+      delete process.env.PREFACTOR_CLI_SELF_PATH;
+    } else {
+      process.env.PREFACTOR_CLI_SELF_PATH = originalSelfPath;
     }
 
     if (tempRoot) {
@@ -68,6 +69,10 @@ describe('CLI profiles command', () => {
       'pfid',
       'bulk',
       'version',
+      'install',
+      'update',
+      'uninstall',
+      'doctor',
     ]);
   });
 
@@ -255,10 +260,10 @@ describe('CLI profiles command', () => {
 
 describe('CLI command validation', () => {
   const originalCwd = process.cwd();
-  const originalHome = process.env.HOME;
   const originalProfile = process.env.PREFACTOR_PROFILE;
   const originalApiToken = process.env.PREFACTOR_API_TOKEN;
   const originalApiUrl = process.env.PREFACTOR_API_URL;
+  const originalSelfPath = process.env.PREFACTOR_CLI_SELF_PATH;
   const originalFetch = globalThis.fetch;
   let tempRoot = '';
 
@@ -267,17 +272,12 @@ describe('CLI command validation', () => {
     delete process.env.PREFACTOR_PROFILE;
     delete process.env.PREFACTOR_API_TOKEN;
     delete process.env.PREFACTOR_API_URL;
+    process.env.PREFACTOR_CLI_SELF_PATH = join(tempRoot, '.prefactor', 'bin', 'prefactor');
     globalThis.fetch = originalFetch;
   });
 
   afterEach(() => {
     process.chdir(originalCwd);
-
-    if (originalHome === undefined) {
-      delete process.env.HOME;
-    } else {
-      process.env.HOME = originalHome;
-    }
 
     if (originalProfile === undefined) {
       delete process.env.PREFACTOR_PROFILE;
@@ -295,6 +295,12 @@ describe('CLI command validation', () => {
       delete process.env.PREFACTOR_API_URL;
     } else {
       process.env.PREFACTOR_API_URL = originalApiUrl;
+    }
+
+    if (originalSelfPath === undefined) {
+      delete process.env.PREFACTOR_CLI_SELF_PATH;
+    } else {
+      process.env.PREFACTOR_CLI_SELF_PATH = originalSelfPath;
     }
 
     globalThis.fetch = originalFetch;
