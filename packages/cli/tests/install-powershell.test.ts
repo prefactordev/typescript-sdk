@@ -81,6 +81,7 @@ function createZipArchive(inputPath: string, outputPath: string): void {
 }
 
 function createFailingExecutable(outputPath: string, exitCode: number): void {
+  const sourcePath = `${outputPath}.cs`;
   const command = `$source = @'
 using System;
 
@@ -89,7 +90,25 @@ public class Program {
     return ${exitCode};
   }
 }
-'@; Add-Type -TypeDefinition $source -Language CSharp -OutputAssembly '${escapePowerShellLiteral(outputPath)}' -OutputType ConsoleApplication`;
+'@;
+$sourcePath = '${escapePowerShellLiteral(sourcePath)}';
+$outputPath = '${escapePowerShellLiteral(outputPath)}';
+Set-Content -LiteralPath $sourcePath -Value $source -NoNewline;
+$csc = (Get-Command csc.exe -ErrorAction SilentlyContinue).Source;
+if (-not $csc) {
+  $candidates = @(
+    (Join-Path $env:WINDIR 'Microsoft.NET\\Framework64\\v4.0.30319\\csc.exe'),
+    (Join-Path $env:WINDIR 'Microsoft.NET\\Framework\\v4.0.30319\\csc.exe')
+  );
+  $csc = $candidates | Where-Object { Test-Path $_ } | Select-Object -First 1;
+}
+if (-not $csc) {
+  throw 'Unable to locate csc.exe for test executable compilation.';
+}
+& $csc /nologo /target:exe "/out:$outputPath" $sourcePath;
+if ($LASTEXITCODE -ne 0) {
+  exit $LASTEXITCODE;
+}`;
   const result = spawnSync(PWSH, [...PWSH_BASE_ARGS, '-Command', command], {
     encoding: 'utf8',
     windowsHide: true,
