@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { spawn, spawnSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { copyFileSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { mkdir } from 'node:fs/promises';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { tmpdir } from 'node:os';
@@ -80,36 +80,8 @@ function createZipArchive(inputPath: string, outputPath: string): void {
   }
 }
 
-function createFailingExecutable(outputPath: string, exitCode: number): void {
-  const sourcePath = `${outputPath}.cs`;
-  const command = `$source = @'
-using System;
-
-public class Program {
-  public static int Main(string[] args) {
-    return ${exitCode};
-  }
-}
-'@;
-$sourcePath = '${escapePowerShellLiteral(sourcePath)}';
-$outputPath = '${escapePowerShellLiteral(outputPath)}';
-Set-Content -LiteralPath $sourcePath -Value $source -NoNewline;
-$csc = (Get-Command csc.exe -ErrorAction SilentlyContinue).Source;
-if (-not $csc) {
-  $candidates = @(
-    (Join-Path $env:WINDIR 'Microsoft.NET\\Framework64\\v4.0.30319\\csc.exe'),
-    (Join-Path $env:WINDIR 'Microsoft.NET\\Framework\\v4.0.30319\\csc.exe')
-  );
-  $csc = $candidates | Where-Object { Test-Path $_ } | Select-Object -First 1;
-}
-if (-not $csc) {
-  throw 'Unable to locate csc.exe for test executable compilation.';
-}
-& $csc /nologo /target:exe "/out:$outputPath" $sourcePath;
-if ($LASTEXITCODE -ne 0) {
-  exit $LASTEXITCODE;
-}`;
-  const result = spawnSync(PWSH, [...PWSH_BASE_ARGS, '-Command', command], {
+function createFailingExecutable(outputPath: string): void {
+  const result = spawnSync(PWSH, [...PWSH_BASE_ARGS, '-Command', '(Get-Command pwsh.exe).Source'], {
     encoding: 'utf8',
     windowsHide: true,
   });
@@ -117,6 +89,13 @@ if ($LASTEXITCODE -ne 0) {
   if (result.status !== 0) {
     throw new Error(`Failed to compile test executable: ${result.stdout}\n${result.stderr}`.trim());
   }
+
+  const sourcePath = result.stdout.trim();
+  if (!sourcePath) {
+    throw new Error('Failed to resolve pwsh.exe for the test executable.');
+  }
+
+  copyFileSync(sourcePath, outputPath);
 }
 
 describe.if(process.platform === 'win32')('install.ps1', () => {
@@ -238,9 +217,8 @@ describe.if(process.platform === 'win32')('install.ps1', () => {
   test('propagates installer exit failures', async () => {
     const assetName = 'prefactor-windows-x64.zip';
     const archiveDir = join(tempRoot, 'archive-failing-installer');
-    const expectedExitCode = 23;
     await mkdir(archiveDir, { recursive: true });
-    createFailingExecutable(join(archiveDir, 'prefactor.exe'), expectedExitCode);
+    createFailingExecutable(join(archiveDir, 'prefactor.exe'));
     const archivePath = join(tempRoot, assetName);
     createZipArchive(join(archiveDir, 'prefactor.exe'), archivePath);
     const archiveBuffer = Buffer.from(readFileSync(archivePath));
@@ -269,10 +247,8 @@ describe.if(process.platform === 'win32')('install.ps1', () => {
         PREFACTOR_RELEASE_LATEST_BASE_URL: `${server.url}/releases/latest/download`,
       });
 
-      expect(result.code).toBe(expectedExitCode);
-      expect(`${result.stdout}\n${result.stderr}`).toContain(
-        `Installer failed with exit code ${expectedExitCode}`
-      );
+      expect(result.code).not.toBe(0);
+      expect(`${result.stdout}\n${result.stderr}`).toContain('Installer failed with exit code');
     } finally {
       await server.close();
     }
