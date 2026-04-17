@@ -33,10 +33,20 @@ function Resolve-Arch {
     }
   }
 
-  switch ($env:PROCESSOR_ARCHITECTURE) {
+  if (-not [Environment]::Is64BitOperatingSystem) {
+    throw "Unsupported architecture: $($env:PROCESSOR_ARCHITECTURE)"
+  }
+
+  $nativeArch = if ($env:PROCESSOR_ARCHITEW6432) {
+    $env:PROCESSOR_ARCHITEW6432
+  } else {
+    $env:PROCESSOR_ARCHITECTURE
+  }
+
+  switch ($nativeArch) {
     "ARM64" { return "arm64" }
     "AMD64" { return "x64" }
-    default { throw "Unsupported architecture: $($env:PROCESSOR_ARCHITECTURE)" }
+    default { throw "Unsupported architecture: $nativeArch" }
   }
 }
 

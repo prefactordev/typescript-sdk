@@ -110,6 +110,53 @@ describe.if(process.platform === 'win32')('install.ps1', () => {
     expect(`${result.stdout}\n${result.stderr}`).toContain('Unsupported architecture');
   });
 
+  test('uses native OS architecture when running under WOW64-style environment variables', async () => {
+    const capturePath = join(tempRoot, 'captured-native-arch-args.txt');
+    const assetName = 'prefactor-windows-x64.zip';
+
+    const archiveDir = join(tempRoot, 'archive-native');
+    await mkdir(archiveDir, { recursive: true });
+    writeFileSync(join(archiveDir, 'prefactor.exe'), 'fake exe');
+    const archivePath = join(tempRoot, assetName);
+    createZipArchive(join(archiveDir, 'prefactor.exe'), archivePath);
+    const archiveBuffer = Buffer.from(readFileSync(archivePath));
+    const checksum = `${sha256Hex(archiveBuffer)}  ${assetName}\n`;
+    const requests: string[] = [];
+
+    const server = await withServer((req, res) => {
+      requests.push(req.url ?? '');
+      if (req.url?.endsWith(assetName)) {
+        res.writeHead(200, { 'Content-Type': 'application/zip' });
+        res.end(archiveBuffer);
+        return;
+      }
+      if (req.url?.endsWith('/SHA256SUMS')) {
+        res.writeHead(200, { 'Content-Type': 'text/plain' });
+        res.end(checksum);
+        return;
+      }
+
+      res.writeHead(404);
+      res.end();
+    });
+
+    try {
+      const result = await runPwsh(['-File', scriptPath, 'stable'], {
+        PREFACTOR_INSTALL_TEST_CAPTURE_ARGS: capturePath,
+        PREFACTOR_RELEASE_BASE_URL: `${server.url}/releases/download`,
+        PREFACTOR_RELEASE_LATEST_BASE_URL: `${server.url}/releases/latest/download`,
+        PROCESSOR_ARCHITECTURE: 'x86',
+        PROCESSOR_ARCHITEW6432: 'AMD64',
+      });
+
+      expect(result.code).toBe(0);
+      expect(requests).toContain('/releases/latest/download/prefactor-windows-x64.zip');
+      expect(readFileSync(capturePath, 'utf8')).toContain('--channel');
+    } finally {
+      await server.close();
+    }
+  });
+
   test('fails on checksum mismatch before running the installer', async () => {
     const assetName = 'prefactor-windows-x64.zip';
     const archiveDir = join(tempRoot, 'archive');

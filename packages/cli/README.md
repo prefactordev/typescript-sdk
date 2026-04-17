@@ -19,7 +19,7 @@ curl -fsSL https://raw.githubusercontent.com/prefactordev/typescript-sdk/main/sc
 Install a pinned version:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/prefactordev/typescript-sdk/main/scripts/install.sh | bash -s -- v0.0.4
+curl -fsSL https://raw.githubusercontent.com/prefactordev/typescript-sdk/v0.0.4/scripts/install.sh | bash -s -- v0.0.4
 ```
 
 ### Windows (PowerShell)
@@ -31,7 +31,7 @@ irm https://raw.githubusercontent.com/prefactordev/typescript-sdk/main/scripts/i
 Install a pinned version:
 
 ```powershell
-& ([scriptblock]::Create((irm https://raw.githubusercontent.com/prefactordev/typescript-sdk/main/scripts/install.ps1))) v0.0.4
+& ([scriptblock]::Create((irm https://raw.githubusercontent.com/prefactordev/typescript-sdk/v0.0.4/scripts/install.ps1))) v0.0.4
 ```
 
 ### Manual downloads

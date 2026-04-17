@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
   doctorManagedBinary,
+  INSTALL_STATE_FILENAME,
   installManagedBinary,
   type LifecycleCommandDeps,
   readInstallState,
@@ -268,5 +269,205 @@ describe('install helpers', () => {
     );
 
     expect(readFileSync(childLog, 'utf8')).toContain('--wait-for-pid');
+  });
+
+  test('readInstallState rejects invalid persisted channel values', async () => {
+    const installRoot = join(tempRoot, '.prefactor');
+    await mkdir(installRoot, { recursive: true });
+    writeFileSync(
+      join(installRoot, INSTALL_STATE_FILENAME),
+      JSON.stringify({
+        schemaVersion: 1,
+        channel: 'bogus',
+        requestedVersion: null,
+        resolvedTag: 'v0.0.4',
+        assetName: 'prefactor-linux-x64.tar.gz',
+        platform: 'linux',
+        arch: 'x64',
+        libc: 'glibc',
+        installRoot,
+        binPath: join(installRoot, 'bin', 'prefactor'),
+        installedAt: '2026-04-15T00:00:00.000Z',
+      })
+    );
+
+    const result = await readInstallState(installRoot);
+
+    expect(result.state).toBeNull();
+    expect(result.error).toContain('is invalid');
+  });
+
+  test('update honors explicit channel after a pinned install', async () => {
+    const fakeSource = join(tempRoot, 'prefactor');
+    writeFileSync(fakeSource, '#!/usr/bin/env bash\nexit 0\n', { mode: 0o755 });
+    const childLog = join(tempRoot, 'child-install.log');
+
+    await installManagedBinary(
+      { version: '0.0.4' },
+      '0.0.4',
+      createDeps(
+        {
+          env: { HOME: tempRoot, PATH: '' },
+          currentExecutablePath: () => fakeSource,
+        },
+        tempRoot
+      )
+    );
+
+    const assetName = buildAssetName({ platform: 'linux', arch: 'x64', libc: 'glibc' });
+    const archiveDir = join(tempRoot, 'archive-latest');
+    await mkdir(archiveDir, { recursive: true });
+    writeFileSync(
+      join(archiveDir, 'prefactor'),
+      `#!/usr/bin/env bash\nprintf '%s\n' "$@" > "${childLog}"\nexit 0\n`,
+      { mode: 0o755 }
+    );
+    const archivePath = join(tempRoot, assetName);
+    Bun.spawnSync(['tar', '-czf', archivePath, '-C', archiveDir, 'prefactor']);
+    const archiveBuffer = await readFile(archivePath);
+    const checksum = `${new Bun.CryptoHasher('sha256').update(archiveBuffer).digest('hex')}  ${assetName}\n`;
+    const requests: string[] = [];
+
+    const fetchMock = mock(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      requests.push(url);
+
+      if (url.endsWith('/SHA256SUMS')) {
+        return {
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          text: async () => checksum,
+          url: 'https://github.com/prefactordev/typescript-sdk/releases/download/canary/SHA256SUMS',
+        } as Response;
+      }
+
+      return {
+        ok: true,
+        status: 200,
+        statusText: 'OK',
+        arrayBuffer: async () =>
+          archiveBuffer.buffer.slice(
+            archiveBuffer.byteOffset,
+            archiveBuffer.byteOffset + archiveBuffer.byteLength
+          ),
+        url: `https://github.com/prefactordev/typescript-sdk/releases/download/canary/${assetName}`,
+      } as Response;
+    });
+
+    await updateManagedBinary(
+      { channel: 'latest' },
+      '0.0.4',
+      createDeps(
+        {
+          env: { HOME: tempRoot, PATH: '' },
+          fetchImpl: fetchMock as unknown as typeof fetch,
+          currentExecutablePath: () => fakeSource,
+        },
+        tempRoot
+      )
+    );
+
+    expect(requests).toContain(
+      `https://github.com/prefactordev/typescript-sdk/releases/download/canary/${assetName}`
+    );
+    expect(readFileSync(childLog, 'utf8')).toContain('--channel');
+    expect(readFileSync(childLog, 'utf8')).toContain('latest');
+    expect(readFileSync(childLog, 'utf8')).not.toContain('--version');
+  });
+
+  test('update verifies stable downloads against the resolved release tag checksum', async () => {
+    const fakeSource = join(tempRoot, 'prefactor');
+    writeFileSync(fakeSource, '#!/usr/bin/env bash\nexit 0\n', { mode: 0o755 });
+    const childLog = join(tempRoot, 'child-stable.log');
+
+    await installManagedBinary(
+      {},
+      '0.0.4',
+      createDeps(
+        {
+          env: { HOME: tempRoot, PATH: '' },
+          currentExecutablePath: () => fakeSource,
+        },
+        tempRoot
+      )
+    );
+
+    const assetName = buildAssetName({ platform: 'linux', arch: 'x64', libc: 'glibc' });
+    const archiveDir = join(tempRoot, 'archive-stable');
+    await mkdir(archiveDir, { recursive: true });
+    writeFileSync(
+      join(archiveDir, 'prefactor'),
+      `#!/usr/bin/env bash\nprintf '%s\n' "$@" > "${childLog}"\nexit 0\n`,
+      { mode: 0o755 }
+    );
+    const archivePath = join(tempRoot, assetName);
+    Bun.spawnSync(['tar', '-czf', archivePath, '-C', archiveDir, 'prefactor']);
+    const archiveBuffer = await readFile(archivePath);
+    const checksum = `${new Bun.CryptoHasher('sha256').update(archiveBuffer).digest('hex')}  ${assetName}\n`;
+    const resolvedTag = 'v0.0.5';
+    const requests: string[] = [];
+
+    const fetchMock = mock(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      requests.push(url);
+
+      if (
+        url ===
+        `https://github.com/prefactordev/typescript-sdk/releases/latest/download/${assetName}`
+      ) {
+        return {
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          arrayBuffer: async () =>
+            archiveBuffer.buffer.slice(
+              archiveBuffer.byteOffset,
+              archiveBuffer.byteOffset + archiveBuffer.byteLength
+            ),
+          url: `https://github.com/prefactordev/typescript-sdk/releases/download/${resolvedTag}/${assetName}`,
+        } as Response;
+      }
+
+      if (
+        url ===
+        `https://github.com/prefactordev/typescript-sdk/releases/download/${resolvedTag}/SHA256SUMS`
+      ) {
+        return {
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          text: async () => checksum,
+          url,
+        } as Response;
+      }
+
+      return {
+        ok: false,
+        status: 404,
+        statusText: 'Not Found',
+      } as Response;
+    });
+
+    await updateManagedBinary(
+      {},
+      '0.0.4',
+      createDeps(
+        {
+          env: { HOME: tempRoot, PATH: '' },
+          fetchImpl: fetchMock as unknown as typeof fetch,
+          currentExecutablePath: () => fakeSource,
+        },
+        tempRoot
+      )
+    );
+
+    expect(requests).toContain(
+      `https://github.com/prefactordev/typescript-sdk/releases/download/${resolvedTag}/SHA256SUMS`
+    );
+    expect(requests).not.toContain(
+      'https://github.com/prefactordev/typescript-sdk/releases/latest/download/SHA256SUMS'
+    );
+    expect(readFileSync(childLog, 'utf8')).toContain(resolvedTag);
   });
 });

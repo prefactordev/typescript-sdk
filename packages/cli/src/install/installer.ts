@@ -66,6 +66,10 @@ export const INSTALL_STATE_FILENAME = 'install.json';
 
 const WINDOWS_INSTALL_RETRY_ATTEMPTS = 100;
 const WINDOWS_INSTALL_RETRY_DELAY_MS = 250;
+const VALID_INSTALL_CHANNELS = new Set<InstallChannel>(['stable', 'latest', 'pinned']);
+const VALID_INSTALL_PLATFORMS = new Set<PlatformInfo['platform']>(['darwin', 'linux', 'windows']);
+const VALID_INSTALL_ARCHS = new Set<PlatformInfo['arch']>(['x64', 'arm64']);
+const VALID_INSTALL_LIBCS = new Set<PlatformInfo['libc']>(['glibc', 'musl', null]);
 
 export function createDefaultLifecycleDeps(): LifecycleCommandDeps {
   return {
@@ -234,11 +238,13 @@ export async function readInstallState(
 
     if (
       parsed.schemaVersion !== 1 ||
-      typeof parsed.channel !== 'string' ||
+      !VALID_INSTALL_CHANNELS.has(parsed.channel as InstallChannel) ||
+      (parsed.requestedVersion !== null && typeof parsed.requestedVersion !== 'string') ||
       typeof parsed.resolvedTag !== 'string' ||
       typeof parsed.assetName !== 'string' ||
-      typeof parsed.platform !== 'string' ||
-      typeof parsed.arch !== 'string' ||
+      !VALID_INSTALL_PLATFORMS.has(parsed.platform as PlatformInfo['platform']) ||
+      !VALID_INSTALL_ARCHS.has(parsed.arch as PlatformInfo['arch']) ||
+      !VALID_INSTALL_LIBCS.has(parsed.libc as PlatformInfo['libc']) ||
       typeof parsed.installRoot !== 'string' ||
       typeof parsed.binPath !== 'string' ||
       typeof parsed.installedAt !== 'string'
@@ -532,7 +538,7 @@ export async function updateManagedBinary(
         : installState.state.channel;
   const requestedVersion =
     options.version ??
-    (installState.state.channel === 'pinned'
+    (!options.channel && installState.state.channel === 'pinned'
       ? (installState.state.requestedVersion ?? undefined)
       : undefined);
   const releaseUrls = createReleaseBaseUrls(deps.env);
@@ -548,16 +554,18 @@ export async function updateManagedBinary(
   try {
     const archivePath = join(tempRoot, spec.assetName);
     const downloadResult = await downloadToFile(spec.assetUrl, archivePath, deps.fetchImpl);
+    const resolvedDownloadTag =
+      parseResolvedTagFromUrl(downloadResult.finalUrl) ?? spec.resolvedTag;
+    const checksumUrl = resolvedDownloadTag
+      ? `${releaseUrls.baseUrl}/${resolvedDownloadTag}/SHA256SUMS`
+      : spec.checksumUrl;
     const checksumResult = await verifyDownloadedAsset(
       archivePath,
       spec.assetName,
-      spec.checksumUrl,
+      checksumUrl,
       deps.fetchImpl
     );
-    const resolvedTag =
-      checksumResult.resolvedTag ??
-      parseResolvedTagFromUrl(downloadResult.finalUrl) ??
-      spec.resolvedTag;
+    const resolvedTag = checksumResult.resolvedTag ?? resolvedDownloadTag;
 
     const extractedDir = join(tempRoot, 'extracted');
     await mkdir(extractedDir, { recursive: true });
