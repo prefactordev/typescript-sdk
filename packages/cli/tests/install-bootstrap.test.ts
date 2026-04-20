@@ -2,36 +2,11 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { spawn, spawnSync } from 'node:child_process';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { mkdir } from 'node:fs/promises';
-import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { sha256Hex, withServer } from './install-test-helpers';
 
 const scriptPath = join(process.cwd(), 'scripts', 'install.sh');
-
-function sha256Hex(contents: Buffer): string {
-  return new Bun.CryptoHasher('sha256').update(contents).digest('hex');
-}
-
-async function withServer(
-  handler: (req: IncomingMessage, res: ServerResponse) => void
-): Promise<{ url: string; close: () => Promise<void> }> {
-  const server = createServer(handler);
-  await new Promise<void>((resolvePromise) =>
-    server.listen(0, '127.0.0.1', () => resolvePromise())
-  );
-  const address = server.address();
-  if (!address || typeof address === 'string') {
-    throw new Error('Failed to start test server.');
-  }
-
-  return {
-    url: `http://127.0.0.1:${address.port}`,
-    close: () =>
-      new Promise<void>((resolvePromise, reject) =>
-        server.close((error) => (error ? reject(error) : resolvePromise()))
-      ),
-  };
-}
 
 async function runCommand(
   command: string,
