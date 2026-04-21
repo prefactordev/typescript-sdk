@@ -4,23 +4,65 @@ Command-line interface and typed API clients for managing Prefactor resources.
 
 ## Installation
 
+### macOS and Linux
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/prefactordev/typescript-sdk/main/scripts/install.sh | bash
+```
+
+Install the canary channel:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/prefactordev/typescript-sdk/main/scripts/install.sh | bash -s -- latest
+```
+
+Install a pinned version:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/prefactordev/typescript-sdk/v0.0.5/scripts/install.sh | bash -s -- v0.0.5
+```
+
+### Windows (PowerShell)
+
+```powershell
+irm https://raw.githubusercontent.com/prefactordev/typescript-sdk/main/scripts/install.ps1 | iex
+```
+
+Install a pinned version:
+
+```powershell
+& ([scriptblock]::Create((irm https://raw.githubusercontent.com/prefactordev/typescript-sdk/v0.0.5/scripts/install.ps1))) v0.0.5
+```
+
+### Manual downloads
+
+Standalone archives are published on GitHub Releases. Download the archive for your platform, extract it, and run:
+
+```bash
+./prefactor install
+```
+
+The managed install location is:
+
+- macOS/Linux: `~/.prefactor/bin/prefactor`
+- Windows: `%USERPROFILE%\.prefactor\bin\prefactor.exe`
+
+The installer does not edit your shell profile. It prints the exact PATH change needed if the managed bin directory is not already available.
+
+### Lifecycle commands
+
+```bash
+prefactor update
+prefactor doctor
+prefactor uninstall
+```
+
+### npm package usage
+
+The npm package remains available for programmatic usage:
+
 ```bash
 npm install @prefactor/cli
-# or
-bun add @prefactor/cli
-```
-
-Run directly with `npx`:
-
-```bash
-npx @prefactor/cli --help
-```
-
-Or install globally:
-
-```bash
-npm install --global @prefactor/cli
-prefactor --help
 ```
 
 ## Quick Start
@@ -50,9 +92,9 @@ prefactor agents list --environment_id <environment_id>
 
 The CLI reads credentials from profiles stored in `prefactor.json`:
 
-- Uses `./prefactor.json` when present in the current directory.
-- Otherwise uses `~/.prefactor/prefactor.json` when available.
-- If neither exists, creating a profile writes `./prefactor.json`.
+- Uses `<repo-root>/prefactor.json` when one exists at the current git/worktree root.
+- Otherwise uses `<executable-root>/prefactor.json`.
+- If neither exists, creating a profile writes `<executable-root>/prefactor.json`.
 
 Select a profile with either:
 
@@ -154,7 +196,8 @@ Each client exposes typed request/response interfaces for its resource operation
 
 ## Requirements
 
-- Node.js >= 22.0.0
+- Direct binary installs do not require Node.js or npm.
+- Programmatic package usage requires Node.js >= 22.0.0.
 
 ## License
 

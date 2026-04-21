@@ -1,0 +1,19 @@
+name: Installer CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  windows-installer:
+    name: Install Script (windows-latest)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - run: bun install --frozen-lockfile
+      - shell: pwsh
+        run: bun test packages/cli/tests/install-powershell.test.ts

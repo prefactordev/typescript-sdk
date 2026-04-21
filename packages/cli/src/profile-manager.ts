@@ -1,5 +1,5 @@
-import { access, mkdir, readFile, realpath, writeFile } from 'node:fs/promises';
-import { dirname, resolve } from 'node:path';
+import { access, mkdir, readFile, writeFile } from 'node:fs/promises';
+import { basename, dirname, resolve } from 'node:path';
 
 export interface Profile {
   api_key: string;
@@ -10,6 +10,7 @@ export type Profiles = Record<string, Profile>;
 
 export const DEFAULT_PROFILE_NAME = 'default';
 export const DEFAULT_BASE_URL = 'https://app.prefactorai.com';
+const CONFIG_FILENAME = 'prefactor.json';
 
 export class ProfileManager {
   private constructor(
@@ -66,22 +67,39 @@ export class ProfileManager {
 }
 
 async function findConfigPath(): Promise<string> {
-  const cwdPath = resolve(process.cwd(), 'prefactor.json');
-  if (await pathExists(cwdPath)) {
-    return cwdPath;
+  const directoryRoot = await findDirectoryRoot(process.cwd());
+  const directoryRootConfigPath = resolve(directoryRoot, CONFIG_FILENAME);
+
+  if (await pathExists(directoryRootConfigPath)) {
+    return directoryRootConfigPath;
   }
 
-  const home = process.env.HOME || process.env.USERPROFILE;
-  if (!home) {
-    return cwdPath;
-  }
+  return resolveExecutableConfigPath();
+}
 
-  const homePath = resolve(home, '.prefactor', 'prefactor.json');
-  if (await pathExists(homePath)) {
-    return homePath;
-  }
+async function findDirectoryRoot(startDir: string): Promise<string> {
+  let currentDir = resolve(startDir);
 
-  return cwdPath;
+  while (true) {
+    if (await pathExists(resolve(currentDir, '.git'))) {
+      return currentDir;
+    }
+
+    const parentDir = dirname(currentDir);
+    if (parentDir === currentDir) {
+      return resolve(startDir);
+    }
+
+    currentDir = parentDir;
+  }
+}
+
+function resolveExecutableConfigPath(): string {
+  const executablePath = resolve(process.env.PREFACTOR_CLI_SELF_PATH || process.execPath);
+  const executableDir = dirname(executablePath);
+  const executableRoot = basename(executableDir) === 'bin' ? dirname(executableDir) : executableDir;
+
+  return resolve(executableRoot, CONFIG_FILENAME);
 }
 
 async function loadProfiles(configPath: string): Promise<Profiles> {
@@ -95,19 +113,18 @@ async function loadProfiles(configPath: string): Promise<Profiles> {
 }
 
 async function ensureLocalGitignoreEntry(configPath: string): Promise<void> {
-  const cwd = process.cwd();
-  const localConfigPath = resolve(cwd, 'prefactor.json');
-
-  if (!(await isSamePath(configPath, localConfigPath))) {
+  if (basename(configPath) !== CONFIG_FILENAME) {
     return;
   }
 
-  if (!(await pathExists(resolve(cwd, '.git')))) {
+  const configDir = dirname(configPath);
+
+  if (!(await pathExists(resolve(configDir, '.git')))) {
     return;
   }
 
-  const gitignorePath = resolve(cwd, '.gitignore');
-  const entry = 'prefactor.json';
+  const gitignorePath = resolve(configDir, '.gitignore');
+  const entry = CONFIG_FILENAME;
 
   let contents = '';
   try {
@@ -135,14 +152,6 @@ async function pathExists(path: string): Promise<boolean> {
     return true;
   } catch {
     return false;
-  }
-}
-
-async function isSamePath(left: string, right: string): Promise<boolean> {
-  try {
-    return (await realpath(left)) === (await realpath(right));
-  } catch {
-    return resolve(left) === resolve(right);
   }
 }
 

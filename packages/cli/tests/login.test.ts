@@ -39,20 +39,21 @@ describe('validateToken', () => {
 
 describe('login command action', () => {
   const originalCwd = process.cwd();
-  const originalHome = process.env.HOME;
+  const originalSelfPath = process.env.PREFACTOR_CLI_SELF_PATH;
   let tempRoot = '';
 
   beforeEach(() => {
     tempRoot = mkdtempSync(join(tmpdir(), 'prefactor-login-test-'));
+    process.env.PREFACTOR_CLI_SELF_PATH = join(tempRoot, '.prefactor', 'bin', 'prefactor');
   });
 
   afterEach(() => {
     process.chdir(originalCwd);
 
-    if (originalHome === undefined) {
-      delete process.env.HOME;
+    if (originalSelfPath === undefined) {
+      delete process.env.PREFACTOR_CLI_SELF_PATH;
     } else {
-      process.env.HOME = originalHome;
+      process.env.PREFACTOR_CLI_SELF_PATH = originalSelfPath;
     }
 
     if (tempRoot) {
@@ -60,7 +61,7 @@ describe('login command action', () => {
     }
   });
 
-  test('saves token to default profile with DEFAULT_BASE_URL when no profile exists', async () => {
+  test('saves token to executable-root default profile with DEFAULT_BASE_URL when no root profile exists', async () => {
     const cwd = join(tempRoot, 'cwd');
     mkdirSync(cwd, { recursive: true });
     process.chdir(cwd);
