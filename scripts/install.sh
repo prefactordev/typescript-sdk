@@ -12,7 +12,7 @@ Usage:
 Examples:
   ./scripts/install.sh
   ./scripts/install.sh latest
-  ./scripts/install.sh v0.0.4
+  ./scripts/install.sh v0.0.5
 EOF
 }
 
