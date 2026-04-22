@@ -1,0 +1,40 @@
+{
+  "name": "@prefactor/livekit",
+  "version": "0.1.0",
+  "description": "LiveKit Agents integration for Prefactor observability",
+  "type": "module",
+  "main": "dist/index.cjs",
+  "module": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "keywords": [
+    "prefactor",
+    "livekit",
+    "agents",
+    "telemetry",
+    "tracing",
+    "voice",
+    "observability"
+  ],
+  "author": "Prefactor",
+  "license": "MIT",
+  "peerDependencies": {
+    "@prefactor/core": "^0.3.0",
+    "@livekit/agents": "^1.0.0"
+  },
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  }
+}
