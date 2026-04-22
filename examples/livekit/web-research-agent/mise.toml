@@ -1,0 +1,19 @@
+[tools]
+node = "22"
+bun = "latest"
+
+[tasks.dev]
+description = "Run the LiveKit worker against a deployment"
+run = "bun main.ts dev"
+
+[tasks.connect]
+description = "Connect the worker directly to a room in development"
+run = "bun main.ts connect"
+
+[tasks.download-files]
+description = "Download local LiveKit plugin assets"
+run = "bun main.ts download-files"
+
+[tasks.start]
+description = "Run the worker in production mode"
+run = "bun main.ts start"

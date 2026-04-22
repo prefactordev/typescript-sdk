@@ -1,0 +1,9 @@
+[env]
+PREFACTOR_API_URL = "https://app.prefactorai.com"
+PREFACTOR_AGENT_ID = "REPLACE_ME"
+PREFACTOR_AGENT_NAME = "Web Research Agent"
+PREFACTOR_API_TOKEN = "REPLACE_ME"
+LIVEKIT_API_KEY = "REPLACE_ME"
+LIVEKIT_API_SECRET = "REPLACE_ME"
+LIVEKIT_URL = "wss://your-project.livekit.cloud"
+EXA_API_KEY = "REPLACE_ME"

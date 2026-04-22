@@ -1,0 +1,17 @@
+{
+  "dispatch_rule": {
+    "rule": {
+      "dispatchRuleIndividual": {
+        "roomPrefix": "call-"
+      }
+    },
+    "name": "Web research phone dispatch",
+    "roomConfig": {
+      "agents": [
+        {
+          "agentName": "web-research-agent"
+        }
+      ]
+    }
+  }
+}
