@@ -47,6 +47,13 @@ describe('livekit schema', () => {
     );
     const spanSchemas = normalized.agentSchema.span_schemas as Record<string, unknown>;
     expect(spanSchemas).toHaveProperty('livekit:tool:lookup-weather');
+    expect(
+      (
+        spanSchemas['livekit:tool:lookup-weather'] as {
+          properties?: { type?: { const?: string } };
+        }
+      ).properties?.type?.const
+    ).toBe('livekit:tool:lookup-weather');
   });
 
   test('drops invalid tool schema objects', () => {

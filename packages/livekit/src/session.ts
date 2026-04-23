@@ -36,6 +36,11 @@ type ActiveTurn = {
   story: Record<string, unknown>;
 };
 
+type SessionFinalState = {
+  status: 'completed' | 'failed';
+  error?: Error;
+};
+
 type EventCallback = (event: unknown) => void;
 type EventEmitterLike = {
   on?(event: string, callback: EventCallback): unknown;
@@ -128,7 +133,14 @@ export class PrefactorLiveKitSession {
   ): Promise<Awaited<ReturnType<voice.AgentSession<unknown>['start']>>> {
     await this.attach(session);
     this.recordAgentClass(startOptions);
-    return session.start(startOptions as never);
+    try {
+      return await session.start(startOptions as never);
+    } catch (error) {
+      const startError = toError(error);
+      this.pendingError = startError;
+      await this.finalizeFromState(this.resolveFinalState(undefined, startError));
+      throw error;
+    }
   }
 
   async close(): Promise<void> {
@@ -137,7 +149,7 @@ export class PrefactorLiveKitSession {
     }
 
     this.closingPromise = this.enqueue(async () => {
-      await this.finalize('completed');
+      await this.finalizeFromState(this.resolveFinalState());
     });
     return this.closingPromise;
   }
@@ -451,13 +463,7 @@ export class PrefactorLiveKitSession {
 
   private async onClose(event: unknown): Promise<void> {
     const reason = readString(event, 'reason');
-    const error = readValue(event, 'error');
-    const finalStatus = reason === 'error' ? 'failed' : 'completed';
-    await this.finalize(
-      finalStatus,
-      reason,
-      error ? toError(error) : (this.pendingError ?? undefined)
-    );
+    await this.finalizeFromState(this.resolveFinalState(reason, readValue(event, 'error')), reason);
   }
 
   private async onComponentMetrics(kind: 'llm' | 'stt' | 'tts', event: unknown): Promise<void> {
@@ -510,7 +516,7 @@ export class PrefactorLiveKitSession {
   private startUserTurn(createdAt?: number): ActiveTurn {
     this.finishActiveUserTurn('cancelled', createdAt);
     const turnIndex = this.nextTurnIndex();
-    const span = this.withParent(null, () =>
+    const span = this.withParent(this.resolveParentSpan(null), () =>
       this.safeStartSpan({
         name: 'user_turn',
         spanType: 'livekit:user_turn',
@@ -549,7 +555,7 @@ export class PrefactorLiveKitSession {
     }
 
     const turnIndex = this.nextTurnIndex();
-    const span = this.withParent(null, () =>
+    const span = this.withParent(this.resolveParentSpan(null), () =>
       this.safeStartSpan({
         name: 'assistant_turn',
         spanType: 'livekit:assistant_turn',
@@ -665,6 +671,13 @@ export class PrefactorLiveKitSession {
     this.onDidClose?.();
   }
 
+  private async finalizeFromState(
+    finalState: SessionFinalState,
+    closeReason?: string
+  ): Promise<void> {
+    await this.finalize(finalState.status, closeReason, finalState.error);
+  }
+
   private unbindAllEvents(): void {
     if (this.session?.off) {
       for (const [eventName, handler] of this.boundSessionEvents) {
@@ -689,7 +702,7 @@ export class PrefactorLiveKitSession {
       error?: Error;
     }
   ): Promise<void> {
-    const span = this.withParent(parentSpan, () =>
+    const span = this.withParent(this.resolveParentSpan(parentSpan), () =>
       this.safeStartSpan({
         name: options.name,
         spanType: options.spanType,
@@ -701,6 +714,22 @@ export class PrefactorLiveKitSession {
     }
 
     this.safeEndSpan(span, options.outputs, options.error);
+  }
+
+  private resolveParentSpan(parentSpan: Span | null): Span | null {
+    return parentSpan ?? this.rootSpan;
+  }
+
+  private resolveFinalState(closeReason?: string, explicitError?: unknown): SessionFinalState {
+    const error = explicitError ? toError(explicitError) : (this.pendingError ?? undefined);
+    if (closeReason === 'error' || error) {
+      return {
+        status: 'failed',
+        ...(error ? { error } : {}),
+      };
+    }
+
+    return { status: 'completed' };
   }
 
   private withParent<T>(parentSpan: Span | null, fn: () => T): T {

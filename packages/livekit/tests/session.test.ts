@@ -34,12 +34,16 @@ class FakeEmitter {
 
 class FakeSession extends FakeEmitter {
   startCalls: unknown[] = [];
+  startError: Error | null = null;
   llm = new FakeEmitter();
   stt = new FakeEmitter();
   tts = new FakeEmitter();
 
   async start(options: unknown): Promise<string> {
     this.startCalls.push(options);
+    if (this.startError) {
+      throw this.startError;
+    }
     return 'started';
   }
 }
@@ -140,7 +144,7 @@ describe('PrefactorLiveKitSession', () => {
   });
 
   test('final user transcripts create a user turn span', async () => {
-    const { tracer, ended } = createTestTracer();
+    const { tracer, started, ended } = createTestTracer();
     const sessionTracer = new PrefactorLiveKitSession({
       tracer: tracer as never,
       agentManager: {
@@ -160,7 +164,9 @@ describe('PrefactorLiveKitSession', () => {
     });
     await flushQueue();
 
+    const rootSpan = started.find((entry) => entry.spanType === 'livekit:session');
     const userTurn = ended.find((entry) => entry.span.spanType === 'livekit:user_turn');
+    expect(userTurn?.span.parentSpanId).toBe(rootSpan?.spanId ?? null);
     expect(userTurn?.outputs).toMatchObject({
       status: 'completed',
       transcript: 'hello world',
@@ -170,7 +176,7 @@ describe('PrefactorLiveKitSession', () => {
   });
 
   test('speech plus assistant message completes assistant turn', async () => {
-    const { tracer, ended } = createTestTracer();
+    const { tracer, started, ended } = createTestTracer();
     const sessionTracer = new PrefactorLiveKitSession({
       tracer: tracer as never,
       agentManager: {
@@ -203,7 +209,9 @@ describe('PrefactorLiveKitSession', () => {
     });
     await flushQueue();
 
+    const rootSpan = started.find((entry) => entry.spanType === 'livekit:session');
     const assistantTurn = ended.find((entry) => entry.span.spanType === 'livekit:assistant_turn');
+    expect(assistantTurn?.span.parentSpanId).toBe(rootSpan?.spanId ?? null);
     expect(assistantTurn?.outputs).toMatchObject({
       status: 'completed',
       outputs: {
@@ -331,8 +339,98 @@ describe('PrefactorLiveKitSession', () => {
     expect(finishCalls).toBe(1);
   });
 
-  test('component metrics emit llm, stt, and tts spans without deprecated session metrics', async () => {
+  test('start rejection finalizes the root span as failed and finishes the agent instance', async () => {
     const { tracer, ended } = createTestTracer();
+    let finishCalls = 0;
+    const sessionTracer = new PrefactorLiveKitSession({
+      tracer: tracer as never,
+      agentManager: {
+        startInstance: () => {},
+        finishInstance: () => {
+          finishCalls += 1;
+        },
+      } as never,
+    });
+    const session = new FakeSession();
+    session.startError = new Error('start failed');
+
+    await expect(sessionTracer.start(session as never, { agent: { foo: 'bar' } })).rejects.toThrow(
+      'start failed'
+    );
+
+    const root = ended.find((entry) => entry.span.spanType === 'livekit:session');
+    expect(root?.outputs).toMatchObject({
+      status: 'failed',
+      error: {
+        errorType: 'Error',
+        message: 'start failed',
+      },
+    });
+    expect(root?.error?.message).toBe('start failed');
+    expect(finishCalls).toBe(1);
+  });
+
+  test('manual close finalizes the root span as failed when an error was recorded', async () => {
+    const { tracer, ended } = createTestTracer();
+    const sessionTracer = new PrefactorLiveKitSession({
+      tracer: tracer as never,
+      agentManager: {
+        startInstance: () => {},
+        finishInstance: () => {},
+      } as never,
+    });
+    const session = new FakeSession();
+    await sessionTracer.attach(session as never);
+
+    session.emit('error', {
+      createdAt: 225,
+      source: { constructor: { name: 'FakeLLM' } },
+      error: new Error('boom'),
+    });
+    await flushQueue();
+    await sessionTracer.close();
+
+    const root = ended.find((entry) => entry.span.spanType === 'livekit:session');
+    expect(root?.outputs).toMatchObject({
+      status: 'failed',
+      error: {
+        errorType: 'Error',
+        message: 'boom',
+      },
+    });
+  });
+
+  test('close events with explicit errors finalize the root span as failed', async () => {
+    const { tracer, ended } = createTestTracer();
+    const sessionTracer = new PrefactorLiveKitSession({
+      tracer: tracer as never,
+      agentManager: {
+        startInstance: () => {},
+        finishInstance: () => {},
+      } as never,
+    });
+    const session = new FakeSession();
+    await sessionTracer.attach(session as never);
+
+    session.emit('close', {
+      reason: 'user_initiated',
+      createdAt: 300,
+      error: new Error('close failed'),
+    });
+    await flushQueue();
+
+    const root = ended.find((entry) => entry.span.spanType === 'livekit:session');
+    expect(root?.outputs).toMatchObject({
+      status: 'failed',
+      error: {
+        errorType: 'Error',
+        message: 'close failed',
+      },
+    });
+  });
+
+  test('component metrics emit llm, stt, and tts spans without deprecated session metrics', async () => {
+    const { tracer, started, ended } = createTestTracer();
     const sessionTracer = new PrefactorLiveKitSession({
       tracer: tracer as never,
       agentManager: {
@@ -363,6 +461,13 @@ describe('PrefactorLiveKitSession', () => {
     });
     await flushQueue();
 
+    const rootSpan = started.find((entry) => entry.spanType === 'livekit:session');
+    const llmSpan = ended.find((entry) => entry.span.spanType === 'livekit:llm');
+    const sttSpan = ended.find((entry) => entry.span.spanType === 'livekit:stt');
+    const ttsSpan = ended.find((entry) => entry.span.spanType === 'livekit:tts');
+    expect(llmSpan?.span.parentSpanId).toBe(rootSpan?.spanId ?? null);
+    expect(sttSpan?.span.parentSpanId).toBe(rootSpan?.spanId ?? null);
+    expect(ttsSpan?.span.parentSpanId).toBe(rootSpan?.spanId ?? null);
     expect(ended.some((entry) => entry.span.spanType === 'livekit:stt')).toBe(true);
     expect(ended.some((entry) => entry.span.spanType === 'livekit:llm')).toBe(true);
     expect(ended.some((entry) => entry.span.spanType === 'livekit:tts')).toBe(true);

@@ -8,6 +8,7 @@
  * ```ts
  * import { init } from '@prefactor/core';
  * import { PrefactorLiveKit } from '@prefactor/livekit';
+ * import { voice } from '@livekit/agents';
  *
  * const prefactor = init({
  *   provider: new PrefactorLiveKit(),
@@ -16,6 +17,10 @@
  *     apiToken: process.env.PREFACTOR_API_TOKEN!,
  *     agentIdentifier: 'v1.0.0',
  *   },
+ * });
+ *
+ * const session = new voice.AgentSession({
+ *   llm: 'openai/gpt-4.1-mini',
  * });
  *
  * const { createSessionTracer } = prefactor.getMiddleware();

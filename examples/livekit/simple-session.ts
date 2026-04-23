@@ -9,10 +9,9 @@ const apiToken = process.env.PREFACTOR_API_TOKEN;
 const agentId = process.env.PREFACTOR_AGENT_ID;
 
 if (!apiUrl || !apiToken || !agentId) {
-  console.log(
-    'PREFACTOR_API_URL, PREFACTOR_API_TOKEN, and PREFACTOR_AGENT_ID Must be set.',
+  throw new Error(
+    'PREFACTOR_API_URL, PREFACTOR_API_TOKEN, and PREFACTOR_AGENT_ID must be set.',
   );
-  process.exit(0);
 }
 
 const prefactor = init({
@@ -34,6 +33,9 @@ const session = new voice.AgentSession({
 const { createSessionTracer } = prefactor.getMiddleware();
 const sessionTracer = createSessionTracer();
 
-await sessionTracer.attach(session);
-await sessionTracer.close();
-await prefactor.shutdown();
+try {
+  await sessionTracer.attach(session);
+} finally {
+  await sessionTracer.close();
+  await prefactor.shutdown();
+}

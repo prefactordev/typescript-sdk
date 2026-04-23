@@ -27,13 +27,15 @@ export class PrefactorLiveKit implements PrefactorProvider<LiveKitMiddleware> {
     agentManager: AgentInstanceManager,
     coreConfig: Config
   ): LiveKitMiddleware {
+    const toolSpanTypes = cloneToolSpanTypes(this.toolSpanTypes);
+
     return {
       createSessionTracer: (): PrefactorLiveKitSession => {
         const sessionTracer = new PrefactorLiveKitSession({
           tracer,
           agentManager,
           agentInfo: toLiveKitAgentInfo(coreConfig),
-          toolSpanTypes: this.toolSpanTypes,
+          toolSpanTypes,
           onDidClose: () => {
             this.sessions.delete(sessionTracer);
           },
@@ -102,4 +104,14 @@ function logShutdownError(error: unknown): void {
   } catch {
     // Logging must never turn shutdown cleanup into a user-visible failure.
   }
+}
+
+function cloneToolSpanTypes(
+  toolSpanTypes: Record<string, string> | undefined
+): Record<string, string> | undefined {
+  if (!toolSpanTypes) {
+    return undefined;
+  }
+
+  return { ...toolSpanTypes };
 }

@@ -288,7 +288,7 @@ function buildAgentSchema(
 
   for (const { spanType } of Object.values(toolSchemas)) {
     if (!spanSchemas[spanType]) {
-      spanSchemas[spanType] = LIVEKIT_TOOL_SCHEMA;
+      spanSchemas[spanType] = buildToolSchemaForSpanType(spanType);
     }
     if (!spanResultSchemas[spanType]) {
       spanResultSchemas[spanType] = LIVEKIT_TOOL_RESULT_SCHEMA;
@@ -308,4 +308,14 @@ function cloneRecord(value: unknown): Record<string, unknown> {
   }
 
   return { ...(value as Record<string, unknown>) };
+}
+
+function buildToolSchemaForSpanType(spanType: string): Record<string, unknown> {
+  const schema = cloneRecord(LIVEKIT_TOOL_SCHEMA);
+  const properties = cloneRecord(schema.properties);
+  const typeProperty = cloneRecord(properties.type);
+  typeProperty.const = spanType;
+  properties.type = typeProperty;
+  schema.properties = properties;
+  return schema;
 }
