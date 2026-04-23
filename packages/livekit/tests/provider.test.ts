@@ -83,9 +83,7 @@ describe('PrefactorLiveKit', () => {
 
     const started: Array<Record<string, unknown>> = [];
     const tracer = {
-      startSpan: (options: {
-        inputs: Record<string, unknown>;
-      }) => {
+      startSpan: (options: { inputs: Record<string, unknown> }) => {
         started.push(options.inputs);
         return null;
       },
