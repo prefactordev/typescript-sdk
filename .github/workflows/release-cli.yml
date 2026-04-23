@@ -82,39 +82,52 @@ jobs:
             artifact: prefactor-linux-x64.tar.gz
             archive: prefactor-linux-x64.tar.gz
             extracted_bin: prefactor
+            requires_musl: false
           - os: ubuntu-latest
             artifact: prefactor-linux-x64-musl.tar.gz
             archive: prefactor-linux-x64-musl.tar.gz
             extracted_bin: prefactor
+            requires_musl: true
           - os: ubuntu-24.04-arm
             artifact: prefactor-linux-arm64.tar.gz
             archive: prefactor-linux-arm64.tar.gz
             extracted_bin: prefactor
+            requires_musl: false
           - os: ubuntu-24.04-arm
             artifact: prefactor-linux-arm64-musl.tar.gz
             archive: prefactor-linux-arm64-musl.tar.gz
             extracted_bin: prefactor
+            requires_musl: true
           - os: macos-latest
             artifact: prefactor-darwin-arm64.tar.gz
             archive: prefactor-darwin-arm64.tar.gz
             extracted_bin: prefactor
+            requires_musl: false
           - os: macos-15-intel
             artifact: prefactor-darwin-x64.tar.gz
             archive: prefactor-darwin-x64.tar.gz
             extracted_bin: prefactor
+            requires_musl: false
           - os: windows-latest
             artifact: prefactor-windows-x64.zip
             archive: prefactor-windows-x64.zip
             extracted_bin: prefactor.exe
+            requires_musl: false
           - os: windows-11-arm
             artifact: prefactor-windows-arm64.zip
             archive: prefactor-windows-arm64.zip
             extracted_bin: prefactor.exe
+            requires_musl: false
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/download-artifact@v4
         with:
           name: ${{ matrix.artifact }}
+      - name: Install musl runtime
+        if: runner.os != 'Windows' && matrix.requires_musl
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y musl
       - name: Run smoke test (unix)
         if: runner.os != 'Windows'
         run: |
