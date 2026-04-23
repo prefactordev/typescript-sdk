@@ -268,7 +268,7 @@ describe('install helpers', () => {
       )
     );
 
-    expect(readFileSync(childLog, 'utf8')).toContain('--wait-for-pid');
+    expect(readFileSync(childLog, 'utf8')).not.toContain('--wait-for-pid');
   });
 
   test('readInstallState rejects invalid persisted channel values', async () => {

@@ -123,13 +123,33 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: ${{ matrix.artifact }}
-      - name: Install musl runtime
-        if: runner.os != 'Windows' && matrix.requires_musl
+      - name: Run smoke test (linux musl)
+        if: runner.os == 'Linux' && matrix.requires_musl
+        env:
+          ARCHIVE: ${{ matrix.archive }}
+          EXTRACTED_BIN: ${{ matrix.extracted_bin }}
         run: |
-          sudo apt-get update
-          sudo apt-get install -y musl
+          docker run --rm \
+            -e HOME=/tmp/prefactor-home \
+            -e ARCHIVE \
+            -e EXTRACTED_BIN \
+            -v "$PWD:/work" \
+            -w /work \
+            alpine:3.22 \
+            sh -euxc '
+              apk add --no-cache ca-certificates libgcc libstdc++
+              rm -rf "$HOME" smoke
+              mkdir -p "$HOME" smoke
+              tar -xzf "$ARCHIVE" -C smoke
+              chmod +x "smoke/$EXTRACTED_BIN"
+              "smoke/$EXTRACTED_BIN" --version
+              "smoke/$EXTRACTED_BIN" install --channel stable
+              "$HOME/.prefactor/bin/prefactor" doctor
+              "$HOME/.prefactor/bin/prefactor" update
+              "$HOME/.prefactor/bin/prefactor" doctor
+            '
       - name: Run smoke test (unix)
-        if: runner.os != 'Windows'
+        if: runner.os != 'Windows' && !matrix.requires_musl
         run: |
           export HOME="${RUNNER_TEMP}/prefactor-home"
           rm -rf "$HOME" && mkdir -p "$HOME"
@@ -138,6 +158,8 @@ jobs:
           chmod +x smoke/${{ matrix.extracted_bin }}
           smoke/${{ matrix.extracted_bin }} --version
           smoke/${{ matrix.extracted_bin }} install --channel stable
+          "$HOME/.prefactor/bin/prefactor" doctor
+          "$HOME/.prefactor/bin/prefactor" update
           "$HOME/.prefactor/bin/prefactor" doctor
       - name: Run smoke test (windows)
         if: runner.os == 'Windows'
@@ -151,6 +173,12 @@ jobs:
           .\smoke\${{ matrix.extracted_bin }} --version
           .\smoke\${{ matrix.extracted_bin }} install --channel stable
           & "$env:USERPROFILE\.prefactor\bin\prefactor.exe" doctor
+          $output = & "$env:USERPROFILE\.prefactor\bin\prefactor.exe" update 2>&1
+          Write-Output $output
+          if ($output -notmatch "Update started") {
+            Write-Error "Expected update start message not found"
+            exit 1
+          }
 
   release:
     runs-on: ubuntu-latest
@@ -169,7 +197,7 @@ jobs:
       - name: Generate checksums
         run: |
           cd dist/cli
-          sha256sum *.tar.gz *.zip > SHA256SUMS
+          sha256sum -- *.tar.gz *.zip > SHA256SUMS
       - name: Create versioned release
         if: github.ref_type == 'tag'
         uses: softprops/action-gh-release@v2
