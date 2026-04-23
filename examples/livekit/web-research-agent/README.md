@@ -66,5 +66,7 @@ mise -E local run connect -- --room call-local
 
 - This example uses `@prefactor/livekit` plus two custom Prefactor spans:
   `example:session_setup` and `example:web_search`.
+- The main agent decides whether to answer directly or call the web search tool.
+  There is no keyword-based routing or separate research subagent layer.
 - The Node.js worker CLI does not expose the Python repo's console audio mode, so
   this example uses the standard `dev`, `connect`, and `download-files` commands.

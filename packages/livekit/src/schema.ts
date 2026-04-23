@@ -12,6 +12,8 @@ export const GENERIC_OBJECT_SCHEMA = {
 } as const satisfies JsonSchema;
 
 export const LIVEKIT_SESSION_SCHEMA = {
+  'prefactor:template':
+    'Session {{ status | default: "completed" }}{% if conversation.userMessages %}: {{ conversation.userMessages }} user, {{ conversation.assistantMessages | default: 0 }} assistant{% endif %}{% if conversation.functionCalls %}, {{ conversation.functionCalls }} tool calls{% endif %}{% if metadata.closeReason %} ({{ metadata.closeReason }}){% endif %}',
   type: 'object',
   properties: {
     name: { type: 'string' },
@@ -36,6 +38,8 @@ export const LIVEKIT_SESSION_RESULT_SCHEMA = {
 } as const satisfies JsonSchema;
 
 export const LIVEKIT_USER_TURN_SCHEMA = {
+  'prefactor:template':
+    '{% if transcript %}User: {{ transcript }}{% else %}User turn{% endif %}{% if language %} ({{ language }}){% endif %}{% if status == "cancelled" %} -> cancelled{% endif %}',
   type: 'object',
   properties: {
     name: { type: 'string' },
@@ -62,6 +66,8 @@ export const LIVEKIT_USER_TURN_RESULT_SCHEMA = {
 } as const satisfies JsonSchema;
 
 export const LIVEKIT_ASSISTANT_TURN_SCHEMA = {
+  'prefactor:template':
+    '{% if outputs.message.content %}Assistant: {{ outputs.message.content }}{% elsif outputs.message.textContent %}Assistant: {{ outputs.message.textContent }}{% elsif status == "cancelled" %}Assistant turn cancelled{% else %}Assistant turn {{ status | default: "completed" }}{% endif %}',
   type: 'object',
   properties: {
     name: { type: 'string' },
@@ -88,6 +94,8 @@ export const LIVEKIT_ASSISTANT_TURN_RESULT_SCHEMA = {
 } as const satisfies JsonSchema;
 
 export const LIVEKIT_TOOL_SCHEMA = {
+  'prefactor:template':
+    'Tool {{ outputs.name | default: "call" }}{% if status %} -> {{ status }}{% endif %}{% if isError %} (error){% endif %}',
   type: 'object',
   properties: {
     name: { type: 'string' },
@@ -112,6 +120,8 @@ export const LIVEKIT_TOOL_RESULT_SCHEMA = {
 } as const satisfies JsonSchema;
 
 export const LIVEKIT_LLM_SCHEMA = {
+  'prefactor:template':
+    'LLM {{ metrics.metadata.modelName | default: "model" }}{% if metrics.totalTokens %}: {{ metrics.totalTokens }} tokens{% endif %}{% if status %} -> {{ status }}{% endif %}',
   type: 'object',
   properties: {
     name: { type: 'string' },
@@ -136,6 +146,8 @@ export const LIVEKIT_LLM_RESULT_SCHEMA = {
 } as const satisfies JsonSchema;
 
 export const LIVEKIT_STT_SCHEMA = {
+  'prefactor:template':
+    'STT {{ metrics.metadata.modelName | default: "speech-to-text" }}{% if metrics.audioDurationMs %}: {{ metrics.audioDurationMs }} ms audio{% endif %}{% if status %} -> {{ status }}{% endif %}',
   type: 'object',
   properties: {
     name: { type: 'string' },
@@ -152,6 +164,8 @@ export const LIVEKIT_STT_SCHEMA = {
 export const LIVEKIT_STT_RESULT_SCHEMA = LIVEKIT_LLM_RESULT_SCHEMA;
 
 export const LIVEKIT_TTS_SCHEMA = {
+  'prefactor:template':
+    'TTS {{ metrics.metadata.modelName | default: "text-to-speech" }}{% if metrics.charactersCount %}: {{ metrics.charactersCount }} chars{% endif %}{% if status %} -> {{ status }}{% endif %}',
   type: 'object',
   properties: {
     name: { type: 'string' },
@@ -168,6 +182,7 @@ export const LIVEKIT_TTS_SCHEMA = {
 export const LIVEKIT_TTS_RESULT_SCHEMA = LIVEKIT_LLM_RESULT_SCHEMA;
 
 export const LIVEKIT_STATE_SCHEMA = {
+  'prefactor:template': 'State change{% if status %} -> {{ status }}{% endif %}',
   type: 'object',
   properties: {
     name: { type: 'string' },
@@ -190,6 +205,8 @@ export const LIVEKIT_STATE_RESULT_SCHEMA = {
 } as const satisfies JsonSchema;
 
 export const LIVEKIT_ERROR_SCHEMA = {
+  'prefactor:template':
+    'LiveKit error{% if error.errorType %} {{ error.errorType }}{% endif %}{% if error.message %}: {{ error.message }}{% endif %}',
   type: 'object',
   properties: {
     name: { type: 'string' },

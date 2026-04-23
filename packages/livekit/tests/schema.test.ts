@@ -19,6 +19,18 @@ describe('livekit schema', () => {
     expect(schema).toHaveProperty('livekit:error');
   });
 
+  test('default span schemas include display templates', () => {
+    const schema = DEFAULT_LIVEKIT_AGENT_SCHEMA.span_schemas as Record<
+      string,
+      Record<string, unknown>
+    >;
+
+    for (const spanSchema of Object.values(schema)) {
+      expect(spanSchema['prefactor:template']).toEqual(expect.any(String));
+      expect((spanSchema['prefactor:template'] as string).length).toBeGreaterThan(0);
+    }
+  });
+
   test('normalizes tool span type suffixes', () => {
     const normalized = normalizeAgentSchema({
       ...DEFAULT_LIVEKIT_AGENT_SCHEMA,

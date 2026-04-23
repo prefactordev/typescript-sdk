@@ -247,7 +247,7 @@ export class PrefactorLiveKitSession {
       this.conversationTurns.push(completedTurn);
       this.conversationSummary.userMessages += 1;
 
-      await this.emitChildSpan(this.rootSpan, {
+      await this.emitChildSpan(null, {
         name: 'user_turn',
         spanType: 'livekit:user_turn',
         inputs: {
@@ -332,7 +332,7 @@ export class PrefactorLiveKitSession {
         ? serializeUnknown(readRecord(output, 'output') ?? output)
         : undefined;
       const inputs = parseArguments(call);
-      const parent = this.activeAssistantTurn?.span ?? this.rootSpan;
+      const parent = this.activeAssistantTurn?.span ?? null;
 
       await this.emitChildSpan(parent, {
         name: toolName,
@@ -422,7 +422,7 @@ export class PrefactorLiveKitSession {
     const error = toError(errorValue);
     this.pendingError = error;
 
-    await this.emitChildSpan(this.rootSpan, {
+    await this.emitChildSpan(this.activeAssistantTurn?.span ?? this.activeUserTurn?.span ?? null, {
       name: 'livekit_error',
       spanType: 'livekit:error',
       inputs: {
@@ -468,8 +468,8 @@ export class PrefactorLiveKitSession {
 
     const parent =
       kind === 'stt'
-        ? (this.activeUserTurn?.span ?? this.rootSpan)
-        : (this.activeAssistantTurn?.span ?? this.rootSpan);
+        ? (this.activeUserTurn?.span ?? null)
+        : (this.activeAssistantTurn?.span ?? null);
 
     const payload = serializeUnknown(metrics);
     await this.emitChildSpan(parent, {
@@ -510,7 +510,7 @@ export class PrefactorLiveKitSession {
   private startUserTurn(createdAt?: number): ActiveTurn {
     this.finishActiveUserTurn('cancelled', createdAt);
     const turnIndex = this.nextTurnIndex();
-    const span = this.withParent(this.rootSpan, () =>
+    const span = this.withParent(null, () =>
       this.safeStartSpan({
         name: 'user_turn',
         spanType: 'livekit:user_turn',
@@ -549,7 +549,7 @@ export class PrefactorLiveKitSession {
     }
 
     const turnIndex = this.nextTurnIndex();
-    const span = this.withParent(this.rootSpan, () =>
+    const span = this.withParent(null, () =>
       this.safeStartSpan({
         name: 'assistant_turn',
         spanType: 'livekit:assistant_turn',

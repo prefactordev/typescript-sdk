@@ -19,128 +19,40 @@ import {
   PrefactorLiveKit,
   type LiveKitMiddleware,
 } from '@prefactor/livekit';
-import Exa from 'exa-js';
+import Exa, { type SearchResponse } from 'exa-js';
 import { z } from 'zod';
 
 const DEFAULT_PRESET = 'budget';
 const DEFAULT_EXA_MAX_RESULTS = 5;
 const DEFAULT_EXA_SEARCH_TYPE = 'auto';
 const MAX_EXA_RESULTS = 5;
-const SEARCH_RESULT_TEXT_CHAR_LIMIT = 1600;
+const SEARCH_RESULT_TEXT_CHAR_LIMIT = 1000;
 const DEFAULT_PREFACTOR_AGENT_ID = 'web-research-agent';
 const DEFAULT_PREFACTOR_AGENT_NAME = 'Web Research Agent';
+const USER_AWAY_TIMEOUT_SECONDS = 180;
+const LLM_MODEL_OPTIONS = {
+  max_completion_tokens: 220,
+  parallel_tool_calls: false,
+  reasoning_effort: 'minimal',
+  verbosity: 'low',
+} as const;
+const SEARCH_ACKNOWLEDGEMENT = 'One moment while I check the latest information.';
 const WELCOME_MESSAGE =
-  'Hi there, I am a web research agent that can search the web with up to date information. ' +
-  "Please tell me what you'd like to search today!";
-const SEARCH_ACKNOWLEDGEMENT =
-  'Let me check that for you. Please wait while I search the web.';
-const SEARCH_ERROR_MESSAGE =
-  'I hit a problem while searching the web just now. Please try again.';
-const SEARCH_NO_RESULTS_MESSAGE =
-  'I could not find enough reliable web results to answer that.';
-
-const SMALL_TALK_MESSAGES = new Set([
-  'bye',
-  'goodbye',
-  'good morning',
-  'good afternoon',
-  'good evening',
-  'hello',
-  'hey',
-  'hi',
-  'how are you',
-  'how are you doing',
-  'thanks',
-  'thank you',
-  'who are you',
-]);
-
-const END_CALL_PHRASES = [
-  'hang up',
-  'hang up now',
-  'hang up the call',
-  'please hang up',
-  'end the call',
-  'end call',
-  'disconnect',
-  'thats all',
-  'that is all',
-  'nothing else',
-  'no thats enough',
-  'no that is enough',
-];
-
-const DIRECT_RESPONSE_PHRASES = [
-  'can you hear me',
-  'help me',
-  'repeat that',
-  'say that again',
-  'speak louder',
-  'slow down',
-  'stop',
-  'wait',
-];
-
-const SEARCH_TRIGGER_PREFIXES = [
-  'what ',
-  'whats ',
-  "what's ",
-  'who ',
-  'whos ',
-  "who's ",
-  'when ',
-  'where ',
-  'which ',
-  'why ',
-  'how ',
-  'tell me about ',
-  'explain ',
-  'compare ',
-  'find ',
-  'search ',
-  'look up ',
-  'check ',
-];
-
-const SEARCH_TRIGGER_SUBSTRINGS = [
-  'latest',
-  'today',
-  'current',
-  'currently',
-  'recent',
-  'recently',
-  'news',
-  'price',
-  'weather',
-  'score',
-  'stock',
-  'market cap',
-  'release date',
-  'update on',
-  'what happened',
-  'search the web',
-  'look it up',
-  'on the web',
-  'online',
-];
+  'Hi there. I can answer simple questions directly and search the web when you need up-to-date information. What would you like to know?';
 
 const EXA_SEARCH_TYPES = [
   'auto',
   'deep',
   'deep-lite',
-  'deep-max',
   'deep-reasoning',
   'fast',
   'hybrid',
   'instant',
   'keyword',
-  'magic',
   'neural',
 ] as const;
 
-type ExaSearchType = (typeof EXA_SEARCH_TYPES)[number];
-
-const VALID_EXA_SEARCH_TYPES = new Set<ExaSearchType>(EXA_SEARCH_TYPES);
+const VALID_EXA_SEARCH_TYPES = new Set(EXA_SEARCH_TYPES);
 
 const PRESETS = {
   budget: {
@@ -160,34 +72,32 @@ const PRESETS = {
 } as const;
 
 const INSTRUCTIONS = `\
-You are the voice front-end for a web research assistant.
+You are a voice-first web research assistant.
 
 Runtime context:
 - Current local datetime: {currentDatetime}
 - Current timezone: {currentTimezone}
 
 Behavior rules:
-- Answer simple greetings, thanks, and conversational remarks directly.
-- If the user asks to end the call, hang up, disconnect, or says they are done, use the end call tool immediately.
-- Keep conversational replies short and easy to follow in voice.
-- Keep every direct reply under 80 words.
-- Do not claim you searched the web unless search findings were explicitly provided to you.
+- Decide whether to answer directly or call the searchWeb tool.
+- Use searchWeb when the user needs current events, recent changes, external verification, or other up-to-date web information.
+- Do not use searchWeb for greetings, thanks, conversational filler, or requests you can answer from the conversation alone.
+- If the user clearly wants to end the call, use the endCall tool immediately.
+- Keep answers brief, natural, and easy to follow when spoken.
+- Prefer a direct answer first, then a few short supporting details.
+- Mention uncertainty when the evidence is weak or conflicting.
+- Do not say you searched unless you actually used searchWeb in this turn.
+- searchWeb is a single-shot tool for this turn. Build one best-effort query, call it once, then answer from those results instead of refining with more searches.
+- After searchWeb returns, give one short spoken paragraph under 60 words. Do not use bullets, markdown, headings, or long lists.
+- If the user asks for a TLDR after a search, summarize the search results already in the conversation instead of searching again.
+- If searchWeb returns no results or an error, say that plainly and briefly.
 `;
 
-const SUBAGENT_INSTRUCTIONS = `\
-You are a background web research subagent for a live voice assistant.
-
-Use only the provided web search results.
-
-Rules:
-- Answer in plain text suitable for speech.
-- Start with a short TLDR sentence.
-- Then give 2 to 4 short supporting sentences.
-- End with "Sources:" followed by 2 to 4 source titles or domains.
-- Mention uncertainty, weak evidence, or conflicting reports explicitly.
-- Never invent facts, sources, dates, quotes, or certainty.
-- Keep the full answer under 170 words.
-`;
+type ExaSearchType = (typeof EXA_SEARCH_TYPES)[number];
+type AgentPreset = (typeof PRESETS)[keyof typeof PRESETS];
+type ProcessUserData = {
+  vad?: Awaited<ReturnType<typeof silero.VAD.load>>;
+};
 
 type SearchConfig = {
   apiKey: string;
@@ -198,39 +108,40 @@ type SearchConfig = {
 
 type SearchResult = {
   title: string | null;
-  url: string | null;
-  domain: string | null;
+  url: string;
+  domain: string;
   publishedDate: string | null;
   author: string | null;
-  text: string;
+  excerpt: string;
 };
 
-type SearchPayload = {
+type SearchToolResult = {
+  status: 'ok' | 'no_results' | 'error';
   query: string;
   resolvedSearchType: string | null;
   searchTimeMs: number | null;
   resultCount: number;
   results: SearchResult[];
+  error: string | null;
 };
 
-type SearchReport = {
-  status: 'ok' | 'no_results';
-  query: string;
-  searchPayload: SearchPayload;
-  answer: string;
+type ExaTextContentsOptions = {
+  text: {
+    maxCharacters: number;
+  };
 };
-
-type AgentPreset = (typeof PRESETS)[keyof typeof PRESETS];
-type ProcessUserData = {
-  vad?: Awaited<ReturnType<typeof silero.VAD.load>>;
-};
+type ExaTextSearchResponse = SearchResponse<ExaTextContentsOptions>;
 
 const EXAMPLE_AGENT_SCHEMA = {
   ...DEFAULT_LIVEKIT_AGENT_SCHEMA,
-  external_identifier: 'livekit-web-research-example-v1',
+  external_identifier: 'livekit-web-research-example-v2',
   span_schemas: {
     ...(DEFAULT_LIVEKIT_AGENT_SCHEMA.span_schemas as Record<string, unknown>),
     'example:session_setup': {
+      title: 'Session Setup',
+      description: 'Initial setup for the LiveKit web research session before the agent starts.',
+      'prefactor:template':
+        'Session setup for {{ preset }} using {{ searchProvider }} (tracing: {{ tracingEnabled }}) -> {{ status | default: "unknown" }}',
       type: 'object',
       properties: {
         preset: { type: 'string' },
@@ -241,9 +152,13 @@ const EXAMPLE_AGENT_SCHEMA = {
       additionalProperties: false,
     },
     'example:web_search': {
+      title: 'Web Search',
+      description: 'Single Exa web search used to answer a user request with up-to-date information.',
+      'prefactor:template':
+        '{% if status == "error" %}Search "{{ query }}" failed{% if error %}: {{ error }}{% endif %}{% elsif status == "no_results" %}Search "{{ query }}" returned no results{% else %}Search "{{ query }}" found {{ resultCount | default: 0 }} results{% if resolvedSearchType %} via {{ resolvedSearchType }}{% endif %}{% endif %}',
       type: 'object',
       properties: {
-        question: { type: 'string' },
+        query: { type: 'string' },
         provider: { type: 'string' },
         numResults: { type: 'integer', minimum: 1 },
         searchType: { type: 'string' },
@@ -252,7 +167,7 @@ const EXAMPLE_AGENT_SCHEMA = {
           items: { type: 'string' },
         },
       },
-      required: ['question', 'provider', 'numResults', 'searchType'],
+      required: ['query', 'provider', 'numResults', 'searchType'],
       additionalProperties: false,
     },
   },
@@ -261,7 +176,10 @@ const EXAMPLE_AGENT_SCHEMA = {
     'example:session_setup': {
       type: 'object',
       properties: {
-        status: { type: 'string' },
+        status: {
+          type: 'string',
+          enum: ['ready'],
+        },
       },
       required: ['status'],
       additionalProperties: false,
@@ -269,15 +187,41 @@ const EXAMPLE_AGENT_SCHEMA = {
     'example:web_search': {
       type: 'object',
       properties: {
-        status: { type: 'string' },
+        status: {
+          type: 'string',
+          enum: ['ok', 'no_results', 'error'],
+        },
         query: { type: 'string' },
-        answer: { type: 'string' },
-        searchPayload: {
-          type: 'object',
-          additionalProperties: true,
+        resolvedSearchType: { type: ['string', 'null'] },
+        searchTimeMs: { type: ['number', 'null'] },
+        resultCount: { type: 'integer', minimum: 0 },
+        error: { type: ['string', 'null'] },
+        results: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              title: { type: ['string', 'null'] },
+              url: { type: 'string' },
+              domain: { type: 'string' },
+              publishedDate: { type: ['string', 'null'] },
+              author: { type: ['string', 'null'] },
+              excerpt: { type: 'string' },
+            },
+            required: ['title', 'url', 'domain', 'publishedDate', 'author', 'excerpt'],
+            additionalProperties: false,
+          },
         },
       },
-      required: ['status', 'query', 'answer', 'searchPayload'],
+      required: [
+        'status',
+        'query',
+        'resolvedSearchType',
+        'searchTimeMs',
+        'resultCount',
+        'error',
+        'results',
+      ],
       additionalProperties: false,
     },
   },
@@ -287,6 +231,17 @@ const EXAMPLE_AGENT_SCHEMA = {
       inputSchema: {
         type: 'object',
         properties: {},
+        additionalProperties: false,
+      },
+    },
+    searchWeb: {
+      spanType: 'search-web',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          query: { type: 'string' },
+        },
+        required: ['query'],
         additionalProperties: false,
       },
     },
@@ -307,30 +262,22 @@ function resolveSearchConfig(): SearchConfig {
     throw new Error('EXA_API_KEY environment variable is required.');
   }
 
-  const rawMaxResults = process.env.EXA_SEARCH_MAX_RESULTS?.trim() ?? '';
-  const parsedMaxResults = Number.parseInt(rawMaxResults, 10);
-  const maxResults = Number.isFinite(parsedMaxResults)
-    ? parsedMaxResults
-    : DEFAULT_EXA_MAX_RESULTS;
-
-  const rawSearchType = process.env.EXA_SEARCH_TYPE?.trim() || DEFAULT_EXA_SEARCH_TYPE;
-  const searchType = isExaSearchType(rawSearchType)
-    ? rawSearchType
-    : DEFAULT_EXA_SEARCH_TYPE;
+  const maxResults = Number.parseInt(process.env.EXA_SEARCH_MAX_RESULTS?.trim() ?? '', 10);
+  const searchType = process.env.EXA_SEARCH_TYPE?.trim() ?? DEFAULT_EXA_SEARCH_TYPE;
 
   return {
     apiKey,
-    maxResults: Math.min(Math.max(1, maxResults), MAX_EXA_RESULTS),
-    searchType,
+    maxResults: Number.isFinite(maxResults)
+      ? Math.min(Math.max(1, maxResults), MAX_EXA_RESULTS)
+      : DEFAULT_EXA_MAX_RESULTS,
+    searchType: VALID_EXA_SEARCH_TYPES.has(searchType as ExaSearchType)
+      ? (searchType as ExaSearchType)
+      : DEFAULT_EXA_SEARCH_TYPE,
     includeDomains: (process.env.EXA_INCLUDE_DOMAINS ?? '')
       .split(',')
       .map((value) => value.trim())
       .filter(Boolean),
   };
-}
-
-function isExaSearchType(value: string): value is ExaSearchType {
-  return VALID_EXA_SEARCH_TYPES.has(value as ExaSearchType);
 }
 
 function createPrefactorClient(): PrefactorClient<LiveKitMiddleware> | null {
@@ -353,85 +300,18 @@ function createPrefactorClient(): PrefactorClient<LiveKitMiddleware> | null {
   });
 }
 
-function currentRuntimeContext(): { currentDatetime: string; currentTimezone: string } {
+function buildAgentInstructions(): string {
   const now = new Date();
-  const timeZone =
+  const currentTimezone =
     Intl.DateTimeFormat().resolvedOptions().timeZone || process.env.TZ || 'local';
 
-  return {
-    currentDatetime: now.toISOString(),
-    currentTimezone: timeZone,
-  };
-}
-
-function buildAgentInstructions(): string {
-  const { currentDatetime, currentTimezone } = currentRuntimeContext();
-  return INSTRUCTIONS.replace('{currentDatetime}', currentDatetime).replace(
+  return INSTRUCTIONS.replace('{currentDatetime}', now.toISOString()).replace(
     '{currentTimezone}',
     currentTimezone,
   );
 }
 
-function normalizeUserText(value: string): string {
-  return value
-    .trim()
-    .toLowerCase()
-    .replace(/[^\p{L}\p{N}\s]/gu, '')
-    .replace(/\s+/g, ' ')
-    .trim();
-}
-
-function containsPhrase(normalized: string, phrases: readonly string[]): boolean {
-  return phrases.some((phrase) => normalized.includes(phrase));
-}
-
-function shouldEndCall(value: string): boolean {
-  const normalized = normalizeUserText(value);
-  return normalized.length > 0 && containsPhrase(normalized, END_CALL_PHRASES);
-}
-
-function shouldBackgroundSearch(value: string): boolean {
-  const normalized = normalizeUserText(value);
-  if (!normalized) {
-    return false;
-  }
-
-  if (SMALL_TALK_MESSAGES.has(normalized)) {
-    return false;
-  }
-
-  if (containsPhrase(normalized, END_CALL_PHRASES)) {
-    return false;
-  }
-
-  if (containsPhrase(normalized, DIRECT_RESPONSE_PHRASES)) {
-    return false;
-  }
-
-  if (SEARCH_TRIGGER_PREFIXES.some((prefix) => normalized.startsWith(prefix))) {
-    return true;
-  }
-
-  return containsPhrase(normalized, SEARCH_TRIGGER_SUBSTRINGS);
-}
-
-function extractDomain(url: string | null): string | null {
-  if (!url) {
-    return null;
-  }
-
-  try {
-    return new URL(url).hostname.toLowerCase();
-  } catch {
-    return null;
-  }
-}
-
-function trimText(value: string | null, limit = SEARCH_RESULT_TEXT_CHAR_LIMIT): string {
-  if (!value) {
-    return '';
-  }
-
+function trimText(value: string, limit = SEARCH_RESULT_EXCERPT_CHAR_LIMIT): string {
   const compact = value.replace(/\s+/g, ' ').trim();
   if (compact.length <= limit) {
     return compact;
@@ -440,283 +320,174 @@ function trimText(value: string | null, limit = SEARCH_RESULT_TEXT_CHAR_LIMIT): 
   return `${compact.slice(0, limit - 3).trimEnd()}...`;
 }
 
-function buildSearchResult(rawResult: Record<string, unknown>): SearchResult {
-  const url = readString(rawResult, 'url');
+function getDomain(url: string): string {
+  try {
+    return new URL(url).hostname.toLowerCase();
+  } catch {
+    return url;
+  }
+}
+
+function buildSearchResult(result: ExaTextSearchResponse['results'][number]): SearchResult {
   return {
-    title: readString(rawResult, 'title'),
-    url,
-    domain: extractDomain(url),
-    publishedDate:
-      readString(rawResult, 'publishedDate') ?? readString(rawResult, 'published_date'),
-    author: readString(rawResult, 'author'),
-    text: trimText(readString(rawResult, 'text')),
+    title: result.title,
+    url: result.url,
+    domain: getDomain(result.url),
+    publishedDate: result.publishedDate ?? null,
+    author: result.author ?? null,
+    excerpt: trimText(result.text),
   };
 }
 
 async function runExaSearch(
   client: Exa,
   searchConfig: SearchConfig,
-  question: string,
-): Promise<SearchPayload> {
-  const response = (await client.search(question, {
-    type: searchConfig.searchType,
-    numResults: searchConfig.maxResults,
-    includeDomains: searchConfig.includeDomains.length > 0 ? searchConfig.includeDomains : undefined,
-    contents: {
-      text: true,
-    },
-  })) as unknown;
-
-  const responseRecord = asRecord(response);
-  const rawResults = readArray(responseRecord, 'results');
-  const results = rawResults
-    .map((value) => asRecord(value))
-    .filter((value): value is Record<string, unknown> => value !== null)
-    .map(buildSearchResult);
-
-  return {
-    query: question,
-    resolvedSearchType:
-      readString(responseRecord, 'resolvedSearchType') ??
-      readString(responseRecord, 'resolved_search_type') ??
-      searchConfig.searchType,
-    searchTimeMs:
-      readNumber(responseRecord, 'searchTime') ?? readNumber(responseRecord, 'search_time'),
-    resultCount: results.length,
-    results,
-  };
-}
-
-function formatSearchPayloadForPrompt(searchPayload: SearchPayload): string {
-  if (searchPayload.results.length === 0) {
-    return 'No search results were returned.';
-  }
-
-  return searchPayload.results
-    .map((result, index) =>
-      [
-        `Result ${index + 1}`,
-        `Title: ${result.title ?? 'Untitled'}`,
-        `URL: ${result.url ?? 'N/A'}`,
-        `Domain: ${result.domain ?? 'unknown'}`,
-        `Published date: ${result.publishedDate ?? 'unknown'}`,
-        `Author: ${result.author ?? 'unknown'}`,
-        `Excerpt: ${trimText(result.text, 900) || 'No excerpt'}`,
-      ].join('\n'),
-    )
-    .join('\n\n');
-}
-
-function buildResearchPrompt(question: string, searchPayload: SearchPayload): string {
-  const { currentDatetime, currentTimezone } = currentRuntimeContext();
-  return [
-    `Current local datetime: ${currentDatetime}`,
-    `Current timezone: ${currentTimezone}`,
-    `Original user question: ${question}`,
-    `Resolved search type: ${searchPayload.resolvedSearchType ?? 'unknown'}`,
-    `Search time ms: ${searchPayload.searchTimeMs ?? 'unknown'}`,
-    `Result count: ${searchPayload.resultCount}`,
-    'Search results:',
-    formatSearchPayloadForPrompt(searchPayload),
-  ].join('\n\n');
-}
-
-async function collectLlmText(chat: AsyncIterable<llm.ChatChunk>): Promise<string> {
-  const parts: string[] = [];
-  for await (const chunk of chat) {
-    if (chunk.delta?.content) {
-      parts.push(chunk.delta.content);
-    }
-  }
-
-  return parts.join('').trim();
-}
-
-class WebSearchSubagent {
-  private readonly searchConfig: SearchConfig;
-  private readonly exaClient: Exa;
-  private readonly model: inference.LLM;
-  private readonly prefactor: PrefactorClient<LiveKitMiddleware> | null;
-
-  constructor(options: {
-    searchConfig: SearchConfig;
-    llmModel: string;
-    prefactor: PrefactorClient<LiveKitMiddleware> | null;
-  }) {
-    this.searchConfig = options.searchConfig;
-    this.exaClient = new Exa(options.searchConfig.apiKey);
-    this.model = new inference.LLM({
-      model: options.llmModel,
-      modelOptions: {
-        verbosity: 'low',
-      },
-    });
-    this.prefactor = options.prefactor;
-  }
-
-  async close(): Promise<void> {
-    await this.model.aclose();
-  }
-
-  async research(question: string): Promise<SearchReport> {
-    const runSearch = async (): Promise<SearchReport> => {
-      const searchPayload = await runExaSearch(this.exaClient, this.searchConfig, question);
-
-      if (searchPayload.resultCount === 0) {
-        return {
-          status: 'no_results',
-          query: question,
-          searchPayload,
-          answer: SEARCH_NO_RESULTS_MESSAGE,
-        };
-      }
-
-      const chatCtx = llm.ChatContext.empty();
-      chatCtx.addMessage({
-        role: 'system',
-        content: SUBAGENT_INSTRUCTIONS,
-      });
-      chatCtx.addMessage({
-        role: 'user',
-        content: buildResearchPrompt(question, searchPayload),
-      });
-
-      const answer =
-        (await collectLlmText(this.model.chat({ chatCtx, toolChoice: 'none' }))) ||
-        SEARCH_NO_RESULTS_MESSAGE;
-
-      return {
-        status: 'ok',
-        query: question,
-        searchPayload,
-        answer,
-      };
-    };
-
-    if (!this.prefactor) {
-      return runSearch();
-    }
-
-    return this.prefactor.withSpan(
-      {
-        name: 'web_search',
-        spanType: 'example:web_search',
-        inputs: {
-          question,
-          provider: 'exa',
-          numResults: this.searchConfig.maxResults,
-          searchType: this.searchConfig.searchType,
-          includeDomains:
-            this.searchConfig.includeDomains.length > 0 ? this.searchConfig.includeDomains : null,
+  query: string,
+): Promise<SearchToolResult> {
+  try {
+    const response = await client.search(query, {
+      type: searchConfig.searchType,
+      numResults: searchConfig.maxResults,
+      includeDomains: searchConfig.includeDomains.length > 0 ? searchConfig.includeDomains : undefined,
+      contents: {
+        text: {
+          maxCharacters: SEARCH_RESULT_TEXT_CHAR_LIMIT,
         },
       },
-      runSearch,
-    );
+    });
+
+    const results = response.results.map(buildSearchResult);
+
+    return {
+      status: results.length > 0 ? 'ok' : 'no_results',
+      query,
+      resolvedSearchType: response.resolvedSearchType?.trim() || searchConfig.searchType,
+      searchTimeMs: response.searchTime ?? null,
+      resultCount: results.length,
+      results,
+      error: null,
+    };
+  } catch (error) {
+    return {
+      status: 'error',
+      query,
+      resolvedSearchType: null,
+      searchTimeMs: null,
+      resultCount: 0,
+      results: [],
+      error: error instanceof Error ? error.message : 'Web search failed.',
+    };
   }
 }
 
-class WebResearchAgent extends voice.Agent {
-  private readonly subagent: WebSearchSubagent;
-  private requestGeneration = 0;
-  private pendingSearch: Promise<void> | null = null;
-  private isClosed = false;
+function createSearchTool(options: {
+  searchConfig: SearchConfig;
+  prefactor: PrefactorClient<LiveKitMiddleware> | null;
+}) {
+  const exa = new Exa(options.searchConfig.apiKey);
 
-  constructor(options: {
-    searchConfig: SearchConfig;
-    llmModel: string;
-    prefactor: PrefactorClient<LiveKitMiddleware> | null;
-  }) {
-    super({
-      instructions: buildAgentInstructions(),
-      tools: {
-        endCall: llm.tool({
-          description:
-            'End the call only when the user clearly indicates they are done or asks to hang up.',
-          parameters: z.object({}),
-          execute: async (_args, opts) => {
-            opts.ctx.session.shutdown({
-              drain: true,
-              reason: 'user_initiated',
-            });
-            return {
-              status: 'ending_call',
-            };
+  return llm.tool({
+    description:
+      'Search the web for up-to-date or externally sourced information. Use this when the answer depends on current facts, recent changes, or specific web sources. Call this at most once per user turn.',
+    parameters: z.object({
+      query: z.string().min(1).describe('The web search query to run.'),
+    }),
+    execute: async ({ query }, opts) => {
+      const run = (): Promise<SearchToolResult> => runExaSearch(exa, options.searchConfig, query);
+      await opts.ctx.waitForPlayout();
+
+      const acknowledgement = opts.ctx.session.say(SEARCH_ACKNOWLEDGEMENT, {
+        allowInterruptions: true,
+        addToChatCtx: false,
+      });
+
+      if (!options.prefactor) {
+        const result = await run();
+        await acknowledgement.waitForPlayout();
+        return result;
+      }
+
+      const result = await options.prefactor.withSpan(
+        {
+          name: 'web_search',
+          spanType: 'example:web_search',
+          inputs: {
+            query,
+            provider: 'exa',
+            numResults: options.searchConfig.maxResults,
+            searchType: options.searchConfig.searchType,
+            includeDomains:
+              options.searchConfig.includeDomains.length > 0
+                ? options.searchConfig.includeDomains
+                : null,
           },
-        }),
-      },
-    });
+        },
+        run,
+      );
 
-    this.subagent = new WebSearchSubagent({
-      searchConfig: options.searchConfig,
-      llmModel: options.llmModel,
-      prefactor: options.prefactor,
-    });
-  }
+      await acknowledgement.waitForPlayout();
+      return result;
+    },
+  });
+}
 
-  override async onUserTurnCompleted(
-    _turnCtx: llm.ChatContext,
-    newMessage: llm.ChatMessage,
-  ): Promise<void> {
-    this.requestGeneration += 1;
-    const requestGeneration = this.requestGeneration;
+function createAgent(options: {
+  searchConfig: SearchConfig;
+  prefactor: PrefactorClient<LiveKitMiddleware> | null;
+  disconnectRoom: () => Promise<void>;
+}): voice.Agent {
+  return new voice.Agent({
+    instructions: buildAgentInstructions(),
+    tools: {
+      endCall: llm.tool({
+        description:
+          'End the call only when the user clearly indicates they are done or asks to hang up.',
+        parameters: z.object({}),
+        execute: async (_args, opts) => {
+          await opts.ctx.waitForPlayout();
+          const goodbye = opts.ctx.session.say('Okay, goodbye.', {
+            allowInterruptions: false,
+            addToChatCtx: false,
+          });
+          await goodbye.waitForPlayout();
 
-    const userText = newMessage.textContent?.trim() ?? '';
-    if (!userText || shouldEndCall(userText)) {
-      return;
+          await options.disconnectRoom();
+          return undefined;
+        },
+      }),
+      searchWeb: createSearchTool(options),
+    },
+  });
+}
+
+function createDisconnectRoom(
+  session: voice.AgentSession<ProcessUserData>,
+  room: JobContext<ProcessUserData>['room'],
+): () => Promise<void> {
+  let disconnecting: Promise<void> | null = null;
+
+  return async () => {
+    if (disconnecting) {
+      return disconnecting;
     }
 
-    if (!shouldBackgroundSearch(userText)) {
-      return;
-    }
+    disconnecting = (async () => {
+      try {
+        session.shutdown({
+          drain: false,
+          reason: 'user_initiated',
+        });
+      } catch (error) {
+        console.error('Failed to shut down agent session during room disconnect.', error);
+      }
 
-    // StopResponse skips the normal persistence path, so keep the user turn in the session history.
-    this._chatCtx.items.push(newMessage);
-    this.session._conversationItemAdded(newMessage);
-
-    this.session.say(SEARCH_ACKNOWLEDGEMENT, {
-      allowInterruptions: true,
-      addToChatCtx: false,
+      await room.disconnect();
+    })().finally(() => {
+      disconnecting = null;
     });
 
-    const task = this.runBackgroundSearch(requestGeneration, userText);
-    this.pendingSearch = task.finally(() => {
-      if (this.pendingSearch === task) {
-        this.pendingSearch = null;
-      }
-    });
-
-    throw new voice.StopResponse();
-  }
-
-  override async onExit(): Promise<void> {
-    this.isClosed = true;
-    this.requestGeneration += 1;
-    await this.subagent.close();
-  }
-
-  private async runBackgroundSearch(
-    requestGeneration: number,
-    userText: string,
-  ): Promise<void> {
-    try {
-      const report = await this.subagent.research(userText);
-      if (this.isClosed || requestGeneration !== this.requestGeneration) {
-        return;
-      }
-
-      this.session.say(report.answer, {
-        allowInterruptions: true,
-      });
-    } catch {
-      if (this.isClosed || requestGeneration !== this.requestGeneration) {
-        return;
-      }
-
-      this.session.say(SEARCH_ERROR_MESSAGE, {
-        allowInterruptions: true,
-      });
-    }
-  }
+    return disconnecting;
+  };
 }
 
 async function entry(ctx: JobContext<ProcessUserData>): Promise<void> {
@@ -738,9 +509,10 @@ async function entry(ctx: JobContext<ProcessUserData>): Promise<void> {
 
   ctx.addShutdownCallback(closeTracing);
 
-  const session = new voice.AgentSession({
+  const session = new voice.AgentSession<ProcessUserData>({
     llm: new inference.LLM({
       model: preset.llmModel,
+      modelOptions: LLM_MODEL_OPTIONS,
     }),
     stt: new inference.STT({
       model: preset.sttModel,
@@ -751,16 +523,19 @@ async function entry(ctx: JobContext<ProcessUserData>): Promise<void> {
       voice: preset.ttsVoice,
     }),
     vad: ctx.proc.userData.vad,
+    userAwayTimeout: USER_AWAY_TIMEOUT_SECONDS,
     turnHandling: {
       turnDetection: new livekit.turnDetector.MultilingualModel(),
+      preemptiveGeneration: {
+        enabled: false,
+      },
     },
-    preemptiveGeneration: false,
   });
 
-  const agent = new WebResearchAgent({
+  const agent = createAgent({
     searchConfig,
-    llmModel: preset.llmModel,
     prefactor,
+    disconnectRoom: createDisconnectRoom(session, ctx.room),
   });
 
   try {
@@ -824,27 +599,4 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
       agentName: DEFAULT_PREFACTOR_AGENT_ID,
     }),
   );
-}
-
-function asRecord(value: unknown): Record<string, unknown> | null {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) {
-    return null;
-  }
-
-  return value as Record<string, unknown>;
-}
-
-function readString(record: Record<string, unknown> | null, key: string): string | null {
-  const value = record?.[key];
-  return typeof value === 'string' ? value : null;
-}
-
-function readNumber(record: Record<string, unknown> | null, key: string): number | null {
-  const value = record?.[key];
-  return typeof value === 'number' && Number.isFinite(value) ? value : null;
-}
-
-function readArray(record: Record<string, unknown> | null, key: string): unknown[] {
-  const value = record?.[key];
-  return Array.isArray(value) ? value : [];
 }
