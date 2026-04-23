@@ -173,7 +173,7 @@ jobs:
           .\smoke\${{ matrix.extracted_bin }} --version
           .\smoke\${{ matrix.extracted_bin }} install --channel stable
           & "$env:USERPROFILE\.prefactor\bin\prefactor.exe" doctor
-          $output = & "$env:USERPROFILE\.prefactor\bin\prefactor.exe" update 2>&1
+          $output = & "$env:USERPROFILE\.prefactor\bin\prefactor.exe" update 2>&1 | Out-String
           Write-Output $output
           if ($output -notmatch "Update started") {
             Write-Error "Expected update start message not found"
