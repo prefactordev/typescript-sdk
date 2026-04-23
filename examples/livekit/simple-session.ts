@@ -1,19 +1,34 @@
-import { voice } from '@livekit/agents';
+import { initializeLogger, voice } from '@livekit/agents';
 import { init } from '@prefactor/core';
-import { PrefactorLiveKit } from '@prefactor/livekit';
+import { DEFAULT_LIVEKIT_AGENT_SCHEMA, PrefactorLiveKit } from '@prefactor/livekit';
+
+initializeLogger({ pretty: true, level: 'info' });
+
+const apiUrl = process.env.PREFACTOR_API_URL;
+const apiToken = process.env.PREFACTOR_API_TOKEN;
+const agentId = process.env.PREFACTOR_AGENT_ID;
+
+if (!apiUrl || !apiToken || !agentId) {
+  console.log(
+    'PREFACTOR_API_URL, PREFACTOR_API_TOKEN, and PREFACTOR_AGENT_ID Must be set.',
+  );
+  process.exit(0);
+}
 
 const prefactor = init({
   provider: new PrefactorLiveKit(),
   httpConfig: {
-    apiUrl: process.env.PREFACTOR_API_URL ?? 'https://api.prefactor.ai',
-    apiToken: process.env.PREFACTOR_API_TOKEN ?? 'prefactor-api-token',
+    apiUrl,
+    apiToken,
+    agentId,
     agentIdentifier: 'livekit-example',
     agentName: 'LiveKit Example Agent',
+    agentSchema: DEFAULT_LIVEKIT_AGENT_SCHEMA,
   },
 });
 
 const session = new voice.AgentSession({
-  llm: 'openai/gpt-4.1-mini',
+  llm: 'openai/gpt-5.4-mini',
 });
 
 const { createSessionTracer } = prefactor.getMiddleware();
