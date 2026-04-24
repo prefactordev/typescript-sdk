@@ -35,8 +35,12 @@ describe('PrefactorLiveKit', () => {
       },
     });
 
-    const spanSchemas = normalized.span_schemas as Record<string, unknown>;
-    expect(spanSchemas).toHaveProperty('livekit:tool:lookup-weather');
+    const spanTypeSchemas = normalized.span_type_schemas as Array<{ name: string }>;
+    expect(spanTypeSchemas.map((spanSchema) => spanSchema.name)).toContain(
+      'livekit:tool:lookup-weather'
+    );
+    expect(normalized).not.toHaveProperty('span_schemas');
+    expect(normalized).not.toHaveProperty('span_result_schemas');
   });
 
   test('createMiddleware returns createSessionTracer helper', () => {

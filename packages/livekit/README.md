@@ -52,8 +52,9 @@ await prefactor.shutdown();
 
 ## Configuration
 
-Custom tool schemas should be passed through `httpConfig.agentSchema.toolSchemas`, following the
-same schema pattern as the other Prefactor TypeScript provider packages.
+Custom tool schemas should be passed through `httpConfig.agentSchema.toolSchemas`. The LiveKit
+provider registers its default spans with `span_type_schemas` and compiles each custom tool schema
+into a tool-specific span type.
 
 ```ts
 import { init } from '@prefactor/core';
