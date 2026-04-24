@@ -29,12 +29,16 @@ const prefactor = init({
 const session = new voice.AgentSession({
   llm: 'openai/gpt-5.4-mini',
 });
+const agent = new voice.Agent({
+  instructions: 'You are a concise voice assistant.',
+});
 
 const { createSessionTracer } = prefactor.getMiddleware();
 const sessionTracer = createSessionTracer();
 
 try {
-  await sessionTracer.attach(session);
+  await sessionTracer.start(session, { agent });
+  await session.run({ userInput: 'Say hello in one sentence.' }).wait();
 } finally {
   await sessionTracer.close();
   await prefactor.shutdown();

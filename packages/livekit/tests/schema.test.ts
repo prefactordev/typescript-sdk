@@ -26,6 +26,8 @@ describe('livekit schema', () => {
     for (const spanSchema of DEFAULT_LIVEKIT_AGENT_SCHEMA.span_type_schemas) {
       expect(spanSchema.template).toEqual(expect.any(String));
       expect(spanSchema.template.length).toBeGreaterThan(0);
+      expect(spanSchema.template).not.toContain('| default:');
+      expect(spanSchema.template).not.toContain('metrics.metadata.modelName');
       expect(spanSchema.params_schema).not.toHaveProperty('prefactor:template');
     }
   });

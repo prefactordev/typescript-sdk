@@ -27,19 +27,19 @@ export const GENERIC_OBJECT_SCHEMA = {
 } as const satisfies JsonSchema;
 
 const LIVEKIT_SESSION_TEMPLATE =
-  'Session {{ status | default: "completed" }}{% if conversation.userMessages %}: {{ conversation.userMessages }} user, {{ conversation.assistantMessages | default: 0 }} assistant{% endif %}{% if conversation.functionCalls %}, {{ conversation.functionCalls }} tool calls{% endif %}{% if metadata.closeReason %} ({{ metadata.closeReason }}){% endif %}';
+  'Session {{ status }}{% if conversation.userMessages %}: {{ conversation.userMessages }} user, {{ conversation.assistantMessages }} assistant{% endif %}{% if conversation.functionCalls %}, {{ conversation.functionCalls }} tool calls{% endif %}{% if metadata.closeReason %} ({{ metadata.closeReason }}){% endif %}';
 const LIVEKIT_USER_TURN_TEMPLATE =
   '{% if transcript %}User: {{ transcript }}{% else %}User turn{% endif %}{% if language %} ({{ language }}){% endif %}{% if status == "cancelled" %} -> cancelled{% endif %}';
 const LIVEKIT_ASSISTANT_TURN_TEMPLATE =
-  '{% if outputs.message.content %}Assistant: {{ outputs.message.content }}{% elsif outputs.message.textContent %}Assistant: {{ outputs.message.textContent }}{% elsif status == "cancelled" %}Assistant turn cancelled{% else %}Assistant turn {{ status | default: "completed" }}{% endif %}';
+  '{% if outputs.message.content %}Assistant: {{ outputs.message.content }}{% elsif outputs.message.textContent %}Assistant: {{ outputs.message.textContent }}{% elsif status == "cancelled" %}Assistant turn cancelled{% else %}Assistant turn {{ status }}{% endif %}';
 const LIVEKIT_TOOL_TEMPLATE =
-  'Tool {{ outputs.name | default: "call" }}{% if status %} -> {{ status }}{% endif %}{% if isError %} (error){% endif %}';
+  'Tool {{ outputs.name }}{% if status %} -> {{ status }}{% endif %}{% if isError %} (error){% endif %}';
 const LIVEKIT_LLM_TEMPLATE =
-  'LLM {{ metrics.metadata.modelName | default: "model" }}{% if metrics.totalTokens %}: {{ metrics.totalTokens }} tokens{% endif %}{% if status %} -> {{ status }}{% endif %}';
+  'LLM {{ modelName }}{% if metrics.totalTokens %}: {{ metrics.totalTokens }} tokens{% endif %}{% if status %} -> {{ status }}{% endif %}';
 const LIVEKIT_STT_TEMPLATE =
-  'STT {{ metrics.metadata.modelName | default: "speech-to-text" }}{% if metrics.audioDurationMs %}: {{ metrics.audioDurationMs }} ms audio{% endif %}{% if status %} -> {{ status }}{% endif %}';
+  'STT {{ modelName }}{% if metrics.audioDurationMs %}: {{ metrics.audioDurationMs }} ms audio{% endif %}{% if status %} -> {{ status }}{% endif %}';
 const LIVEKIT_TTS_TEMPLATE =
-  'TTS {{ metrics.metadata.modelName | default: "text-to-speech" }}{% if metrics.charactersCount %}: {{ metrics.charactersCount }} chars{% endif %}{% if status %} -> {{ status }}{% endif %}';
+  'TTS {{ modelName }}{% if metrics.charactersCount %}: {{ metrics.charactersCount }} chars{% endif %}{% if status %} -> {{ status }}{% endif %}';
 const LIVEKIT_STATE_TEMPLATE = 'State change{% if status %} -> {{ status }}{% endif %}';
 const LIVEKIT_ERROR_TEMPLATE =
   'LiveKit error{% if error.errorType %} {{ error.errorType }}{% endif %}{% if error.message %}: {{ error.message }}{% endif %}';

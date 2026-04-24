@@ -272,6 +272,47 @@ describe('PrefactorLiveKitSession', () => {
     });
   });
 
+  test('custom tool spans use the resolved span type in inputs', async () => {
+    const { tracer, ended } = createTestTracer();
+    const sessionTracer = new PrefactorLiveKitSession({
+      tracer: tracer as never,
+      agentManager: {
+        startInstance: () => {},
+        finishInstance: () => {},
+      } as never,
+      toolSpanTypes: {
+        lookupWeather: 'livekit:tool:lookup-weather',
+      },
+    });
+    const session = new FakeSession();
+    await sessionTracer.attach(session as never);
+
+    session.emit('function_tools_executed', {
+      functionCalls: [
+        {
+          name: 'lookupWeather',
+          callId: 'tool-1',
+          arguments: '{"location":"Melbourne"}',
+          createdAt: 220,
+        },
+      ],
+      functionCallOutputs: [
+        {
+          name: 'lookupWeather',
+          output: { weather: 'sunny' },
+          isError: false,
+        },
+      ],
+    });
+    await flushQueue();
+
+    const toolSpan = ended.find((entry) => entry.span.spanType === 'livekit:tool:lookup-weather');
+    expect(toolSpan?.span.inputs).toMatchObject({
+      type: 'livekit:tool:lookup-weather',
+      toolName: 'lookupWeather',
+    });
+  });
+
   test('error emits error span and fails active turns', async () => {
     const { tracer, ended } = createTestTracer();
     const sessionTracer = new PrefactorLiveKitSession({

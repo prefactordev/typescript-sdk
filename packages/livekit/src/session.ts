@@ -345,13 +345,14 @@ export class PrefactorLiveKitSession {
         : undefined;
       const inputs = parseArguments(call);
       const parent = this.activeAssistantTurn?.span ?? null;
+      const spanType = resolveToolSpanType(toolName, this.toolSpanTypes);
 
       await this.emitChildSpan(parent, {
         name: toolName,
-        spanType: resolveToolSpanType(toolName, this.toolSpanTypes),
+        spanType,
         inputs: {
           name: toolName,
-          type: 'livekit:tool',
+          type: spanType,
           toolName,
           callId,
           groupId,
