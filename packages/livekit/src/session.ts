@@ -77,8 +77,10 @@ export class PrefactorLiveKitSession {
   private usageSummary: Record<string, unknown> = {};
   private agentInstanceStarted = false;
   private finalized = false;
+  private attachPromise: Promise<void> | null = null;
   private closingPromise: Promise<void> | null = null;
   private pendingError: Error | null = null;
+  private agentClass: string | undefined;
 
   constructor(options: SessionOptions) {
     this.tracer = options.tracer;
@@ -93,19 +95,33 @@ export class PrefactorLiveKitSession {
       return;
     }
 
+    if (this.attachPromise) {
+      await this.attachPromise;
+      if (this.finalized || (this.session === session && this.rootSpan)) {
+        return;
+      }
+    }
+
     if (this.session === session && this.rootSpan) {
       return;
     }
 
     if (this.session && this.session !== session) {
       await this.close();
+      if (this.finalized) {
+        return;
+      }
     }
 
-    this.session = session;
-    this.bindSessionEvents(session);
-    this.bindMetricsEmitters(session);
+    this.attachPromise = this.enqueue(async () => {
+      if (this.finalized || (this.session === session && this.rootSpan)) {
+        return;
+      }
 
-    await this.enqueue(async () => {
+      this.session = session;
+      this.bindSessionEvents(session);
+      this.bindMetricsEmitters(session);
+
       if (!this.rootSpan) {
         this.startAgentInstance();
         this.rootSpan = this.safeStartSpan({
@@ -125,6 +141,12 @@ export class PrefactorLiveKitSession {
         });
       }
     });
+
+    try {
+      await this.attachPromise;
+    } finally {
+      this.attachPromise = null;
+    }
   }
 
   async start<T>(
@@ -402,6 +424,8 @@ export class PrefactorLiveKitSession {
     const newState = readString(event, 'newState');
     const createdAt = readNumber(event, 'createdAt');
 
+    await this.emitStateSpan('agent', oldState, newState, createdAt);
+
     if (oldState === 'speaking' && newState === 'listening') {
       this.finishActiveAssistantTurn('completed', createdAt);
     }
@@ -412,9 +436,37 @@ export class PrefactorLiveKitSession {
     const newState = readString(event, 'newState');
     const createdAt = readNumber(event, 'createdAt');
 
+    await this.emitStateSpan('user', oldState, newState, createdAt);
+
     if (oldState === 'listening' && newState === 'speaking') {
       this.activeUserTurn = this.startUserTurn(createdAt);
     }
+  }
+
+  private async emitStateSpan(
+    actor: 'agent' | 'user',
+    oldState: string | undefined,
+    newState: string | undefined,
+    createdAt: number | undefined
+  ): Promise<void> {
+    await this.emitChildSpan(this.rootSpan, {
+      name: `${actor}_state_changed`,
+      spanType: 'livekit:state',
+      inputs: {
+        name: `${actor}_state_changed`,
+        type: 'livekit:state',
+        actor,
+        oldState,
+        newState,
+        eventType: `${actor}_state_changed`,
+        createdAt,
+        metadata: {},
+      },
+      outputs: {
+        status: 'completed',
+        metrics: {},
+      },
+    });
   }
 
   private async onSpeechCreated(event: unknown): Promise<void> {
@@ -810,6 +862,7 @@ export class PrefactorLiveKitSession {
       createdAt,
       startedAt: createdAt,
       metrics: {},
+      ...(this.agentClass ? { agentClass: this.agentClass } : {}),
       ...extra,
     };
   }
@@ -822,6 +875,8 @@ export class PrefactorLiveKitSession {
     }
 
     const agentClassName = String(agentClass);
+    this.agentClass = agentClassName;
+    this.rootSpan.inputs.agentClass = agentClassName;
     for (const turn of this.conversationTurns) {
       if (!turn.agentClass) {
         turn.agentClass = agentClassName;

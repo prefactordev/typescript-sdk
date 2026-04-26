@@ -18,7 +18,7 @@ export interface LiveKitSpanTypeSchema {
 
 const DEFAULT_RESULT_SCHEMA = {
   type: 'object',
-  additionalProperties: false,
+  additionalProperties: true,
 } as const satisfies JsonSchema;
 
 export const GENERIC_OBJECT_SCHEMA = {

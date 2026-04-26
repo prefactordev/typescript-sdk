@@ -126,8 +126,8 @@ describe('PrefactorLiveKitSession', () => {
     expect(session.handlers.has('session_usage_updated')).toBe(true);
   });
 
-  test('start delegates to session.start', async () => {
-    const { tracer } = createTestTracer();
+  test('concurrent attach binds listeners once', async () => {
+    const { tracer, started } = createTestTracer();
     const sessionTracer = new PrefactorLiveKitSession({
       tracer: tracer as never,
       agentManager: {
@@ -137,10 +137,36 @@ describe('PrefactorLiveKitSession', () => {
     });
     const session = new FakeSession();
 
-    const result = await sessionTracer.start(session as never, { agent: { foo: 'bar' } });
+    await Promise.all([
+      sessionTracer.attach(session as never),
+      sessionTracer.attach(session as never),
+    ]);
+
+    expect(started.filter((entry) => entry.spanType === 'livekit:session')).toHaveLength(1);
+    expect(session.handlers.get('close')).toHaveLength(1);
+    expect(session.handlers.get('function_tools_executed')).toHaveLength(1);
+  });
+
+  test('start delegates to session.start', async () => {
+    class ExampleAgent {}
+
+    const { tracer, started } = createTestTracer();
+    const sessionTracer = new PrefactorLiveKitSession({
+      tracer: tracer as never,
+      agentManager: {
+        startInstance: () => {},
+        finishInstance: () => {},
+      } as never,
+    });
+    const session = new FakeSession();
+
+    const agent = new ExampleAgent();
+    const result = await sessionTracer.start(session as never, { agent });
 
     expect(result).toBe('started');
-    expect(session.startCalls).toEqual([{ agent: { foo: 'bar' } }]);
+    expect(session.startCalls).toEqual([{ agent }]);
+    const rootSpan = started.find((entry) => entry.spanType === 'livekit:session');
+    expect(rootSpan?.inputs.agentClass).toBe('ExampleAgent');
   });
 
   test('final user transcripts create a user turn span', async () => {
@@ -269,6 +295,46 @@ describe('PrefactorLiveKitSession', () => {
     expect(toolSpan?.outputs).toMatchObject({
       status: 'completed',
       isError: false,
+    });
+  });
+
+  test('state change events emit state spans', async () => {
+    const { tracer, ended } = createTestTracer();
+    const sessionTracer = new PrefactorLiveKitSession({
+      tracer: tracer as never,
+      agentManager: {
+        startInstance: () => {},
+        finishInstance: () => {},
+      } as never,
+    });
+    const session = new FakeSession();
+    await sessionTracer.attach(session as never);
+
+    session.emit('agent_state_changed', {
+      oldState: 'listening',
+      newState: 'speaking',
+      createdAt: 200,
+    });
+    session.emit('user_state_changed', {
+      oldState: 'listening',
+      newState: 'speaking',
+      createdAt: 210,
+    });
+    await flushQueue();
+
+    const stateSpans = ended.filter((entry) => entry.span.spanType === 'livekit:state');
+    expect(stateSpans).toHaveLength(2);
+    expect(stateSpans[0]?.span.inputs).toMatchObject({
+      actor: 'agent',
+      oldState: 'listening',
+      newState: 'speaking',
+      eventType: 'agent_state_changed',
+    });
+    expect(stateSpans[1]?.span.inputs).toMatchObject({
+      actor: 'user',
+      oldState: 'listening',
+      newState: 'speaking',
+      eventType: 'user_state_changed',
     });
   });
 

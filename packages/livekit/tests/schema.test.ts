@@ -176,4 +176,32 @@ describe('livekit schema', () => {
       },
     });
   });
+
+  test('normalizes missing result schemas to open objects', () => {
+    const normalized = normalizeAgentSchema({
+      external_identifier: 'livekit-schema',
+      span_type_schemas: [
+        {
+          name: 'livekit:custom',
+          params_schema: {
+            type: 'object',
+            properties: {
+              type: { type: 'string', const: 'livekit:custom' },
+            },
+          },
+        },
+      ],
+    });
+
+    const spanTypeSchemas = normalized.agentSchema.span_type_schemas as Array<{
+      name: string;
+      result_schema: Record<string, unknown>;
+    }>;
+    const customSchema = spanTypeSchemas.find((spanSchema) => spanSchema.name === 'livekit:custom');
+
+    expect(customSchema?.result_schema).toEqual({
+      type: 'object',
+      additionalProperties: true,
+    });
+  });
 });
