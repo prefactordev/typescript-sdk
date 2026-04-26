@@ -21,7 +21,7 @@ type SessionOptions = {
   agentManager: AgentInstanceManager;
   agentInfo?: SessionAgentInfo;
   toolSpanTypes?: Record<string, string>;
-  onDidClose?: () => void;
+  onDidClose?: () => void | Promise<void>;
 };
 
 type ActiveTurn = {
@@ -356,8 +356,14 @@ export class PrefactorLiveKitSession {
   private async onFunctionToolsExecuted(event: unknown): Promise<void> {
     const zipped = readZippedFunctionCalls(event);
     for (const [call, output] of zipped) {
+      const rawToolName = readString(call, 'name');
+      const toolName = rawToolName?.trim();
+      if (!toolName) {
+        safeWarn('Skipping malformed LiveKit function tool event without a valid tool name.', call);
+        continue;
+      }
+
       this.conversationSummary.functionCalls += 1;
-      const toolName = readString(call, 'name') ?? 'unknown';
       const callId = readString(call, 'callId');
       const groupId = readString(call, 'groupId');
       const createdAt = readNumber(call, 'createdAt');
@@ -721,7 +727,11 @@ export class PrefactorLiveKitSession {
 
     this.finishAgentInstance();
     this.session = null;
-    this.onDidClose?.();
+    try {
+      await this.onDidClose?.();
+    } catch (error) {
+      safeWarn('PrefactorLiveKitSession onDidClose callback failed.', error);
+    }
   }
 
   private async finalizeFromState(
@@ -888,8 +898,12 @@ export class PrefactorLiveKitSession {
 function safeWarn(message: string, error: unknown): void {
   try {
     logger.warn(message, error);
-  } catch {
-    // Logging must never throw from instrumentation code.
+  } catch (err) {
+    try {
+      console.error(message, error, err);
+    } catch {
+      // Logging must never throw from instrumentation code.
+    }
   }
 }
 

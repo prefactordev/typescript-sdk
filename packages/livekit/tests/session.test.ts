@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test } from 'bun:test';
+import { afterEach, describe, expect, spyOn, test } from 'bun:test';
 import { type Span, SpanContext, SpanStatus, type SpanType } from '@prefactor/core';
 import { PrefactorLiveKitSession } from '../src/session.js';
 
@@ -99,7 +99,14 @@ function createTestTracer() {
 }
 
 describe('PrefactorLiveKitSession', () => {
+  let warnSpy: ReturnType<typeof spyOn> | undefined;
+  let errorSpy: ReturnType<typeof spyOn> | undefined;
+
   afterEach(() => {
+    warnSpy?.mockRestore();
+    errorSpy?.mockRestore();
+    warnSpy = undefined;
+    errorSpy = undefined;
     SpanContext.clear();
   });
 
@@ -298,6 +305,74 @@ describe('PrefactorLiveKitSession', () => {
     });
   });
 
+  test('function tool events without valid names are logged and skipped', async () => {
+    warnSpy = spyOn(console, 'warn').mockImplementation(() => {});
+    const { tracer, ended } = createTestTracer();
+    const sessionTracer = new PrefactorLiveKitSession({
+      tracer: tracer as never,
+      agentManager: {
+        startInstance: () => {},
+        finishInstance: () => {},
+      } as never,
+    });
+    const session = new FakeSession();
+    await sessionTracer.attach(session as never);
+
+    session.emit('function_tools_executed', {
+      functionCalls: [
+        {
+          callId: 'tool-1',
+          arguments: '{"location":"Melbourne"}',
+        },
+        {
+          name: '   ',
+          callId: 'tool-2',
+          arguments: '{"location":"Sydney"}',
+        },
+      ],
+      functionCallOutputs: [{ output: { weather: 'sunny' } }, { output: { weather: 'rain' } }],
+    });
+    await flushQueue();
+    await sessionTracer.close();
+
+    const toolSpans = ended.filter((entry) => entry.span.spanType === 'livekit:tool');
+    const root = ended.find((entry) => entry.span.spanType === 'livekit:session');
+    expect(toolSpans).toHaveLength(0);
+    expect(root?.outputs?.conversation).toMatchObject({ functionCalls: 0 });
+    expect(warnSpy).toHaveBeenCalledTimes(2);
+    expect(warnSpy?.mock.calls[0]?.[0]).toContain('Skipping malformed LiveKit function tool event');
+  });
+
+  test('safe warning fallback logs when the logger throws', async () => {
+    const loggerFailure = new Error('logger failed');
+    warnSpy = spyOn(console, 'warn').mockImplementation(() => {
+      throw loggerFailure;
+    });
+    errorSpy = spyOn(console, 'error').mockImplementation(() => {});
+    const { tracer } = createTestTracer();
+    const sessionTracer = new PrefactorLiveKitSession({
+      tracer: tracer as never,
+      agentManager: {
+        startInstance: () => {},
+        finishInstance: () => {},
+      } as never,
+    });
+    const session = new FakeSession();
+    await sessionTracer.attach(session as never);
+
+    session.emit('function_tools_executed', {
+      functionCalls: [{ callId: 'tool-1' }],
+      functionCallOutputs: [{}],
+    });
+    await flushQueue();
+
+    expect(errorSpy).toHaveBeenCalledWith(
+      'Skipping malformed LiveKit function tool event without a valid tool name.',
+      { callId: 'tool-1' },
+      loggerFailure
+    );
+  });
+
   test('state change events emit state spans', async () => {
     const { tracer, ended } = createTestTracer();
     const sessionTracer = new PrefactorLiveKitSession({
@@ -475,6 +550,34 @@ describe('PrefactorLiveKitSession', () => {
     });
     expect(root?.error?.message).toBe('start failed');
     expect(finishCalls).toBe(1);
+  });
+
+  test('start rejection still surfaces when onDidClose fails', async () => {
+    warnSpy = spyOn(console, 'warn').mockImplementation(() => {});
+    const { tracer, ended } = createTestTracer();
+    const sessionTracer = new PrefactorLiveKitSession({
+      tracer: tracer as never,
+      agentManager: {
+        startInstance: () => {},
+        finishInstance: () => {},
+      } as never,
+      onDidClose: async () => {
+        throw new Error('close callback failed');
+      },
+    });
+    const session = new FakeSession();
+    session.startError = new Error('start failed');
+
+    await expect(sessionTracer.start(session as never, { agent: { foo: 'bar' } })).rejects.toThrow(
+      'start failed'
+    );
+
+    const root = ended.find((entry) => entry.span.spanType === 'livekit:session');
+    expect(root?.error?.message).toBe('start failed');
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining('PrefactorLiveKitSession onDidClose callback failed.'),
+      expect.any(Error)
+    );
   });
 
   test('manual close finalizes the root span as failed when an error was recorded', async () => {
