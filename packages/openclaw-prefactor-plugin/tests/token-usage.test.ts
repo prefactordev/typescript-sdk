@@ -45,7 +45,7 @@ describe('token usage flow', () => {
 
       await manager.createAssistantResponseSpan('sess-1', 'Hello world', tokens);
 
-      const call = mockAgent._calls.find(c => c.schema === 'openclaw:assistant_response');
+      const call = mockAgent._calls.find((c) => c.schema === 'openclaw:assistant_response');
       expect(call).toBeDefined();
       expect(call?.payload.tokens).toEqual(tokens);
     });
@@ -57,7 +57,7 @@ describe('token usage flow', () => {
 
       await manager.createAssistantResponseSpan('sess-2', 'Hello world', undefined);
 
-      const call = mockAgent._calls.find(c => c.schema === 'openclaw:assistant_response');
+      const call = mockAgent._calls.find((c) => c.schema === 'openclaw:assistant_response');
       expect(call).toBeDefined();
       expect(call?.payload).not.toHaveProperty('tokens');
     });
@@ -71,7 +71,7 @@ describe('token usage flow', () => {
 
       await manager.createAssistantResponseSpan('sess-3', 'Hello world', tokens);
 
-      const call = mockAgent._calls.find(c => c.schema === 'openclaw:assistant_response');
+      const call = mockAgent._calls.find((c) => c.schema === 'openclaw:assistant_response');
       expect(call?.payload.tokens).toEqual(tokens);
     });
   });
@@ -92,7 +92,7 @@ describe('token usage flow', () => {
 
       await manager.createAgentThinkingSpan('sess-4', '<thinking>...</thinking>', tokens);
 
-      const call = mockAgent._calls.find(c => c.schema === 'openclaw:agent_thinking');
+      const call = mockAgent._calls.find((c) => c.schema === 'openclaw:agent_thinking');
       expect(call).toBeDefined();
       expect(call?.payload.tokens).toEqual(tokens);
     });
@@ -104,7 +104,7 @@ describe('token usage flow', () => {
 
       await manager.createAgentThinkingSpan('sess-5', '<thinking>...</thinking>', undefined);
 
-      const call = mockAgent._calls.find(c => c.schema === 'openclaw:agent_thinking');
+      const call = mockAgent._calls.find((c) => c.schema === 'openclaw:agent_thinking');
       expect(call).toBeDefined();
       expect(call?.payload).not.toHaveProperty('tokens');
     });
