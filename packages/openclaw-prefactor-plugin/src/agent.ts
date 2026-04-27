@@ -245,7 +245,17 @@ export class Agent {
             type: 'object',
             properties: {
               text: { type: 'string', description: 'Assistant response text' },
-              tokens: { type: 'object', description: 'Token usage for this LLM call' },
+              tokens: {
+                type: 'object',
+                description: 'Token usage for this LLM call',
+                properties: {
+                  input:      { type: 'number', description: 'Input tokens' },
+                  output:     { type: 'number', description: 'Output tokens' },
+                  cacheRead:  { type: 'number', description: 'Cache read tokens' },
+                  cacheWrite: { type: 'number', description: 'Cache write tokens' },
+                  total:      { type: 'number', description: 'Total tokens' },
+                },
+              },
               provider: { type: 'string', description: 'LLM provider name' },
               model: { type: 'string', description: 'LLM model name' },
             },
@@ -302,7 +312,17 @@ export class Agent {
             type: 'object',
             properties: {
               thinking: { type: 'string', description: 'Agent thinking content' },
-              tokens: { type: 'object', description: 'Token usage for this LLM call' },
+              tokens: {
+                type: 'object',
+                description: 'Token usage for this LLM call',
+                properties: {
+                  input:      { type: 'number', description: 'Input tokens' },
+                  output:     { type: 'number', description: 'Output tokens' },
+                  cacheRead:  { type: 'number', description: 'Cache read tokens' },
+                  cacheWrite: { type: 'number', description: 'Cache write tokens' },
+                  total:      { type: 'number', description: 'Total tokens' },
+                },
+              },
               signature: { type: 'string', description: 'Thinking signature type' },
               provider: { type: 'string', description: 'LLM provider name' },
               model: { type: 'string', description: 'LLM model name' },

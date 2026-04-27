@@ -296,6 +296,7 @@ export default function register(api: OpenClawPluginApi) {
           output: event.usage.output,
           cacheRead: event.usage.cacheRead,
           cacheWrite: event.usage.cacheWrite,
+          total: event.usage.total,
         }
       : undefined;
 
