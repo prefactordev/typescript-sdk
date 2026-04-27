@@ -1,4 +1,3 @@
-// tests/token-usage.test.ts
 import { describe, expect, test } from 'bun:test';
 import type { Agent } from '../src/agent.js';
 import { createLogger } from '../src/logger.js';

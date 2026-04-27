@@ -319,6 +319,7 @@ export default function register(api: OpenClawPluginApi) {
       usageOutput: tokens?.output,
       usageCacheRead: tokens?.cacheRead,
       usageCacheWrite: tokens?.cacheWrite,
+      usageTotal: tokens?.total,
       hasLastAssistant: !!event.lastAssistant,
     });
 
