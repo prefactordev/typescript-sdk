@@ -218,8 +218,12 @@ export class PrefactorLiveKitSession {
 
     for (const [eventName, handler] of events) {
       if (typeof session.on === 'function') {
-        session.on(eventName as never, handler as never);
-        this.boundSessionEvents.set(eventName, handler);
+        try {
+          session.on(eventName as never, handler as never);
+          this.boundSessionEvents.set(eventName, handler);
+        } catch (error) {
+          safeWarn(`Failed to bind LiveKit session event "${eventName}".`, error);
+        }
       }
     }
   }
@@ -241,8 +245,12 @@ export class PrefactorLiveKitSession {
     const handler = (event: unknown) => {
       void this.handleQueued(() => this.onComponentMetrics(kind, event));
     };
-    emitter.on('metrics_collected', handler);
-    this.boundMetricsEvents.push({ emitter, handler });
+    try {
+      emitter.on('metrics_collected', handler);
+      this.boundMetricsEvents.push({ emitter, handler });
+    } catch (error) {
+      safeWarn(`Failed to bind LiveKit ${kind} metrics emitter.`, error);
+    }
   }
 
   private async handleQueued(task: () => Promise<void>): Promise<void> {
@@ -507,11 +515,7 @@ export class PrefactorLiveKitSession {
       },
       outputs: {
         status: 'failed',
-        error: {
-          errorType: error.name,
-          message: error.message,
-          stacktrace: error.stack ?? '',
-        },
+        error: serializeError(error),
       },
       error,
     });
@@ -744,13 +748,21 @@ export class PrefactorLiveKitSession {
   private unbindAllEvents(): void {
     if (this.session?.off) {
       for (const [eventName, handler] of this.boundSessionEvents) {
-        this.session.off(eventName as never, handler as never);
+        try {
+          this.session.off(eventName as never, handler as never);
+        } catch (error) {
+          safeWarn(`Failed to unbind LiveKit session event "${eventName}".`, error);
+        }
       }
     }
     this.boundSessionEvents.clear();
 
     for (const { emitter, handler } of this.boundMetricsEvents) {
-      emitter.off?.('metrics_collected', handler);
+      try {
+        emitter.off?.('metrics_collected', handler);
+      } catch (error) {
+        safeWarn('Failed to unbind LiveKit metrics emitter.', error);
+      }
     }
     this.boundMetricsEvents.length = 0;
   }
@@ -934,7 +946,7 @@ function serializeUnknown(value: unknown): unknown {
 
 function serializeError(error: Error): Record<string, unknown> {
   return {
-    errorType: error.name,
+    type: error.name,
     message: error.message,
     stacktrace: error.stack ?? '',
   };

@@ -1,4 +1,5 @@
-import { afterEach, describe, expect, test } from 'bun:test';
+import { afterEach, describe, expect, spyOn, test } from 'bun:test';
+import { stderr } from 'node:process';
 import { getClient, init as initCore } from '@prefactor/core';
 import { DEFAULT_LIVEKIT_AGENT_SCHEMA, PrefactorLiveKit } from '../src/index.js';
 import { PACKAGE_NAME, PACKAGE_VERSION } from '../src/version.js';
@@ -9,7 +10,14 @@ class FakeSession {
 }
 
 describe('PrefactorLiveKit', () => {
+  let warnSpy: ReturnType<typeof spyOn> | undefined;
+  let stderrSpy: ReturnType<typeof spyOn> | undefined;
+
   afterEach(async () => {
+    warnSpy?.mockRestore();
+    stderrSpy?.mockRestore();
+    warnSpy = undefined;
+    stderrSpy = undefined;
     await getClient()?.shutdown();
   });
 
@@ -35,8 +43,8 @@ describe('PrefactorLiveKit', () => {
       },
     });
 
-    const spanTypeSchemas = normalized.span_type_schemas as Array<{ name: string }>;
-    expect(spanTypeSchemas.map((spanSchema) => spanSchema.name)).toContain(
+    const spanTypeSchemas = normalized.span_type_schemas as Array<{ spanType: string }>;
+    expect(spanTypeSchemas.map((spanSchema) => spanSchema.spanType)).toContain(
       'livekit:tool:lookup-weather'
     );
     expect(normalized).not.toHaveProperty('span_schemas');
@@ -183,6 +191,48 @@ describe('PrefactorLiveKit', () => {
 
     await provider.shutdown();
     expect(closeCalls).toBe(1);
+  });
+
+  test('provider shutdown logging fallback does not throw when logger fails', async () => {
+    const provider = new PrefactorLiveKit();
+    const middleware = provider.createMiddleware(
+      {
+        startSpan: () => null,
+        endSpan: () => {},
+        close: async () => {},
+        startAgentInstance: () => {},
+        finishAgentInstance: () => {},
+      } as never,
+      {
+        startInstance: () => {},
+        finishInstance: () => {},
+      } as never,
+      {} as never
+    );
+    const sessionTracer = middleware.createSessionTracer();
+    const closeError = new Error('close failed');
+    const loggerError = new Error('logger failed');
+    sessionTracer.close = async () => {
+      throw closeError;
+    };
+    warnSpy = spyOn(console, 'warn').mockImplementation(() => {
+      throw loggerError;
+    });
+    stderrSpy = spyOn(stderr, 'write').mockImplementation(() => true);
+
+    await expect(provider.shutdown()).resolves.toBeUndefined();
+
+    expect(stderrSpy).toHaveBeenCalledWith(
+      expect.stringContaining(
+        'PrefactorLiveKit.shutdown() failed while reporting a session-tracer close error.'
+      )
+    );
+    expect(stderrSpy).toHaveBeenCalledWith(
+      expect.stringContaining('shutdown_error=Error: close failed')
+    );
+    expect(stderrSpy).toHaveBeenCalledWith(
+      expect.stringContaining('logger_error=Error: logger failed')
+    );
   });
 
   test('core init exposes createSessionTracer through middleware', async () => {

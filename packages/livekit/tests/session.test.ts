@@ -48,6 +48,59 @@ class FakeSession extends FakeEmitter {
   }
 }
 
+class ThrowingEmitter extends FakeEmitter {
+  constructor(
+    private readonly failures: {
+      on?: boolean;
+      off?: boolean;
+    }
+  ) {
+    super();
+  }
+
+  override on(event: string, handler: (event: unknown) => void): void {
+    if (this.failures.on) {
+      throw new Error(`failed to bind ${event}`);
+    }
+    super.on(event, handler);
+  }
+
+  override off(event: string, handler: (event: unknown) => void): void {
+    if (this.failures.off) {
+      throw new Error(`failed to unbind ${event}`);
+    }
+    super.off(event, handler);
+  }
+}
+
+class ThrowingSession extends FakeSession {
+  constructor(
+    private readonly failures: {
+      on?: boolean;
+      off?: boolean;
+      llmOn?: boolean;
+      llmOff?: boolean;
+    }
+  ) {
+    super();
+    this.llm = new ThrowingEmitter({ on: failures.llmOn, off: failures.llmOff });
+  }
+
+  override on(event: string, handler: (event: unknown) => void): void {
+    if (this.failures.on) {
+      throw new Error(`failed to bind ${event}`);
+    }
+    super.on(event, handler);
+  }
+
+  override off(event: string, handler: (event: unknown) => void): void {
+    if (this.failures.off) {
+      throw new Error(`failed to unbind ${event}`);
+    }
+    super.off(event, handler);
+  }
+}
+
 function flushQueue(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
@@ -480,7 +533,15 @@ describe('PrefactorLiveKitSession', () => {
     const errorSpan = ended.find((entry) => entry.span.spanType === 'livekit:error');
     const assistantTurn = ended.find((entry) => entry.span.spanType === 'livekit:assistant_turn');
     expect(errorSpan?.error?.message).toBe('boom');
+    expect(errorSpan?.outputs?.error).toMatchObject({
+      type: 'Error',
+      message: 'boom',
+    });
     expect(assistantTurn?.error?.message).toBe('boom');
+    expect(assistantTurn?.outputs?.error).toMatchObject({
+      type: 'Error',
+      message: 'boom',
+    });
   });
 
   test('session close finalizes root span and finishes agent instance', async () => {
@@ -518,6 +579,11 @@ describe('PrefactorLiveKitSession', () => {
       },
     });
     expect(finishCalls).toBe(1);
+    expect(session.handlers.get('close')).toHaveLength(0);
+    expect(session.handlers.get('session_usage_updated')).toHaveLength(0);
+    expect(session.llm.handlers.get('metrics_collected')).toHaveLength(0);
+    expect(session.stt.handlers.get('metrics_collected')).toHaveLength(0);
+    expect(session.tts.handlers.get('metrics_collected')).toHaveLength(0);
   });
 
   test('start rejection finalizes the root span as failed and finishes the agent instance', async () => {
@@ -543,7 +609,7 @@ describe('PrefactorLiveKitSession', () => {
     expect(root?.outputs).toMatchObject({
       status: 'failed',
       error: {
-        errorType: 'Error',
+        type: 'Error',
         message: 'start failed',
       },
     });
@@ -603,7 +669,7 @@ describe('PrefactorLiveKitSession', () => {
     expect(root?.outputs).toMatchObject({
       status: 'failed',
       error: {
-        errorType: 'Error',
+        type: 'Error',
         message: 'boom',
       },
     });
@@ -632,10 +698,68 @@ describe('PrefactorLiveKitSession', () => {
     expect(root?.outputs).toMatchObject({
       status: 'failed',
       error: {
-        errorType: 'Error',
+        type: 'Error',
         message: 'close failed',
       },
     });
+  });
+
+  test('listener binding failures are logged and swallowed during attach', async () => {
+    warnSpy = spyOn(console, 'warn').mockImplementation(() => {});
+    const { tracer, started } = createTestTracer();
+    const sessionTracer = new PrefactorLiveKitSession({
+      tracer: tracer as never,
+      agentManager: {
+        startInstance: () => {},
+        finishInstance: () => {},
+      } as never,
+    });
+    const session = new ThrowingSession({ on: true, llmOn: true });
+
+    await expect(sessionTracer.attach(session as never)).resolves.toBeUndefined();
+
+    expect(started.some((entry) => entry.spanType === 'livekit:session')).toBe(true);
+    expect(session.handlers.size).toBe(0);
+    expect(session.llm.handlers.size).toBe(0);
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining('Failed to bind LiveKit session event'),
+      expect.any(Error)
+    );
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining('Failed to bind LiveKit llm metrics emitter.'),
+      expect.any(Error)
+    );
+  });
+
+  test('listener unbinding failures are logged and finalization still completes', async () => {
+    warnSpy = spyOn(console, 'warn').mockImplementation(() => {});
+    const { tracer, ended } = createTestTracer();
+    let finishCalls = 0;
+    const sessionTracer = new PrefactorLiveKitSession({
+      tracer: tracer as never,
+      agentManager: {
+        startInstance: () => {},
+        finishInstance: () => {
+          finishCalls += 1;
+        },
+      } as never,
+    });
+    const session = new ThrowingSession({ off: true, llmOff: true });
+    await sessionTracer.attach(session as never);
+
+    await expect(sessionTracer.close()).resolves.toBeUndefined();
+
+    const root = ended.find((entry) => entry.span.spanType === 'livekit:session');
+    expect(root?.outputs).toMatchObject({ status: 'completed' });
+    expect(finishCalls).toBe(1);
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining('Failed to unbind LiveKit session event'),
+      expect.any(Error)
+    );
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining('Failed to unbind LiveKit metrics emitter.'),
+      expect.any(Error)
+    );
   });
 
   test('component metrics emit llm, stt, and tts spans without deprecated session metrics', async () => {

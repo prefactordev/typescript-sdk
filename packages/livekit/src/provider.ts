@@ -1,3 +1,4 @@
+import { stderr } from 'node:process';
 import {
   type AgentInstanceManager,
   type Config,
@@ -95,15 +96,35 @@ function toLiveKitAgentInfo(config: Config):
   };
 }
 
-function logShutdownError(error: unknown): void {
+function logShutdownError(error: unknown) {
   try {
     logger.warn(
       'PrefactorLiveKit.shutdown() failed while closing an active session tracer.',
       error
     );
-  } catch {
-    // Logging must never turn shutdown cleanup into a user-visible failure.
+  } catch (logError) {
+    return writeShutdownFallbackLog(error, logError);
   }
+}
+
+function writeShutdownFallbackLog(error: unknown, logError: unknown): void {
+  try {
+    stderr.write(
+      `PrefactorLiveKit.shutdown() failed while reporting a session-tracer close error. shutdown_error=${formatEmergencyLogValue(
+        error
+      )} logger_error=${formatEmergencyLogValue(logError)}\n`
+    );
+  } catch {
+    // Shutdown cleanup must remain non-throwing even when every logging path fails.
+  }
+}
+
+function formatEmergencyLogValue(value: unknown): string {
+  if (value instanceof Error) {
+    return `${value.name}: ${value.message}`;
+  }
+
+  return typeof value === 'string' ? value : JSON.stringify(value);
 }
 
 function cloneToolSpanTypes(
