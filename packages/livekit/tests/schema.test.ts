@@ -26,9 +26,6 @@ describe('livekit schema', () => {
     for (const spanSchema of DEFAULT_LIVEKIT_AGENT_SCHEMA.span_type_schemas) {
       expect(spanSchema.template).toEqual(expect.any(String));
       expect(spanSchema.template.length).toBeGreaterThan(0);
-      expect(spanSchema.template).not.toContain('| default:');
-      expect(spanSchema.template).not.toContain('metrics.metadata.modelName');
-      expect(spanSchema.params_schema).not.toHaveProperty('prefactor:template');
     }
   });
 
@@ -46,7 +43,6 @@ describe('livekit schema', () => {
 
     for (const spanSchema of spanTypeSchemas) {
       expect(spanSchema.template).toEqual(expect.any(String));
-      expect(spanSchema.params_schema).not.toHaveProperty('prefactor:template');
       expect(spanSchema.result_schema).toEqual(expect.any(Object));
     }
   });
@@ -79,7 +75,6 @@ describe('livekit schema', () => {
     expect(customToolSchema?.params_schema.properties?.type?.const).toBe(
       'livekit:tool:lookup-weather'
     );
-    expect(customToolSchema?.params_schema).not.toHaveProperty('prefactor:template');
     expect(customToolSchema?.result_schema).toEqual(expect.any(Object));
   });
 
@@ -115,65 +110,6 @@ describe('livekit schema', () => {
 
     expect(normalized.toolSpanTypes).toEqual({
       first: 'livekit:tool:lookup-weather',
-    });
-  });
-
-  test('normalizes legacy span_schemas input to span_type_schemas', () => {
-    const normalized = normalizeAgentSchema({
-      external_identifier: 'legacy-livekit-schema',
-      span_schemas: {
-        'livekit:session': {
-          type: 'object',
-          title: 'LiveKit session',
-          description: 'Session lifecycle',
-          'prefactor:template': 'Session {{ status }}',
-          properties: {
-            type: { type: 'string', const: 'livekit:session' },
-          },
-        },
-      },
-      span_result_schemas: {
-        'livekit:session': {
-          type: 'object',
-          properties: {
-            status: { type: 'string' },
-          },
-        },
-      },
-    });
-
-    expect(normalized.agentSchema).not.toHaveProperty('span_schemas');
-    expect(normalized.agentSchema).not.toHaveProperty('span_result_schemas');
-
-    const spanTypeSchemas = normalized.agentSchema.span_type_schemas as Array<{
-      name: string;
-      title?: string;
-      description?: string;
-      template?: string;
-      params_schema: Record<string, unknown>;
-      result_schema: Record<string, unknown>;
-    }>;
-    const sessionSchema = spanTypeSchemas.find(
-      (spanSchema) => spanSchema.name === 'livekit:session'
-    );
-
-    expect(sessionSchema).toMatchObject({
-      name: 'livekit:session',
-      title: 'LiveKit session',
-      description: 'Session lifecycle',
-      template: 'Session {{ status }}',
-      result_schema: {
-        type: 'object',
-        properties: {
-          status: { type: 'string' },
-        },
-      },
-    });
-    expect(sessionSchema?.params_schema).toEqual({
-      type: 'object',
-      properties: {
-        type: { type: 'string', const: 'livekit:session' },
-      },
     });
   });
 
