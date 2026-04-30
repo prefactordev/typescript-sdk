@@ -45,6 +45,9 @@ Flag a test for removal or rewrite when it:
 - Asserts mock choreography rather than observable outcomes.
 - Replaces a stale test by adding a new one without removing the obsolete expectation.
 - Tests behavior already guaranteed by the type system unless there is a runtime contract at stake.
+- Only asserts that an obsolete or unsupported output is not returned, instead of asserting the
+  current positive contract. Example: if the behavior is "Paris is in France", do not keep a test
+  whose only value is "does not answer Germany" unless "Germany" is a realistic product regression.
 
 ## Keep Valuable Tests
 
@@ -65,6 +68,10 @@ Treat a unit as a unit of behavior, not a class or function. A non-technical sta
 Prioritize detail for `domain` code. Use only a few high-level tests for `controller` code. Call out `trivial` code that does not need dedicated unit tests. For `overcomplicated` code, suggest extracting deeper domain units before adding a broad test suite.
 
 When a feature replaces or changes another feature, remove or update stale tests instead of preserving outdated expectations beside new ones.
+
+Prefer positive contract assertions over broad negative assertions. A negative assertion is worth
+keeping only when the excluded output is a documented edge case, a realistic regression, or a
+security/business invariant.
 
 ## Output Contract
 

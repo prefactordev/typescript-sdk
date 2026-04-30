@@ -32,8 +32,6 @@ describe('livekit schema', () => {
   test('normalizes default schema to span_type_schemas', () => {
     const normalized = normalizeAgentSchema(DEFAULT_LIVEKIT_AGENT_SCHEMA);
 
-    expect(normalized.agentSchema).not.toHaveProperty('span_schemas');
-    expect(normalized.agentSchema).not.toHaveProperty('span_result_schemas');
     const spanTypeSchemas = normalized.agentSchema.span_type_schemas as Array<{
       name: string;
       template?: string;
