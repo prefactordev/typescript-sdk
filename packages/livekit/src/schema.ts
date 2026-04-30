@@ -294,10 +294,17 @@ export function normalizeAgentSchema(
     DEFAULT_LIVEKIT_AGENT_SCHEMA.span_type_schemas as unknown as LiveKitSpanTypeSchema[],
     userSpanTypeSchemas ?? []
   );
-  const customToolSpanTypeSchemas = buildCustomToolSpanTypeSchemas(normalizedTools.toolSchemas);
+  const existingSpanTypeNames = new Set(mergedSpanTypeSchemas.map((schema) => schema.name));
+  const customToolSpanTypeSchemas = buildCustomToolSpanTypeSchemas(
+    normalizedTools.toolSchemas,
+    existingSpanTypeNames
+  );
 
-  const { toolSchemas: _toolSchemas, span_type_schemas: _spanTypeSchemas, ...rest } =
-    cloneRecord(agentSchema);
+  const {
+    toolSchemas: _toolSchemas,
+    span_type_schemas: _spanTypeSchemas,
+    ...rest
+  } = cloneRecord(agentSchema);
 
   return {
     agentSchema: {
@@ -347,7 +354,13 @@ function mergeSpanTypeSchemas(
   overrides: LiveKitSpanTypeSchema[]
 ): LiveKitSpanTypeSchema[] {
   const overrideMap = new Map(overrides.map((s) => [s.name, s]));
-  const merged = defaults.map((s) => overrideMap.get(s.name) ?? s);
+  const merged = defaults.map((s) => {
+    const override = overrideMap.get(s.name);
+    if (!override) {
+      return s;
+    }
+    return override.result_schema ? override : { ...override, result_schema: s.result_schema };
+  });
   const newEntries = overrides
     .filter((s) => !defaults.some((d) => d.name === s.name))
     .map((s) => (s.result_schema ? s : { ...s, result_schema: DEFAULT_RESULT_SCHEMA }));
@@ -355,16 +368,25 @@ function mergeSpanTypeSchemas(
 }
 
 function buildCustomToolSpanTypeSchemas(
-  toolSchemas: ReturnType<typeof normalizeAgentToolSchemas>['toolSchemas']
+  toolSchemas: ReturnType<typeof normalizeAgentToolSchemas>['toolSchemas'],
+  existingSpanTypeNames: Set<string>
 ): LiveKitSpanTypeSchema[] {
   if (!toolSchemas) return [];
-  return Object.values(toolSchemas).map(({ spanType }) => {
-    const properties = cloneRecord(LIVEKIT_TOOL_SCHEMA.properties);
-    properties.type = { type: 'string', const: spanType };
+  return Object.values(toolSchemas).flatMap(({ spanType }) => {
+    if (existingSpanTypeNames.has(spanType)) {
+      return [];
+    }
+
+    const properties = {
+      ...cloneRecord(LIVEKIT_TOOL_SCHEMA.properties),
+      type: { type: 'string', const: spanType },
+    };
     const paramsSchema = { ...cloneRecord(LIVEKIT_TOOL_SCHEMA), properties } as JsonSchema;
-    return buildSpanTypeSchema(spanType, LIVEKIT_TOOL_TEMPLATE, paramsSchema, {
-      resultSchema: LIVEKIT_TOOL_RESULT_SCHEMA,
-    });
+    return [
+      buildSpanTypeSchema(spanType, LIVEKIT_TOOL_TEMPLATE, paramsSchema, {
+        resultSchema: LIVEKIT_TOOL_RESULT_SCHEMA,
+      }),
+    ];
   });
 }
 
