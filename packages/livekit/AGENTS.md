@@ -95,8 +95,16 @@ Rules:
 ## Schema conventions
 - Default schemas live in `src/schema.ts` and are exported from `src/index.ts`.
 - The default schema uses `span_type_schemas`, not legacy `span_schemas` maps.
-- `normalizeAgentSchema()` must accept legacy `span_schemas` and `span_result_schemas` input and
-  return normalized `span_type_schemas`.
+- `normalizeAgentSchema()` accepts current `span_type_schemas` input and returns
+  `span_type_schemas`; do not reintroduce legacy `span_schemas`/`span_result_schemas`
+  compatibility without a concrete client requirement.
+- `normalizeAgentSchema()` must return at most one `span_type_schemas` entry for each `name`.
+  When `toolSchemas` would generate a tool-specific span type that already exists in
+  user-provided `span_type_schemas`, keep the user-provided schema and do not append a generated
+  duplicate.
+- If a user-provided `span_type_schemas` entry overrides a built-in LiveKit span type without a
+  `result_schema`, preserve the built-in result schema for that span type. Only replace it when the
+  user provides an explicit `result_schema`.
 - Templates are part of the tracing contract. If a result field is used in a template, keep runtime
   span outputs aligned with it.
 - Never use `additionalProperties: false` to block provider noise. LiveKit payloads are expected to
@@ -114,7 +122,9 @@ Rules:
 - If changing span types, update schemas, templates, event handling, and tests together.
 - If changing LiveKit event handling, add or update tests for span parentage, final outputs, and
   error/finalization behavior.
-- If changing schema normalization, cover both current `span_type_schemas` and legacy map inputs.
+- If changing schema normalization, cover current `span_type_schemas` behavior and tool-specific
+  span mappings, including duplicate-name prevention and result-schema preservation for built-in
+  overrides.
 - If changing public exports, update `src/index.ts` and package docs as needed.
 - If changing behavior that depends on built output, run build before affected tests.
 - Do not edit `src/version.ts` directly; use the repository version generation flow.

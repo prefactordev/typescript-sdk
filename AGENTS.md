@@ -113,6 +113,8 @@ Follow this process for all non-trivial changes:
 - Prefer stable, human-readable field names. Use names that describe intent (`model`, `tool_name`, `token_usage`, `finish_reason`) rather than transient implementation details.
 - Prefer explicit object schemas with `properties`, `required`, and `additionalProperties` choices that match real runtime behavior. Do not mark fields required unless instrumentation can reliably provide them.
 - Keep params and result schemas aligned with runtime lifecycle. Inputs belong in params/payload; outputs, status details, and usage belong in result payloads.
+- When merging, normalizing, or generating span schemas, preserve a single canonical schema entry per span type/name. Do not append generated schemas that duplicate a user-provided or default span type; prefer the more specific existing schema or make the precedence explicit in tests.
+- When a caller overrides part of a default span schema, do not silently drop the default result schema. Preserve the default result schema unless the caller provides an intentional replacement, and cover that behavior with a regression test.
 - Reuse existing provider span types when the meaning matches. Add a new span type only when the work is materially different, not just because the call site is different.
 - Keep provider-prefixed naming consistent for custom span types. Follow the existing package namespace pattern instead of inventing cross-package generic names.
 - Tool-specific schemas should be specific enough to describe the tool contract, but still resilient to provider noise. Prefer narrow input schemas and pragmatic output schemas.
