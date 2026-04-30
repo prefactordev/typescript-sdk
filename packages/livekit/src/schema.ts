@@ -284,14 +284,27 @@ export const DEFAULT_LIVEKIT_AGENT_SCHEMA = {
 export function normalizeAgentSchema(
   agentSchema: Record<string, unknown> | undefined
 ): NormalizedLiveKitSchemaData {
-  const normalizedToolSchemas = normalizeAgentToolSchemas(toLegacyAgentSchema(agentSchema), {
-    defaultAgentSchema: toLegacyAgentSchema(DEFAULT_LIVEKIT_AGENT_SCHEMA),
+  const normalizedTools = normalizeAgentToolSchemas(agentSchema ?? {}, {
+    defaultAgentSchema: {},
     providerName: 'livekit',
   });
 
+  const userSpanTypeSchemas = readSpanTypeSchemas(agentSchema?.span_type_schemas);
+  const mergedSpanTypeSchemas = mergeSpanTypeSchemas(
+    DEFAULT_LIVEKIT_AGENT_SCHEMA.span_type_schemas as unknown as LiveKitSpanTypeSchema[],
+    userSpanTypeSchemas ?? []
+  );
+  const customToolSpanTypeSchemas = buildCustomToolSpanTypeSchemas(normalizedTools.toolSchemas);
+
+  const { toolSchemas: _toolSchemas, span_type_schemas: _spanTypeSchemas, ...rest } =
+    cloneRecord(agentSchema);
+
   return {
-    agentSchema: buildAgentSchema(normalizedToolSchemas),
-    toolSpanTypes: normalizedToolSchemas.toolSpanTypes,
+    agentSchema: {
+      ...rest,
+      span_type_schemas: [...mergedSpanTypeSchemas, ...customToolSpanTypeSchemas],
+    },
+    toolSpanTypes: normalizedTools.toolSpanTypes,
   };
 }
 
@@ -300,28 +313,6 @@ export function resolveToolSpanType(
   toolSpanTypes: Record<string, string> | undefined
 ): string {
   return resolveMappedSpanType(toolName, toolSpanTypes, 'livekit:tool');
-}
-
-function buildAgentSchema(
-  normalizedToolSchemas: ReturnType<typeof normalizeAgentToolSchemas>
-): Record<string, unknown> {
-  const base = normalizedToolSchemas.agentSchema;
-  const toolSchemas = normalizedToolSchemas.toolSchemas;
-  const spanSchemas = cloneRecord(base.span_schemas);
-  const spanResultSchemas = cloneRecord(base.span_result_schemas);
-
-  if (toolSchemas) {
-    for (const { spanType } of Object.values(toolSchemas)) {
-      if (!spanSchemas[spanType]) {
-        spanSchemas[spanType] = buildLegacyToolSchemaForSpanType(spanType);
-      }
-      if (!spanResultSchemas[spanType]) {
-        spanResultSchemas[spanType] = LIVEKIT_TOOL_RESULT_SCHEMA;
-      }
-    }
-  }
-
-  return toSpanTypeAgentSchema(base, spanSchemas, spanResultSchemas);
 }
 
 function buildSpanTypeSchema(
@@ -351,87 +342,29 @@ function buildSpanTypeSchema(
   }) as unknown as LiveKitSpanTypeSchema;
 }
 
-function toLegacyAgentSchema(
-  agentSchema: Record<string, unknown> | undefined
-): Record<string, unknown> {
-  if (!agentSchema) {
-    return legacyMapsToAgentSchema(DEFAULT_LIVEKIT_AGENT_SCHEMA);
-  }
-
-  const spanTypeSchemas = readSpanTypeSchemas(agentSchema.span_type_schemas);
-  if (!spanTypeSchemas) {
-    return cloneRecord(agentSchema);
-  }
-
-  return legacyMapsToAgentSchema(agentSchema, spanTypeSchemas);
-}
-
-function legacyMapsToAgentSchema(
-  agentSchema: Record<string, unknown>,
-  spanTypeSchemas: LiveKitSpanTypeSchema[] = readSpanTypeSchemas(agentSchema.span_type_schemas) ??
-    []
-): Record<string, unknown> {
-  const { span_type_schemas: _spanTypeSchemas, ...rest } = cloneRecord(agentSchema);
-  const { spanSchemas, spanResultSchemas } = spanTypeSchemasToLegacyMaps(spanTypeSchemas);
-
-  return {
-    ...rest,
-    span_schemas: spanSchemas,
-    span_result_schemas: spanResultSchemas,
-  };
-}
-
-function toSpanTypeAgentSchema(
-  base: Record<string, unknown>,
-  spanSchemas: Record<string, unknown>,
-  spanResultSchemas: Record<string, unknown>
-): Record<string, unknown> {
-  const {
-    span_schemas: _spanSchemas,
-    span_result_schemas: _spanResultSchemas,
-    span_type_schemas: _spanTypeSchemas,
-    ...rest
-  } = base;
-
-  return {
-    ...rest,
-    span_type_schemas: legacyMapsToSpanTypeSchemas(spanSchemas, spanResultSchemas),
-  };
-}
-
-function spanTypeSchemasToLegacyMaps(spanTypeSchemas: LiveKitSpanTypeSchema[]): {
-  spanSchemas: Record<string, unknown>;
-  spanResultSchemas: Record<string, unknown>;
-} {
-  const spanSchemas: Record<string, unknown> = {};
-  const spanResultSchemas: Record<string, unknown> = {};
-
-  for (const spanTypeSchema of spanTypeSchemas) {
-    spanSchemas[spanTypeSchema.name] = injectUxFieldsIntoParamsSchema(spanTypeSchema);
-    spanResultSchemas[spanTypeSchema.name] = spanTypeSchema.result_schema ?? DEFAULT_RESULT_SCHEMA;
-  }
-
-  return { spanSchemas, spanResultSchemas };
-}
-
-function legacyMapsToSpanTypeSchemas(
-  spanSchemas: Record<string, unknown>,
-  spanResultSchemas: Record<string, unknown>
+function mergeSpanTypeSchemas(
+  defaults: LiveKitSpanTypeSchema[],
+  overrides: LiveKitSpanTypeSchema[]
 ): LiveKitSpanTypeSchema[] {
-  return Object.entries(spanSchemas).map(([name, rawParamsSchema]) => {
-    const { paramsSchema, title, description, template, dataRisk } =
-      extractUxFieldsFromParamsSchema(rawParamsSchema);
-    const resultSchema = readJsonSchema(spanResultSchemas[name]);
+  const overrideMap = new Map(overrides.map((s) => [s.name, s]));
+  const merged = defaults.map((s) => overrideMap.get(s.name) ?? s);
+  const newEntries = overrides
+    .filter((s) => !defaults.some((d) => d.name === s.name))
+    .map((s) => (s.result_schema ? s : { ...s, result_schema: DEFAULT_RESULT_SCHEMA }));
+  return [...merged, ...newEntries];
+}
 
-    return compactRecord({
-      name,
-      title,
-      description,
-      template,
-      data_risk: dataRisk,
-      params_schema: paramsSchema,
-      result_schema: resultSchema,
-    }) as unknown as LiveKitSpanTypeSchema;
+function buildCustomToolSpanTypeSchemas(
+  toolSchemas: ReturnType<typeof normalizeAgentToolSchemas>['toolSchemas']
+): LiveKitSpanTypeSchema[] {
+  if (!toolSchemas) return [];
+  return Object.values(toolSchemas).map(({ spanType }) => {
+    const properties = cloneRecord(LIVEKIT_TOOL_SCHEMA.properties);
+    properties.type = { type: 'string', const: spanType };
+    const paramsSchema = { ...cloneRecord(LIVEKIT_TOOL_SCHEMA), properties } as JsonSchema;
+    return buildSpanTypeSchema(spanType, LIVEKIT_TOOL_TEMPLATE, paramsSchema, {
+      resultSchema: LIVEKIT_TOOL_RESULT_SCHEMA,
+    });
   });
 }
 
@@ -466,71 +399,6 @@ function readSpanTypeSchemas(value: unknown): LiveKitSpanTypeSchema[] | undefine
   });
 
   return spanTypeSchemas.length > 0 ? spanTypeSchemas : undefined;
-}
-
-function injectUxFieldsIntoParamsSchema(
-  spanTypeSchema: LiveKitSpanTypeSchema
-): Record<string, unknown> {
-  const paramsSchema = cloneRecord(spanTypeSchema.params_schema);
-
-  if (spanTypeSchema.title && spanTypeSchema.title !== spanTypeSchema.name) {
-    paramsSchema.title = spanTypeSchema.title;
-  }
-  if (spanTypeSchema.description) {
-    paramsSchema.description = spanTypeSchema.description;
-  }
-  if (spanTypeSchema.template) {
-    paramsSchema['prefactor:template'] = spanTypeSchema.template;
-  }
-  if (spanTypeSchema.data_risk) {
-    paramsSchema['prefactor:data_risk'] = spanTypeSchema.data_risk;
-  }
-
-  return paramsSchema;
-}
-
-function extractUxFieldsFromParamsSchema(value: unknown): {
-  paramsSchema: JsonSchema;
-  title?: string;
-  description?: string;
-  template?: string;
-  dataRisk?: Record<string, unknown>;
-} {
-  const paramsSchema = cloneRecord(value);
-  const title = readOptionalString(paramsSchema.title);
-  const description = readOptionalString(paramsSchema.description);
-  const template = readOptionalString(paramsSchema['prefactor:template']);
-  const dataRisk = readRecord(paramsSchema['prefactor:data_risk']);
-
-  delete paramsSchema.title;
-  delete paramsSchema.description;
-  delete paramsSchema['prefactor:template'];
-  delete paramsSchema['prefactor:data_risk'];
-
-  return compactRecord({
-    paramsSchema,
-    title,
-    description,
-    template,
-    dataRisk,
-  }) as {
-    paramsSchema: JsonSchema;
-    title?: string;
-    description?: string;
-    template?: string;
-    dataRisk?: Record<string, unknown>;
-  };
-}
-
-function buildLegacyToolSchemaForSpanType(spanType: string): Record<string, unknown> {
-  const schema = cloneRecord(LIVEKIT_TOOL_SCHEMA);
-  const properties = cloneRecord(schema.properties);
-  const typeProperty = cloneRecord(properties.type);
-  typeProperty.const = spanType;
-  properties.type = typeProperty;
-  schema.properties = properties;
-  schema['prefactor:template'] = LIVEKIT_TOOL_TEMPLATE;
-  return schema;
 }
 
 function readJsonSchema(value: unknown): JsonSchema | undefined {
