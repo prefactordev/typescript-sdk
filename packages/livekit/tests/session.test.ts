@@ -256,7 +256,7 @@ describe('PrefactorLiveKitSession', () => {
   });
 
   test('function tools executed emits child tool span under assistant turn', async () => {
-    const { tracer, ended } = createTestTracer();
+    const { tracer, started, ended } = createTestTracer();
     const sessionTracer = new PrefactorLiveKitSession({
       tracer: tracer as never,
       agentManager: {
@@ -294,11 +294,9 @@ describe('PrefactorLiveKitSession', () => {
     await flushQueue();
 
     const toolSpan = ended.find((entry) => entry.span.spanType === 'livekit:tool');
-    const assistantTurn = ended.find((entry) => entry.span.spanType === 'livekit:assistant_turn');
-    expect(toolSpan?.span.parentSpanId).toBeTruthy();
-    expect(toolSpan?.span.parentSpanId).toBe(
-      assistantTurn?.span.spanId ?? toolSpan?.span.parentSpanId
-    );
+    const assistantTurn = started.find((entry) => entry.spanType === 'livekit:assistant_turn');
+    expect(assistantTurn).toBeDefined();
+    expect(toolSpan?.span.parentSpanId).toBe(assistantTurn?.spanId);
     expect(toolSpan?.outputs).toMatchObject({
       status: 'completed',
       isError: false,
@@ -343,13 +341,13 @@ describe('PrefactorLiveKitSession', () => {
     expect(warnSpy?.mock.calls[0]?.[0]).toContain('Skipping malformed LiveKit function tool event');
   });
 
-  test('safe warning fallback logs when the logger throws', async () => {
+  test('logger failures do not interrupt malformed tool event handling', async () => {
     const loggerFailure = new Error('logger failed');
     warnSpy = spyOn(console, 'warn').mockImplementation(() => {
       throw loggerFailure;
     });
     errorSpy = spyOn(console, 'error').mockImplementation(() => {});
-    const { tracer } = createTestTracer();
+    const { tracer, ended } = createTestTracer();
     const sessionTracer = new PrefactorLiveKitSession({
       tracer: tracer as never,
       agentManager: {
@@ -365,12 +363,13 @@ describe('PrefactorLiveKitSession', () => {
       functionCallOutputs: [{}],
     });
     await flushQueue();
+    await sessionTracer.close();
 
-    expect(errorSpy).toHaveBeenCalledWith(
-      'Skipping malformed LiveKit function tool event without a valid tool name.',
-      { callId: 'tool-1' },
-      loggerFailure
-    );
+    const toolSpans = ended.filter((entry) => entry.span.spanType === 'livekit:tool');
+    const root = ended.find((entry) => entry.span.spanType === 'livekit:session');
+    expect(toolSpans).toHaveLength(0);
+    expect(root?.outputs?.conversation).toMatchObject({ functionCalls: 0 });
+    expect(errorSpy).toHaveBeenCalled();
   });
 
   test('state change events emit state spans', async () => {
