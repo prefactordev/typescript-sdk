@@ -4,6 +4,7 @@ import { ensureIdempotencyKey } from './idempotency.js';
 
 export type AgentInstanceRegisterPayload = {
   agent_id?: string;
+  environment_id?: string;
   agent_version?: {
     external_identifier: string;
     name: string;
