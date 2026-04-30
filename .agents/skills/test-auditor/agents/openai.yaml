@@ -1,0 +1,4 @@
+interface:
+  display_name: "Test Auditor"
+  short_description: "Review tests for relevance and value"
+  default_prompt: "Use $test-auditor to review these tests for relevance, behavior focus, and unnecessary coverage."
