@@ -1,11 +1,6 @@
 import type { Command } from 'commander';
 import { ApiTokenClient } from '../clients/api-token.js';
-import {
-  executeAuthed,
-  printJson,
-  validateTokenCreateOptions,
-  validateTokenScope,
-} from './shared.js';
+import { executeAuthed, printJson, validateTokenCreateOptions, validateTokenScope } from './shared.js';
 
 export function registerApiTokensCommands(program: Command): void {
   const apiTokens = program.command('api_tokens').description('Manage API tokens');
