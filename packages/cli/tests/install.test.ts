@@ -267,7 +267,6 @@ describe('install helpers', () => {
         tempRoot
       )
     );
-
   });
 
   test('readInstallState rejects invalid persisted channel values', async () => {
