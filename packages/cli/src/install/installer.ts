@@ -460,7 +460,7 @@ function buildChildInstallArgs(
   childBinaryPath: string,
   spec: ReleaseSpec,
   resolvedTag: string,
-  currentPid: number
+  waitForPid: number | undefined
 ): string[] {
   return [
     'install',
@@ -470,8 +470,7 @@ function buildChildInstallArgs(
     resolvedTag,
     '--asset-name',
     spec.assetName,
-    '--wait-for-pid',
-    String(currentPid),
+    ...(waitForPid !== undefined ? ['--wait-for-pid', String(waitForPid)] : []),
     ...(spec.channel === 'pinned' && spec.requestedVersion
       ? ['--version', spec.requestedVersion]
       : ['--channel', spec.channel]),
@@ -485,9 +484,8 @@ async function runChildInstaller(
   deps: LifecycleCommandDeps,
   platform: PlatformInfo['platform']
 ): Promise<void> {
-  const args = buildChildInstallArgs(childBinaryPath, spec, resolvedTag, process.pid);
-
   if (platform === 'windows') {
+    const args = buildChildInstallArgs(childBinaryPath, spec, resolvedTag, process.pid);
     await new Promise<void>((resolvePromise, reject) => {
       const child = deps.spawnProcess(childBinaryPath, args, {
         detached: true,
@@ -503,6 +501,7 @@ async function runChildInstaller(
     return;
   }
 
+  const args = buildChildInstallArgs(childBinaryPath, spec, resolvedTag, undefined);
   await new Promise<void>((resolvePromise, reject) => {
     const child = deps.spawnProcess(childBinaryPath, args, {
       stdio: 'inherit',

@@ -6,6 +6,7 @@
     "build": "bun run scripts/build.ts",
     "docs:typedoc": "typedoc --options typedoc.json",
     "versions:check": "bun run scripts/generate-versions.ts --check",
+    "release:cli:stable": "bun run scripts/release-cli-stable.ts",
     "test": "bun test",
     "test:watch": "bun test --watch",
     "typecheck": "tsc --build",

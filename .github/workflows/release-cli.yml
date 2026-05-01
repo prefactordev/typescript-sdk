@@ -3,7 +3,12 @@ name: Release CLI Binaries
 on:
   push:
     branches: [main]
-    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Stable CLI version to release. Must match packages/cli/package.json.
+        required: true
+        type: string
 
 jobs:
   build:
@@ -123,45 +128,181 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: ${{ matrix.artifact }}
-      - name: Install musl runtime
-        if: runner.os != 'Windows' && matrix.requires_musl
+      - name: Run smoke test (linux musl)
+        if: runner.os == 'Linux' && matrix.requires_musl
+        env:
+          ARCHIVE: ${{ matrix.archive }}
+          EXTRACTED_BIN: ${{ matrix.extracted_bin }}
+          SMOKE_TAG: smoke-${{ github.sha }}
         run: |
-          sudo apt-get update
-          sudo apt-get install -y musl
+          docker run --rm \
+            -e HOME=/tmp/prefactor-home \
+            -e ARCHIVE \
+            -e EXTRACTED_BIN \
+            -e SMOKE_TAG \
+            -v "$PWD:/work" \
+            -w /work \
+            alpine:3.22 \
+            sh -euxc '
+              apk add --no-cache ca-certificates libgcc libstdc++ python3
+              release_root=/tmp/prefactor-release
+              release_dir="$release_root/releases/download/$SMOKE_TAG"
+              rm -rf "$HOME" smoke "$release_root"
+              mkdir -p "$HOME" smoke
+              mkdir -p "$release_dir"
+              cp "$ARCHIVE" "$release_dir/$ARCHIVE"
+              (
+                cd "$release_dir"
+                sha256sum -- "$ARCHIVE" > SHA256SUMS
+              )
+              python3 -m http.server 8765 --bind 127.0.0.1 --directory "$release_root" >/tmp/prefactor-release-server.log 2>&1 &
+              server_pid=$!
+              trap "kill $server_pid" EXIT
+              export PREFACTOR_RELEASE_BASE_URL="http://127.0.0.1:8765/releases/download"
+              export PREFACTOR_RELEASE_LATEST_BASE_URL="$PREFACTOR_RELEASE_BASE_URL/$SMOKE_TAG"
+              tar -xzf "$ARCHIVE" -C smoke
+              chmod +x "smoke/$EXTRACTED_BIN"
+              "smoke/$EXTRACTED_BIN" --version
+              "smoke/$EXTRACTED_BIN" install --channel stable
+              "$HOME/.prefactor/bin/prefactor" doctor
+              "$HOME/.prefactor/bin/prefactor" update
+              "$HOME/.prefactor/bin/prefactor" doctor | tee /tmp/prefactor-doctor.log
+              grep -q "resolvedTag: $SMOKE_TAG" /tmp/prefactor-doctor.log
+            '
       - name: Run smoke test (unix)
-        if: runner.os != 'Windows'
+        if: runner.os != 'Windows' && !matrix.requires_musl
+        env:
+          ARCHIVE: ${{ matrix.archive }}
+          EXTRACTED_BIN: ${{ matrix.extracted_bin }}
+          SMOKE_TAG: smoke-${{ github.sha }}
         run: |
           export HOME="${RUNNER_TEMP}/prefactor-home"
-          rm -rf "$HOME" && mkdir -p "$HOME"
+          release_root="${RUNNER_TEMP}/prefactor-release"
+          release_dir="$release_root/releases/download/$SMOKE_TAG"
+          rm -rf "$HOME" "$release_root" && mkdir -p "$HOME" "$release_dir"
+          cp "$ARCHIVE" "$release_dir/$ARCHIVE"
+          checksum="$(
+            if command -v sha256sum >/dev/null 2>&1; then
+              sha256sum -- "$ARCHIVE" | awk '{ print $1 }'
+            else
+              shasum -a 256 "$ARCHIVE" | awk '{ print $1 }'
+            fi
+          )"
+          printf '%s  %s\n' "$checksum" "$ARCHIVE" > "$release_dir/SHA256SUMS"
+          python3 -m http.server 8765 --bind 127.0.0.1 --directory "$release_root" >"${RUNNER_TEMP}/prefactor-release-server.log" 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid"' EXIT
+          export PREFACTOR_RELEASE_BASE_URL="http://127.0.0.1:8765/releases/download"
+          export PREFACTOR_RELEASE_LATEST_BASE_URL="$PREFACTOR_RELEASE_BASE_URL/$SMOKE_TAG"
           rm -rf smoke && mkdir smoke
-          tar -xzf ${{ matrix.archive }} -C smoke
-          chmod +x smoke/${{ matrix.extracted_bin }}
-          smoke/${{ matrix.extracted_bin }} --version
-          smoke/${{ matrix.extracted_bin }} install --channel stable
+          tar -xzf "$ARCHIVE" -C smoke
+          chmod +x "smoke/$EXTRACTED_BIN"
+          "smoke/$EXTRACTED_BIN" --version
+          "smoke/$EXTRACTED_BIN" install --channel stable
           "$HOME/.prefactor/bin/prefactor" doctor
+          "$HOME/.prefactor/bin/prefactor" update
+          "$HOME/.prefactor/bin/prefactor" doctor | tee "${RUNNER_TEMP}/prefactor-doctor.log"
+          grep -q "resolvedTag: $SMOKE_TAG" "${RUNNER_TEMP}/prefactor-doctor.log"
       - name: Run smoke test (windows)
         if: runner.os == 'Windows'
         shell: pwsh
+        env:
+          ARCHIVE: ${{ matrix.archive }}
+          EXTRACTED_BIN: ${{ matrix.extracted_bin }}
+          SMOKE_TAG: smoke-${{ github.sha }}
         run: |
           $env:USERPROFILE = Join-Path $env:RUNNER_TEMP 'prefactor-home'
           New-Item -ItemType Directory -Path $env:USERPROFILE -Force | Out-Null
+          $releaseRoot = Join-Path $env:RUNNER_TEMP 'prefactor-release'
+          $releaseDir = Join-Path $releaseRoot "releases\download\$env:SMOKE_TAG"
+          Remove-Item -LiteralPath $releaseRoot -Recurse -Force -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Path $releaseDir -Force | Out-Null
+          $archiveCopy = Join-Path $releaseDir $env:ARCHIVE
+          Copy-Item -LiteralPath $env:ARCHIVE -Destination $archiveCopy
+          $checksum = (Get-FileHash -Path $archiveCopy -Algorithm SHA256).Hash.ToLowerInvariant()
+          Set-Content -LiteralPath (Join-Path $releaseDir 'SHA256SUMS') -Value "$checksum  $env:ARCHIVE"
+          $server = Start-Process -FilePath python -ArgumentList @('-m', 'http.server', '8765', '--bind', '127.0.0.1', '--directory', $releaseRoot) -PassThru -WindowStyle Hidden
+          Start-Sleep -Seconds 1
+          $env:PREFACTOR_RELEASE_BASE_URL = 'http://127.0.0.1:8765/releases/download'
+          $env:PREFACTOR_RELEASE_LATEST_BASE_URL = "$env:PREFACTOR_RELEASE_BASE_URL/$env:SMOKE_TAG"
           Remove-Item -LiteralPath smoke -Recurse -Force -ErrorAction SilentlyContinue
           New-Item -ItemType Directory -Path smoke | Out-Null
-          Expand-Archive -LiteralPath ${{ matrix.archive }} -DestinationPath smoke -Force
-          .\smoke\${{ matrix.extracted_bin }} --version
-          .\smoke\${{ matrix.extracted_bin }} install --channel stable
+          Expand-Archive -LiteralPath $env:ARCHIVE -DestinationPath smoke -Force
+          & ".\smoke\$env:EXTRACTED_BIN" --version
+          & ".\smoke\$env:EXTRACTED_BIN" install --channel stable
           & "$env:USERPROFILE\.prefactor\bin\prefactor.exe" doctor
+          $output = & "$env:USERPROFILE\.prefactor\bin\prefactor.exe" update 2>&1 | Out-String
+          if ($LASTEXITCODE -ne 0) {
+            Write-Output $output
+            Write-Error "prefactor update failed with exit code $LASTEXITCODE"
+            exit 1
+          }
+          Write-Output $output
+          if ($output -notmatch "Update started") {
+            Write-Error "Expected update start message not found"
+            exit 1
+          }
+          $doctorOutput = ''
+          for ($attempt = 0; $attempt -lt 60; $attempt += 1) {
+            Start-Sleep -Milliseconds 500
+            $doctorOutput = (& "$env:USERPROFILE\.prefactor\bin\prefactor.exe" doctor 2>&1 | Out-String)
+            if ($doctorOutput -match "resolvedTag: $env:SMOKE_TAG") {
+              Write-Output $doctorOutput
+              Stop-Process -Id $server.Id -Force -ErrorAction SilentlyContinue
+              exit 0
+            }
+          }
+          Write-Output $doctorOutput
+          Stop-Process -Id $server.Id -Force -ErrorAction SilentlyContinue
+          Write-Error "Expected installed CLI to update to $env:SMOKE_TAG"
+          exit 1
 
   release:
     runs-on: ubuntu-latest
     needs: [build, smoke-test]
     concurrency:
-      group: ${{ github.ref_type != 'tag' && format('{0}-canary', github.repository) || format('{0}-{1}', github.workflow, github.ref) }}
-      cancel-in-progress: ${{ github.ref_type != 'tag' }}
-    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+      group: ${{ format('{0}-stable-release', github.repository) }}
+      cancel-in-progress: false
+    if: github.event_name == 'workflow_dispatch'
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v4
+      - name: Prepare stable release
+        id: release
+        run: |
+          version="${{ inputs.version }}"
+          case "$version" in
+            v*) tag="$version" ;;
+            *) tag="v$version" ;;
+          esac
+
+          if ! [[ "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Invalid stable release version: $version" >&2
+            exit 1
+          fi
+
+          package_version="$(node -p "require('./packages/cli/package.json').version")"
+          if [ "$tag" != "v$package_version" ]; then
+            echo "Release tag $tag does not match @prefactor/cli package version v$package_version." >&2
+            exit 1
+          fi
+
+          if git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null 2>&1; then
+            echo "Tag $tag already exists." >&2
+            exit 1
+          fi
+
+          if gh release view "$tag" >/dev/null 2>&1; then
+            echo "Release $tag already exists." >&2
+            exit 1
+          fi
+
+          git tag "$tag" "$GITHUB_SHA"
+          git push origin "refs/tags/$tag"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - uses: actions/download-artifact@v4
         with:
           path: dist/cli
@@ -169,24 +310,12 @@ jobs:
       - name: Generate checksums
         run: |
           cd dist/cli
-          sha256sum *.tar.gz *.zip > SHA256SUMS
-      - name: Create versioned release
-        if: github.ref_type == 'tag'
+          sha256sum -- *.tar.gz *.zip > SHA256SUMS
+      - name: Create stable release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.ref_name }}
-          prerelease: false
-          files: dist/cli/*
-      - name: Delete canary tag
-        if: github.ref_type != 'tag'
-        run: gh api -X DELETE /repos/${{ github.repository }}/git/refs/tags/canary || true
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - name: Create canary release
-        if: github.ref_type != 'tag'
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: canary
+          tag_name: ${{ steps.release.outputs.tag }}
           target_commitish: ${{ github.sha }}
-          prerelease: true
+          prerelease: false
+          draft: false
           files: dist/cli/*
