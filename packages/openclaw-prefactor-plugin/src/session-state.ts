@@ -195,7 +195,9 @@ export class SessionStateManager {
   async createAssistantResponseSpan(
     sessionKey: string,
     text: string,
-    tokens: { input?: number; output?: number } | undefined,
+    tokens:
+      | { input?: number; output?: number; cacheRead?: number; cacheWrite?: number; total?: number }
+      | undefined,
     metadata?: { provider?: string; model?: string }
   ): Promise<string | null> {
     return this.queue.enqueue(sessionKey, () =>
@@ -207,7 +209,7 @@ export class SessionStateManager {
     sessionKey: string,
     thinking: string,
     tokens:
-      | { input?: number; output?: number; cacheRead?: number; cacheWrite?: number }
+      | { input?: number; output?: number; cacheRead?: number; cacheWrite?: number; total?: number }
       | undefined,
     metadata?: { provider?: string; model?: string; signature?: string }
   ): Promise<string | null> {
@@ -594,7 +596,9 @@ export class SessionStateManager {
   private async _createAssistantResponseSpan(
     sessionKey: string,
     text: string,
-    tokens: { input?: number; output?: number } | undefined,
+    tokens:
+      | { input?: number; output?: number; cacheRead?: number; cacheWrite?: number; total?: number }
+      | undefined,
     metadata?: { provider?: string; model?: string }
   ): Promise<string | null> {
     if (!this.agent) return null;
@@ -662,7 +666,7 @@ export class SessionStateManager {
     sessionKey: string,
     thinking: string,
     tokens:
-      | { input?: number; output?: number; cacheRead?: number; cacheWrite?: number }
+      | { input?: number; output?: number; cacheRead?: number; cacheWrite?: number; total?: number }
       | undefined,
     metadata?: { provider?: string; model?: string; signature?: string }
   ): Promise<string | null> {
