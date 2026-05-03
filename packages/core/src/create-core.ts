@@ -3,18 +3,15 @@ import { AgentInstanceManager } from './agent/instance-manager.js';
 import type { Config } from './config.js';
 import { HttpTransportConfigSchema } from './config.js';
 import { setActiveCoreRuntime } from './lifecycle.js';
+import { TerminationMonitor } from './monitoring/termination-monitor.js';
 import { clearActiveTracer, setActiveTracer } from './tracing/active-tracer.js';
 import { Tracer } from './tracing/tracer.js';
 import { HttpTransport } from './transport/http.js';
 
 export type CoreRuntime = {
-  /** Active tracer used to create and finish spans. */
   tracer: Tracer;
-
-  /** Agent instance lifecycle manager bound to the configured transport. */
   agentManager: AgentInstanceManager;
-
-  /** Gracefully shuts down the runtime and flushes transport work. */
+  terminationMonitor: TerminationMonitor;
   shutdown: () => Promise<void>;
 };
 
@@ -58,15 +55,22 @@ export function createCore(config: Config, options: CreateCoreOptions = {}): Cor
     allowUnregisteredSchema,
   });
 
+  const terminationMonitor = new TerminationMonitor(transport.getHttpRequester(), () =>
+    transport.getAgentInstanceId()
+  );
+  const syncInterval = setInterval(() => terminationMonitor.sync(), 1_000);
+
   const shutdown = async (): Promise<void> => {
     try {
+      clearInterval(syncInterval);
+      terminationMonitor.destroy();
       await tracer.close();
     } finally {
       clearActiveTracer(tracer);
       setActiveCoreRuntime(null);
     }
   };
-  const runtime: CoreRuntime = { tracer, agentManager, shutdown };
+  const runtime: CoreRuntime = { tracer, agentManager, terminationMonitor, shutdown };
   setActiveCoreRuntime(runtime);
   return runtime;
 }

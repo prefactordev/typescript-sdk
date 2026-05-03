@@ -86,6 +86,10 @@ export {
 } from './errors.js';
 export { registerShutdownHandler, shutdown } from './lifecycle.js';
 export {
+  type TerminationCallback,
+  TerminationMonitor,
+} from './monitoring/termination-monitor.js';
+export {
   type JsonSchema,
   normalizeAgentToolSchemas,
   resolveMappedSpanType,

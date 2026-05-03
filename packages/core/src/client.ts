@@ -3,6 +3,7 @@ import type { Config } from './config.js';
 import { createConfig } from './config.js';
 import type { CoreRuntime } from './create-core.js';
 import { createCore } from './create-core.js';
+import type { TerminationMonitor } from './monitoring/termination-monitor.js';
 import type { Tracer } from './tracing/tracer.js';
 import { withSpan as coreWithSpan } from './tracing/with-span.js';
 import { configureLogging } from './utils/logging.js';
@@ -36,9 +37,15 @@ export interface PrefactorProvider<TMiddleware = MiddlewareLike> {
    * @param tracer - Runtime tracer used for span creation.
    * @param agentManager - Runtime agent instance manager.
    * @param config - Resolved SDK configuration.
+   * @param abortSignal - AbortSignal that fires when p2 terminates the instance.
    * @returns Provider middleware consumed by upstream frameworks.
    */
-  createMiddleware(tracer: Tracer, agentManager: AgentInstanceManager, config: Config): TMiddleware;
+  createMiddleware(
+    tracer: Tracer,
+    agentManager: AgentInstanceManager,
+    config: Config,
+    abortSignal?: AbortSignal
+  ): TMiddleware;
   /**
    * Optional provider-level cleanup hook invoked during client shutdown.
    */
@@ -107,6 +114,14 @@ export class PrefactorClient<TMiddleware = MiddlewareLike> {
    */
   getMiddleware(): TMiddleware {
     return this.middleware;
+  }
+
+  getTerminationMonitor(): TerminationMonitor {
+    return this.core.terminationMonitor;
+  }
+
+  getAgentInstanceId(): string | null {
+    return this.core.agentManager.getAgentInstanceId();
   }
 
   /**
@@ -227,7 +242,12 @@ export function init<TMiddleware = MiddlewareLike>(
     core.agentManager.registerSchema(httpConfig.agentSchema);
   }
 
-  const middleware = options.provider.createMiddleware(core.tracer, core.agentManager, finalConfig);
+  const middleware = options.provider.createMiddleware(
+    core.tracer,
+    core.agentManager,
+    finalConfig,
+    core.terminationMonitor.signal
+  );
 
   prefactorClient = new PrefactorClient<TMiddleware>(core, middleware, options.provider);
   prefactorInitKey = nextInitKey;

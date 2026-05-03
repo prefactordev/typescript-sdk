@@ -39,7 +39,8 @@ export class PrefactorClaude implements PrefactorProvider<ClaudeMiddleware> {
   createMiddleware(
     tracer: Tracer,
     agentManager: AgentInstanceManager,
-    coreConfig: Config
+    coreConfig: Config,
+    _abortSignal?: AbortSignal
   ): ClaudeMiddleware {
     this.agentManager = agentManager;
     const runtimeController = createClaudeRuntimeController();

@@ -46,6 +46,10 @@ export class AgentInstanceManager {
   finishInstance(): void {
     this.transport.finishAgentInstance();
   }
+
+  getAgentInstanceId(): string | null {
+    return this.transport.getAgentInstanceId();
+  }
 }
 
 function stableStringify(value: unknown): string {
