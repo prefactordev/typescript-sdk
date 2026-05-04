@@ -908,7 +908,9 @@ export class HttpTransport implements Transport {
       // 409 means the instance is already in a terminal state (e.g. terminated).
       // Treat as success — the instance is done either way.
       if (error instanceof HttpClientError && error.status === 409) {
-        logger.debug(`Agent instance ${this.agentInstanceId} already in terminal state; skipping finish.`);
+        logger.debug(
+          `Agent instance ${this.agentInstanceId} already in terminal state; skipping finish.`
+        );
       } else {
         throw error;
       }

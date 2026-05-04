@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
+import { describe, expect, mock, test } from 'bun:test';
 import { TerminationMonitor } from '../../src/monitoring/termination-monitor.js';
 import type { HttpRequester } from '../../src/transport/http/http-client.js';
 
