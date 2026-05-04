@@ -1,4 +1,5 @@
 import type { HttpRequester } from '../transport/http/http-client.js';
+import { getLogger } from '../utils/logging.js';
 
 export type TerminationCallback = (reason: string | null) => void;
 
@@ -6,38 +7,63 @@ type AgentInstanceDetail = {
   details?: { status?: string; termination_reason?: string | null };
 };
 
+const logger = getLogger('termination-monitor');
+
 /**
  * Monitors a p2 agent instance for external termination.
  *
- * Once an agent instance ID is available, the monitor polls the p2 API
- * to check if the instance has been terminated externally. When termination
- * is detected, registered callbacks fire and the internal AbortController
- * is signalled so in-flight work can respond.
+ * Primary detection: the transport calls `detectTermination()` whenever a
+ * span create or finish response contains a control signal. This is fast
+ * (detected on the next span API response) and has zero overhead.
+ *
+ * Fallback detection: slow polling at `pollIntervalMs` (default 30s) covers
+ * idle agents that are not actively emitting spans.
  */
 export class TerminationMonitor {
   private abortController = new AbortController();
-  private pollTimer: ReturnType<typeof setInterval> | null = null;
-  private trackingInstanceId: string | null = null;
   private callbacks: TerminationCallback[] = [];
   private destroyed = false;
+  private generation = 0;
+  // After reset(), block detectTermination() until sync() sees a new instance.
+  // This prevents stale span responses from the previous run from aborting
+  // the fresh signal before the next run has even started.
+  private fenced = false;
+
+  private pollTimer: ReturnType<typeof setInterval> | null = null;
+  private trackingInstanceId: string | null = null;
 
   constructor(
-    private httpClient: HttpRequester,
-    private getAgentInstanceId: () => string | null,
-    private pollIntervalMs: number = 2000
+    private readonly httpClient: HttpRequester,
+    private readonly getAgentInstanceId: () => string | null,
+    private readonly pollIntervalMs: number = 30_000
   ) {}
 
   /**
-   * Checks the current agent instance ID and starts or stops polling accordingly.
-   * Call this periodically (or when the instance lifecycle changes) to keep
-   * the monitor in sync with the transport.
+   * Primary termination path — called by the transport when a span response
+   * contains a control signal. No polling latency.
+   */
+  detectTermination(reason: string | null): void {
+    if (this.terminated || this.destroyed || this.fenced) return;
+    logger.debug(`Termination signalled via span response. Reason: ${reason ?? '(none)'}`);
+    this.triggerTermination(reason);
+  }
+
+  /**
+   * Drives the fallback poll lifecycle. Call periodically (e.g., every 1s)
+   * to start or stop polling based on whether an agent instance ID is known.
    */
   sync(): void {
-    if (this.destroyed) return;
+    if (this.destroyed || this.terminated) return;
 
     const currentId = this.getAgentInstanceId();
+
+    // Lift the post-reset fence once a new instance is active.
+    if (this.fenced && currentId !== null) {
+      this.fenced = false;
+    }
+
     if (currentId === this.trackingInstanceId) return;
-    this.trackingInstanceId = currentId ?? null;
+    this.trackingInstanceId = currentId;
 
     if (currentId) {
       this.startPolling(currentId);
@@ -46,22 +72,63 @@ export class TerminationMonitor {
     }
   }
 
+  onTerminated(callback: TerminationCallback): () => void {
+    this.callbacks.push(callback);
+    return () => {
+      this.callbacks = this.callbacks.filter((c) => c !== callback);
+    };
+  }
+
+  get signal(): AbortSignal {
+    return this.abortController.signal;
+  }
+
+  get terminated(): boolean {
+    return this.abortController.signal.aborted;
+  }
+
+  /**
+   * Resets the monitor for a new agent run. Clears terminated state, creates a
+   * fresh AbortSignal, and stops any in-progress fallback polling. Registered
+   * callbacks are preserved.
+   */
+  reset(): void {
+    this.generation++;
+    this.fenced = true;
+    this.stopPolling();
+    this.abortController = new AbortController();
+    this.trackingInstanceId = null;
+  }
+
+  destroy(): void {
+    this.destroyed = true;
+    this.stopPolling();
+    this.callbacks = [];
+  }
+
   private startPolling(instanceId: string): void {
     this.stopPolling();
+    const pollGeneration = this.generation;
     this.pollTimer = setInterval(async () => {
+      if (this.generation !== pollGeneration || this.terminated || this.destroyed) {
+        this.stopPolling();
+        return;
+      }
+
       try {
         const response = await this.httpClient.request<AgentInstanceDetail>(
           `/api/v1/agent_instance/${instanceId}`
         );
 
+        if (this.generation !== pollGeneration) return;
+
         if (response?.details?.status === 'terminated') {
           const reason = response.details.termination_reason ?? null;
-          this.abortController.abort(reason ?? 'Instance terminated');
-          this.stopPolling();
-          this.fireCallbacks(reason);
+          logger.debug(`Termination detected via fallback poll. Reason: ${reason ?? '(none)'}`);
+          this.triggerTermination(reason);
         }
       } catch {
-        // Silently continue polling on transient errors
+        // transient error — continue polling
       }
     }, this.pollIntervalMs);
   }
@@ -73,39 +140,19 @@ export class TerminationMonitor {
     }
   }
 
+  private triggerTermination(reason: string | null): void {
+    this.abortController.abort(reason ?? 'Instance terminated');
+    this.stopPolling();
+    this.fireCallbacks(reason);
+  }
+
   private fireCallbacks(reason: string | null): void {
     for (const cb of this.callbacks) {
       try {
         cb(reason);
-      } catch {
-        // Callback errors are silently caught
+      } catch (error) {
+        logger.error('Termination callback threw:', error);
       }
     }
-  }
-
-  onTerminated(callback: TerminationCallback): () => void {
-    this.callbacks.push(callback);
-    return () => {
-      this.callbacks = this.callbacks.filter((c) => c !== callback);
-    };
-  }
-
-  /**
-   * An AbortSignal that is aborted when termination is detected.
-   * Pass this to fetch(), TCPSocket.connect(), or any AbortSignal-aware API
-   * to cancel in-flight work when p2 terminates the instance.
-   */
-  get signal(): AbortSignal {
-    return this.abortController.signal;
-  }
-
-  get terminated(): boolean {
-    return this.abortController.signal.aborted;
-  }
-
-  destroy(): void {
-    this.destroyed = true;
-    this.stopPolling();
-    this.callbacks = [];
   }
 }

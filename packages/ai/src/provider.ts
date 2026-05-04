@@ -29,7 +29,7 @@ export class PrefactorAISDK implements PrefactorProvider<LanguageModelMiddleware
     tracer: Tracer,
     agentManager: AgentInstanceManager,
     coreConfig: Config,
-    _abortSignal?: AbortSignal
+    _getAbortSignal?: () => AbortSignal
   ): LanguageModelMiddleware {
     this.agentManager = agentManager;
     const httpConfig = coreConfig.httpConfig;

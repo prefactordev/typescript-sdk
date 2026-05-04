@@ -1,31 +1,34 @@
 /**
- * Prefactor SDK -- Termination Demo
+ * Prefactor SDK -- Termination Demo (Service Loop)
  *
- * This example demonstrates how the SDK detects p2 termination and allows
- * in-progress agent work to be gracefully aborted.
+ * Demonstrates how the SDK handles p2 termination in a long-running service.
+ * The service starts a new agent run, and 30 seconds after each run completes
+ * (or is terminated), it starts another — each as a fresh agent instance.
  *
- * How it works:
- * 1. An agent starts running with multiple tools (some long-running)
- * 2. After a configurable delay, a background task calls the p2 terminate API
- * 3. The SDK's TerminationMonitor polls `/api/v1/agent_instance/{id}` and
- *    detects when `status` changes to `terminated`
- * 4. The internal AbortController fires, and the AbortSignal is set
- * 5. The LangChain middleware's "throwIfTerminated" check fires
- *    between agent steps (LLM calls, tool calls)
- * 6. Long-running tools that check `signal.aborted` on each iteration also stop
+ * Termination is scoped to the current run:
+ *   - PrefactorTerminatedError is thrown by the middleware when p2 terminates
+ *     the active instance.
+ *   - The service loop catches it and restarts after a delay.
+ *   - Ctrl+C stops the entire service.
+ *
+ * How termination is detected:
+ *   Primary: span create/finish responses carry `control.terminate` when the
+ *   instance is terminated. Zero latency — detected on the next span API call.
+ *   Fallback: slow poll of `/api/v1/agent_instance/{id}` every 30s for idle
+ *   agents that are not actively emitting spans.
  *
  * Usage:
  *   bun run examples/langchain/termination-demo.ts
  *
- *   # Custom auto-terminate delay (seconds; 0 = manual)
- *   PREFACTOR_AUTO_TERMINATE_DELAY=3 bun run examples/langchain/termination-demo.ts
+ *   # Auto-terminate delay in seconds (0 = manual mode)
+ *   PREFACTOR_AUTO_TERMINATE_DELAY=8 bun run examples/langchain/termination-demo.ts
  *
- *   # Manual mode — you call terminate from another terminal
+ *   # Manual mode — terminate from another terminal during a run
  *   PREFACTOR_AUTO_TERMINATE_DELAY=0 bun run examples/langchain/termination-demo.ts
  *
  * Prerequisites:
- *   - p2 running (default http://localhost:8000)
- *   - ANTHROPIC_API_KEY set (for Claude model)
+ *   - p2 running on localhost:4000
+ *   - ANTHROPIC_API_KEY set
  */
 import { createAgent, tool } from 'langchain';
 import { ChatAnthropic } from '@langchain/anthropic';
@@ -87,7 +90,8 @@ const getWeatherTool = tool(
   }
 );
 
-// -- Long-running tool that checks the abort signal each cycle ------------
+// These tools capture the abort signal per-run and stop themselves mid-loop
+// when terminated.
 
 function createCountdownTool(signal: AbortSignal) {
   return tool(
@@ -135,11 +139,9 @@ function createPrimeCheckTool(signal: AbortSignal) {
         }
       }
 
-      if (factors.length === 0) {
-        return `${n} is prime`;
-      }
-
-      return `${n} is composite. Factors found: ${factors.join(', ')}`;
+      return factors.length === 0
+        ? `${n} is prime`
+        : `${n} is composite. Factors found: ${factors.join(', ')}`;
     },
     {
       name: 'prime_check',
@@ -153,7 +155,7 @@ function createPrimeCheckTool(signal: AbortSignal) {
   );
 }
 
-// -- Termination helper ---------------------------------------------------
+// -- Termination helpers --------------------------------------------------
 
 async function terminateInstance(
   apiUrl: string,
@@ -162,8 +164,8 @@ async function terminateInstance(
   reason: string
 ): Promise<void> {
   const url = `${apiUrl}/api/v1/agent_instance/${agentInstanceId}/terminate`;
-  console.log(`\n  📡 Calling terminate API: POST ${url}`);
-  console.log(`     Reason: "${reason}"\n`);
+  console.log(`\n  Calling terminate API: POST ${url}`);
+  console.log(`  Reason: "${reason}"\n`);
 
   const response = await fetch(url, {
     method: 'POST',
@@ -179,66 +181,92 @@ async function terminateInstance(
     throw new Error(`Terminate API returned ${response.status}: ${JSON.stringify(body)}`);
   }
 
-  console.log(`  ✅ Terminate API response: status=${body.status}`);
+  console.log(`  Terminate API: status=${body.status}`);
 }
 
-async function scheduleAutoTerminate(
+// Schedules an auto-terminate for the current run. Returns a cancel function.
+// Waits for a new instance ID (after a null transition) so it doesn't pick up
+// a stale ID from the previous run that hasn't been cleared yet.
+function scheduleAutoTerminate(
   prefactor: ReturnType<typeof init>,
   apiUrl: string,
   apiToken: string,
-  delaySeconds: number
-): Promise<void> {
-  console.log(`\n  ⏰ Auto-terminate scheduled in ${delaySeconds}s...`);
+  delaySeconds: number,
+  isFirstRun: boolean
+): () => void {
+  let cancelled = false;
+  const cancel = () => {
+    cancelled = true;
+  };
 
-  // Wait for the agent instance to register (poll until ID is available)
-  let instanceId: string | null = null;
-  while (!instanceId) {
-    instanceId = prefactor.getAgentInstanceId();
-    if (!instanceId) {
-      await sleep(500);
+  (async () => {
+    // On runs after the first, wait for the old instance ID to clear (null)
+    // before looking for the new one. This prevents capturing a stale ID.
+    if (!isFirstRun) {
+      while (!cancelled && prefactor.getAgentInstanceId() !== null) {
+        await sleep(100);
+      }
     }
-  }
 
-  console.log(`  📎 Agent instance ID: ${instanceId}`);
+    let instanceId: string | null = null;
+    while (!instanceId && !cancelled) {
+      instanceId = prefactor.getAgentInstanceId();
+      if (!instanceId) await sleep(200);
+    }
+    if (cancelled || !instanceId) return;
 
-  await sleep(delaySeconds * 1000);
+    console.log(`  Agent instance: ${instanceId}`);
+    console.log(`  Auto-terminate in ${delaySeconds}s...`);
 
-  await terminateInstance(apiUrl, apiToken, instanceId, 'automated demo termination');
+    await sleep(delaySeconds * 1000);
+    if (cancelled) return;
+
+    await terminateInstance(apiUrl, apiToken, instanceId, 'automated demo termination').catch(
+      (err: unknown) => {
+        if (!(err instanceof Error) || !err.message.includes('409')) {
+          console.error('  Auto-terminate error:', err);
+        }
+      }
+    );
+  })();
+
+  return cancel;
 }
 
-// -- Main -----------------------------------------------------------------
+// -- Service loop ---------------------------------------------------------
 
 async function main() {
   if (!process.env.ANTHROPIC_API_KEY) {
     throw new Error('ANTHROPIC_API_KEY environment variable is required.');
   }
 
-  const apiUrl = process.env.PREFACTOR_API_URL || 'http://localhost:8000';
-  const apiToken = process.env.PREFACTOR_API_TOKEN || 'dev-token';
-  const autoDelay = parseInt(process.env.PREFACTOR_AUTO_TERMINATE_DELAY ?? '5', 10);
+  const apiUrl = process.env.PREFACTOR_API_URL || 'http://localhost:4000';
+  const apiToken =
+    process.env.PREFACTOR_API_TOKEN ||
+    'eyJhbGciOiJIUzI1NiIsImtpZCI6IjBhM2M5MzI0OWU5NjJkMWExOTBmMWJkNTE0OGU5YmRkIiwidHlwIjoiSldUIn0.eyJfIjp7ImEiOiIwMWtxZ2ZiMmdrcHpqenA2NzJhMnoycnIzMXptczYzMiIsInQiOiJiYSJ9LCJleHAiOjE4NDA2ODA4NTYsImlhdCI6MTc3NzYwODg1NiwianRpIjoiMDFrcWd2eDUzd3B6anpwNmo5M3pzcmg0amt2c3Q2NW0ifQ.yPAX1MfJuvs5bNGnG9-2mNg727vZeti0kO_BU6tPW7c';
+  const autoDelay = parseInt(process.env.PREFACTOR_AUTO_TERMINATE_DELAY ?? '8', 10);
+  const restartDelay = parseInt(process.env.PREFACTOR_RESTART_DELAY ?? '30', 10);
 
-  console.log('='.repeat(72));
-  console.log('Prefactor SDK — Termination Demo');
-  console.log('='.repeat(72));
-  console.log(`  API:       ${apiUrl}`);
-  console.log(`  Auto-stop: ${autoDelay > 0 ? `${autoDelay}s` : 'manual (call terminate yourself)'}`);
+  const sep = '='.repeat(72);
+  console.log(sep);
+  console.log('Prefactor SDK — Termination Demo (Service Loop)');
+  console.log(sep);
+  console.log(`  API:            ${apiUrl}`);
+  console.log(`  Auto-terminate: ${autoDelay > 0 ? `${autoDelay}s` : 'manual'}`);
+  console.log(`  Restart delay:  ${restartDelay}s`);
+  console.log(`  Ctrl+C to stop the service.`);
   console.log();
 
+  // SDK is initialized once for the lifetime of the service.
   const prefactor = init({
     provider: new PrefactorLangChain(),
     httpConfig: {
       apiUrl,
       apiToken,
-      agentId: process.env.PREFACTOR_AGENT_ID,
+      agentId: process.env.PREFACTOR_AGENT_ID || '01kqgvyh4tpzjzp6ape8eq56s9m5nx3s',
       agentIdentifier: 'termination-demo-v1',
       agentSchema: {
         external_identifier: 'termination-demo-schema-v1',
-        span_schemas: {
-          'custom:example-root': { type: 'object', additionalProperties: true },
-        },
-        span_result_schemas: {
-          'custom:example-root': { type: 'object', additionalProperties: true },
-        },
         toolSchemas: {
           calculator: {
             spanType: 'calculator',
@@ -260,10 +288,7 @@ async function main() {
             spanType: 'prime_check',
             inputSchema: {
               type: 'object',
-              properties: {
-                number: { type: 'number' },
-                delay_ms: { type: 'number' },
-              },
+              properties: { number: { type: 'number' }, delay_ms: { type: 'number' } },
               required: ['number'],
             },
           },
@@ -273,120 +298,99 @@ async function main() {
   });
 
   const monitor = prefactor.getTerminationMonitor();
-  monitor.onTerminated((reason) => {
-    console.log(`\n  🛑 TerminationMonitor fired! Reason: "${reason ?? '(none)'}"`);
-    console.log('  🛑 AbortSignal is now aborted.\n');
-  });
-
-  const signal = monitor.signal;
-
   const model = new ChatAnthropic({
     apiKey: process.env.ANTHROPIC_API_KEY,
     anthropicApiUrl: process.env.ANTHROPIC_BASE_URL,
-    model: 'claude-3-haiku-20240307',
+    model: 'claude-haiku-4-5-20251001',
   });
 
-  const tools = [
-    calculatorTool,
-    getCurrentTimeTool,
-    getWeatherTool,
-    createCountdownTool(signal),
-    createPrimeCheckTool(signal),
-  ];
+  let runCount = 0;
 
-  const agent = createAgent({
-    model,
-    tools,
-    systemPrompt:
-      'You are a helpful assistant. When you start any task, first check the current time. ' +
-      'When using countdown or prime_check, report back the full result exactly as the tool returns it.',
-    middleware: [prefactor.getMiddleware()],
+  process.on('SIGINT', () => {
+    console.log('\n  Service stopped (SIGINT). Shutting down...');
+    prefactor.shutdown().finally(() => process.exit(0));
   });
 
-  let terminated = false;
+  // Service loop: start a new run, handle termination, repeat.
+  // biome-ignore lint/correctness/noConstantCondition: intentional service loop
+  while (true) {
+    runCount++;
 
-  try {
-    if (autoDelay > 0) {
-      scheduleAutoTerminate(prefactor, apiUrl, apiToken, autoDelay).catch((err) => {
-        console.error('Auto-terminate failed:', err);
-      });
-    } else {
-      console.log('  📋 Manual mode: The agent is now running.');
-      console.log(
-        '     In another terminal, use the p2 CLI or curl to terminate.'
-      );
-      console.log(
-        '     Example: curl -XPOST -H "Authorization: Bearer dev-token" \\'
-      );
-      console.log(
-        `       "${apiUrl}/api/v1/agent_instance/{id}/terminate" \\`
-      );
-      console.log('       -H "Content-Type: application/json" \\');
-      console.log('       -d \'{"reason":"manual test"}\'');
-      console.log();
-    }
+    const signal = monitor.signal;
 
-    await prefactor.withSpan(
-      {
-        name: 'termination-demo:root',
-        spanType: 'custom:example-root',
-        inputs: {
-          example: 'termination-demo',
-          autoTerminateDelay: autoDelay,
-        },
-      },
-      async () => {
-        const query =
-          "First tell me the current time and weather in Tokyo. " +
-          "Then do a countdown from 8. " +
-          "Then check if 9876543221 is prime. " +
-          "After that, tell me the weather in London.";
+    // Tools must be recreated per run: they capture the run's AbortSignal
+    // directly so they can stop in-loop when terminated.
+    const tools = [
+      calculatorTool,
+      getCurrentTimeTool,
+      getWeatherTool,
+      createCountdownTool(signal),
+      createPrimeCheckTool(signal),
+    ];
 
-        console.log('  🤖 Agent query:');
-        console.log(`     "${query}"`);
-        console.log();
+    const agent = createAgent({
+      model,
+      tools,
+      systemPrompt:
+        'You are a helpful assistant. When you start any task, first check the current time. ' +
+        'When using countdown or prime_check, report back the full result exactly as the tool returns it.',
+      middleware: [prefactor.getMiddleware()],
+    });
 
-        const result = await agent.invoke({
-          messages: [{ role: 'user', content: query }],
-        });
+    console.log(`${sep}`);
+    console.log(`Run #${runCount} — starting`);
+    console.log(`${sep}`);
 
-        if (!monitor.terminated) {
-          // Only show result if we weren't terminated
-          console.log('\n  ✅ Agent completed without termination.\n');
-          const lastMessage = result.messages[result.messages.length - 1];
-          console.log('  Agent response:', lastMessage.content);
-        }
+    const query =
+      'First check the current time and weather in Tokyo. ' +
+      'Then do a countdown from 10. ' +
+      'Then check if 9876543221 is prime. ' +
+      'Finally tell me the weather in London.';
+
+    console.log(`  Query: "${query}"`);
+    console.log();
+
+    let cancelAutoTerminate: (() => void) | null = null;
+
+    try {
+      if (autoDelay > 0) {
+        cancelAutoTerminate = scheduleAutoTerminate(prefactor, apiUrl, apiToken, autoDelay, runCount === 1);
+      } else {
+        const instancePoller = setInterval(() => {
+          const id = prefactor.getAgentInstanceId();
+          if (id) {
+            clearInterval(instancePoller);
+            console.log(`\n  Run instance: ${id}`);
+            console.log(
+              `  Manual mode — terminate with:\n` +
+                `  curl -XPOST http://localhost:4000/api/v1/agent_instance/${id}/terminate \\\n` +
+                `       -H "Authorization: Bearer ${apiToken}" \\\n` +
+                `       -H "Content-Type: application/json" \\\n` +
+                `       -d '{"reason":"manual test"}'`
+            );
+          }
+        }, 300);
       }
-    );
-  } catch (error) {
-    if (error instanceof Error && error.name === 'PrefactorTerminatedError') {
-      terminated = true;
-      console.log('\n  🛑 Agent was terminated by p2 while running!');
-      console.log(`     ${error.message}`);
-      console.log();
-    } else {
-      console.error('\n  ❌ Unexpected error:', error);
-    }
-  } finally {
-    if (autoDelay > 0 && !monitor.terminated && !terminated) {
-      console.log(
-        '  ⚠️  Agent completed before auto-terminate fired. Try a lower delay or a larger task.\n'
-      );
+
+      await agent.invoke({ messages: [{ role: 'user', content: query }] });
+
+      console.log(`\n  Run #${runCount} completed normally.`);
+    } catch (err) {
+      if (err instanceof Error && err.name === 'PrefactorTerminatedError') {
+        console.log(`\n  Run #${runCount} terminated: ${err.message}`);
+        console.log(`  Service continues — next run in ${restartDelay}s.`);
+      } else {
+        // Unexpected error: let it propagate and kill the service.
+        throw err;
+      }
+    } finally {
+      cancelAutoTerminate?.();
+      // Finish the current instance and reset the monitor for the next run.
+      prefactor.finishCurrentRun();
     }
 
-    console.log('  Flushing pending spans...');
-    await prefactor.shutdown();
-    console.log('  Shutdown complete.\n');
-    console.log('='.repeat(72));
-
-    if (terminated || monitor.terminated) {
-      console.log('✅ Termination demo SUCCESS — instance was terminated mid-execution');
-    } else if (autoDelay === 0) {
-      console.log('⏳ Agent ran to completion (manual mode)');
-    } else {
-      console.log('⚠️  Agent completed before auto-terminate fired');
-    }
-    console.log('='.repeat(72));
+    console.log(`\n  Waiting ${restartDelay}s before next run...`);
+    await sleep(restartDelay * 1000);
   }
 }
 

@@ -132,6 +132,7 @@ export class HttpTransport implements Transport {
   private droppedAfterClose = 0;
   private cancelledScheduledRetries = 0;
   private partialTelemetryEvents = 0;
+  private controlSignalCallback?: (reason: string | null) => void;
 
   /** @internal */
   constructor(config: HttpTransportConfig, sdkHeaderEntry: string);
@@ -156,6 +157,14 @@ export class HttpTransport implements Transport {
       },
     });
     this.taskExecutor.start();
+  }
+
+  /**
+   * Registers a callback that fires when any span response contains a
+   * termination control signal. Called by createCore to wire the monitor.
+   */
+  registerControlSignalCallback(fn: (reason: string | null) => void): void {
+    this.controlSignalCallback = fn;
   }
 
   registerSchema(schema: Record<string, unknown>): void {
@@ -891,9 +900,19 @@ export class HttpTransport implements Transport {
       return;
     }
 
-    await this.agentInstanceClient.finish(this.agentInstanceId, {
-      idempotency_key: action.idempotencyKey,
-    });
+    try {
+      await this.agentInstanceClient.finish(this.agentInstanceId, {
+        idempotency_key: action.idempotencyKey,
+      });
+    } catch (error) {
+      // 409 means the instance is already in a terminal state (e.g. terminated).
+      // Treat as success — the instance is done either way.
+      if (error instanceof HttpClientError && error.status === 409) {
+        logger.debug(`Agent instance ${this.agentInstanceId} already in terminal state; skipping finish.`);
+      } else {
+        throw error;
+      }
+    }
 
     this.agentInstanceId = null;
     this.currentAgentRegisterIdempotencyKey = null;
@@ -913,6 +932,9 @@ export class HttpTransport implements Transport {
       ...this.transformSpanToApiFormat(action.span),
       idempotency_key: action.idempotencyKey,
     });
+
+    this.checkControlSignal(response.control);
+
     const backendSpanId = response.details?.id;
 
     if (!backendSpanId) {
@@ -940,13 +962,26 @@ export class HttpTransport implements Transport {
       return;
     }
 
-    await this.agentSpanClient.finish(backendSpanId, new Date(action.endTime).toISOString(), {
-      status: action.status,
-      result_payload: action.resultPayload ?? {},
-      idempotency_key: action.idempotencyKey,
-    });
+    const finishResponse = await this.agentSpanClient.finish(
+      backendSpanId,
+      new Date(action.endTime).toISOString(),
+      {
+        status: action.status,
+        result_payload: action.resultPayload ?? {},
+        idempotency_key: action.idempotencyKey,
+      }
+    );
 
+    this.checkControlSignal(finishResponse.control);
     this.recordActionSuccess(action);
+  }
+
+  private checkControlSignal(
+    control: { terminate?: boolean; reason?: string | null } | undefined
+  ): void {
+    if (control?.terminate && this.controlSignalCallback) {
+      this.controlSignalCallback(control.reason ?? null);
+    }
   }
 
   private recordPartialTelemetry(message: string): void {

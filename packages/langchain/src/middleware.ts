@@ -47,7 +47,7 @@ export class PrefactorMiddleware {
     private agentManager: AgentInstanceManager,
     private agentInfo?: Parameters<AgentInstanceManager['startInstance']>[0],
     private toolSpanTypes?: Record<string, string>,
-    private abortSignal?: AbortSignal
+    private getAbortSignal?: () => AbortSignal
   ) {}
 
   /**
@@ -336,8 +336,9 @@ export class PrefactorMiddleware {
   }
 
   private throwIfTerminated(): void {
-    if (this.abortSignal?.aborted) {
-      const reason = typeof this.abortSignal.reason === 'string' ? this.abortSignal.reason : null;
+    const signal = this.getAbortSignal?.();
+    if (signal?.aborted) {
+      const reason = typeof signal.reason === 'string' ? signal.reason : null;
       const error = new Error(
         reason ? `Agent instance terminated by p2: ${reason}` : 'Agent instance terminated by p2'
       );

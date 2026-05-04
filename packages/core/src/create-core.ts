@@ -55,9 +55,11 @@ export function createCore(config: Config, options: CreateCoreOptions = {}): Cor
     allowUnregisteredSchema,
   });
 
-  const terminationMonitor = new TerminationMonitor(transport.getHttpRequester(), () =>
-    transport.getAgentInstanceId()
+  const terminationMonitor = new TerminationMonitor(
+    transport.getHttpRequester(),
+    () => transport.getAgentInstanceId()
   );
+  transport.registerControlSignalCallback((reason) => terminationMonitor.detectTermination(reason));
   const syncInterval = setInterval(() => terminationMonitor.sync(), 1_000);
 
   const shutdown = async (): Promise<void> => {

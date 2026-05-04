@@ -37,19 +37,25 @@ export interface PrefactorProvider<TMiddleware = MiddlewareLike> {
    * @param tracer - Runtime tracer used for span creation.
    * @param agentManager - Runtime agent instance manager.
    * @param config - Resolved SDK configuration.
-   * @param abortSignal - AbortSignal that fires when p2 terminates the instance.
+   * @param getAbortSignal - Returns the AbortSignal for the current run. Called
+   *   on each check so a fresh signal is returned after `monitor.reset()`.
    * @returns Provider middleware consumed by upstream frameworks.
    */
   createMiddleware(
     tracer: Tracer,
     agentManager: AgentInstanceManager,
     config: Config,
-    abortSignal?: AbortSignal
+    getAbortSignal?: () => AbortSignal
   ): TMiddleware;
   /**
    * Optional provider-level cleanup hook invoked during client shutdown.
    */
   shutdown?: () => void | Promise<void>;
+  /**
+   * Optional hook called between agent runs to reset per-run middleware state
+   * (e.g. finish the current agent instance and clear instance-started flags).
+   */
+  resetForNextRun?: () => void;
   /**
    * Returns the SDK header entry to append to HTTP requests created by the core runtime.
    *
@@ -122,6 +128,19 @@ export class PrefactorClient<TMiddleware = MiddlewareLike> {
 
   getAgentInstanceId(): string | null {
     return this.core.agentManager.getAgentInstanceId();
+  }
+
+  /**
+   * Ends the current agent run and resets the termination monitor for the next
+   * run. Call this between runs in a long-running service loop.
+   *
+   * Finishes the active agent instance (if any), resets the termination monitor
+   * so a fresh AbortSignal is available, and invokes the provider's
+   * `resetForNextRun` hook to clear any per-run middleware state.
+   */
+  finishCurrentRun(): void {
+    this.provider.resetForNextRun?.();
+    this.core.terminationMonitor.reset();
   }
 
   /**
@@ -246,7 +265,7 @@ export function init<TMiddleware = MiddlewareLike>(
     core.tracer,
     core.agentManager,
     finalConfig,
-    core.terminationMonitor.signal
+    () => core.terminationMonitor.signal
   );
 
   prefactorClient = new PrefactorClient<TMiddleware>(core, middleware, options.provider);
