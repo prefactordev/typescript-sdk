@@ -40,6 +40,13 @@ export const PACKAGE_CONFIGS: PackageConfig[] = [
     generateVersionModule: true,
   },
   {
+    name: '@prefactor/livekit',
+    path: 'packages/livekit',
+    entrypoint: './packages/livekit/src/index.ts',
+    external: ['@prefactor/core', '@livekit/agents'],
+    generateVersionModule: true,
+  },
+  {
     name: '@prefactor/langchain',
     path: 'packages/langchain',
     entrypoint: './packages/langchain/src/index.ts',

@@ -103,6 +103,34 @@ Follow this process for all non-trivial changes:
 - Do not normalize package-specific spans to shared enum literals.
 - Preserve package-specific naming for agent, model, and tool operations.
 
+## Schemas and templates
+- Schemas are the tracing contract for an agent or provider integration. They define which span types exist, what payload shape each span is allowed to send, and what result shape it is allowed to finish with.
+- In this repo, schemas are not decorative metadata. They are how the SDK tells Prefactor what a `langchain:llm`, `ai-sdk:tool`, `livekit:user_turn`, or custom app span means.
+- We need schemas so spans are interpretable, queryable, and stable across SDK versions. Without them, traces degrade into unstructured blobs that are harder to validate, summarize, search, and evolve safely.
+- Schemas also protect compatibility. If instrumentation changes the payload shape without coordinating the schema, the HTTP transport can hit schema drift or backend validation issues.
+- Treat schema changes as API changes for observability. If you change a span's meaning, payload keys, result keys, or required fields, coordinate that change and update identifiers/versioning when appropriate.
+- Keep schemas minimal and requirement-driven. Include fields that explain the unit of work, drive summaries, support debugging, or are needed for downstream queries; do not add speculative fields.
+- Prefer stable, human-readable field names. Use names that describe intent (`model`, `tool_name`, `token_usage`, `finish_reason`) rather than transient implementation details.
+- Prefer explicit object schemas with `properties`, `required`, and `additionalProperties` choices that match real runtime behavior. Do not mark fields required unless instrumentation can reliably provide them.
+- Keep params and result schemas aligned with runtime lifecycle. Inputs belong in params/payload; outputs, status details, and usage belong in result payloads.
+- When merging, normalizing, or generating span schemas, preserve a single canonical schema entry per span type/name. Do not append generated schemas that duplicate a user-provided or default span type; prefer the more specific existing schema or make the precedence explicit in tests.
+- When a caller overrides part of a default span schema, do not silently drop the default result schema. Preserve the default result schema unless the caller provides an intentional replacement, and cover that behavior with a regression test.
+- Reuse existing provider span types when the meaning matches. Add a new span type only when the work is materially different, not just because the call site is different.
+- Keep provider-prefixed naming consistent for custom span types. Follow the existing package namespace pattern instead of inventing cross-package generic names.
+- Tool-specific schemas should be specific enough to describe the tool contract, but still resilient to provider noise. Prefer narrow input schemas and pragmatic output schemas.
+- When evolving default schemas, preserve backward compatibility where possible and avoid silent breakage for existing users relying on current span names or shapes.
+
+- Templates are short human-readable summary strings attached to span schemas. They turn structured params/result fields into a concise sentence or phrase in the Prefactor UI.
+- We need templates because raw JSON payloads are slow to scan. A good template makes traces understandable at a glance without opening the full payload.
+- A template should summarize what happened, not restate the whole schema. It is for quick triage and navigation, not exhaustive detail.
+- Keep templates short, concrete, and field-driven. Good examples mention the action, the main subject, and optionally the outcome.
+- Prefer templates that use stable high-signal fields such as model name, tool name, query, target, result count, or finish status.
+- Do not depend on noisy, huge, or highly variable fields in templates. Avoid dumping full prompts, full outputs, or arbitrarily large content into summaries.
+- Write templates so they still read reasonably when optional fields are absent. Do not build templates that become misleading or unreadable if one field is missing.
+- Use templates to distinguish similar spans in lists. If two span types would otherwise look identical in the UI, improve the template before adding more fields.
+- Keep templates semantically aligned with the schema. If the template references `result_count`, that field must be consistently populated by the runtime instrumentation.
+- Update templates when span meaning changes, and update schemas if the template needs new structured fields. Do not patch observability gaps with template text alone.
+
 ## Transport and queue conventions
 - Transport implementations must be resilient and must never crash user apps.
 - Use queue actions from `packages/core/src/queue/actions.ts` when working in code paths that rely on the shared queue implementation.
