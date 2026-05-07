@@ -8,10 +8,9 @@ export function registerAgentsCommands(program: Command): void {
   agents
     .command('list')
     .description('List agents')
-    .requiredOption('--environment_id <environment_id>', 'Environment ID')
-    .action(function (this: Command, options: { environment_id: string }) {
+    .action(function (this: Command) {
       return executeAuthed(this, async (apiClient) => {
-        const result = await new AgentClient(apiClient).list(options.environment_id);
+        const result = await new AgentClient(apiClient).list();
         printJson(result);
       });
     });
@@ -30,14 +29,12 @@ export function registerAgentsCommands(program: Command): void {
     .command('create')
     .description('Create agent')
     .requiredOption('--name <name>', 'Agent name')
-    .requiredOption('--environment_id <environment_id>', 'Environment ID')
     .option('--description <description>', 'Agent description')
     .option('--id <id>', 'Agent ID')
     .action(function (
       this: Command,
       options: {
         name: string;
-        environment_id: string;
         description?: string;
         id?: string;
       }
@@ -47,7 +44,6 @@ export function registerAgentsCommands(program: Command): void {
 
         const result = await new AgentClient(apiClient).create({
           name: options.name,
-          environment_id: options.environment_id,
           ...(options.description ? { description: options.description } : {}),
           ...(options.id ? { id: options.id } : {}),
         });

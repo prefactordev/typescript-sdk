@@ -62,6 +62,7 @@ describe('CLI profiles command', () => {
       'agent_versions',
       'agent_schema_versions',
       'agent_instances',
+      'agent_deployments',
       'agent_spans',
       'admin_users',
       'admin_user_invites',
@@ -447,11 +448,11 @@ describe('CLI command validation', () => {
         'invalid_scope',
       ])
     ).rejects.toThrow(
-      "Invalid --token_scope 'invalid_scope'. Allowed values: account, environment."
+      "Invalid --token_scope 'invalid_scope'. Allowed values: account, agent_deployment."
     );
   });
 
-  test('requires environment_id when token_scope is environment', async () => {
+  test('requires agent_id and environment_id when token_scope is agent_deployment', async () => {
     const cwd = join(tempRoot, 'cwd');
     mkdirSync(cwd, { recursive: true });
     process.chdir(cwd);
@@ -463,8 +464,158 @@ describe('CLI command validation', () => {
     const cli = createCli('1.0.0');
 
     await expect(
-      cli.parseAsync(['node', 'prefactor', 'api_tokens', 'create', '--token_scope', 'environment'])
-    ).rejects.toThrow("--environment_id is required when --token_scope is 'environment'.");
+      cli.parseAsync([
+        'node',
+        'prefactor',
+        'api_tokens',
+        'create',
+        '--token_scope',
+        'agent_deployment',
+      ])
+    ).rejects.toThrow(
+      "--agent_id and --environment_id are required when --token_scope is 'agent_deployment'."
+    );
+  });
+
+  test('rejects agent_id and environment_id when token_scope is account', async () => {
+    const cwd = join(tempRoot, 'cwd');
+    mkdirSync(cwd, { recursive: true });
+    process.chdir(cwd);
+    writeFileSync(
+      join(cwd, 'prefactor.json'),
+      JSON.stringify({ default: { api_key: 'token', base_url: 'https://example.com' } })
+    );
+
+    const cli = createCli('1.0.0');
+
+    await expect(
+      cli.parseAsync([
+        'node',
+        'prefactor',
+        'api_tokens',
+        'create',
+        '--token_scope',
+        'account',
+        '--agent_id',
+        'agent_123',
+        '--environment_id',
+        'env_123',
+      ])
+    ).rejects.toThrow(
+      "--agent_id and --environment_id must be omitted when --token_scope is 'account'."
+    );
+  });
+
+  test('agent_deployments update requires at least one update field before auth', async () => {
+    const cwd = join(tempRoot, 'cwd');
+    mkdirSync(cwd, { recursive: true });
+    process.chdir(cwd);
+
+    globalThis.fetch = mock(async () => {
+      throw new Error('fetch should not be called');
+    }) as unknown as typeof fetch;
+
+    await expect(
+      createCli('1.0.0').parseAsync(['node', 'prefactor', 'agent_deployments', 'update', 'dep_123'])
+    ).rejects.toThrow('No update fields provided; pass --current_version_id.');
+
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+  });
+
+  test('agent_deployments create and update trim optional IDs in payloads', async () => {
+    const cwd = join(tempRoot, 'cwd');
+    mkdirSync(cwd, { recursive: true });
+    process.chdir(cwd);
+    writeFileSync(
+      join(cwd, 'prefactor.json'),
+      JSON.stringify({ default: { api_key: 'token', base_url: 'https://example.com' } })
+    );
+
+    const bodies: unknown[] = [];
+    globalThis.fetch = (async (_input, init) => {
+      bodies.push(JSON.parse(String(init?.body ?? '{}')));
+      return new Response(JSON.stringify({ details: { id: 'dep_123' } }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }) as typeof fetch;
+
+    await createCli('1.0.0').parseAsync([
+      'node',
+      'prefactor',
+      'agent_deployments',
+      'create',
+      '--agent_id',
+      'agent_123',
+      '--environment_id',
+      'env_123',
+      '--id',
+      '  013xrzp12g3nqk8n5pj6qzmkvdr8mw1v  ',
+      '--current_version_id',
+      '  version_123  ',
+    ]);
+    await createCli('1.0.0').parseAsync([
+      'node',
+      'prefactor',
+      'agent_deployments',
+      'update',
+      'dep_123',
+      '--current_version_id',
+      '  version_456  ',
+    ]);
+
+    expect(bodies).toEqual([
+      {
+        details: {
+          agent_id: 'agent_123',
+          environment_id: 'env_123',
+          id: '013xrzp12g3nqk8n5pj6qzmkvdr8mw1v',
+          current_version_id: 'version_123',
+        },
+      },
+      {
+        details: {
+          current_version_id: 'version_456',
+        },
+      },
+    ]);
+  });
+
+  test('agent_deployments update accepts null sentinel to clear current_version_id', async () => {
+    const cwd = join(tempRoot, 'cwd');
+    mkdirSync(cwd, { recursive: true });
+    process.chdir(cwd);
+    writeFileSync(
+      join(cwd, 'prefactor.json'),
+      JSON.stringify({ default: { api_key: 'token', base_url: 'https://example.com' } })
+    );
+
+    const bodies: unknown[] = [];
+    globalThis.fetch = (async (_input, init) => {
+      bodies.push(JSON.parse(String(init?.body ?? '{}')));
+      return new Response(JSON.stringify({ details: { id: 'dep_123' } }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }) as typeof fetch;
+
+    await createCli('1.0.0').parseAsync([
+      'node',
+      'prefactor',
+      'agent_deployments',
+      'update',
+      'dep_123',
+      '--current_version_id',
+      'null',
+    ]);
+
+    expect(bodies).toEqual([
+      {
+        details: {
+          current_version_id: null,
+        },
+      },
+    ]);
   });
 
   test('supports @file JSON parsing for --payload', async () => {

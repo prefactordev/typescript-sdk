@@ -32,6 +32,14 @@ export {
   type AgentResponse,
 } from './clients/agent.js';
 export {
+  type AgentDeployment,
+  AgentDeploymentClient,
+  type AgentDeploymentCreateDetails,
+  type AgentDeploymentListResponse,
+  type AgentDeploymentResponse,
+  type AgentDeploymentUpdateDetails,
+} from './clients/agent-deployment.js';
+export {
   type AgentInstance,
   AgentInstanceClient,
   type AgentInstanceFinishOptions,

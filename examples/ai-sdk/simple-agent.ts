@@ -143,7 +143,7 @@ async function main() {
   // Wrap the model with our middleware
   // This is the key difference from the experimental_telemetry approach
   const model = wrapLanguageModel({
-    model: anthropic('claude-3-haiku-20240307'),
+    model: anthropic('claude-haiku-4-5-20251001'),
     middleware: prefactor.getMiddleware(),
   });
 

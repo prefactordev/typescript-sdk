@@ -3,7 +3,6 @@ import type { ApiClient } from '../api-client.js';
 export interface Agent {
   id: string;
   name: string;
-  environment_id: string;
   description?: string;
   status: string;
 }
@@ -13,7 +12,6 @@ export interface AgentDetails {
   name?: string;
   description?: string;
   current_version_id?: string;
-  environment_id?: string;
 }
 
 export interface AgentResponse {
@@ -27,10 +25,9 @@ export interface AgentListResponse {
 export class AgentClient {
   constructor(private readonly client: ApiClient) {}
 
-  list(environmentId: string): Promise<AgentListResponse> {
+  list(): Promise<AgentListResponse> {
     return this.client.request('/agent', {
       method: 'GET',
-      query: { environment_id: environmentId },
     });
   }
 
@@ -38,7 +35,7 @@ export class AgentClient {
     return this.client.request(`/agent/${id}`, { method: 'GET' });
   }
 
-  create(details: AgentDetails & { environment_id: string }): Promise<AgentResponse> {
+  create(details: AgentDetails & { name: string }): Promise<AgentResponse> {
     return this.client.request('/agent', {
       method: 'POST',
       body: { details },

@@ -5,7 +5,7 @@ import { ApiClient } from '../api-client.js';
 import type { BulkItem } from '../clients/bulk.js';
 import { DEFAULT_BASE_URL, ProfileManager, resolveCurrentProfileName } from '../profile-manager.js';
 
-const VALID_TOKEN_SCOPES = ['account', 'environment'] as const;
+const VALID_TOKEN_SCOPES = ['account', 'agent_deployment'] as const;
 const MAX_JSON_OPTION_FILE_SIZE_BYTES = 1024 * 1024;
 // When env auth is used without PREFACTOR_API_URL, fall back to the same
 // production default used for profile creation to avoid divergent defaults.
@@ -147,16 +147,35 @@ export function validateTokenScope(scope: string): void {
   );
 }
 
-export function validateTokenCreateOptions(tokenScope: string, environmentId?: string): void {
-  if (tokenScope !== 'environment') {
+export function validateTokenCreateOptions(
+  tokenScope: string,
+  agentId?: string,
+  environmentId?: string
+): void {
+  const hasAgentId = Boolean(agentId && agentId.trim().length > 0);
+  const hasEnvironmentId = Boolean(environmentId && environmentId.trim().length > 0);
+
+  if (tokenScope === 'account') {
+    if (!hasAgentId && !hasEnvironmentId) {
+      return;
+    }
+
+    throw new Error(
+      "--agent_id and --environment_id must be omitted when --token_scope is 'account'."
+    );
+  }
+
+  if (tokenScope !== 'agent_deployment') {
     return;
   }
 
-  if (environmentId && environmentId.trim().length > 0) {
+  if (hasAgentId && hasEnvironmentId) {
     return;
   }
 
-  throw new Error("--environment_id is required when --token_scope is 'environment'.");
+  throw new Error(
+    "--agent_id and --environment_id are required when --token_scope is 'agent_deployment'."
+  );
 }
 
 export function validateBaseUrl(baseUrl: string): void {
