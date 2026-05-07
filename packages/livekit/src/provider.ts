@@ -26,7 +26,8 @@ export class PrefactorLiveKit implements PrefactorProvider<LiveKitMiddleware> {
   createMiddleware(
     tracer: Tracer,
     agentManager: AgentInstanceManager,
-    coreConfig: Config
+    coreConfig: Config,
+    getAbortSignal?: () => AbortSignal
   ): LiveKitMiddleware {
     const toolSpanTypes = cloneToolSpanTypes(this.toolSpanTypes);
 
@@ -37,6 +38,7 @@ export class PrefactorLiveKit implements PrefactorProvider<LiveKitMiddleware> {
           agentManager,
           agentInfo: toLiveKitAgentInfo(coreConfig),
           toolSpanTypes,
+          getAbortSignal,
           onDidClose: () => {
             this.sessions.delete(sessionTracer);
           },

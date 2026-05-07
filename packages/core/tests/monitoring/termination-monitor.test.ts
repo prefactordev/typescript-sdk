@@ -273,6 +273,31 @@ describe('TerminationMonitor — reset()', () => {
     monitor.destroy();
   });
 
+  test('lingering old instance ID after reset does not lift the fence or restart polling', async () => {
+    let instanceId: string | null = 'instance-1';
+    const client = makeHttpClient('active');
+    const monitor = new TerminationMonitor(client, () => instanceId, 50);
+
+    monitor.sync();
+    await new Promise((resolve) => setTimeout(resolve, 60));
+    const callsBeforeReset = (client.request as ReturnType<typeof mock>).mock.calls.length;
+
+    monitor.reset();
+    monitor.sync();
+    monitor.detectTermination('stale signal');
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
+    expect(monitor.terminated).toBe(false);
+    expect((client.request as ReturnType<typeof mock>).mock.calls.length).toBe(callsBeforeReset);
+
+    instanceId = 'instance-2';
+    monitor.sync();
+    monitor.detectTermination('new run signal');
+
+    expect(monitor.terminated).toBe(true);
+    monitor.destroy();
+  });
+
   test('stale poll response after reset does not abort fresh signal', async () => {
     let resolveRequest!: (val: unknown) => void;
     const client: HttpRequester = {

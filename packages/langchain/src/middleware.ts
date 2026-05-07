@@ -57,6 +57,7 @@ export class PrefactorMiddleware {
    */
   // biome-ignore lint/suspicious/noExplicitAny: LangChain state can be any structure
   async beforeAgent(_state: any): Promise<void> {
+    this.throwIfTerminated();
     this.ensureAgentInstanceStarted();
   }
 
@@ -84,8 +85,8 @@ export class PrefactorMiddleware {
    */
   // biome-ignore lint/suspicious/noExplicitAny: LangChain request/handler types are dynamic
   async wrapModelCall<T>(request: any, handler: (req: any) => Promise<T>): Promise<T> {
-    this.ensureAgentInstanceStarted();
     this.throwIfTerminated();
+    this.ensureAgentInstanceStarted();
 
     const modelName = this.extractModelName(request);
     const span = this.tracer.startSpan({
@@ -120,8 +121,8 @@ export class PrefactorMiddleware {
    */
   // biome-ignore lint/suspicious/noExplicitAny: LangChain request/handler types are dynamic
   async wrapToolCall<T>(request: any, handler: (req: any) => Promise<T>): Promise<T> {
-    this.ensureAgentInstanceStarted();
     this.throwIfTerminated();
+    this.ensureAgentInstanceStarted();
 
     const toolName = this.extractToolName(request);
     const span = this.tracer.startSpan({

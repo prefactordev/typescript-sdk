@@ -506,6 +506,81 @@ describe('CLI command validation', () => {
     );
   });
 
+  test('api_tokens create treats whitespace-only deployment IDs as missing before request', async () => {
+    const cwd = join(tempRoot, 'cwd');
+    mkdirSync(cwd, { recursive: true });
+    process.chdir(cwd);
+    writeFileSync(
+      join(cwd, 'prefactor.json'),
+      JSON.stringify({ default: { api_key: 'token', base_url: 'https://example.com' } })
+    );
+
+    globalThis.fetch = mock(async () => {
+      throw new Error('fetch should not be called');
+    }) as unknown as typeof fetch;
+
+    await expect(
+      createCli('1.0.0').parseAsync([
+        'node',
+        'prefactor',
+        'api_tokens',
+        'create',
+        '--token_scope',
+        'agent_deployment',
+        '--agent_id',
+        '   ',
+        '--environment_id',
+        'env_123',
+      ])
+    ).rejects.toThrow(
+      "--agent_id and --environment_id are required when --token_scope is 'agent_deployment'."
+    );
+
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+  });
+
+  test('api_tokens create trims deployment IDs before sending payload', async () => {
+    const cwd = join(tempRoot, 'cwd');
+    mkdirSync(cwd, { recursive: true });
+    process.chdir(cwd);
+    writeFileSync(
+      join(cwd, 'prefactor.json'),
+      JSON.stringify({ default: { api_key: 'token', base_url: 'https://example.com' } })
+    );
+
+    const bodies: unknown[] = [];
+    globalThis.fetch = (async (_input, init) => {
+      bodies.push(JSON.parse(String(init?.body ?? '{}')));
+      return new Response(JSON.stringify({ details: { id: 'token_123' } }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }) as typeof fetch;
+
+    await createCli('1.0.0').parseAsync([
+      'node',
+      'prefactor',
+      'api_tokens',
+      'create',
+      '--token_scope',
+      'agent_deployment',
+      '--agent_id',
+      '  agent_123  ',
+      '--environment_id',
+      '  env_123  ',
+    ]);
+
+    expect(bodies).toEqual([
+      {
+        details: {
+          token_scope: 'agent_deployment',
+          agent_id: 'agent_123',
+          environment_id: 'env_123',
+        },
+      },
+    ]);
+  });
+
   test('agent_deployments update requires at least one update field before auth', async () => {
     const cwd = join(tempRoot, 'cwd');
     mkdirSync(cwd, { recursive: true });

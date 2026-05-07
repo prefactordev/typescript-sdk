@@ -139,8 +139,15 @@ export class PrefactorClient<TMiddleware = MiddlewareLike> {
    * `resetForNextRun` hook to clear any per-run middleware state.
    */
   finishCurrentRun(): void {
-    this.provider.resetForNextRun?.();
-    this.core.terminationMonitor.reset();
+    try {
+      if (this.provider.resetForNextRun) {
+        this.provider.resetForNextRun();
+      } else if (this.core.agentManager.getAgentInstanceId()) {
+        this.core.agentManager.finishInstance();
+      }
+    } finally {
+      this.core.terminationMonitor.reset();
+    }
   }
 
   /**

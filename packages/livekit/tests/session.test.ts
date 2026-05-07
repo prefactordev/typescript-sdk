@@ -34,6 +34,7 @@ class FakeEmitter {
 
 class FakeSession extends FakeEmitter {
   startCalls: unknown[] = [];
+  shutdownCalls: unknown[] = [];
   startError: Error | null = null;
   llm = new FakeEmitter();
   stt = new FakeEmitter();
@@ -45,6 +46,10 @@ class FakeSession extends FakeEmitter {
       throw this.startError;
     }
     return 'started';
+  }
+
+  shutdown(options?: unknown): void {
+    this.shutdownCalls.push(options);
   }
 }
 
@@ -184,6 +189,31 @@ describe('PrefactorLiveKitSession', () => {
     expect(startCalls).toHaveLength(1);
     expect(session.handlers.has('metrics_collected')).toBe(false);
     expect(session.handlers.has('session_usage_updated')).toBe(true);
+  });
+
+  test('attach throws before agent instance startup when the abort signal is already aborted', async () => {
+    const abortController = new AbortController();
+    abortController.abort('p2 requested stop');
+    const { tracer, started } = createTestTracer();
+    const startCalls: Array<Record<string, unknown> | undefined> = [];
+    const sessionTracer = new PrefactorLiveKitSession({
+      tracer: tracer as never,
+      agentManager: {
+        startInstance: (options?: Record<string, unknown>) => {
+          startCalls.push(options);
+        },
+        finishInstance: () => {},
+      } as never,
+      getAbortSignal: () => abortController.signal,
+    });
+
+    await expect(sessionTracer.attach(new FakeSession() as never)).rejects.toMatchObject({
+      name: 'PrefactorTerminatedError',
+      message: expect.stringContaining('p2 requested stop'),
+    });
+
+    expect(startCalls).toHaveLength(0);
+    expect(started).toHaveLength(0);
   });
 
   test('concurrent attach binds listeners once', async () => {
@@ -584,6 +614,80 @@ describe('PrefactorLiveKitSession', () => {
     expect(session.llm.handlers.get('metrics_collected')).toHaveLength(0);
     expect(session.stt.handlers.get('metrics_collected')).toHaveLength(0);
     expect(session.tts.handlers.get('metrics_collected')).toHaveLength(0);
+  });
+
+  test('abort signal shuts down LiveKit session and finalizes Prefactor state as failed', async () => {
+    const abortController = new AbortController();
+    const { tracer, ended } = createTestTracer();
+    let finishCalls = 0;
+    let onDidCloseCalls = 0;
+    const sessionTracer = new PrefactorLiveKitSession({
+      tracer: tracer as never,
+      agentManager: {
+        startInstance: () => {},
+        finishInstance: () => {
+          finishCalls += 1;
+        },
+      } as never,
+      getAbortSignal: () => abortController.signal,
+      onDidClose: () => {
+        onDidCloseCalls += 1;
+      },
+    });
+    const session = new FakeSession();
+    await sessionTracer.attach(session as never);
+
+    abortController.abort('p2 requested stop');
+    await flushQueue();
+
+    expect(session.shutdownCalls).toEqual([{ drain: false, reason: 'prefactor_terminated' }]);
+    const root = ended.find((entry) => entry.span.spanType === 'livekit:session');
+    expect(root?.outputs).toMatchObject({
+      status: 'failed',
+      metadata: {
+        closeReason: 'prefactor_terminated',
+      },
+      error: {
+        type: 'PrefactorTerminatedError',
+        message: expect.stringContaining('p2 requested stop'),
+      },
+    });
+    expect(root?.error?.name).toBe('PrefactorTerminatedError');
+    expect(finishCalls).toBe(1);
+    expect(onDidCloseCalls).toBe(1);
+    expect(session.handlers.get('close')).toHaveLength(0);
+    expect(session.llm.handlers.get('metrics_collected')).toHaveLength(0);
+  });
+
+  test('termination cleanup remains idempotent when followed by close events and manual close', async () => {
+    const abortController = new AbortController();
+    const { tracer, ended } = createTestTracer();
+    let finishCalls = 0;
+    const sessionTracer = new PrefactorLiveKitSession({
+      tracer: tracer as never,
+      agentManager: {
+        startInstance: () => {},
+        finishInstance: () => {
+          finishCalls += 1;
+        },
+      } as never,
+      getAbortSignal: () => abortController.signal,
+    });
+    const session = new FakeSession();
+    await sessionTracer.attach(session as never);
+
+    abortController.abort('p2 requested stop');
+    await flushQueue();
+    session.emit('close', {
+      reason: 'prefactor_terminated',
+      error: new Error('late close'),
+    });
+    await sessionTracer.close();
+    await flushQueue();
+
+    expect(finishCalls).toBe(1);
+    expect(ended.filter((entry) => entry.span.spanType === 'livekit:session')).toHaveLength(1);
+    expect(session.shutdownCalls).toHaveLength(1);
   });
 
   test('start rejection finalizes the root span as failed and finishes the agent instance', async () => {

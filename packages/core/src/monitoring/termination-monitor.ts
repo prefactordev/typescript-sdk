@@ -31,6 +31,8 @@ export class TerminationMonitor {
 
   private pollTimer: ReturnType<typeof setInterval> | null = null;
   private trackingInstanceId: string | null = null;
+  private fencedInstanceId: string | null = null;
+  private sawNullInstanceAfterReset = false;
 
   constructor(
     private readonly httpClient: HttpRequester,
@@ -57,9 +59,19 @@ export class TerminationMonitor {
 
     const currentId = this.getAgentInstanceId();
 
-    // Lift the post-reset fence once a new instance is active.
-    if (this.fenced && currentId !== null) {
-      this.fenced = false;
+    // Lift the post-reset fence only after the old instance disappears or a
+    // genuinely different instance starts. A stale old ID can linger for one
+    // sync tick after finishCurrentRun().
+    if (this.fenced) {
+      if (currentId === null) {
+        this.sawNullInstanceAfterReset = true;
+      } else if (this.sawNullInstanceAfterReset || currentId !== this.fencedInstanceId) {
+        this.fenced = false;
+        this.fencedInstanceId = null;
+        this.sawNullInstanceAfterReset = false;
+      } else {
+        return;
+      }
     }
 
     if (currentId === this.trackingInstanceId) return;
@@ -95,6 +107,8 @@ export class TerminationMonitor {
   reset(): void {
     this.generation++;
     this.fenced = true;
+    this.fencedInstanceId = this.trackingInstanceId ?? this.readCurrentInstanceId();
+    this.sawNullInstanceAfterReset = false;
     this.stopPolling();
     this.abortController = new AbortController();
     this.trackingInstanceId = null;
@@ -127,8 +141,8 @@ export class TerminationMonitor {
           logger.debug(`Termination detected via fallback poll. Reason: ${reason ?? '(none)'}`);
           this.triggerTermination(reason);
         }
-      } catch {
-        // transient error — continue polling
+      } catch (error) {
+        logger.debug('Termination poll failed (will retry):', error);
       }
     }, this.pollIntervalMs);
   }
@@ -137,6 +151,15 @@ export class TerminationMonitor {
     if (this.pollTimer) {
       clearInterval(this.pollTimer);
       this.pollTimer = null;
+    }
+  }
+
+  private readCurrentInstanceId(): string | null {
+    try {
+      return this.getAgentInstanceId();
+    } catch (error) {
+      logger.debug('Failed to read agent instance ID while resetting termination monitor:', error);
+      return null;
     }
   }
 

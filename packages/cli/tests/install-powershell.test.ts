@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test';
 import { spawn, spawnSync } from 'node:child_process';
 import { copyFileSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { mkdir } from 'node:fs/promises';
@@ -8,6 +8,10 @@ import { sha256Hex, withServer } from './install-test-helpers';
 
 const PWSH = 'pwsh.exe';
 const PWSH_BASE_ARGS = ['-NoLogo', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass'];
+
+if (process.platform === 'win32') {
+  setDefaultTimeout(20_000);
+}
 
 async function runPwsh(
   args: string[],

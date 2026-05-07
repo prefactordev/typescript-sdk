@@ -21,6 +21,7 @@ type SessionOptions = {
   agentManager: AgentInstanceManager;
   agentInfo?: SessionAgentInfo;
   toolSpanTypes?: Record<string, string>;
+  getAbortSignal?: () => AbortSignal;
   onDidClose?: () => void | Promise<void>;
 };
 
@@ -46,15 +47,20 @@ type EventEmitterLike = {
   on?(event: string, callback: EventCallback): unknown;
   off?(event: string, callback: EventCallback): unknown;
 };
+type ShutdownCapableSession = {
+  shutdown?(options?: { drain?: boolean; reason?: string }): void;
+};
 
 const logger = getLogger('livekit-session');
+const PREFACTOR_TERMINATION_CLOSE_REASON = 'prefactor_terminated';
 
 export class PrefactorLiveKitSession {
   private readonly tracer: Tracer;
   private readonly agentManager: AgentInstanceManager;
   private readonly agentInfo?: SessionAgentInfo;
   private readonly toolSpanTypes?: Record<string, string>;
-  private readonly onDidClose?: () => void;
+  private readonly getAbortSignal?: () => AbortSignal;
+  private readonly onDidClose?: () => void | Promise<void>;
   private session: voice.AgentSession<unknown> | null = null;
   private rootSpan: Span | null = null;
   private activeUserTurn: ActiveTurn | null = null;
@@ -81,16 +87,21 @@ export class PrefactorLiveKitSession {
   private closingPromise: Promise<void> | null = null;
   private pendingError: Error | null = null;
   private agentClass: string | undefined;
+  private abortSignal: AbortSignal | null = null;
+  private abortListener: (() => void) | null = null;
 
   constructor(options: SessionOptions) {
     this.tracer = options.tracer;
     this.agentManager = options.agentManager;
     this.agentInfo = options.agentInfo;
     this.toolSpanTypes = options.toolSpanTypes;
+    this.getAbortSignal = options.getAbortSignal;
     this.onDidClose = options.onDidClose;
   }
 
   async attach(session: voice.AgentSession<unknown>): Promise<void> {
+    this.throwIfTerminated();
+
     if (this.finalized) {
       return;
     }
@@ -117,6 +128,10 @@ export class PrefactorLiveKitSession {
       if (this.finalized || (this.session === session && this.rootSpan)) {
         return;
       }
+
+      this.throwIfTerminated();
+      this.bindAbortSignal();
+      this.throwIfTerminated();
 
       this.session = session;
       this.bindSessionEvents(session);
@@ -254,7 +269,15 @@ export class PrefactorLiveKitSession {
   }
 
   private async handleQueued(task: () => Promise<void>): Promise<void> {
+    if (this.finalized) {
+      return;
+    }
+
     await this.enqueue(async () => {
+      if (this.finalized) {
+        return;
+      }
+
       try {
         await task();
       } catch (error) {
@@ -529,6 +552,76 @@ export class PrefactorLiveKitSession {
     await this.finalizeFromState(this.resolveFinalState(reason, readValue(event, 'error')), reason);
   }
 
+  private bindAbortSignal(): void {
+    const signal = this.readAbortSignal();
+    if (!signal || signal === this.abortSignal) {
+      return;
+    }
+
+    this.unbindAbortSignal();
+    this.abortSignal = signal;
+    if (signal.aborted) {
+      return;
+    }
+
+    const listener = () => {
+      void this.handleTermination(signal.reason);
+    };
+    signal.addEventListener('abort', listener, { once: true });
+    this.abortListener = listener;
+  }
+
+  private unbindAbortSignal(): void {
+    if (this.abortSignal && this.abortListener) {
+      this.abortSignal.removeEventListener('abort', this.abortListener);
+    }
+
+    this.abortSignal = null;
+    this.abortListener = null;
+  }
+
+  private throwIfTerminated(): void {
+    const signal = this.readAbortSignal();
+    if (signal?.aborted) {
+      throw createTerminatedError(signal.reason);
+    }
+  }
+
+  private readAbortSignal(): AbortSignal | undefined {
+    try {
+      return this.getAbortSignal?.();
+    } catch (error) {
+      safeWarn('Failed to read Prefactor termination signal for LiveKit session.', error);
+      return undefined;
+    }
+  }
+
+  private async handleTermination(reason: unknown): Promise<void> {
+    await this.enqueue(async () => {
+      if (this.finalized) {
+        return;
+      }
+
+      const error = createTerminatedError(reason);
+      this.pendingError = error;
+      this.shutdownLiveKitSession();
+      await this.finalizeFromState({ status: 'failed', error }, PREFACTOR_TERMINATION_CLOSE_REASON);
+    });
+  }
+
+  private shutdownLiveKitSession(): void {
+    const session = this.session as (voice.AgentSession<unknown> & ShutdownCapableSession) | null;
+    if (typeof session?.shutdown !== 'function') {
+      return;
+    }
+
+    try {
+      session.shutdown({ drain: false, reason: PREFACTOR_TERMINATION_CLOSE_REASON });
+    } catch (error) {
+      safeWarn('Failed to shut down LiveKit session after Prefactor termination.', error);
+    }
+  }
+
   private async onComponentMetrics(kind: 'llm' | 'stt' | 'tts', event: unknown): Promise<void> {
     const metrics = readRecord(event, 'metrics') ?? (isRecord(event) ? event : undefined);
     if (!metrics) {
@@ -704,6 +797,7 @@ export class PrefactorLiveKitSession {
     }
     this.finalized = true;
 
+    this.unbindAbortSignal();
     this.unbindAllEvents();
     this.finishActiveAssistantTurn(
       finalStatus === 'failed' ? 'failed' : 'cancelled',
@@ -797,6 +891,13 @@ export class PrefactorLiveKitSession {
 
   private resolveFinalState(closeReason?: string, explicitError?: unknown): SessionFinalState {
     const error = explicitError ? toError(explicitError) : (this.pendingError ?? undefined);
+    if (closeReason === PREFACTOR_TERMINATION_CLOSE_REASON) {
+      return {
+        status: 'failed',
+        error: error ?? createTerminatedError(undefined),
+      };
+    }
+
     if (closeReason === 'error' || error) {
       return {
         status: 'failed',
@@ -957,6 +1058,34 @@ function toError(error: unknown): Error {
     return error;
   }
   return new Error(typeof error === 'string' ? error : JSON.stringify(serializeUnknown(error)));
+}
+
+function createTerminatedError(reason: unknown): Error {
+  const formattedReason = formatTerminationReason(reason);
+  const message = formattedReason
+    ? `Prefactor run terminated by p2: ${formattedReason}`
+    : 'Prefactor run terminated by p2.';
+  const error = new Error(message);
+  error.name = 'PrefactorTerminatedError';
+  return error;
+}
+
+function formatTerminationReason(reason: unknown): string | undefined {
+  if (reason instanceof Error) {
+    return reason.message;
+  }
+
+  if (typeof reason === 'string') {
+    const trimmed = reason.trim();
+    return trimmed || undefined;
+  }
+
+  if (reason === undefined || reason === null) {
+    return undefined;
+  }
+
+  const serialized = serializeUnknown(reason);
+  return typeof serialized === 'string' ? serialized : JSON.stringify(serialized);
 }
 
 function readZippedFunctionCalls(

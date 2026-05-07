@@ -4,9 +4,12 @@ import { getClient, init as initCore } from '@prefactor/core';
 import { DEFAULT_LIVEKIT_AGENT_SCHEMA, PrefactorLiveKit } from '../src/index.js';
 import { PACKAGE_NAME, PACKAGE_VERSION } from '../src/version.js';
 
+const TEST_API_URL = 'https://example.com';
+
 class FakeSession {
   on(): void {}
   off(): void {}
+  shutdown(): void {}
 }
 
 describe('PrefactorLiveKit', () => {
@@ -69,7 +72,7 @@ describe('PrefactorLiveKit', () => {
       } as never,
       {
         httpConfig: {
-          apiUrl: 'https://example.com',
+          apiUrl: TEST_API_URL,
           apiToken: 'test-token',
           agentIdentifier: 'livekit-test',
         },
@@ -79,6 +82,46 @@ describe('PrefactorLiveKit', () => {
     const tracer = middleware.createSessionTracer();
     expect(typeof middleware.createSessionTracer).toBe('function');
     expect(tracer).toBeDefined();
+  });
+
+  test('createMiddleware passes the core abort signal getter into session tracers', async () => {
+    const provider = new PrefactorLiveKit();
+    const abortController = new AbortController();
+    abortController.abort('p2 requested stop');
+    const startCalls: unknown[] = [];
+    const middleware = provider.createMiddleware(
+      {
+        startSpan: () => {
+          throw new Error('should not start a span');
+        },
+        endSpan: () => {},
+        close: async () => {},
+        startAgentInstance: () => {},
+        finishAgentInstance: () => {},
+      } as never,
+      {
+        startInstance: (options?: unknown) => {
+          startCalls.push(options);
+        },
+        finishInstance: () => {},
+      } as never,
+      {
+        httpConfig: {
+          apiUrl: TEST_API_URL,
+          apiToken: 'test-token',
+          agentIdentifier: 'livekit-test',
+        },
+      } as never,
+      () => abortController.signal
+    );
+
+    await expect(
+      middleware.createSessionTracer().attach(new FakeSession() as never)
+    ).rejects.toMatchObject({
+      name: 'PrefactorTerminatedError',
+      message: expect.stringContaining('p2 requested stop'),
+    });
+    expect(startCalls).toHaveLength(0);
   });
 
   test('middleware snapshots tool span mappings when created', async () => {
@@ -113,7 +156,7 @@ describe('PrefactorLiveKit', () => {
       } as never,
       {
         httpConfig: {
-          apiUrl: 'https://example.com',
+          apiUrl: TEST_API_URL,
           apiToken: 'test-token',
           agentIdentifier: 'livekit-test',
         },
@@ -138,7 +181,7 @@ describe('PrefactorLiveKit', () => {
       } as never,
       {
         httpConfig: {
-          apiUrl: 'https://example.com',
+          apiUrl: TEST_API_URL,
           apiToken: 'test-token',
           agentIdentifier: 'livekit-test',
         },
@@ -176,7 +219,7 @@ describe('PrefactorLiveKit', () => {
       } as never,
       {
         httpConfig: {
-          apiUrl: 'https://example.com',
+          apiUrl: TEST_API_URL,
           apiToken: 'test-token',
           agentIdentifier: 'livekit-test',
         },
@@ -239,7 +282,7 @@ describe('PrefactorLiveKit', () => {
     const prefactor = initCore({
       provider: new PrefactorLiveKit(),
       httpConfig: {
-        apiUrl: 'https://example.com',
+        apiUrl: TEST_API_URL,
         apiToken: 'test-token',
         agentIdentifier: 'livekit-test',
       },

@@ -241,9 +241,10 @@ async function main() {
   }
 
   const apiUrl = process.env.PREFACTOR_API_URL || 'http://localhost:4000';
-  const apiToken =
-    process.env.PREFACTOR_API_TOKEN ||
-    'eyJhbGciOiJIUzI1NiIsImtpZCI6IjBhM2M5MzI0OWU5NjJkMWExOTBmMWJkNTE0OGU5YmRkIiwidHlwIjoiSldUIn0.eyJfIjp7ImEiOiIwMWtxZ2ZiMmdrcHpqenA2NzJhMnoycnIzMXptczYzMiIsInQiOiJiYSJ9LCJleHAiOjE4NDA2ODA4NTYsImlhdCI6MTc3NzYwODg1NiwianRpIjoiMDFrcWd2eDUzd3B6anpwNmo5M3pzcmg0amt2c3Q2NW0ifQ.yPAX1MfJuvs5bNGnG9-2mNg727vZeti0kO_BU6tPW7c';
+  const apiToken = process.env.PREFACTOR_API_TOKEN;
+  if (!apiToken) {
+    throw new Error('PREFACTOR_API_TOKEN environment variable is required.');
+  }
   const autoDelay = parseInt(process.env.PREFACTOR_AUTO_TERMINATE_DELAY ?? '8', 10);
   const restartDelay = parseInt(process.env.PREFACTOR_RESTART_DELAY ?? '30', 10);
 
@@ -351,20 +352,24 @@ async function main() {
     console.log();
 
     let cancelAutoTerminate: (() => void) | null = null;
+    let manualInstancePoller: ReturnType<typeof setInterval> | null = null;
 
     try {
       if (autoDelay > 0) {
         cancelAutoTerminate = scheduleAutoTerminate(prefactor, apiUrl, apiToken, autoDelay, runCount === 1);
       } else {
-        const instancePoller = setInterval(() => {
+        manualInstancePoller = setInterval(() => {
           const id = prefactor.getAgentInstanceId();
           if (id) {
-            clearInterval(instancePoller);
+            if (manualInstancePoller) {
+              clearInterval(manualInstancePoller);
+              manualInstancePoller = null;
+            }
             console.log(`\n  Run instance: ${id}`);
             console.log(
               `  Manual mode — terminate with:\n` +
-                `  curl -XPOST http://localhost:4000/api/v1/agent_instance/${id}/terminate \\\n` +
-                `       -H "Authorization: Bearer ${apiToken}" \\\n` +
+                `  curl -XPOST ${apiUrl}/api/v1/agent_instance/${id}/terminate \\\n` +
+                `       -H "Authorization: Bearer <redacted>" \\\n` +
                 `       -H "Content-Type: application/json" \\\n` +
                 `       -d '{"reason":"manual test"}'`
             );
@@ -385,6 +390,9 @@ async function main() {
       }
     } finally {
       cancelAutoTerminate?.();
+      if (manualInstancePoller) {
+        clearInterval(manualInstancePoller);
+      }
       // Finish the current instance and reset the monitor for the next run.
       prefactor.finishCurrentRun();
     }
