@@ -3,15 +3,19 @@ import type { ApiClient } from '../api-client.js';
 export interface ApiToken {
   id: string;
   token_scope: string;
-  account_id?: string;
-  environment_id?: string;
-  expires_at?: string;
+  account_id: string;
+  agent_deployment_id: string | null;
+  agent_id: string | null;
+  environment_id: string | null;
+  expires_at: string;
+  last_used_at: string | null;
   status: string;
 }
 
 export interface ApiTokenCreateDetails {
   token_scope: string;
   account_id?: string;
+  agent_id?: string;
   environment_id?: string;
   expires_at?: string;
 }

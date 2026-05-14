@@ -36,24 +36,30 @@ export function registerApiTokensCommands(program: Command): void {
     .description('Create API token')
     .requiredOption('--token_scope <token_scope>', 'Token scope')
     .option('--account_id <account_id>', 'Account ID')
-    .option('--environment_id <environment_id>', 'Environment ID')
+    .option('--agent_id <agent_id>', 'Agent ID (required when token_scope is agent_deployment)')
+    .option(
+      '--environment_id <environment_id>',
+      'Environment ID (required when token_scope is agent_deployment)'
+    )
     .option('--expires_at <expires_at>', 'Expiration timestamp')
     .action(function (
       this: Command,
       options: {
         token_scope: string;
         account_id?: string;
+        agent_id?: string;
         environment_id?: string;
         expires_at?: string;
       }
     ) {
       return executeAuthed(this, async (apiClient) => {
         validateTokenScope(options.token_scope);
-        validateTokenCreateOptions(options.token_scope, options.environment_id);
+        validateTokenCreateOptions(options.token_scope, options.agent_id, options.environment_id);
 
         const result = await new ApiTokenClient(apiClient).create({
           token_scope: options.token_scope,
           ...(options.account_id ? { account_id: options.account_id } : {}),
+          ...(options.agent_id ? { agent_id: options.agent_id } : {}),
           ...(options.environment_id ? { environment_id: options.environment_id } : {}),
           ...(options.expires_at ? { expires_at: options.expires_at } : {}),
         });

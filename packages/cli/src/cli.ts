@@ -2,6 +2,7 @@ import { Command } from 'commander';
 import packageJson from '../package.json';
 import { registerAccountsCommands } from './commands/accounts.js';
 import { registerAdminCommands } from './commands/admin.js';
+import { registerAgentDeploymentsCommands } from './commands/agent-deployments.js';
 import { registerAgentInstancesCommands } from './commands/agent-instances.js';
 import { registerAgentSchemaVersionsCommands } from './commands/agent-schema-versions.js';
 import { registerAgentSpansCommands } from './commands/agent-spans.js';
@@ -43,7 +44,8 @@ export function createCli(version: string): Command {
       'Examples:',
       '  prefactor profiles add default --api-token <api-token>',
       '  prefactor accounts list',
-      '  prefactor agents list --environment_id <environment_id>',
+      '  prefactor agents list',
+      '  prefactor agent_deployments create --agent_id <agent_id> --environment_id <environment_id>',
       '  prefactor agent_spans create --agent_instance_id <id> --payload \'{"step":"tool"}\'',
     ].join('\n')
   );
@@ -56,6 +58,7 @@ export function createCli(version: string): Command {
   registerAgentVersionsCommands(program);
   registerAgentSchemaVersionsCommands(program);
   registerAgentInstancesCommands(program);
+  registerAgentDeploymentsCommands(program);
   registerAgentSpansCommands(program);
   registerAdminCommands(program);
   registerApiTokensCommands(program);

@@ -118,11 +118,15 @@ async function main() {
       apiUrl: process.env.PREFACTOR_API_URL || 'http://localhost:8000',
       apiToken: process.env.PREFACTOR_API_TOKEN || 'dev-token',
       agentId: process.env.PREFACTOR_AGENT_ID,
-      agentIdentifier: 'langchain-v1',
+      agentIdentifier: 'langchain-v2',
       agentSchema: {
-        external_identifier: 'langchain-tool-schema-example-v1',
-        span_schemas: {},
-        span_result_schemas: {},
+        external_identifier: 'langchain-tool-schema-example-v2',
+        span_schemas: {
+          'custom:example-root': { type: 'object', additionalProperties: true },
+        },
+        span_result_schemas: {
+          'custom:example-root': { type: 'object', additionalProperties: true },
+        },
         toolSchemas: {
           calculator: {
             spanType: 'calculator',
@@ -158,7 +162,7 @@ async function main() {
         // Create agent using the createAgent API with middleware
         console.log('Creating agent with createAgent API and Prefactor middleware...');
         const agent = createAgent({
-          model: 'claude-3-haiku-20240307',
+          model: 'claude-haiku-4-5-20251001',
           tools,
           systemPrompt: 'You are a helpful assistant. Use the available tools to answer questions.',
           middleware: [prefactor.getMiddleware()],

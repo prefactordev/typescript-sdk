@@ -5,6 +5,7 @@ import { AccountClient } from '../src/clients/account.js';
 import { AdminUserClient } from '../src/clients/admin-user.js';
 import { AdminUserInviteClient } from '../src/clients/admin-user-invite.js';
 import { AgentClient } from '../src/clients/agent.js';
+import { AgentDeploymentClient } from '../src/clients/agent-deployment.js';
 import { AgentInstanceClient } from '../src/clients/agent-instance.js';
 import { AgentSchemaVersionClient } from '../src/clients/agent-schema-version.js';
 import { AgentSpanClient } from '../src/clients/agent-span.js';
@@ -34,6 +35,7 @@ describe('resource clients', () => {
   test('root index exports all clients', () => {
     expect(typeof cliExports.AccountClient).toBe('function');
     expect(typeof cliExports.AgentClient).toBe('function');
+    expect(typeof cliExports.AgentDeploymentClient).toBe('function');
     expect(typeof cliExports.EnvironmentClient).toBe('function');
     expect(typeof cliExports.AgentVersionClient).toBe('function');
     expect(typeof cliExports.AgentSchemaVersionClient).toBe('function');
@@ -47,7 +49,7 @@ describe('resource clients', () => {
     expect(cliExports.AgentInstanceClient).toBe(CoreAgentInstanceClient);
   });
 
-  test('agent list uses query filters for GET', async () => {
+  test('agent list sends GET without filters', async () => {
     let captured: CapturedRequest | undefined;
     globalThis.fetch = (async (input, init) => {
       captured = { url: String(input), init };
@@ -60,13 +62,120 @@ describe('resource clients', () => {
     const apiClient = new ApiClient('https://example.com', 'test-token');
     const client = new AgentClient(apiClient);
 
-    await client.list('env_123');
+    const response = await client.list();
 
     const url = new URL(captured?.url ?? 'https://example.com');
     expect(url.pathname).toBe('/api/v1/agent');
-    expect(url.searchParams.get('environment_id')).toBe('env_123');
+    expect(url.searchParams.toString()).toBe('');
     expect(captured?.init?.method).toBe('GET');
     expect(captured?.init?.body).toBeUndefined();
+    expect(response).toEqual({ details: [] });
+  });
+
+  test('agent deployment list uses agent_id query param', async () => {
+    let captured: CapturedRequest | undefined;
+    globalThis.fetch = (async (input, init) => {
+      captured = { url: String(input), init };
+      return new Response(JSON.stringify({ details: [] }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }) as typeof fetch;
+
+    const apiClient = new ApiClient('https://example.com', 'test-token');
+    const client = new AgentDeploymentClient(apiClient);
+
+    const response = await client.list('agent_123');
+
+    const url = new URL(captured?.url ?? 'https://example.com');
+    expect(url.pathname).toBe('/api/v1/agent_deployment');
+    expect(url.searchParams.get('agent_id')).toBe('agent_123');
+    expect(captured?.init?.method).toBe('GET');
+    expect(response).toEqual({ details: [] });
+  });
+
+  test('agent deployment create wraps payload in details', async () => {
+    let captured: CapturedRequest | undefined;
+    globalThis.fetch = (async (input, init) => {
+      captured = { url: String(input), init };
+      return new Response(JSON.stringify({ details: { id: 'dep_1' } }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }) as typeof fetch;
+
+    const apiClient = new ApiClient('https://example.com', 'test-token');
+    const client = new AgentDeploymentClient(apiClient);
+
+    await client.create({ agent_id: 'agent_1', environment_id: 'env_1' });
+
+    const url = new URL(captured?.url ?? 'https://example.com');
+    expect(url.pathname).toBe('/api/v1/agent_deployment');
+    expect(captured?.init?.method).toBe('POST');
+    const body = JSON.parse(String(captured?.init?.body));
+    expect(body.details.agent_id).toBe('agent_1');
+    expect(body.details.environment_id).toBe('env_1');
+  });
+
+  test('agent deployment update sends PUT with details', async () => {
+    let captured: CapturedRequest | undefined;
+    globalThis.fetch = (async (input, init) => {
+      captured = { url: String(input), init };
+      return new Response(JSON.stringify({ details: { id: 'dep_1' } }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }) as typeof fetch;
+
+    const apiClient = new ApiClient('https://example.com', 'test-token');
+    const client = new AgentDeploymentClient(apiClient);
+
+    await client.update('dep_1', { current_version_id: 'ver_1' });
+
+    const url = new URL(captured?.url ?? 'https://example.com');
+    expect(url.pathname).toBe('/api/v1/agent_deployment/dep_1');
+    expect(captured?.init?.method).toBe('PUT');
+    const body = JSON.parse(String(captured?.init?.body));
+    expect(body.details.current_version_id).toBe('ver_1');
+  });
+
+  test('agent deployment update supports clearing current_version_id', async () => {
+    let captured: CapturedRequest | undefined;
+    globalThis.fetch = (async (input, init) => {
+      captured = { url: String(input), init };
+      return new Response(JSON.stringify({ details: { id: 'dep_1' } }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }) as typeof fetch;
+
+    const apiClient = new ApiClient('https://example.com', 'test-token');
+    const client = new AgentDeploymentClient(apiClient);
+
+    await client.update('dep_1', { current_version_id: null });
+
+    const body = JSON.parse(String(captured?.init?.body));
+    expect(body.details.current_version_id).toBeNull();
+  });
+
+  test('agent deployment delete sends DELETE', async () => {
+    let captured: CapturedRequest | undefined;
+    globalThis.fetch = (async (input, init) => {
+      captured = { url: String(input), init };
+      return new Response(JSON.stringify({ details: { id: 'dep_1' } }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }) as typeof fetch;
+
+    const apiClient = new ApiClient('https://example.com', 'test-token');
+    const client = new AgentDeploymentClient(apiClient);
+
+    await client.delete('dep_1');
+
+    const url = new URL(captured?.url ?? 'https://example.com');
+    expect(url.pathname).toBe('/api/v1/agent_deployment/dep_1');
+    expect(captured?.init?.method).toBe('DELETE');
   });
 
   test('environment create wraps payload in details', async () => {
@@ -132,6 +241,52 @@ describe('resource clients', () => {
     );
     expect(captured?.init?.method).toBe('POST');
     expect(captured?.init?.body).toBe('{}');
+  });
+
+  test('api token create wraps account-scoped payload in details', async () => {
+    let captured: CapturedRequest | undefined;
+    globalThis.fetch = (async (input, init) => {
+      captured = { url: String(input), init };
+      return new Response(JSON.stringify({ details: { id: 'tok_1' } }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }) as typeof fetch;
+
+    const apiClient = new ApiClient('https://example.com', 'test-token');
+    const client = new ApiTokenClient(apiClient);
+
+    await client.create({ token_scope: 'account', account_id: 'acct_1' });
+
+    expect(new URL(captured?.url ?? 'https://example.com').pathname).toBe('/api/v1/api_token');
+    expect(captured?.init?.method).toBe('POST');
+    expect(captured?.init?.body).toBe(
+      '{"details":{"token_scope":"account","account_id":"acct_1"}}'
+    );
+  });
+
+  test('api token create wraps deployment-scoped payload in details', async () => {
+    let captured: CapturedRequest | undefined;
+    globalThis.fetch = (async (input, init) => {
+      captured = { url: String(input), init };
+      return new Response(JSON.stringify({ details: { id: 'tok_1' } }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }) as typeof fetch;
+
+    const apiClient = new ApiClient('https://example.com', 'test-token');
+    const client = new ApiTokenClient(apiClient);
+
+    await client.create({
+      token_scope: 'agent_deployment',
+      agent_id: 'agent_1',
+      environment_id: 'env_1',
+    });
+
+    expect(captured?.init?.body).toBe(
+      '{"details":{"token_scope":"agent_deployment","agent_id":"agent_1","environment_id":"env_1"}}'
+    );
   });
 
   test('pfid generate sends non-details payload', async () => {

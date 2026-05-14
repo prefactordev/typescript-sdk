@@ -8,6 +8,7 @@ export {
 export interface AgentInstance {
   id: string;
   agent_id: string;
+  agent_deployment_id: string;
   status: string;
 }
 

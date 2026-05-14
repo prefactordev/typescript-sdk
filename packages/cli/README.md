@@ -85,7 +85,8 @@ prefactor accounts list
 
 ```bash
 prefactor environments list --account_id <account_id>
-prefactor agents list --environment_id <environment_id>
+prefactor agents list
+prefactor api_tokens create --token_scope agent_deployment --agent_id <agent_id> --environment_id <environment_id>
 ```
 
 ## Authentication and Profiles
@@ -113,6 +114,7 @@ Environment fallback is supported when no default profile is configured:
 - `accounts`: list, retrieve, update
 - `environments`: list, retrieve, create, update, delete
 - `agents`: list, retrieve, create, update, delete, retire, reinstate
+- `agent_deployments`: list, retrieve, create, update, delete
 - `agent_versions`: list, retrieve, create
 - `agent_schema_versions`: list, retrieve, create
 - `agent_instances`: list, retrieve, register, start, finish
@@ -142,26 +144,22 @@ prefactor agent_spans create --payload @./span.json
 import {
   ApiClient,
   AccountClient,
-  EnvironmentClient,
   AgentClient,
+  AgentDeploymentClient,
 } from '@prefactor/cli';
 
 const api = new ApiClient('https://app.prefactorai.com', process.env.PREFACTOR_API_TOKEN!);
 const accounts = new AccountClient(api);
-const environments = new EnvironmentClient(api);
 const agents = new AgentClient(api);
+const deployments = new AgentDeploymentClient(api);
 
 const accountList = await accounts.list();
-const accountId = accountList.details[0]?.id;
+const agentList = await agents.list();
+const agentId = agentList.details[0]?.id;
 
-if (accountId) {
-  const envList = await environments.list(accountId);
-  const environmentId = envList.details[0]?.id;
-
-  if (environmentId) {
-    const agentList = await agents.list(environmentId);
-    console.log(agentList.details);
-  }
+if (accountList.details[0]?.id && agentId) {
+  const deploymentList = await deployments.list(agentId);
+  console.log(deploymentList.details);
 }
 ```
 
@@ -182,6 +180,7 @@ if (accountId) {
 - `AccountClient`
 - `EnvironmentClient`
 - `AgentClient`
+- `AgentDeploymentClient`
 - `AgentVersionClient`
 - `AgentSchemaVersionClient`
 - `AgentInstanceClient`
