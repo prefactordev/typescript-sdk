@@ -3,6 +3,7 @@ import type { Config } from './config.js';
 import { createConfig } from './config.js';
 import type { CoreRuntime } from './create-core.js';
 import { createCore } from './create-core.js';
+import type { TerminationMonitor } from './monitoring/termination-monitor.js';
 import type { Tracer } from './tracing/tracer.js';
 import { withSpan as coreWithSpan } from './tracing/with-span.js';
 import { configureLogging } from './utils/logging.js';
@@ -36,13 +37,25 @@ export interface PrefactorProvider<TMiddleware = MiddlewareLike> {
    * @param tracer - Runtime tracer used for span creation.
    * @param agentManager - Runtime agent instance manager.
    * @param config - Resolved SDK configuration.
+   * @param getAbortSignal - Returns the AbortSignal for the current run. Called
+   *   on each check so a fresh signal is returned after `monitor.reset()`.
    * @returns Provider middleware consumed by upstream frameworks.
    */
-  createMiddleware(tracer: Tracer, agentManager: AgentInstanceManager, config: Config): TMiddleware;
+  createMiddleware(
+    tracer: Tracer,
+    agentManager: AgentInstanceManager,
+    config: Config,
+    getAbortSignal?: () => AbortSignal
+  ): TMiddleware;
   /**
    * Optional provider-level cleanup hook invoked during client shutdown.
    */
   shutdown?: () => void | Promise<void>;
+  /**
+   * Optional hook called between agent runs to reset per-run middleware state
+   * (e.g. finish the current agent instance and clear instance-started flags).
+   */
+  resetForNextRun?: () => void;
   /**
    * Returns the SDK header entry to append to HTTP requests created by the core runtime.
    *
@@ -107,6 +120,34 @@ export class PrefactorClient<TMiddleware = MiddlewareLike> {
    */
   getMiddleware(): TMiddleware {
     return this.middleware;
+  }
+
+  getTerminationMonitor(): TerminationMonitor {
+    return this.core.terminationMonitor;
+  }
+
+  getAgentInstanceId(): string | null {
+    return this.core.agentManager.getAgentInstanceId();
+  }
+
+  /**
+   * Ends the current agent run and resets the termination monitor for the next
+   * run. Call this between runs in a long-running service loop.
+   *
+   * Finishes the active agent instance (if any), resets the termination monitor
+   * so a fresh AbortSignal is available, and invokes the provider's
+   * `resetForNextRun` hook to clear any per-run middleware state.
+   */
+  finishCurrentRun(): void {
+    try {
+      if (this.provider.resetForNextRun) {
+        this.provider.resetForNextRun();
+      } else if (this.core.agentManager.getAgentInstanceId()) {
+        this.core.agentManager.finishInstance();
+      }
+    } finally {
+      this.core.terminationMonitor.reset();
+    }
   }
 
   /**
@@ -227,7 +268,12 @@ export function init<TMiddleware = MiddlewareLike>(
     core.agentManager.registerSchema(httpConfig.agentSchema);
   }
 
-  const middleware = options.provider.createMiddleware(core.tracer, core.agentManager, finalConfig);
+  const middleware = options.provider.createMiddleware(
+    core.tracer,
+    core.agentManager,
+    finalConfig,
+    () => core.terminationMonitor.signal
+  );
 
   prefactorClient = new PrefactorClient<TMiddleware>(core, middleware, options.provider);
   prefactorInitKey = nextInitKey;

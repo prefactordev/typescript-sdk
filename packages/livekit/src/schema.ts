@@ -7,6 +7,7 @@ interface NormalizedLiveKitSchemaData {
 }
 
 export interface LiveKitSpanTypeSchema {
+  spanType: string;
   name: string;
   params_schema: JsonSchema;
   result_schema?: JsonSchema;
@@ -289,20 +290,26 @@ export function normalizeAgentSchema(
     providerName: 'livekit',
   });
 
-  const userSpanTypeSchemas = readSpanTypeSchemas(agentSchema?.span_type_schemas);
+  const userSpanTypeSchemas = [
+    ...(readLegacySpanTypeSchemas(agentSchema?.span_schemas, agentSchema?.span_result_schemas) ??
+      []),
+    ...(readSpanTypeSchemas(agentSchema?.span_type_schemas) ?? []),
+  ];
   const mergedSpanTypeSchemas = mergeSpanTypeSchemas(
     DEFAULT_LIVEKIT_AGENT_SCHEMA.span_type_schemas as unknown as LiveKitSpanTypeSchema[],
-    userSpanTypeSchemas ?? []
+    userSpanTypeSchemas
   );
-  const existingSpanTypeNames = new Set(mergedSpanTypeSchemas.map((schema) => schema.name));
+  const existingSpanTypes = new Set(mergedSpanTypeSchemas.map((schema) => schema.spanType));
   const customToolSpanTypeSchemas = buildCustomToolSpanTypeSchemas(
     normalizedTools.toolSchemas,
-    existingSpanTypeNames
+    existingSpanTypes
   );
 
   const {
     toolSchemas: _toolSchemas,
     span_type_schemas: _spanTypeSchemas,
+    span_schemas: _spanSchemas,
+    span_result_schemas: _spanResultSchemas,
     ...rest
   } = cloneRecord(agentSchema);
 
@@ -323,15 +330,17 @@ export function resolveToolSpanType(
 }
 
 function buildSpanTypeSchema(
-  name: string,
-  template: string,
+  spanType: string,
+  template: string | undefined,
   paramsSchema: JsonSchema,
   {
+    name,
     resultSchema,
     title,
     description,
     dataRisk,
   }: {
+    name?: string;
     resultSchema?: JsonSchema;
     title?: string;
     description?: string;
@@ -339,7 +348,8 @@ function buildSpanTypeSchema(
   } = {}
 ): LiveKitSpanTypeSchema {
   return compactRecord({
-    name,
+    spanType,
+    name: name ?? displayNameFromSpanType(spanType),
     title,
     description,
     template,
@@ -353,27 +363,27 @@ function mergeSpanTypeSchemas(
   defaults: LiveKitSpanTypeSchema[],
   overrides: LiveKitSpanTypeSchema[]
 ): LiveKitSpanTypeSchema[] {
-  const overrideMap = new Map(overrides.map((s) => [s.name, s]));
+  const overrideMap = new Map(overrides.map((s) => [s.spanType, s]));
   const merged = defaults.map((s) => {
-    const override = overrideMap.get(s.name);
+    const override = overrideMap.get(s.spanType);
     if (!override) {
       return s;
     }
     return override.result_schema ? override : { ...override, result_schema: s.result_schema };
   });
   const newEntries = overrides
-    .filter((s) => !defaults.some((d) => d.name === s.name))
+    .filter((s) => !defaults.some((d) => d.spanType === s.spanType))
     .map((s) => (s.result_schema ? s : { ...s, result_schema: DEFAULT_RESULT_SCHEMA }));
   return [...merged, ...newEntries];
 }
 
 function buildCustomToolSpanTypeSchemas(
   toolSchemas: ReturnType<typeof normalizeAgentToolSchemas>['toolSchemas'],
-  existingSpanTypeNames: Set<string>
+  existingSpanTypes: Set<string>
 ): LiveKitSpanTypeSchema[] {
   if (!toolSchemas) return [];
-  return Object.values(toolSchemas).flatMap(({ spanType }) => {
-    if (existingSpanTypeNames.has(spanType)) {
+  return Object.entries(toolSchemas).flatMap(([toolName, { spanType }]) => {
+    if (existingSpanTypes.has(spanType)) {
       return [];
     }
 
@@ -384,6 +394,7 @@ function buildCustomToolSpanTypeSchemas(
     const paramsSchema = { ...cloneRecord(LIVEKIT_TOOL_SCHEMA), properties } as JsonSchema;
     return [
       buildSpanTypeSchema(spanType, LIVEKIT_TOOL_TEMPLATE, paramsSchema, {
+        name: toolName,
         resultSchema: LIVEKIT_TOOL_RESULT_SCHEMA,
       }),
     ];
@@ -401,14 +412,16 @@ function readSpanTypeSchemas(value: unknown): LiveKitSpanTypeSchema[] | undefine
     }
 
     const record = entry as Record<string, unknown>;
+    const spanType = record.spanType;
     const name = record.name;
     const paramsSchema = readJsonSchema(record.params_schema);
-    if (typeof name !== 'string' || !paramsSchema) {
+    if (typeof spanType !== 'string' || typeof name !== 'string' || !paramsSchema) {
       return [];
     }
 
     return [
       compactRecord({
+        spanType,
         name,
         title: readOptionalString(record.title),
         description: readOptionalString(record.description),
@@ -421,6 +434,36 @@ function readSpanTypeSchemas(value: unknown): LiveKitSpanTypeSchema[] | undefine
   });
 
   return spanTypeSchemas.length > 0 ? spanTypeSchemas : undefined;
+}
+
+function readLegacySpanTypeSchemas(
+  spanSchemasValue: unknown,
+  spanResultSchemasValue: unknown
+): LiveKitSpanTypeSchema[] | undefined {
+  const spanSchemas = readRecord(spanSchemasValue);
+  if (!spanSchemas) {
+    return undefined;
+  }
+
+  const spanResultSchemas = readRecord(spanResultSchemasValue) ?? {};
+  const spanTypeSchemas = Object.entries(spanSchemas).flatMap(([spanType, paramsSchemaValue]) => {
+    const paramsSchema = readJsonSchema(paramsSchemaValue);
+    if (!paramsSchema) {
+      return [];
+    }
+
+    return [
+      buildSpanTypeSchema(spanType, undefined, paramsSchema, {
+        resultSchema: readJsonSchema(spanResultSchemas[spanType]),
+      }),
+    ];
+  });
+
+  return spanTypeSchemas.length > 0 ? spanTypeSchemas : undefined;
+}
+
+function displayNameFromSpanType(spanType: string): string {
+  return spanType.split(':').at(-1) ?? spanType;
 }
 
 function readJsonSchema(value: unknown): JsonSchema | undefined {

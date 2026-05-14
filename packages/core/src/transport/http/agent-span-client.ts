@@ -25,11 +25,17 @@ export type AgentSpanCreatePayload = {
   idempotency_key?: string;
 };
 
+export type AgentSpanControlSignal = {
+  terminate?: boolean;
+  reason?: string | null;
+};
+
 export type AgentSpanResponse = {
   details?: {
     id?: string;
     started_at?: string;
   };
+  control?: AgentSpanControlSignal;
 };
 
 export class AgentSpanClient {
@@ -46,23 +52,26 @@ export class AgentSpanClient {
     spanId: string,
     timestamp: string,
     options: AgentSpanFinishOptions = {}
-  ): Promise<void> {
+  ): Promise<AgentSpanResponse> {
     try {
-      await this.httpClient.request(`/api/v1/agent_spans/${spanId}/finish`, {
-        method: 'POST',
-        body: {
-          timestamp,
-          ...options,
-          idempotency_key: ensureIdempotencyKey(options.idempotency_key),
-        },
-      });
+      return await this.httpClient.request<AgentSpanResponse>(
+        `/api/v1/agent_spans/${spanId}/finish`,
+        {
+          method: 'POST',
+          body: {
+            timestamp,
+            ...options,
+            idempotency_key: ensureIdempotencyKey(options.idempotency_key),
+          },
+        }
+      );
     } catch (error) {
       if (
         error instanceof HttpClientError &&
         error.status === 409 &&
         isAlreadyFinishedError(error.responseBody)
       ) {
-        return;
+        return {};
       }
 
       throw error;
