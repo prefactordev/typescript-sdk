@@ -13,6 +13,7 @@
     "lint": "biome check .",
     "format": "biome format --write .",
     "example:langchain": "bun examples/langchain/simple-agent.ts",
+    "example:langchain-termination": "bun examples/langchain/termination-demo.ts",
     "example:livekit": "bun examples/livekit/simple-session.ts",
     "example:ai": "bun examples/ai-sdk/simple-agent.ts",
     "example:ai-schema": "bun examples/ai-sdk/custom-schema.ts"
