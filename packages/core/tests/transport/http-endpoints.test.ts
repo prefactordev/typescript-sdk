@@ -144,7 +144,7 @@ describe('HTTP endpoint clients', () => {
       client.finish('backend-span-1', '2026-02-09T00:00:01.000Z', {
         status: 'complete',
       })
-    ).resolves.toBeUndefined();
+    ).resolves.toEqual({});
   });
 });
 

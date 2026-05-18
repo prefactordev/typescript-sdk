@@ -52,15 +52,18 @@ export function registerApiTokensCommands(program: Command): void {
         expires_at?: string;
       }
     ) {
+      const agentId = options.agent_id?.trim();
+      const environmentId = options.environment_id?.trim();
+
       return executeAuthed(this, async (apiClient) => {
         validateTokenScope(options.token_scope);
-        validateTokenCreateOptions(options.token_scope, options.agent_id, options.environment_id);
+        validateTokenCreateOptions(options.token_scope, agentId, environmentId);
 
         const result = await new ApiTokenClient(apiClient).create({
           token_scope: options.token_scope,
           ...(options.account_id ? { account_id: options.account_id } : {}),
-          ...(options.agent_id ? { agent_id: options.agent_id } : {}),
-          ...(options.environment_id ? { environment_id: options.environment_id } : {}),
+          ...(agentId ? { agent_id: agentId } : {}),
+          ...(environmentId ? { environment_id: environmentId } : {}),
           ...(options.expires_at ? { expires_at: options.expires_at } : {}),
         });
         printJson(result);

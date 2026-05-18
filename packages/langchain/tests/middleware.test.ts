@@ -44,6 +44,10 @@ class CaptureTransport implements Transport {
   async close(): Promise<void> {}
 }
 
+function makeAbortedSignal(): AbortSignal {
+  return AbortSignal.abort('stopped');
+}
+
 describe('PrefactorMiddleware', () => {
   test('uses existing context as parent when no root agent span is created', async () => {
     const transport = new CaptureTransport();
@@ -186,6 +190,75 @@ describe('PrefactorMiddleware', () => {
     middleware.shutdown();
 
     expect(transport.finishedInstances).toBe(1);
+  });
+
+  test('does not start agent instance when beforeAgent sees an aborted run', async () => {
+    const transport = new CaptureTransport();
+    const tracer = new Tracer(transport);
+    const agentManager = new AgentInstanceManager(transport, {});
+    agentManager.registerSchema({ type: 'object' });
+    const middleware = new PrefactorMiddleware(
+      tracer,
+      agentManager,
+      undefined,
+      undefined,
+      makeAbortedSignal
+    );
+
+    await expect(middleware.beforeAgent({ messages: [] })).rejects.toMatchObject({
+      name: 'PrefactorTerminatedError',
+      message: 'Agent instance terminated by p2: stopped',
+    });
+
+    expect(transport.startedInstances).toBe(0);
+  });
+
+  test('does not start agent instance when model call sees an aborted run', async () => {
+    const transport = new CaptureTransport();
+    const tracer = new Tracer(transport);
+    const agentManager = new AgentInstanceManager(transport, {});
+    agentManager.registerSchema({ type: 'object' });
+    const middleware = new PrefactorMiddleware(
+      tracer,
+      agentManager,
+      undefined,
+      undefined,
+      makeAbortedSignal
+    );
+
+    await expect(
+      middleware.wrapModelCall({ model: 'test' }, async () => ({ content: 'ok' }))
+    ).rejects.toMatchObject({
+      name: 'PrefactorTerminatedError',
+      message: 'Agent instance terminated by p2: stopped',
+    });
+
+    expect(transport.startedInstances).toBe(0);
+  });
+
+  test('does not start agent instance when tool call sees an aborted run', async () => {
+    const transport = new CaptureTransport();
+    const tracer = new Tracer(transport);
+    const agentManager = new AgentInstanceManager(transport, {});
+    agentManager.registerSchema({ type: 'object' });
+    const middleware = new PrefactorMiddleware(
+      tracer,
+      agentManager,
+      undefined,
+      undefined,
+      makeAbortedSignal
+    );
+
+    await expect(
+      middleware.wrapToolCall({ name: 'lookup', input: { key: 'count' } }, async () => ({
+        content: '42',
+      }))
+    ).rejects.toMatchObject({
+      name: 'PrefactorTerminatedError',
+      message: 'Agent instance terminated by p2: stopped',
+    });
+
+    expect(transport.startedInstances).toBe(0);
   });
 
   test('preserves scalar strings in tool response content without coercion', async () => {

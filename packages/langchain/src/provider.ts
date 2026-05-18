@@ -26,7 +26,8 @@ export class PrefactorLangChain implements PrefactorProvider<AgentMiddleware> {
   createMiddleware(
     tracer: Tracer,
     agentManager: AgentInstanceManager,
-    coreConfig: Config
+    coreConfig: Config,
+    getAbortSignal?: () => AbortSignal
   ): AgentMiddleware {
     const httpConfig = coreConfig.httpConfig;
     const agentInfo = httpConfig
@@ -38,7 +39,13 @@ export class PrefactorLangChain implements PrefactorProvider<AgentMiddleware> {
         }
       : undefined;
 
-    this.middleware = new PrefactorMiddleware(tracer, agentManager, agentInfo, this.toolSpanTypes);
+    this.middleware = new PrefactorMiddleware(
+      tracer,
+      agentManager,
+      agentInfo,
+      this.toolSpanTypes,
+      getAbortSignal
+    );
     const middleware = this.middleware;
 
     return createMiddleware({
@@ -60,6 +67,10 @@ export class PrefactorLangChain implements PrefactorProvider<AgentMiddleware> {
         await middleware.afterAgent(state);
       },
     });
+  }
+
+  resetForNextRun(): void {
+    this.middleware?.shutdown();
   }
 
   shutdown(): void {

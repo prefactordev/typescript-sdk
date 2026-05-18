@@ -1,15 +1,26 @@
-import { afterEach, describe, expect, test } from 'bun:test';
+import { afterEach, describe, expect, spyOn, test } from 'bun:test';
+import { stderr } from 'node:process';
 import { getClient, init as initCore } from '@prefactor/core';
 import { DEFAULT_LIVEKIT_AGENT_SCHEMA, PrefactorLiveKit } from '../src/index.js';
 import { PACKAGE_NAME, PACKAGE_VERSION } from '../src/version.js';
 
+const TEST_API_URL = 'https://example.com';
+
 class FakeSession {
   on(): void {}
   off(): void {}
+  shutdown(): void {}
 }
 
 describe('PrefactorLiveKit', () => {
+  let warnSpy: ReturnType<typeof spyOn> | undefined;
+  let stderrSpy: ReturnType<typeof spyOn> | undefined;
+
   afterEach(async () => {
+    warnSpy?.mockRestore();
+    stderrSpy?.mockRestore();
+    warnSpy = undefined;
+    stderrSpy = undefined;
     await getClient()?.shutdown();
   });
 
@@ -35,8 +46,8 @@ describe('PrefactorLiveKit', () => {
       },
     });
 
-    const spanTypeSchemas = normalized.span_type_schemas as Array<{ name: string }>;
-    expect(spanTypeSchemas.map((spanSchema) => spanSchema.name)).toContain(
+    const spanTypeSchemas = normalized.span_type_schemas as Array<{ spanType: string }>;
+    expect(spanTypeSchemas.map((spanSchema) => spanSchema.spanType)).toContain(
       'livekit:tool:lookup-weather'
     );
     expect(normalized).not.toHaveProperty('span_schemas');
@@ -61,7 +72,7 @@ describe('PrefactorLiveKit', () => {
       } as never,
       {
         httpConfig: {
-          apiUrl: 'https://example.com',
+          apiUrl: TEST_API_URL,
           apiToken: 'test-token',
           agentIdentifier: 'livekit-test',
         },
@@ -71,6 +82,46 @@ describe('PrefactorLiveKit', () => {
     const tracer = middleware.createSessionTracer();
     expect(typeof middleware.createSessionTracer).toBe('function');
     expect(tracer).toBeDefined();
+  });
+
+  test('createMiddleware passes the core abort signal getter into session tracers', async () => {
+    const provider = new PrefactorLiveKit();
+    const abortController = new AbortController();
+    abortController.abort('p2 requested stop');
+    const startCalls: unknown[] = [];
+    const middleware = provider.createMiddleware(
+      {
+        startSpan: () => {
+          throw new Error('should not start a span');
+        },
+        endSpan: () => {},
+        close: async () => {},
+        startAgentInstance: () => {},
+        finishAgentInstance: () => {},
+      } as never,
+      {
+        startInstance: (options?: unknown) => {
+          startCalls.push(options);
+        },
+        finishInstance: () => {},
+      } as never,
+      {
+        httpConfig: {
+          apiUrl: TEST_API_URL,
+          apiToken: 'test-token',
+          agentIdentifier: 'livekit-test',
+        },
+      } as never,
+      () => abortController.signal
+    );
+
+    await expect(
+      middleware.createSessionTracer().attach(new FakeSession() as never)
+    ).rejects.toMatchObject({
+      name: 'PrefactorTerminatedError',
+      message: expect.stringContaining('p2 requested stop'),
+    });
+    expect(startCalls).toHaveLength(0);
   });
 
   test('middleware snapshots tool span mappings when created', async () => {
@@ -105,7 +156,7 @@ describe('PrefactorLiveKit', () => {
       } as never,
       {
         httpConfig: {
-          apiUrl: 'https://example.com',
+          apiUrl: TEST_API_URL,
           apiToken: 'test-token',
           agentIdentifier: 'livekit-test',
         },
@@ -130,7 +181,7 @@ describe('PrefactorLiveKit', () => {
       } as never,
       {
         httpConfig: {
-          apiUrl: 'https://example.com',
+          apiUrl: TEST_API_URL,
           apiToken: 'test-token',
           agentIdentifier: 'livekit-test',
         },
@@ -168,7 +219,7 @@ describe('PrefactorLiveKit', () => {
       } as never,
       {
         httpConfig: {
-          apiUrl: 'https://example.com',
+          apiUrl: TEST_API_URL,
           apiToken: 'test-token',
           agentIdentifier: 'livekit-test',
         },
@@ -185,11 +236,53 @@ describe('PrefactorLiveKit', () => {
     expect(closeCalls).toBe(1);
   });
 
+  test('provider shutdown logging fallback does not throw when logger fails', async () => {
+    const provider = new PrefactorLiveKit();
+    const middleware = provider.createMiddleware(
+      {
+        startSpan: () => null,
+        endSpan: () => {},
+        close: async () => {},
+        startAgentInstance: () => {},
+        finishAgentInstance: () => {},
+      } as never,
+      {
+        startInstance: () => {},
+        finishInstance: () => {},
+      } as never,
+      {} as never
+    );
+    const sessionTracer = middleware.createSessionTracer();
+    const closeError = new Error('close failed');
+    const loggerError = new Error('logger failed');
+    sessionTracer.close = async () => {
+      throw closeError;
+    };
+    warnSpy = spyOn(console, 'warn').mockImplementation(() => {
+      throw loggerError;
+    });
+    stderrSpy = spyOn(stderr, 'write').mockImplementation(() => true);
+
+    await expect(provider.shutdown()).resolves.toBeUndefined();
+
+    expect(stderrSpy).toHaveBeenCalledWith(
+      expect.stringContaining(
+        'PrefactorLiveKit.shutdown() failed while reporting a session-tracer close error.'
+      )
+    );
+    expect(stderrSpy).toHaveBeenCalledWith(
+      expect.stringContaining('shutdown_error=Error: close failed')
+    );
+    expect(stderrSpy).toHaveBeenCalledWith(
+      expect.stringContaining('logger_error=Error: logger failed')
+    );
+  });
+
   test('core init exposes createSessionTracer through middleware', async () => {
     const prefactor = initCore({
       provider: new PrefactorLiveKit(),
       httpConfig: {
-        apiUrl: 'https://example.com',
+        apiUrl: TEST_API_URL,
         apiToken: 'test-token',
         agentIdentifier: 'livekit-test',
       },

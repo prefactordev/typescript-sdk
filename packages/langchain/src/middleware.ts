@@ -46,7 +46,8 @@ export class PrefactorMiddleware {
     private tracer: Tracer,
     private agentManager: AgentInstanceManager,
     private agentInfo?: Parameters<AgentInstanceManager['startInstance']>[0],
-    private toolSpanTypes?: Record<string, string>
+    private toolSpanTypes?: Record<string, string>,
+    private getAbortSignal?: () => AbortSignal
   ) {}
 
   /**
@@ -56,6 +57,7 @@ export class PrefactorMiddleware {
    */
   // biome-ignore lint/suspicious/noExplicitAny: LangChain state can be any structure
   async beforeAgent(_state: any): Promise<void> {
+    this.throwIfTerminated();
     this.ensureAgentInstanceStarted();
   }
 
@@ -83,6 +85,7 @@ export class PrefactorMiddleware {
    */
   // biome-ignore lint/suspicious/noExplicitAny: LangChain request/handler types are dynamic
   async wrapModelCall<T>(request: any, handler: (req: any) => Promise<T>): Promise<T> {
+    this.throwIfTerminated();
     this.ensureAgentInstanceStarted();
 
     const modelName = this.extractModelName(request);
@@ -118,6 +121,7 @@ export class PrefactorMiddleware {
    */
   // biome-ignore lint/suspicious/noExplicitAny: LangChain request/handler types are dynamic
   async wrapToolCall<T>(request: any, handler: (req: any) => Promise<T>): Promise<T> {
+    this.throwIfTerminated();
     this.ensureAgentInstanceStarted();
 
     const toolName = this.extractToolName(request);
@@ -329,6 +333,18 @@ export class PrefactorMiddleware {
       this.agentInstanceStarted = false;
     } catch (error) {
       logger.error('Failed to finish agent instance:', error);
+    }
+  }
+
+  private throwIfTerminated(): void {
+    const signal = this.getAbortSignal?.();
+    if (signal?.aborted) {
+      const reason = typeof signal.reason === 'string' ? signal.reason : null;
+      const error = new Error(
+        reason ? `Agent instance terminated by p2: ${reason}` : 'Agent instance terminated by p2'
+      );
+      error.name = 'PrefactorTerminatedError';
+      throw error;
     }
   }
 }

@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, spyOn, test } from 'bun:test';
 import type { AgentInstanceManager } from '../src/agent/instance-manager.js';
-import { getClient, init, type PrefactorProvider } from '../src/client.js';
+import { getClient, init, PrefactorClient, type PrefactorProvider } from '../src/client.js';
 import type { Config } from '../src/config.js';
+import type { CoreRuntime } from '../src/create-core.js';
 import type { Tracer } from '../src/tracing/tracer.js';
 
 class TestProvider implements PrefactorProvider {
@@ -227,5 +228,66 @@ describe('core client init', () => {
 
     expect(shutdownSpy).toHaveBeenCalledTimes(1);
     shutdownSpy.mockRestore();
+  });
+});
+
+describe('PrefactorClient finishCurrentRun', () => {
+  function createFinishCurrentRunClient(
+    calls: string[],
+    provider: PrefactorProvider
+  ): PrefactorClient {
+    return new PrefactorClient(
+      {
+        terminationMonitor: {
+          reset: () => calls.push('monitor-reset'),
+        },
+        agentManager: {
+          getAgentInstanceId: () => {
+            calls.push('get-instance-id');
+            return 'instance-123';
+          },
+          finishInstance: () => calls.push('finish-instance'),
+        },
+      } as unknown as CoreRuntime,
+      {},
+      provider
+    );
+  }
+
+  test('calls provider reset hook and resets termination monitor', () => {
+    const calls: string[] = [];
+    const client = createFinishCurrentRunClient(calls, {
+      createMiddleware: () => ({}),
+      resetForNextRun: () => calls.push('provider-reset'),
+    });
+
+    client.finishCurrentRun();
+
+    expect(calls).toEqual(['provider-reset', 'monitor-reset']);
+  });
+
+  test('finishes active instance and resets termination monitor when provider has no reset hook', () => {
+    const calls: string[] = [];
+    const client = createFinishCurrentRunClient(calls, {
+      createMiddleware: () => ({}),
+    });
+
+    client.finishCurrentRun();
+
+    expect(calls).toEqual(['get-instance-id', 'finish-instance', 'monitor-reset']);
+  });
+
+  test('resets termination monitor when provider reset hook throws', () => {
+    const calls: string[] = [];
+    const client = createFinishCurrentRunClient(calls, {
+      createMiddleware: () => ({}),
+      resetForNextRun: () => {
+        calls.push('provider-reset');
+        throw new Error('reset failed');
+      },
+    });
+
+    expect(() => client.finishCurrentRun()).toThrow('reset failed');
+    expect(calls).toEqual(['provider-reset', 'monitor-reset']);
   });
 });

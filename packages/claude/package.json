@@ -1,6 +1,6 @@
 {
   "name": "@prefactor/claude",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Claude Agent SDK integration for Prefactor observability",
   "type": "module",
   "main": "dist/index.cjs",
@@ -32,7 +32,7 @@
     "@prefactor/pfid": "^0.1.0"
   },
   "peerDependencies": {
-    "@prefactor/core": "^0.3.0",
+    "@prefactor/core": "^0.4.1",
     "@anthropic-ai/claude-agent-sdk": "^0.2.0"
   },
   "devDependencies": {
