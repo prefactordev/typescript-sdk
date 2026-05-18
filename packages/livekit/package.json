@@ -1,6 +1,6 @@
 {
   "name": "@prefactor/livekit",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "LiveKit Agents integration for Prefactor observability",
   "type": "module",
   "main": "dist/index.cjs",
@@ -28,7 +28,7 @@
   "author": "Prefactor",
   "license": "MIT",
   "peerDependencies": {
-    "@prefactor/core": "^0.3.0",
+    "@prefactor/core": "^0.4.1",
     "@livekit/agents": "^1.0.0"
   },
   "devDependencies": {

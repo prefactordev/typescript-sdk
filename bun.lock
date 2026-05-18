@@ -29,7 +29,7 @@
     },
     "packages/ai": {
       "name": "@prefactor/ai",
-      "version": "0.3.2",
+      "version": "0.3.3",
       "dependencies": {
         "@prefactor/pfid": "^0.1.0",
       },
@@ -43,7 +43,7 @@
     },
     "packages/claude": {
       "name": "@prefactor/claude",
-      "version": "0.1.1",
+      "version": "0.1.2",
       "dependencies": {
         "@prefactor/pfid": "^0.1.0",
       },
@@ -73,7 +73,7 @@
     },
     "packages/core": {
       "name": "@prefactor/core",
-      "version": "0.4.0",
+      "version": "0.4.1",
       "dependencies": {
         "@prefactor/pfid": "^0.1.0",
       },
@@ -83,7 +83,7 @@
     },
     "packages/langchain": {
       "name": "@prefactor/langchain",
-      "version": "0.3.2",
+      "version": "0.3.3",
       "dependencies": {
         "@prefactor/pfid": "^0.1.0",
       },
@@ -94,7 +94,7 @@
     },
     "packages/livekit": {
       "name": "@prefactor/livekit",
-      "version": "0.1.0",
+      "version": "0.1.1",
       "devDependencies": {
         "@types/bun": "latest",
       },
