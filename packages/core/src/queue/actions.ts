@@ -1,3 +1,4 @@
+import type { PrefactorTransportOperation } from '../errors.js';
 import type { Span } from '../tracing/span.js';
 import type {
   AgentInstanceOptions,
@@ -9,6 +10,8 @@ type RetryableActionMetadata = {
   idempotencyKey: string;
   retryAttempt: number;
   transientKind?: TransientFailureKind;
+  /** Operation that scheduled the retry, when it differs from the action queue type. */
+  failureOperation?: PrefactorTransportOperation;
 };
 
 export type AgentStartAction = {

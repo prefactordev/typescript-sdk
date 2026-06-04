@@ -231,6 +231,30 @@ describe('core client init', () => {
   });
 });
 
+describe('PrefactorClient shutdown', () => {
+  test('runs core shutdown when provider shutdown throws', async () => {
+    const calls: string[] = [];
+    const client = new PrefactorClient(
+      {
+        shutdown: async () => {
+          calls.push('core-shutdown');
+        },
+      } as unknown as CoreRuntime,
+      {},
+      {
+        createMiddleware: () => ({}),
+        shutdown: () => {
+          calls.push('provider-shutdown');
+          throw new Error('provider shutdown failed');
+        },
+      }
+    );
+
+    await expect(client.shutdown()).rejects.toThrow('provider shutdown failed');
+    expect(calls).toEqual(['provider-shutdown', 'core-shutdown']);
+  });
+});
+
 describe('PrefactorClient finishCurrentRun', () => {
   function createFinishCurrentRunClient(
     calls: string[],
