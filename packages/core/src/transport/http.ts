@@ -201,7 +201,7 @@ export class HttpTransport implements Transport {
   }
 
   finishAgentInstance(): void {
-    if (this.fatalError || this.closed || !this.agentInstanceId) {
+    if (this.fatalError || this.closed) {
       return;
     }
 
