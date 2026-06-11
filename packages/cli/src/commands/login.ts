@@ -1,6 +1,7 @@
 import { spawn } from 'node:child_process';
 import type { Command } from 'commander';
 import { DEFAULT_BASE_URL, DEFAULT_PROFILE_NAME, ProfileManager } from '../profile-manager.js';
+import { validateBaseUrl } from './shared.js';
 
 export function buildLoginUrl(baseUrl: string): string {
   return `${baseUrl.replace(/\/+$/, '')}/cli/connect`;
@@ -80,6 +81,46 @@ export function validateToken(token: string): void {
   }
 }
 
+export function normalizeBaseUrl(baseUrl: string): string {
+  return baseUrl.replace(/\/+$/, '');
+}
+
+export function profileNameFromBaseUrl(baseUrl: string): string {
+  return new URL(baseUrl).hostname;
+}
+
+export function resolveLoginProfileName(
+  manager: Pick<ProfileManager, 'getProfile' | 'getProfileEntries'>,
+  baseUrl: string
+): string {
+  const normalizedUrl = normalizeBaseUrl(baseUrl);
+  const existingDefault = manager.getProfile(DEFAULT_PROFILE_NAME);
+
+  if (!existingDefault) {
+    return DEFAULT_PROFILE_NAME;
+  }
+
+  if (normalizeBaseUrl(existingDefault.base_url) === normalizedUrl) {
+    return DEFAULT_PROFILE_NAME;
+  }
+
+  for (const [name, profile] of manager.getProfileEntries()) {
+    if (normalizeBaseUrl(profile.base_url) === normalizedUrl) {
+      return name;
+    }
+  }
+
+  const derivedName = profileNameFromBaseUrl(baseUrl);
+  const existingDerived = manager.getProfile(derivedName);
+  if (existingDerived && normalizeBaseUrl(existingDerived.base_url) !== normalizedUrl) {
+    throw new Error(
+      `Profile '${derivedName}' already exists with a different base URL. Use 'prefactor profiles add <name> [baseUrl] --api-token <apiToken>' instead.`
+    );
+  }
+
+  return derivedName;
+}
+
 export interface LoginDeps {
   openBrowser: (url: string) => void;
   promptForToken: (prompt: string) => Promise<string>;
@@ -94,10 +135,12 @@ export function registerLoginCommand(program: Command, deps: LoginDeps = default
   program
     .command('login')
     .description('Authenticate the CLI with your Prefactor account')
-    .action(async () => {
+    .option('--base-url <baseUrl>', 'Prefactor app URL for the login flow')
+    .action(async (options: { baseUrl?: string }) => {
       const manager = await ProfileManager.create();
       const existing = manager.getProfile(DEFAULT_PROFILE_NAME);
-      const baseUrl = existing?.base_url ?? DEFAULT_BASE_URL;
+      const baseUrl = options.baseUrl ?? existing?.base_url ?? DEFAULT_BASE_URL;
+      validateBaseUrl(baseUrl);
       const loginUrl = buildLoginUrl(baseUrl);
 
       console.log(`Opening your browser to: ${loginUrl}`);
@@ -109,9 +152,8 @@ export function registerLoginCommand(program: Command, deps: LoginDeps = default
       const token = await deps.promptForToken('Paste your API token here: ');
       validateToken(token);
 
-      await manager.addProfile(DEFAULT_PROFILE_NAME, token, baseUrl);
-      console.log(
-        `Authentication successful. Credentials saved to the '${DEFAULT_PROFILE_NAME}' profile.`
-      );
+      const profileName = resolveLoginProfileName(manager, baseUrl);
+      await manager.addProfile(profileName, token, baseUrl);
+      console.log(`Authentication successful. Credentials saved to the '${profileName}' profile.`);
     });
 }
