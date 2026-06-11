@@ -9,7 +9,7 @@ Perform root-cause analysis on a specific agent run using Prefactor span data.
 
 ## When to use
 
-The user has already decided something in a run is wrong or worth investigating. They paste identifiers and a symptom; your job is to analyze the spans and deliver a **findings report** — what happened, why (through five whys), and where in the codebase it connects.
+The user has already decided something in a run is wrong or worth investigating. They paste identifiers and a symptom; your job is to analyze the spans and deliver a **findings report** — what happened, what caused it, and where in the codebase it connects.
 
 Do not prescribe fixes or recommended next actions. The human team owns remediation; your output equips their post-mortem with evidence and source locations.
 
@@ -49,11 +49,13 @@ This skill is for real root-cause analysis, not trigger spotting.
 - The local codebase is where those "why" answers usually live — cross-read spans against source, not spans alone.
 - Treat technical findings as evidence. The final answer often requires human judgment about intent, process, and ownership.
 
-**Five whys**
+**Five whys (internal reasoning only)**
 
+- Use a five-whys approach to trace root causes during analysis, but do not print the why chain in the report.
 - Work through at least five "why" steps from the user-visible symptom down to systemic conditions.
 - Question the accepted truth. If spans show "tool returned empty," ask why empty was acceptable, why the agent did not recover, why the prompt did not constrain that failure mode, why nothing caught it earlier.
-- Each why must be labeled **confirmed** (span evidence), **inferred** (strong circumstantial), or **hypothesis** (needs human validation).
+- Label each step internally as **confirmed** (span evidence), **inferred** (strong circumstantial), or **hypothesis** (needs human validation).
+- Synthesize the conclusions into **What we found** — a flat list of named issues with evidence, not a numbered why chain.
 
 **What automation is good for here**
 
@@ -83,7 +85,7 @@ If the user only has an agent ID, list instances and pick the run that matches t
 Start with the context export for the instance under investigation:
 
 ```bash
-prefactor --profile <profile> agent_instances agent_context <agent-instance-id> --output /tmp/prefactor-agent-context.json
+prefactor --profile <profile> agent_instances agent_context <agent-instance-id> --output ./tmp/prefactor-agent-context.json
 ```
 
 If `agent_context` is not available on that profile, use span listing with summaries:
@@ -129,9 +131,11 @@ For each item, report findings from specific span IDs or `not observed`:
 
 Multiple independent faults can coexist. Do not collapse them into a single "the cause."
 
-## Five whys workflow
+## Root-cause reasoning workflow
 
-After span analysis, walk the chain explicitly:
+After span analysis, use five whys as a private thinking method — not as report structure.
+
+Walk the chain internally:
 
 1. **Symptom** — what the user saw, confirmed in spans where possible.
 2. **Why did that happen?** — first layer; often a specific span, tool, or LLM event (usually the trigger).
@@ -139,49 +143,47 @@ After span analysis, walk the chain explicitly:
 4. **Why was that gap present?** — design choice, missing test, operational constraint, undocumented assumption.
 5. **Why was it not caught earlier?** — monitoring, review process, ownership, false confidence.
 
-Continue beyond five if the chain is still shallow. Stop when you reach a systemic condition a human would need to change — and say so plainly.
+Continue beyond five if the chain is still shallow. Stop when you reach a systemic condition a human would need to change.
+
+Then synthesize: distill each confirmed or strongly inferred conclusion into a named finding in **What we found**. Include triggers, root causes, and contributing factors as separate findings when they are distinct — but never as a "why #1 → why #2" chain.
+
+When linked instances were inspected, fold that into findings or the timeline; do not add a separate linked-instances section.
 
 ## Output format
 
 Deliver a findings report, not an action plan. Use these exact sections, even when the user asks for a concise answer:
 
-### Symptom
+### Summary
 
-What the user reported and what spans confirm about user-visible impact.
+One short paragraph: what happened, what the user experienced, and your verdict on why. No why chain here — just the conclusion a reader needs first.
+
+### What we found
+
+Concrete issues as a flat list of named findings. Each finding gets:
+
+- A short title (the issue in plain language).
+- The conclusion — what went wrong and why, stated directly.
+- Evidence — span IDs, instance IDs, code locations, token counts, payload sizes, or concrete values.
+- Confidence — **confirmed**, **inferred**, or **hypothesis**.
+
+Include triggers, root causes, and contributing factors as separate findings when they are distinct. Do not output the five-whys chain itself.
 
 ### Timeline
 
-Ordered key events with span IDs and one-line summaries.
+Ordered key events with span IDs and one-line summaries. Include linked-instance events here when relevant.
 
-### Trigger
+### What's still unknown
 
-The immediate technical event that produced the symptom. Ground in span evidence.
+Explicit gaps that set honest expectations: missing context, human/process factors, intent behind prompts or schemas, conclusions that could not be verified because the workspace is not the agent's codebase.
 
-### Root cause analysis (five whys)
+### Code pointers
 
-Numbered why chain. Mark each step **confirmed**, **inferred**, or **hypothesis**.
+A trimmed table of source locations directly relevant to the findings above — not a fix list, and not an exhaustive tour of the repo. For each entry:
 
-### Contributing factors
+- File path and symbol (function, class, module, or config key).
+- Which finding it supports.
+- One line on why it matters.
 
-Separate issues that did not alone cause the symptom but increased likelihood or severity.
-
-### Linked instances
-
-Which linked runs were inspected and what they changed — or `none / not applicable`.
-
-### What spans cannot answer
-
-Explicit gaps: missing context, human/process factors, intent behind prompts or schemas. Note any conclusions that could not be verified because the workspace is not the agent's codebase.
-
-### Codebase points of interest
-
-Relevant source tied to the findings — not a fix list. For each point, link span evidence to local code:
-
-- File paths and symbols (functions, classes, modules, config keys).
-- Prompt templates, system instructions, or context-assembly code when LLM behavior is in question.
-- Tool handlers, validators, and error paths when tool spans are involved.
-- Span schema registration and instrumentation when payload shape or missing fields matter.
-
-Use code citations when referencing source. Explain briefly why each location matters to the investigation.
+Cover prompt templates, tool handlers, validators, and span schema registration only when a finding depends on them. Use code citations when referencing source.
 
 Ground every technical claim in span IDs, instance IDs, summaries, token counts, payload sizes, or concrete payload/result values.
