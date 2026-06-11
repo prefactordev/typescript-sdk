@@ -95,6 +95,8 @@ describe('HttpTransport failure modes', () => {
     }
 
     expect(thrownError).toBe(fatalErrors[0]);
+
+    expect(() => transport.finishAgentInstance()).not.toThrow();
     await transport.close();
   });
 
@@ -173,6 +175,62 @@ describe('HttpTransport failure modes', () => {
     transport.startAgentInstance();
     await waitForQueue();
 
+    expect(registerBodies).toHaveLength(2);
+    expect(registerBodies[0]?.idempotency_key).toBe(registerBodies[1]?.idempotency_key);
+    expect(transport.getHealthState()).toBe('healthy');
+
+    await transport.close();
+  });
+
+  test('retries agent-not-found registration during emit with the same idempotency key', async () => {
+    const registerBodies: Array<Record<string, unknown>> = [];
+    let registerAttempts = 0;
+    const fatalErrors: PrefactorFatalError[] = [];
+
+    globalThis.fetch = (async (url, options) => {
+      const urlString = String(url);
+      if (urlString.endsWith('/agent_instance/register')) {
+        registerAttempts += 1;
+        registerBodies.push(JSON.parse(String(options?.body)) as Record<string, unknown>);
+
+        if (registerAttempts === 1) {
+          return new Response(JSON.stringify({ code: 'not_found', message: 'agent not found' }), {
+            status: 404,
+            headers: { 'Content-Type': 'application/json' },
+          });
+        }
+
+        return new Response(JSON.stringify({ details: { id: 'agent-instance-1' } }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+
+      if (urlString.endsWith('/agent_spans')) {
+        return new Response(JSON.stringify({ details: { id: 'backend-span-1' } }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+
+      return new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }) as unknown as typeof fetch;
+
+    const transport = new HttpTransport(createConfig({ maxRetries: 1 }), {
+      failureHandling: {
+        onFatalError: (error) => {
+          fatalErrors.push(error);
+        },
+      },
+    });
+
+    transport.emit(createSpan('span-register-retry'));
+    await waitFor(() => registerBodies.length === 2);
+
+    expect(fatalErrors).toHaveLength(0);
     expect(registerBodies).toHaveLength(2);
     expect(registerBodies[0]?.idempotency_key).toBe(registerBodies[1]?.idempotency_key);
     expect(transport.getHealthState()).toBe('healthy');

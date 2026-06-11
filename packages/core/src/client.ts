@@ -178,12 +178,22 @@ export class PrefactorClient<TMiddleware = MiddlewareLike> {
    * @returns Promise that resolves when shutdown completes.
    */
   async shutdown(): Promise<void> {
+    let providerError: unknown;
     try {
       await this.provider.shutdown?.();
+    } catch (error) {
+      providerError = error;
+    }
+
+    try {
       await this.core.shutdown();
     } finally {
       prefactorClient = null;
       prefactorInitKey = null;
+    }
+
+    if (providerError) {
+      throw providerError;
     }
   }
 }

@@ -201,6 +201,10 @@ export class HttpTransport implements Transport {
   }
 
   finishAgentInstance(): void {
+    if (this.fatalError || this.closed) {
+      return;
+    }
+
     this.assertUsable('agent_finish');
     this.enqueue({
       type: 'agent_finish',
@@ -453,7 +457,7 @@ export class HttpTransport implements Transport {
         return;
       }
 
-      this.scheduleRetry(action, classification.kind, classification.error);
+      this.scheduleRetry(action, classification.kind, classification.error, operation);
       return;
     }
 
@@ -547,13 +551,13 @@ export class HttpTransport implements Transport {
   private scheduleRetry(
     action: RetryableAction,
     kind: TransientFailureKind,
-    error: HttpClientError
+    error: HttpClientError,
+    operation: PrefactorTransportOperation
   ): void {
     if (this.closed || this.fatalError) {
       return;
     }
 
-    const operation = operationForAction(action);
     const key = transientFailureKey(operation, kind);
     const consecutiveFailures = (this.transientFailureCounts.get(key) ?? 0) + 1;
     this.transientFailureCounts.set(key, consecutiveFailures);
@@ -568,6 +572,7 @@ export class HttpTransport implements Transport {
       ...action,
       retryAttempt: action.retryAttempt + 1,
       transientKind: kind,
+      failureOperation: operation,
     };
     const delayMs = calculateRetryDelay(action.retryAttempt, this.config);
 
@@ -596,9 +601,8 @@ export class HttpTransport implements Transport {
 
   private recordActionSuccess(action: RetryableAction): void {
     if (action.transientKind) {
-      this.transientFailureCounts.delete(
-        transientFailureKey(operationForAction(action), action.transientKind)
-      );
+      const operation = action.failureOperation ?? operationForAction(action);
+      this.transientFailureCounts.delete(transientFailureKey(operation, action.transientKind));
     }
 
     if (this.healthState === 'degraded' && this.transientFailureCounts.size === 0) {
@@ -922,7 +926,12 @@ export class HttpTransport implements Transport {
 
   private async sendSpan(action: SpanEndAction): Promise<void> {
     if (!this.agentInstanceId) {
-      await this.ensureAgentRegistered();
+      try {
+        await this.ensureAgentRegistered();
+      } catch (error) {
+        this.handleActionError('agent_register', action, error);
+        return;
+      }
     }
 
     if (action.span.parentSpanId && !this.spanIdMap.has(action.span.parentSpanId)) {
