@@ -1,3 +1,4 @@
+import { writeFile } from 'node:fs/promises';
 import type { Command } from 'commander';
 import { AgentInstanceClient } from '../clients/agent-instance.js';
 import {
@@ -31,6 +32,27 @@ export function registerAgentInstancesCommands(program: Command): void {
     .action(function (this: Command, id: string) {
       return executeAuthed(this, async (apiClient) => {
         const result = await apiClient.request(`/agent_instance/${id}`, { method: 'GET' });
+        printJson(result);
+      });
+    });
+
+  agentInstances
+    .command('agent_context <id>')
+    .description('Export debugging context JSON for an agent instance')
+    .option('--output <path>', 'Write context JSON body to this file')
+    .action(function (this: Command, id: string, options: { output?: string }) {
+      return executeAuthed(this, async (apiClient) => {
+        const result = await apiClient.request<Record<string, unknown>>(
+          `/agent_instance/${id}/agent_context`,
+          { method: 'GET' }
+        );
+
+        if (options.output) {
+          const body = extractAgentContextBody(result);
+          await writeFile(options.output, `${JSON.stringify(body, null, 2)}\n`, 'utf8');
+          return;
+        }
+
         printJson(result);
       });
     });
@@ -146,4 +168,18 @@ export function registerAgentInstancesCommands(program: Command): void {
         printJson(result);
       });
     });
+}
+
+function extractAgentContextBody(result: Record<string, unknown>): unknown {
+  const agentContext = result.agent_context;
+
+  if (!agentContext || typeof agentContext !== 'object' || Array.isArray(agentContext)) {
+    throw new Error('Response missing agent_context.');
+  }
+
+  if (!('body' in agentContext)) {
+    throw new Error('Response missing agent_context.body.');
+  }
+
+  return agentContext.body;
 }

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createCli } from '../src/cli.js';
@@ -753,6 +753,90 @@ describe('CLI command validation', () => {
         '@/definitely/missing/file.json',
       ])
     ).rejects.toThrow('Unable to read file for --payload:');
+  });
+
+  test('agent_instances agent_context retrieves context response', async () => {
+    const cwd = join(tempRoot, 'cwd');
+    mkdirSync(cwd, { recursive: true });
+    process.chdir(cwd);
+    writeFileSync(
+      join(cwd, 'prefactor.json'),
+      JSON.stringify({ default: { api_key: 'token', base_url: 'https://example.com' } })
+    );
+
+    let capturedPath = '';
+    globalThis.fetch = (async (input) => {
+      capturedPath = new URL(String(input)).pathname;
+      return new Response(
+        JSON.stringify({
+          status: 'success',
+          agent_context: { body: { format: 'agent_context_v1' } },
+        }),
+        {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }
+      );
+    }) as typeof fetch;
+
+    const log = mock(() => {});
+    const originalLog = console.log;
+    console.log = log;
+
+    try {
+      await createCli('1.0.0').parseAsync([
+        'node',
+        'prefactor',
+        'agent_instances',
+        'agent_context',
+        'agent_instance_1',
+      ]);
+    } finally {
+      console.log = originalLog;
+    }
+
+    expect(capturedPath).toBe('/api/v1/agent_instance/agent_instance_1/agent_context');
+    expect(log.mock.calls.flat().join('\n')).toContain('"agent_context"');
+  });
+
+  test('agent_instances agent_context writes context body to output file', async () => {
+    const cwd = join(tempRoot, 'cwd');
+    mkdirSync(cwd, { recursive: true });
+    process.chdir(cwd);
+    writeFileSync(
+      join(cwd, 'prefactor.json'),
+      JSON.stringify({ default: { api_key: 'token', base_url: 'https://example.com' } })
+    );
+
+    globalThis.fetch = (async () => {
+      return new Response(
+        JSON.stringify({
+          status: 'success',
+          agent_context: { body: { format: 'agent_context_v1', spans: [] } },
+        }),
+        {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }
+      );
+    }) as typeof fetch;
+
+    const outputPath = join(cwd, 'context.json');
+
+    await createCli('1.0.0').parseAsync([
+      'node',
+      'prefactor',
+      'agent_instances',
+      'agent_context',
+      'agent_instance_1',
+      '--output',
+      outputPath,
+    ]);
+
+    expect(JSON.parse(readFileSync(outputPath, 'utf8'))).toEqual({
+      format: 'agent_context_v1',
+      spans: [],
+    });
   });
 
   test('enforces mutually exclusive span schema options', async () => {
