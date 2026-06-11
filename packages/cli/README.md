@@ -73,7 +73,7 @@ npm install @prefactor/cli
 prefactor login
 ```
 
-This opens your browser to the Prefactor login page. After authenticating, copy your API token and paste it into the prompt. Your credentials are saved automatically to the `default` profile.
+This opens your browser to the Prefactor login page. After authenticating, copy your API token and paste it into the prompt. Your credentials are saved to the `default` profile when no default exists.
 
 2. Verify access:
 
@@ -109,7 +109,7 @@ Environment fallback is supported when no default profile is configured:
 
 ## Command Groups
 
-- `login`: authenticate and save credentials to the default profile
+- `login`: authenticate and save credentials to the matching profile
 - `profiles`: add, list, remove
 - `accounts`: list, retrieve, update
 - `environments`: list, retrieve, create, update, delete
@@ -117,7 +117,7 @@ Environment fallback is supported when no default profile is configured:
 - `agent_deployments`: list, retrieve, create, update, delete
 - `agent_versions`: list, retrieve, create
 - `agent_schema_versions`: list, retrieve, create
-- `agent_instances`: list, retrieve, register, start, finish
+- `agent_instances`: list, retrieve, agent_context, register, start, finish
 - `agent_spans`: list, create, finish, create_test_spans
 - `api_tokens`: list, retrieve, create, suspend, activate, revoke, delete
 - `admin_users`: list, retrieve
