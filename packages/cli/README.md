@@ -73,7 +73,7 @@ npm install @prefactor/cli
 prefactor login
 ```
 
-This opens your browser to the Prefactor login page. After authenticating, copy your API token and paste it into the prompt. Your credentials are saved to the `default` profile when no default exists.
+This opens your browser to the Prefactor login page. After authenticating, copy your API token and paste it into the prompt. Your credentials are saved automatically to the `default` profile.
 
 2. Verify access:
 
@@ -109,7 +109,7 @@ Environment fallback is supported when no default profile is configured:
 
 ## Command Groups
 
-- `login`: authenticate and save credentials to the matching profile
+- `login`: authenticate and save credentials to the default profile
 - `profiles`: add, list, remove
 - `accounts`: list, retrieve, update
 - `environments`: list, retrieve, create, update, delete

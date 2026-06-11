@@ -4,14 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Command } from 'commander';
 import { createCli } from '../src/cli.js';
-import {
-  buildLoginUrl,
-  normalizeBaseUrl,
-  profileNameFromBaseUrl,
-  registerLoginCommand,
-  resolveLoginProfileName,
-  validateToken,
-} from '../src/commands/login.js';
+import { buildLoginUrl, registerLoginCommand, validateToken } from '../src/commands/login.js';
 import { DEFAULT_BASE_URL, DEFAULT_PROFILE_NAME, ProfileManager } from '../src/profile-manager.js';
 
 describe('buildLoginUrl', () => {
@@ -150,103 +143,6 @@ describe('login command action', () => {
     expect(profile?.base_url).toBe('https://custom.example.com');
   });
 
-  test('uses --base-url for login URL and saves it to the default profile when no default exists', async () => {
-    const cwd = join(tempRoot, 'cwd');
-    mkdirSync(cwd, { recursive: true });
-    process.chdir(cwd);
-
-    const openBrowser = mock(() => {});
-    const promptForToken = mock(async () => 'new-token');
-
-    const program = new Command();
-    program.exitOverride();
-    registerLoginCommand(program, { openBrowser, promptForToken });
-
-    await program.parseAsync(['node', 'prefactor', 'login', '--base-url', 'http://localhost:4000']);
-
-    expect(openBrowser).toHaveBeenCalledWith('http://localhost:4000/cli/connect');
-
-    const manager = await ProfileManager.create();
-    const profile = manager.getProfile(DEFAULT_PROFILE_NAME);
-    expect(profile).toEqual({
-      api_key: 'new-token',
-      base_url: 'http://localhost:4000',
-    });
-  });
-
-  test('does not overwrite default when --base-url differs from the existing default profile', async () => {
-    const cwd = join(tempRoot, 'cwd');
-    mkdirSync(cwd, { recursive: true });
-    writeFileSync(
-      join(cwd, 'prefactor.json'),
-      JSON.stringify({
-        default: { api_key: 'prod-token', base_url: 'https://app.prefactorai.com' },
-      })
-    );
-    process.chdir(cwd);
-
-    const openBrowser = mock(() => {});
-    const promptForToken = mock(async () => 'local-token');
-
-    const logs: string[] = [];
-    const originalLog = console.log;
-    console.log = (...args: unknown[]) => logs.push(args.join(' '));
-
-    try {
-      const program = new Command();
-      program.exitOverride();
-      registerLoginCommand(program, { openBrowser, promptForToken });
-      await program.parseAsync([
-        'node',
-        'prefactor',
-        'login',
-        '--base-url',
-        'http://localhost:4000',
-      ]);
-    } finally {
-      console.log = originalLog;
-    }
-
-    const manager = await ProfileManager.create();
-    expect(manager.getProfile(DEFAULT_PROFILE_NAME)).toEqual({
-      api_key: 'prod-token',
-      base_url: 'https://app.prefactorai.com',
-    });
-    expect(manager.getProfile('localhost')).toEqual({
-      api_key: 'local-token',
-      base_url: 'http://localhost:4000',
-    });
-    expect(logs.join('\n')).toContain("Credentials saved to the 'localhost' profile.");
-  });
-
-  test('updates an existing profile when login base URL matches that profile instead of default', async () => {
-    const cwd = join(tempRoot, 'cwd');
-    mkdirSync(cwd, { recursive: true });
-    writeFileSync(
-      join(cwd, 'prefactor.json'),
-      JSON.stringify({
-        default: { api_key: 'prod-token', base_url: 'https://app.prefactorai.com' },
-        localhost: { api_key: 'old-local-token', base_url: 'http://localhost:4000' },
-      })
-    );
-    process.chdir(cwd);
-
-    const openBrowser = mock(() => {});
-    const promptForToken = mock(async () => 'new-local-token');
-
-    const program = new Command();
-    program.exitOverride();
-    registerLoginCommand(program, { openBrowser, promptForToken });
-    await program.parseAsync(['node', 'prefactor', 'login', '--base-url', 'http://localhost:4000']);
-
-    const manager = await ProfileManager.create();
-    expect(manager.getProfile(DEFAULT_PROFILE_NAME)?.api_key).toBe('prod-token');
-    expect(manager.getProfile('localhost')).toEqual({
-      api_key: 'new-local-token',
-      base_url: 'http://localhost:4000',
-    });
-  });
-
   test('calls openBrowser with the derived URL', async () => {
     const cwd = join(tempRoot, 'cwd');
     mkdirSync(cwd, { recursive: true });
@@ -305,43 +201,6 @@ describe('login command action', () => {
     expect(logs.join('\n')).toContain(
       `Authentication successful. Credentials saved to the '${DEFAULT_PROFILE_NAME}' profile.`
     );
-  });
-});
-
-describe('resolveLoginProfileName', () => {
-  let tempRoot = '';
-
-  beforeEach(() => {
-    tempRoot = mkdtempSync(join(tmpdir(), 'prefactor-resolve-login-test-'));
-  });
-
-  afterEach(() => {
-    if (tempRoot) {
-      rmSync(tempRoot, { recursive: true, force: true });
-    }
-  });
-
-  test('uses default when no profile exists', async () => {
-    const manager = await ProfileManager.create(join(tempRoot, 'prefactor.json'));
-    expect(resolveLoginProfileName(manager, DEFAULT_BASE_URL)).toBe(DEFAULT_PROFILE_NAME);
-  });
-
-  test('uses default when base URL matches the existing default profile', async () => {
-    const manager = await ProfileManager.create(join(tempRoot, 'prefactor.json'));
-    await manager.addProfile(DEFAULT_PROFILE_NAME, 'token', 'https://app.prefactorai.com/');
-
-    expect(resolveLoginProfileName(manager, 'https://app.prefactorai.com')).toBe(
-      DEFAULT_PROFILE_NAME
-    );
-  });
-
-  test('derives a profile name from hostname when default uses a different base URL', async () => {
-    const manager = await ProfileManager.create(join(tempRoot, 'prefactor.json'));
-    await manager.addProfile(DEFAULT_PROFILE_NAME, 'token', 'https://app.prefactorai.com');
-
-    expect(resolveLoginProfileName(manager, 'http://localhost:4000')).toBe('localhost');
-    expect(profileNameFromBaseUrl('http://localhost:4000')).toBe('localhost');
-    expect(normalizeBaseUrl('https://app.prefactorai.com/')).toBe('https://app.prefactorai.com');
   });
 });
 
