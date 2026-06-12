@@ -34,7 +34,7 @@
     "zod": "^4.0.0"
   },
   "peerDependencies": {
-    "@prefactor/core": "^0.3.0"
+    "@prefactor/core": "^0.4.0"
   },
   "devDependencies": {
     "openclaw": "^2026.3.28",

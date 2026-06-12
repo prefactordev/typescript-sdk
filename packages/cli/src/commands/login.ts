@@ -2,8 +2,16 @@ import { spawn } from 'node:child_process';
 import type { Command } from 'commander';
 import { DEFAULT_BASE_URL, DEFAULT_PROFILE_NAME, ProfileManager } from '../profile-manager.js';
 
+function stripTrailingSlashes(baseUrl: string): string {
+  let end = baseUrl.length;
+  while (end > 0 && baseUrl[end - 1] === '/') {
+    end--;
+  }
+  return end === baseUrl.length ? baseUrl : baseUrl.slice(0, end);
+}
+
 export function buildLoginUrl(baseUrl: string): string {
-  return `${baseUrl.replace(/\/+$/, '')}/cli/connect`;
+  return `${stripTrailingSlashes(baseUrl)}/cli/connect`;
 }
 
 function openBrowserImpl(url: string): void {
