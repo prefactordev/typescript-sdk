@@ -67,6 +67,7 @@ describe('CLI profiles command', () => {
       'admin_users',
       'admin_user_invites',
       'api_tokens',
+      'setup',
       'pfid',
       'bulk',
       'ping',

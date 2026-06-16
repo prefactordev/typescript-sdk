@@ -82,7 +82,24 @@ prefactor accounts list
 prefactor ping
 ```
 
-3. Query additional resources:
+3. Print setup values for an agent:
+
+```bash
+prefactor setup <agent_id>
+```
+
+This verifies the selected profile can access the agent, selects the deployment for that agent, creates a deployment-scoped runtime API token, and prints shell-style setup values:
+
+```bash
+PREFACTOR_API_URL=...
+PREFACTOR_API_TOKEN=...
+PREFACTOR_AGENT_ID=...
+PREFACTOR_AGENT_IDENTIFIER=1.0.0
+```
+
+`PREFACTOR_API_TOKEN` is an agent-deployment token. Use it for tracing from that agent deployment.
+
+4. Query additional resources:
 
 ```bash
 prefactor environments list --account_id <account_id>
@@ -121,6 +138,7 @@ Environment fallback is supported when no default profile is configured:
 - `agent_instances`: list, retrieve, agent_context, register, start, finish
 - `agent_spans`: list, create, finish, create_test_spans
 - `api_tokens`: list, retrieve, create, suspend, activate, revoke, delete
+- `setup`: verify an agent and print setup values for instrumentation
 - `admin_users`: list, retrieve
 - `admin_user_invites`: list, retrieve, create, revoke
 - `pfid`: generate
