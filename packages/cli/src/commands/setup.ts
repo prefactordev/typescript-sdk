@@ -23,7 +23,7 @@ export function registerSetupCommand(program: Command): void {
       });
 
       console.log(`PREFACTOR_API_URL=${baseUrl}`);
-      console.log(`PREFACTOR_API_TOKEN=${tokenResponse.token}`);
+      console.log(`PREFACTOR_API_TOKEN=${tokenResponse.details.token}`);
       console.log(`PREFACTOR_AGENT_ID=${agentId}`);
       console.log(`PREFACTOR_AGENT_IDENTIFIER=${DEFAULT_AGENT_IDENTIFIER}`);
     });
