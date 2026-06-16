@@ -24,6 +24,11 @@ export interface ApiTokenResponse {
   details: ApiToken;
 }
 
+export interface ApiTokenCreateResponse {
+  details: ApiToken;
+  token: string;
+}
+
 export interface ApiTokenListResponse {
   details: ApiToken[];
 }
@@ -42,7 +47,7 @@ export class ApiTokenClient {
     return this.client.request(`/api_token/${id}`, { method: 'GET' });
   }
 
-  create(details: ApiTokenCreateDetails): Promise<ApiTokenResponse> {
+  create(details: ApiTokenCreateDetails): Promise<ApiTokenCreateResponse> {
     return this.client.request('/api_token', {
       method: 'POST',
       body: { details },

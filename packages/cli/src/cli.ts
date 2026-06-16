@@ -13,6 +13,7 @@ import { registerEnvironmentsCommands } from './commands/environments.js';
 import { registerLifecycleCommands } from './commands/lifecycle.js';
 import { registerLoginCommand } from './commands/login.js';
 import { registerProfilesCommands } from './commands/profiles.js';
+import { registerSetupCommand } from './commands/setup.js';
 import { registerUtilitiesCommands } from './commands/utilities.js';
 
 const CLI_VERSION = typeof packageJson.version === 'string' ? packageJson.version : '0.0.0';
@@ -43,6 +44,7 @@ export function createCli(version: string): Command {
       '',
       'Examples:',
       '  prefactor profiles add default --api-token <api-token>',
+      '  prefactor setup <agent_id>',
       '  prefactor accounts list',
       '  prefactor agents list',
       '  prefactor agent_deployments create --agent_id <agent_id> --environment_id <environment_id>',
@@ -62,6 +64,7 @@ export function createCli(version: string): Command {
   registerAgentSpansCommands(program);
   registerAdminCommands(program);
   registerApiTokensCommands(program);
+  registerSetupCommand(program);
   registerUtilitiesCommands(program, version);
   registerLifecycleCommands(program, version);
 

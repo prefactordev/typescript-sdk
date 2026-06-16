@@ -19,19 +19,32 @@ export function printJson(value: unknown): void {
 }
 
 async function getApiClient(command: Command): Promise<ApiClient> {
+  return (await getAuthedContext(command)).apiClient;
+}
+
+export async function getAuthedContext(command: Command): Promise<{
+  apiClient: ApiClient;
+  baseUrl: string;
+}> {
   const manager = await ProfileManager.create();
   const options = command.optsWithGlobals() as GlobalOptions;
   const profileSelection = resolveProfileSelection(options.profile);
   const selectedProfile = manager.getProfile(profileSelection.name);
 
   if (selectedProfile) {
-    return new ApiClient(selectedProfile.base_url, selectedProfile.api_key);
+    return {
+      apiClient: new ApiClient(selectedProfile.base_url, selectedProfile.api_key),
+      baseUrl: selectedProfile.base_url,
+    };
   }
 
   const envToken = process.env.PREFACTOR_API_TOKEN;
   if (envToken && profileSelection.source === 'default') {
     const envApiUrl = process.env.PREFACTOR_API_URL || ENV_FALLBACK_BASE_URL;
-    return new ApiClient(envApiUrl, envToken);
+    return {
+      apiClient: new ApiClient(envApiUrl, envToken),
+      baseUrl: envApiUrl,
+    };
   }
 
   throw new Error(
