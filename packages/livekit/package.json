@@ -28,7 +28,7 @@
   "author": "Prefactor",
   "license": "MIT",
   "peerDependencies": {
-    "@prefactor/core": "^0.4.0",
+    "@prefactor/core": ">=0.4.0",
     "@livekit/agents": "^1.0.0"
   },
   "devDependencies": {
