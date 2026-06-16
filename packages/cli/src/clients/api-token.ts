@@ -51,13 +51,10 @@ export class ApiTokenClient {
   }
 
   async create(details: ApiTokenCreateDetails): Promise<ApiTokenCreateResponse> {
-    const response = await this.client.request<{ details: ApiToken; token: string }>(
-      '/api_token',
-      {
-        method: 'POST',
-        body: { details },
-      }
-    );
+    const response = await this.client.request<{ details: ApiToken; token: string }>('/api_token', {
+      method: 'POST',
+      body: { details },
+    });
 
     return {
       details: {
