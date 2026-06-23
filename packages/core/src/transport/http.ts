@@ -101,6 +101,8 @@ export type FinishSpanOptions = {
   status?: AgentSpanFinishStatus;
   /** Optional normalized payload included in finish request. */
   resultPayload?: Record<string, unknown>;
+  /** When true, instructs the backend to encode this span's sensitive content. */
+  sensitiveEncoding?: boolean;
 };
 
 /**
@@ -231,6 +233,7 @@ export class HttpTransport implements Transport {
       endTime,
       status: options?.status,
       resultPayload: options?.resultPayload,
+      sensitiveEncoding: options?.sensitiveEncoding,
       idempotencyKey: createActionIdempotencyKey(),
       retryAttempt: 0,
     });
@@ -983,6 +986,9 @@ export class HttpTransport implements Transport {
         status: action.status,
         result_payload: action.resultPayload ?? {},
         idempotency_key: action.idempotencyKey,
+        ...(action.sensitiveEncoding !== undefined
+          ? { sensitive_encoding: action.sensitiveEncoding }
+          : {}),
       }
     );
 

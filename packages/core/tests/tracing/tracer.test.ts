@@ -220,6 +220,20 @@ describe('Tracer', () => {
     expect(transport.finished[0]?.resultPayload).toEqual({});
   });
 
+  test('should forward sensitiveEncoding when finishing agent spans', () => {
+    const span = tracer.startSpan({
+      name: 'agent',
+      spanType: SpanType.AGENT,
+      inputs: {},
+      sensitiveEncoding: true,
+    });
+
+    tracer.endSpan(span);
+
+    expect(transport.finished).toHaveLength(1);
+    expect(transport.finished[0]?.sensitiveEncoding).toBe(true);
+  });
+
   test('should include agent result payload when finished successfully', () => {
     const span = tracer.startSpan({
       name: 'agent',

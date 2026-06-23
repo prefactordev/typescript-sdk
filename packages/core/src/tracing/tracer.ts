@@ -155,6 +155,7 @@ export class Tracer {
         this.transport.finishSpan(span.spanId, endTime, {
           status,
           resultPayload: buildSpanResultPayload(span),
+          sensitiveEncoding: span.sensitiveEncoding,
         });
       } else {
         this.transport.emit(span);

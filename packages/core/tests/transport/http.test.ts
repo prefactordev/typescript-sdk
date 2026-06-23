@@ -443,4 +443,63 @@ describe('HttpTransport', () => {
     expect(spanPayloads[1]).not.toHaveProperty('sensitive_encoding');
     expect(spanPayloads[2]?.sensitive_encoding).toBe(false);
   });
+
+  test('forwards sensitive_encoding on span finish when set', async () => {
+    const fetchCalls: Array<{ url: string; options?: RequestInit }> = [];
+    globalThis.fetch = (async (url, options) => {
+      const urlString = String(url);
+      fetchCalls.push({ url: urlString, options });
+
+      if (urlString.endsWith('/agent_instance/register')) {
+        return new Response(JSON.stringify({ details: { id: 'agent-instance-1' } }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+
+      if (urlString.endsWith('/agent_spans')) {
+        return new Response(JSON.stringify({ details: { id: 'backend-span-1' } }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+
+      return new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }) as unknown as typeof fetch;
+
+    const transport = new HttpTransport(createConfig());
+    const endTime = 1700000000000;
+
+    const span: Span = {
+      spanId: 'span-1',
+      parentSpanId: null,
+      traceId: 'trace-1',
+      name: 'Agent Span',
+      spanType: SpanType.AGENT,
+      startTime: endTime - 1000,
+      endTime,
+      status: SpanStatus.SUCCESS,
+      inputs: {},
+      outputs: { message: 'done' },
+      tokenUsage: null,
+      error: null,
+      metadata: {},
+      sensitiveEncoding: true,
+    };
+
+    transport.emit(span);
+    transport.finishSpan(span.spanId, endTime, {
+      status: 'complete',
+      resultPayload: { message: 'done' },
+      sensitiveEncoding: true,
+    });
+    await transport.close();
+
+    const finishCall = fetchCalls.find((call) => call.url.endsWith('/finish'));
+    const finishPayload = JSON.parse(String(finishCall?.options?.body)) as Record<string, unknown>;
+    expect(finishPayload.sensitive_encoding).toBe(true);
+  });
 });
