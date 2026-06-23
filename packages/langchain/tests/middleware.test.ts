@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import {
   AgentInstanceManager,
+  PrefactorFatalError,
   type PrefactorTransportHealthState,
   type PrefactorTransportOperation,
   type Span,
@@ -38,6 +39,16 @@ class CaptureTransport implements Transport {
   getHealthState(): PrefactorTransportHealthState {
     return 'healthy';
   }
+
+  getAgentInstanceId(): string | null {
+    return null;
+  }
+
+  getHttpRequester() {
+    return { request: async () => ({}) };
+  }
+
+  async validateToken(): Promise<void> {}
 
   async flush(): Promise<void> {}
 
@@ -297,5 +308,25 @@ describe('PrefactorMiddleware', () => {
     middleware.shutdown();
 
     expect(transport.finishedInstances).toBe(1);
+  });
+
+  test('throws auth error when token validation fails on first use', async () => {
+    const transport = new CaptureTransport();
+    transport.validateToken = async () => {
+      throw new PrefactorFatalError('auth', 'API token validation failed.', {
+        operation: 'token_validate',
+        status: 401,
+      });
+    };
+    const tracer = new Tracer(transport);
+    const agentManager = new AgentInstanceManager(transport, {});
+    agentManager.registerSchema({ type: 'object' });
+    const middleware = new PrefactorMiddleware(tracer, agentManager);
+
+    await expect(middleware.beforeAgent({ messages: ['hi'] })).rejects.toMatchObject({
+      kind: 'auth',
+      operation: 'token_validate',
+    });
+    expect(transport.startedInstances).toBe(0);
   });
 });
