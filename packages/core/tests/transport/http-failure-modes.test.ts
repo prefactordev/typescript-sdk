@@ -64,6 +64,24 @@ describe('HttpTransport failure modes', () => {
     globalThis.fetch = originalFetch;
   });
 
+  test('validateToken throws auth fatal error for unauthorized ping responses', async () => {
+    globalThis.fetch = (async () =>
+      new Response(JSON.stringify({ code: 'bad_authtoken', message: 'Token expired' }), {
+        status: 401,
+        headers: { 'Content-Type': 'application/json' },
+      })) as unknown as typeof fetch;
+
+    const transport = new HttpTransport(createConfig());
+
+    await expect(transport.validateToken()).rejects.toMatchObject({
+      kind: 'auth',
+      operation: 'token_validate',
+      status: 401,
+    });
+
+    await transport.close();
+  });
+
   test('enters fatal auth state, invokes callback once, and rethrows the same error later', async () => {
     const fatalErrors: PrefactorFatalError[] = [];
 

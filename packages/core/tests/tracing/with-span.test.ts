@@ -50,6 +50,16 @@ class ThrowingTransport implements Transport {
     return 'healthy';
   }
 
+  getAgentInstanceId(): string | null {
+    return null;
+  }
+
+  getHttpRequester() {
+    return { request: async () => ({}) };
+  }
+
+  async validateToken(): Promise<void> {}
+
   async close(): Promise<void> {}
 }
 
