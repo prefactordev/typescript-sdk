@@ -67,6 +67,7 @@ describe('PrefactorLiveKit', () => {
         finishAgentInstance: () => {},
       } as never,
       {
+        ensureTokenValid: async () => {},
         startInstance: () => {},
         finishInstance: () => {},
       } as never,
@@ -100,6 +101,7 @@ describe('PrefactorLiveKit', () => {
         finishAgentInstance: () => {},
       } as never,
       {
+        ensureTokenValid: async () => {},
         startInstance: (options?: unknown) => {
           startCalls.push(options);
         },
@@ -151,6 +153,7 @@ describe('PrefactorLiveKit', () => {
     const middlewareBeforeRenormalize = provider.createMiddleware(
       tracer as never,
       {
+        ensureTokenValid: async () => {},
         startInstance: () => {},
         finishInstance: () => {},
       } as never,
@@ -176,6 +179,7 @@ describe('PrefactorLiveKit', () => {
     const middlewareAfterRenormalize = provider.createMiddleware(
       tracer as never,
       {
+        ensureTokenValid: async () => {},
         startInstance: () => {},
         finishInstance: () => {},
       } as never,
@@ -214,6 +218,7 @@ describe('PrefactorLiveKit', () => {
         finishAgentInstance: () => {},
       } as never,
       {
+        ensureTokenValid: async () => {},
         startInstance: () => {},
         finishInstance: () => {},
       } as never,
@@ -247,6 +252,7 @@ describe('PrefactorLiveKit', () => {
         finishAgentInstance: () => {},
       } as never,
       {
+        ensureTokenValid: async () => {},
         startInstance: () => {},
         finishInstance: () => {},
       } as never,

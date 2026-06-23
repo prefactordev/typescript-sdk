@@ -174,6 +174,7 @@ describe('PrefactorLiveKitSession', () => {
     const sessionTracer = new PrefactorLiveKitSession({
       tracer: tracer as never,
       agentManager: {
+        ensureTokenValid: async () => {},
         startInstance: (options?: Record<string, unknown>) => {
           startCalls.push(options);
         },
@@ -199,6 +200,7 @@ describe('PrefactorLiveKitSession', () => {
     const sessionTracer = new PrefactorLiveKitSession({
       tracer: tracer as never,
       agentManager: {
+        ensureTokenValid: async () => {},
         startInstance: (options?: Record<string, unknown>) => {
           startCalls.push(options);
         },
@@ -221,6 +223,7 @@ describe('PrefactorLiveKitSession', () => {
     const sessionTracer = new PrefactorLiveKitSession({
       tracer: tracer as never,
       agentManager: {
+        ensureTokenValid: async () => {},
         startInstance: () => {},
         finishInstance: () => {},
       } as never,
@@ -244,6 +247,7 @@ describe('PrefactorLiveKitSession', () => {
     const sessionTracer = new PrefactorLiveKitSession({
       tracer: tracer as never,
       agentManager: {
+        ensureTokenValid: async () => {},
         startInstance: () => {},
         finishInstance: () => {},
       } as never,
@@ -264,6 +268,7 @@ describe('PrefactorLiveKitSession', () => {
     const sessionTracer = new PrefactorLiveKitSession({
       tracer: tracer as never,
       agentManager: {
+        ensureTokenValid: async () => {},
         startInstance: () => {},
         finishInstance: () => {},
       } as never,
@@ -296,6 +301,7 @@ describe('PrefactorLiveKitSession', () => {
     const sessionTracer = new PrefactorLiveKitSession({
       tracer: tracer as never,
       agentManager: {
+        ensureTokenValid: async () => {},
         startInstance: () => {},
         finishInstance: () => {},
       } as never,
@@ -343,6 +349,7 @@ describe('PrefactorLiveKitSession', () => {
     const sessionTracer = new PrefactorLiveKitSession({
       tracer: tracer as never,
       agentManager: {
+        ensureTokenValid: async () => {},
         startInstance: () => {},
         finishInstance: () => {},
       } as never,
@@ -392,6 +399,7 @@ describe('PrefactorLiveKitSession', () => {
     const sessionTracer = new PrefactorLiveKitSession({
       tracer: tracer as never,
       agentManager: {
+        ensureTokenValid: async () => {},
         startInstance: () => {},
         finishInstance: () => {},
       } as never,
@@ -434,6 +442,7 @@ describe('PrefactorLiveKitSession', () => {
     const sessionTracer = new PrefactorLiveKitSession({
       tracer: tracer as never,
       agentManager: {
+        ensureTokenValid: async () => {},
         startInstance: () => {},
         finishInstance: () => {},
       } as never,
@@ -460,6 +469,7 @@ describe('PrefactorLiveKitSession', () => {
     const sessionTracer = new PrefactorLiveKitSession({
       tracer: tracer as never,
       agentManager: {
+        ensureTokenValid: async () => {},
         startInstance: () => {},
         finishInstance: () => {},
       } as never,
@@ -500,6 +510,7 @@ describe('PrefactorLiveKitSession', () => {
     const sessionTracer = new PrefactorLiveKitSession({
       tracer: tracer as never,
       agentManager: {
+        ensureTokenValid: async () => {},
         startInstance: () => {},
         finishInstance: () => {},
       } as never,
@@ -541,6 +552,7 @@ describe('PrefactorLiveKitSession', () => {
     const sessionTracer = new PrefactorLiveKitSession({
       tracer: tracer as never,
       agentManager: {
+        ensureTokenValid: async () => {},
         startInstance: () => {},
         finishInstance: () => {},
       } as never,
@@ -580,6 +592,7 @@ describe('PrefactorLiveKitSession', () => {
     const sessionTracer = new PrefactorLiveKitSession({
       tracer: tracer as never,
       agentManager: {
+        ensureTokenValid: async () => {},
         startInstance: () => {},
         finishInstance: () => {
           finishCalls += 1;
@@ -624,6 +637,7 @@ describe('PrefactorLiveKitSession', () => {
     const sessionTracer = new PrefactorLiveKitSession({
       tracer: tracer as never,
       agentManager: {
+        ensureTokenValid: async () => {},
         startInstance: () => {},
         finishInstance: () => {
           finishCalls += 1;
@@ -666,6 +680,7 @@ describe('PrefactorLiveKitSession', () => {
     const sessionTracer = new PrefactorLiveKitSession({
       tracer: tracer as never,
       agentManager: {
+        ensureTokenValid: async () => {},
         startInstance: () => {},
         finishInstance: () => {
           finishCalls += 1;
@@ -696,6 +711,7 @@ describe('PrefactorLiveKitSession', () => {
     const sessionTracer = new PrefactorLiveKitSession({
       tracer: tracer as never,
       agentManager: {
+        ensureTokenValid: async () => {},
         startInstance: () => {},
         finishInstance: () => {
           finishCalls += 1;
@@ -727,6 +743,7 @@ describe('PrefactorLiveKitSession', () => {
     const sessionTracer = new PrefactorLiveKitSession({
       tracer: tracer as never,
       agentManager: {
+        ensureTokenValid: async () => {},
         startInstance: () => {},
         finishInstance: () => {},
       } as never,
@@ -754,6 +771,7 @@ describe('PrefactorLiveKitSession', () => {
     const sessionTracer = new PrefactorLiveKitSession({
       tracer: tracer as never,
       agentManager: {
+        ensureTokenValid: async () => {},
         startInstance: () => {},
         finishInstance: () => {},
       } as never,
@@ -784,6 +802,7 @@ describe('PrefactorLiveKitSession', () => {
     const sessionTracer = new PrefactorLiveKitSession({
       tracer: tracer as never,
       agentManager: {
+        ensureTokenValid: async () => {},
         startInstance: () => {},
         finishInstance: () => {},
       } as never,
@@ -814,6 +833,7 @@ describe('PrefactorLiveKitSession', () => {
     const sessionTracer = new PrefactorLiveKitSession({
       tracer: tracer as never,
       agentManager: {
+        ensureTokenValid: async () => {},
         startInstance: () => {},
         finishInstance: () => {},
       } as never,
@@ -842,6 +862,7 @@ describe('PrefactorLiveKitSession', () => {
     const sessionTracer = new PrefactorLiveKitSession({
       tracer: tracer as never,
       agentManager: {
+        ensureTokenValid: async () => {},
         startInstance: () => {},
         finishInstance: () => {
           finishCalls += 1;
@@ -871,6 +892,7 @@ describe('PrefactorLiveKitSession', () => {
     const sessionTracer = new PrefactorLiveKitSession({
       tracer: tracer as never,
       agentManager: {
+        ensureTokenValid: async () => {},
         startInstance: () => {},
         finishInstance: () => {},
       } as never,
@@ -917,6 +939,7 @@ describe('PrefactorLiveKitSession', () => {
     const sessionTracer = new PrefactorLiveKitSession({
       tracer: tracer as never,
       agentManager: {
+        ensureTokenValid: async () => {},
         startInstance: () => {},
         finishInstance: () => {
           finishCalls += 1;
