@@ -1,0 +1,38 @@
+{
+  "name": "@prefactor/agent-spans",
+  "version": "0.1.0",
+  "description": "Thin Prefactor API client for forwarding pre-mapped agent spans",
+  "type": "module",
+  "main": "dist/index.cjs",
+  "module": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "keywords": [
+    "prefactor",
+    "agent",
+    "spans",
+    "observability",
+    "telemetry"
+  ],
+  "author": "Prefactor",
+  "license": "MIT",
+  "peerDependencies": {
+    "@prefactor/core": "^0.4.0"
+  },
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  }
+}
+

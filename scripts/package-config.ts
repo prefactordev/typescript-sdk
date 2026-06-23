@@ -20,6 +20,13 @@ export const PACKAGE_CONFIGS: PackageConfig[] = [
     generateVersionModule: true,
   },
   {
+    name: '@prefactor/agent-spans',
+    path: 'packages/agent-spans',
+    entrypoint: './packages/agent-spans/src/index.ts',
+    external: ['@prefactor/core'],
+    generateVersionModule: true,
+  },
+  {
     name: '@prefactor/cli',
     path: 'packages/cli',
     entrypoints: ['./packages/cli/src/index.ts', './packages/cli/src/bin/cli.ts'],
