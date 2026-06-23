@@ -92,4 +92,7 @@ export interface Span {
 
   /** Additional metadata about this span */
   metadata: Record<string, unknown>;
+
+  /** When true, instructs the backend to encode this span's sensitive content. */
+  sensitiveEncoding?: boolean;
 }

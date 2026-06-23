@@ -352,4 +352,154 @@ describe('HttpTransport', () => {
     >;
     expect(registerPayload.agent_schema_version).toBeUndefined();
   });
+
+  test('forwards sensitive_encoding at top-level of details when set on span', async () => {
+    const spanPayloads: Array<Record<string, unknown>> = [];
+
+    globalThis.fetch = (async (url, options) => {
+      const urlString = String(url);
+
+      if (urlString.endsWith('/agent_instance/register')) {
+        return new Response(JSON.stringify({ details: { id: 'agent-instance-1' } }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+
+      if (urlString.endsWith('/agent_spans')) {
+        const payload = JSON.parse(String(options?.body)) as { details: Record<string, unknown> };
+        spanPayloads.push(payload.details);
+        return new Response(JSON.stringify({ details: { id: 'backend-span-1' } }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+
+      return new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }) as unknown as typeof fetch;
+
+    const transport = new HttpTransport(createConfig());
+
+    const spanWithEncoding: Span = {
+      spanId: 'span-encoded',
+      parentSpanId: null,
+      traceId: 'trace-1',
+      name: 'Encoded Span',
+      spanType: SpanType.LLM,
+      startTime: 1,
+      endTime: 2,
+      status: SpanStatus.SUCCESS,
+      inputs: {},
+      outputs: {},
+      tokenUsage: null,
+      error: null,
+      metadata: {},
+      sensitiveEncoding: true,
+    };
+
+    const spanWithoutEncoding: Span = {
+      spanId: 'span-plain',
+      parentSpanId: null,
+      traceId: 'trace-1',
+      name: 'Plain Span',
+      spanType: SpanType.LLM,
+      startTime: 1,
+      endTime: 2,
+      status: SpanStatus.SUCCESS,
+      inputs: {},
+      outputs: {},
+      tokenUsage: null,
+      error: null,
+      metadata: {},
+    };
+
+    const spanWithEncodingDisabled: Span = {
+      spanId: 'span-disabled',
+      parentSpanId: null,
+      traceId: 'trace-1',
+      name: 'Disabled Encoding Span',
+      spanType: SpanType.LLM,
+      startTime: 1,
+      endTime: 2,
+      status: SpanStatus.SUCCESS,
+      inputs: {},
+      outputs: {},
+      tokenUsage: null,
+      error: null,
+      metadata: {},
+      sensitiveEncoding: false,
+    };
+
+    transport.emit(spanWithEncoding);
+    transport.emit(spanWithoutEncoding);
+    transport.emit(spanWithEncodingDisabled);
+    await transport.close();
+
+    expect(spanPayloads).toHaveLength(3);
+    expect(spanPayloads[0]?.sensitive_encoding).toBe(true);
+    expect(spanPayloads[1]).not.toHaveProperty('sensitive_encoding');
+    expect(spanPayloads[2]?.sensitive_encoding).toBe(false);
+  });
+
+  test('forwards sensitive_encoding on span finish when set', async () => {
+    const fetchCalls: Array<{ url: string; options?: RequestInit }> = [];
+    globalThis.fetch = (async (url, options) => {
+      const urlString = String(url);
+      fetchCalls.push({ url: urlString, options });
+
+      if (urlString.endsWith('/agent_instance/register')) {
+        return new Response(JSON.stringify({ details: { id: 'agent-instance-1' } }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+
+      if (urlString.endsWith('/agent_spans')) {
+        return new Response(JSON.stringify({ details: { id: 'backend-span-1' } }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+
+      return new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }) as unknown as typeof fetch;
+
+    const transport = new HttpTransport(createConfig());
+    const endTime = 1700000000000;
+
+    const span: Span = {
+      spanId: 'span-1',
+      parentSpanId: null,
+      traceId: 'trace-1',
+      name: 'Agent Span',
+      spanType: SpanType.AGENT,
+      startTime: endTime - 1000,
+      endTime,
+      status: SpanStatus.SUCCESS,
+      inputs: {},
+      outputs: { message: 'done' },
+      tokenUsage: null,
+      error: null,
+      metadata: {},
+      sensitiveEncoding: true,
+    };
+
+    transport.emit(span);
+    transport.finishSpan(span.spanId, endTime, {
+      status: 'complete',
+      resultPayload: { message: 'done' },
+      sensitiveEncoding: true,
+    });
+    await transport.close();
+
+    const finishCall = fetchCalls.find((call) => call.url.endsWith('/finish'));
+    const finishPayload = JSON.parse(String(finishCall?.options?.body)) as Record<string, unknown>;
+    expect(finishPayload.sensitive_encoding).toBe(true);
+  });
 });

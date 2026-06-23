@@ -88,6 +88,17 @@ describe('Tracer', () => {
     expect(span.parentSpanId).toBeNull();
   });
 
+  test('should store sensitiveEncoding when provided at span start', () => {
+    const span = tracer.startSpan({
+      name: 'test_span',
+      spanType: SpanType.LLM,
+      inputs: { prompt: 'Hello' },
+      sensitiveEncoding: true,
+    });
+
+    expect(span.sensitiveEncoding).toBe(true);
+  });
+
   test('should emit agent spans immediately', () => {
     const span = tracer.startSpan({
       name: 'agent',
@@ -207,6 +218,20 @@ describe('Tracer', () => {
     expect(typeof transport.finished[0]?.endTime).toBe('number');
     expect(transport.finished[0]?.status).toBe('complete');
     expect(transport.finished[0]?.resultPayload).toEqual({});
+  });
+
+  test('should forward sensitiveEncoding when finishing agent spans', () => {
+    const span = tracer.startSpan({
+      name: 'agent',
+      spanType: SpanType.AGENT,
+      inputs: {},
+      sensitiveEncoding: true,
+    });
+
+    tracer.endSpan(span);
+
+    expect(transport.finished).toHaveLength(1);
+    expect(transport.finished[0]?.sensitiveEncoding).toBe(true);
   });
 
   test('should include agent result payload when finished successfully', () => {

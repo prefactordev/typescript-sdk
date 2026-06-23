@@ -20,6 +20,9 @@ export interface StartSpanOptions {
 
   /** Additional metadata (optional) */
   metadata?: Record<string, unknown>;
+
+  /** When true, instructs the backend to encode this span's sensitive content. */
+  sensitiveEncoding?: boolean;
 }
 
 /**
@@ -104,6 +107,7 @@ export class Tracer {
       tokenUsage: null,
       error: null,
       metadata: options.metadata ?? {},
+      sensitiveEncoding: options.sensitiveEncoding,
     };
 
     // AGENT spans are emitted immediately for real-time tracking
@@ -151,6 +155,7 @@ export class Tracer {
         this.transport.finishSpan(span.spanId, endTime, {
           status,
           resultPayload: buildSpanResultPayload(span),
+          sensitiveEncoding: span.sensitiveEncoding,
         });
       } else {
         this.transport.emit(span);

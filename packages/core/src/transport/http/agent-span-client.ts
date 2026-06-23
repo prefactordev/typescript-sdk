@@ -9,6 +9,7 @@ export type AgentSpanFinishOptions = {
   status?: AgentSpanFinishStatus;
   result_payload?: Record<string, unknown>;
   idempotency_key?: string;
+  sensitive_encoding?: boolean;
 };
 
 export type AgentSpanCreatePayload = {
@@ -21,6 +22,7 @@ export type AgentSpanCreatePayload = {
     parent_span_id: string | null;
     started_at: string;
     finished_at: string | null;
+    sensitive_encoding?: boolean;
   };
   idempotency_key?: string;
 };
