@@ -799,6 +799,9 @@ export class HttpTransport implements Transport {
         parent_span_id: parentSpanId,
         started_at: startedAt,
         finished_at: finishedAt,
+        ...(span.sensitiveEncoding !== undefined
+          ? { sensitive_encoding: span.sensitiveEncoding }
+          : {}),
       },
     };
   }

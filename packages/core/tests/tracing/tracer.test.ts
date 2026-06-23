@@ -88,6 +88,17 @@ describe('Tracer', () => {
     expect(span.parentSpanId).toBeNull();
   });
 
+  test('should store sensitiveEncoding when provided at span start', () => {
+    const span = tracer.startSpan({
+      name: 'test_span',
+      spanType: SpanType.LLM,
+      inputs: { prompt: 'Hello' },
+      sensitiveEncoding: true,
+    });
+
+    expect(span.sensitiveEncoding).toBe(true);
+  });
+
   test('should emit agent spans immediately', () => {
     const span = tracer.startSpan({
       name: 'agent',

@@ -21,6 +21,7 @@ export type AgentSpanCreatePayload = {
     parent_span_id: string | null;
     started_at: string;
     finished_at: string | null;
+    sensitive_encoding?: boolean;
   };
   idempotency_key?: string;
 };
