@@ -665,10 +665,11 @@ export function createPrefactorMiddleware(
   const deadTimeoutMs = coreOptions?.deadTimeoutMs ?? AGENT_DEAD_TIMEOUT_MS;
   const toolSpanTypes = coreOptions?.toolSpanTypes;
 
-  function ensureAgentInstanceStarted(): void {
+  async function ensureAgentInstanceStarted(): Promise<void> {
     if (!agentManager || agentLifecycle.started) {
       return;
     }
+    await agentManager.ensureTokenValid();
     agentManager.startInstance(agentInfo);
     agentLifecycle.started = true;
   }
@@ -681,7 +682,7 @@ export function createPrefactorMiddleware(
      * Wraps non-streaming generation calls.
      */
     wrapGenerate: async ({ doGenerate, params, model }) => {
-      ensureAgentInstanceStarted();
+      await ensureAgentInstanceStarted();
 
       // Use existing context when available; otherwise the LLM span becomes root
       const parentSpan = SpanContext.getCurrent();
@@ -731,7 +732,7 @@ export function createPrefactorMiddleware(
      * Wraps streaming generation calls.
      */
     wrapStream: async ({ doStream, params, model }) => {
-      ensureAgentInstanceStarted();
+      await ensureAgentInstanceStarted();
 
       // Use existing context when available; otherwise the LLM span becomes root
       const parentSpan = SpanContext.getCurrent();

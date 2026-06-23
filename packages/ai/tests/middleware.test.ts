@@ -21,6 +21,7 @@ function createSpan(spanId: string, spanType: string, inputs: Record<string, unk
 }
 
 const agentManagerStub = {
+  ensureTokenValid: async () => {},
   startInstance: () => {},
   finishInstance: () => {},
 } as never;

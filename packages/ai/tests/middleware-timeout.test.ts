@@ -40,6 +40,7 @@ describe('middleware timeout handling', () => {
     const lifecycle = { started: false };
     let finished = false;
     const agentManager = {
+      ensureTokenValid: async () => {},
       startInstance: () => {
         lifecycle.started = true;
       },
