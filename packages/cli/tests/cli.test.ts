@@ -544,13 +544,7 @@ describe('CLI command validation', () => {
       });
     }) as typeof fetch;
 
-    await createCli('1.0.0').parseAsync([
-      'node',
-      'prefactor',
-      'ping',
-      '--api-token',
-      'dep-token',
-    ]);
+    await createCli('1.0.0').parseAsync(['node', 'prefactor', 'ping', '--api-token', 'dep-token']);
 
     const url = new URL(requestUrl);
     expect(`${url.origin}${url.pathname}`).toBe('https://app.prefactorai.com/api/v1/ping');
