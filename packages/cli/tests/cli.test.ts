@@ -69,6 +69,7 @@ describe('CLI profiles command', () => {
       'api_tokens',
       'pfid',
       'bulk',
+      'ping',
       'version',
       'install',
       'update',
@@ -425,6 +426,135 @@ describe('CLI command validation', () => {
     await cli.parseAsync(['node', 'prefactor', 'accounts', 'list']);
 
     expect(requestUrl).toStartWith('https://profile-api.example/');
+  });
+
+  test('ping with api token uses default API URL', async () => {
+    const cwd = join(tempRoot, 'cwd');
+    mkdirSync(cwd, { recursive: true });
+    process.chdir(cwd);
+
+    let requestUrl = '';
+    let authorization = '';
+    globalThis.fetch = (async (input, init) => {
+      requestUrl = String(input);
+      authorization = new Headers(init?.headers).get('Authorization') ?? '';
+      return new Response(JSON.stringify({ status: 'success', details: { token_type: 'api' } }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }) as typeof fetch;
+
+    const log = mock(() => {});
+    const originalLog = console.log;
+    console.log = log;
+
+    try {
+      await createCli('1.0.0').parseAsync([
+        'node',
+        'prefactor',
+        'ping',
+        '--api-token',
+        'dep-token',
+      ]);
+    } finally {
+      console.log = originalLog;
+    }
+
+    const url = new URL(requestUrl);
+    expect(`${url.origin}${url.pathname}`).toBe('https://app.prefactorai.com/api/v1/ping');
+    expect(authorization).toBe('Bearer dep-token');
+    expect(log.mock.calls.flat().join('\n')).toContain('"status": "success"');
+  });
+
+  test('ping with api token uses explicit API URL', async () => {
+    const cwd = join(tempRoot, 'cwd');
+    mkdirSync(cwd, { recursive: true });
+    process.chdir(cwd);
+
+    let requestUrl = '';
+    let authorization = '';
+    globalThis.fetch = (async (input, init) => {
+      requestUrl = String(input);
+      authorization = new Headers(init?.headers).get('Authorization') ?? '';
+      return new Response(JSON.stringify({ status: 'success', details: { token_type: 'api' } }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }) as typeof fetch;
+
+    await createCli('1.0.0').parseAsync([
+      'node',
+      'prefactor',
+      'ping',
+      '--api-url',
+      'https://api.example',
+      '--api-token',
+      'dep-token',
+    ]);
+
+    const url = new URL(requestUrl);
+    expect(`${url.origin}${url.pathname}`).toBe('https://api.example/api/v1/ping');
+    expect(authorization).toBe('Bearer dep-token');
+  });
+
+  test('ping without api token uses existing profile auth', async () => {
+    const cwd = join(tempRoot, 'cwd');
+    mkdirSync(cwd, { recursive: true });
+    process.chdir(cwd);
+    writeFileSync(
+      join(cwd, 'prefactor.json'),
+      JSON.stringify({ default: { api_key: 'profile-token', base_url: 'https://profile.example' } })
+    );
+
+    let requestUrl = '';
+    let authorization = '';
+    globalThis.fetch = (async (input, init) => {
+      requestUrl = String(input);
+      authorization = new Headers(init?.headers).get('Authorization') ?? '';
+      return new Response(JSON.stringify({ status: 'success', details: { token_type: 'api' } }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }) as typeof fetch;
+
+    await createCli('1.0.0').parseAsync(['node', 'prefactor', 'ping']);
+
+    const url = new URL(requestUrl);
+    expect(`${url.origin}${url.pathname}`).toBe('https://profile.example/api/v1/ping');
+    expect(authorization).toBe('Bearer profile-token');
+  });
+
+  test('ping api token option takes precedence over default profile', async () => {
+    const cwd = join(tempRoot, 'cwd');
+    mkdirSync(cwd, { recursive: true });
+    process.chdir(cwd);
+    writeFileSync(
+      join(cwd, 'prefactor.json'),
+      JSON.stringify({ default: { api_key: 'profile-token', base_url: 'https://profile.example' } })
+    );
+
+    let requestUrl = '';
+    let authorization = '';
+    globalThis.fetch = (async (input, init) => {
+      requestUrl = String(input);
+      authorization = new Headers(init?.headers).get('Authorization') ?? '';
+      return new Response(JSON.stringify({ status: 'success', details: { token_type: 'api' } }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }) as typeof fetch;
+
+    await createCli('1.0.0').parseAsync([
+      'node',
+      'prefactor',
+      'ping',
+      '--api-token',
+      'dep-token',
+    ]);
+
+    const url = new URL(requestUrl);
+    expect(`${url.origin}${url.pathname}`).toBe('https://app.prefactorai.com/api/v1/ping');
+    expect(authorization).toBe('Bearer dep-token');
   });
 
   test('validates api_tokens create token_scope', async () => {
