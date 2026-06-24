@@ -8,9 +8,6 @@
  * Prerequisites:
  * - ANTHROPIC_API_KEY environment variable set
  * - PREFACTOR_API_URL, PREFACTOR_API_TOKEN, and PREFACTOR_AGENT_ID for HTTP transport
- * - Create a local agent with the p2 CLI, then set PREFACTOR_AGENT_ID in .env:
- *     p2 agents create --name "My agent" --environment-id <env-id>
- *     p2 agent_deployments create --agent-id <agent-id> --environment-id <env-id>
  */
 
 import { createAgent, tool } from 'langchain';

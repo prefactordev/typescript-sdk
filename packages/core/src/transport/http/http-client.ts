@@ -77,10 +77,6 @@ export class HttpClient {
       : DEFAULT_SDK_REQUEST_HEADER;
   }
 
-  async validateToken(): Promise<void> {
-    await this.request('/api/v1/ping', { method: 'GET' });
-  }
-
   async request<TResponse = unknown>(
     path: string,
     options: HttpRequestOptions = {}

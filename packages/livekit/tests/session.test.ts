@@ -192,6 +192,31 @@ describe('PrefactorLiveKitSession', () => {
     expect(session.handlers.has('session_usage_updated')).toBe(true);
   });
 
+  test('attach continues when agent token validation fails', async () => {
+    const { tracer, started } = createTestTracer();
+    let startCalls = 0;
+    const sessionTracer = new PrefactorLiveKitSession({
+      tracer: tracer as never,
+      agentManager: {
+        ensureTokenValid: async () => {
+          throw new Error('bad token');
+        },
+        startInstance: () => {
+          startCalls += 1;
+        },
+        finishInstance: () => {},
+      } as never,
+      agentInfo: { agentIdentifier: 'livekit-test' },
+    });
+    const session = new FakeSession();
+
+    await sessionTracer.attach(session as never);
+
+    expect(started[0]?.spanType).toBe('livekit:session');
+    expect(startCalls).toBe(0);
+    expect(session.handlers.has('session_usage_updated')).toBe(true);
+  });
+
   test('attach throws before agent instance startup when the abort signal is already aborted', async () => {
     const abortController = new AbortController();
     abortController.abort('p2 requested stop');

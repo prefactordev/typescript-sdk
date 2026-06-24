@@ -153,44 +153,6 @@ describe('HttpClient', () => {
     });
   });
 
-  test('validateToken calls ping with bearer auth', async () => {
-    let requestUrl = '';
-    let requestMethod = '';
-    let requestHeaders: Headers | undefined;
-
-    const fetchFn: FetchLike = async (url, init) => {
-      requestUrl = url.toString();
-      requestMethod = init?.method ?? 'GET';
-      requestHeaders = new Headers(init?.headers);
-      return new Response(JSON.stringify({ status: 'success', details: {} }), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-      });
-    };
-
-    const client = new HttpClient(baseConfig, { fetchFn });
-    await client.validateToken();
-
-    expect(requestUrl).toBe('https://example.com/api/v1/ping');
-    expect(requestMethod).toBe('GET');
-    expect(requestHeaders?.get('Authorization')).toBe('Bearer test-token');
-  });
-
-  test('validateToken throws HttpClientError on unauthorized response', async () => {
-    const fetchFn: FetchLike = async () =>
-      new Response(JSON.stringify({ code: 'bad_authtoken', message: 'Token expired' }), {
-        status: 401,
-        headers: { 'Content-Type': 'application/json' },
-      });
-
-    const client = new HttpClient({ ...baseConfig, maxRetries: 0 }, { fetchFn });
-
-    await expect(client.validateToken()).rejects.toMatchObject({
-      status: 401,
-      responseBody: { code: 'bad_authtoken', message: 'Token expired' },
-    });
-  });
-
   test('retries non-explicit 5xx status by default policy', async () => {
     let attempts = 0;
 

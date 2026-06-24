@@ -945,9 +945,13 @@ export class PrefactorLiveKitSession {
       return;
     }
 
-    await this.agentManager.ensureTokenValid();
-    this.agentManager.startInstance(this.agentInfo);
-    this.agentInstanceStarted = true;
+    try {
+      await this.agentManager.ensureTokenValid();
+      this.agentManager.startInstance(this.agentInfo);
+      this.agentInstanceStarted = true;
+    } catch (error) {
+      safeWarn('Failed to start Prefactor agent instance for LiveKit session.', error);
+    }
   }
 
   private finishAgentInstance(): void {

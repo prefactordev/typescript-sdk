@@ -266,7 +266,7 @@ export class HttpTransport implements Transport {
 
   async validateToken(): Promise<void> {
     try {
-      await this.httpClient.validateToken();
+      await this.httpClient.request('/api/v1/ping', { method: 'GET' });
     } catch (error) {
       if (error instanceof HttpClientError && (error.status === 401 || error.status === 403)) {
         throw new PrefactorFatalError('auth', 'API token validation failed.', {
