@@ -1,6 +1,6 @@
 {
   "name": "@prefactor/claude",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Claude Agent SDK integration for Prefactor observability",
   "type": "module",
   "main": "dist/index.cjs",

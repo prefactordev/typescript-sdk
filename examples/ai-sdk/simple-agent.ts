@@ -7,7 +7,7 @@
  *
  * Prerequisites:
  * - ANTHROPIC_API_KEY environment variable set
- * - For HTTP transport: PREFACTOR_API_URL and PREFACTOR_API_TOKEN
+ * - PREFACTOR_API_URL, PREFACTOR_API_TOKEN, and PREFACTOR_AGENT_ID for HTTP transport
  */
 
 import { init } from '@prefactor/core';
@@ -134,9 +134,18 @@ async function main() {
       apiToken: process.env.PREFACTOR_API_TOKEN!,
       apiUrl: process.env.PREFACTOR_API_URL!,
       agentId: process.env.PREFACTOR_AGENT_ID,
-      agentIdentifier: '1.0.0',
+      agentIdentifier: '1.0.0-ai-simple',
       agentName: 'Middleware Agent',
       agentDescription: 'An agent demonstrating the middleware approach.',
+      agentSchema: {
+        external_identifier: 'ai-sdk-simple-agent-v1',
+        span_schemas: {
+          'ai:example-root': { type: 'object', additionalProperties: true },
+        },
+        span_result_schemas: {
+          'ai:example-root': { type: 'object', additionalProperties: true },
+        },
+      },
     },
   });
 

@@ -94,6 +94,8 @@ export interface Transport {
   getAgentInstanceId(): string | null;
 
   getHttpRequester(): HttpRequester;
+
+  validateToken(): Promise<void>;
 }
 
 export type FinishSpanOptions = {
@@ -260,6 +262,24 @@ export class HttpTransport implements Transport {
 
   getHttpRequester(): HttpRequester {
     return this.httpClient;
+  }
+
+  async validateToken(): Promise<void> {
+    try {
+      await this.httpClient.request('/api/v1/ping', { method: 'GET' });
+    } catch (error) {
+      if (error instanceof HttpClientError && (error.status === 401 || error.status === 403)) {
+        throw new PrefactorFatalError('auth', 'API token validation failed.', {
+          operation: 'token_validate',
+          status: error.status,
+          responseBody: error.responseBody,
+          consecutiveFailures: 1,
+          cause: error,
+        });
+      }
+
+      throw error;
+    }
   }
 
   async close(): Promise<void> {

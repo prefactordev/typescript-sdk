@@ -40,6 +40,16 @@ class MockTransport implements Transport {
     return 'healthy';
   }
 
+  getAgentInstanceId(): string | null {
+    return null;
+  }
+
+  getHttpRequester() {
+    return { request: async () => ({}) };
+  }
+
+  async validateToken(): Promise<void> {}
+
   async close(): Promise<void> {}
 }
 
@@ -117,5 +127,29 @@ describe('AgentInstanceManager', () => {
     manager.finishInstance();
 
     expect(transport.finishedInstances).toBe(1);
+  });
+
+  test('validates token once before returning the same promise', async () => {
+    let validationCalls = 0;
+    const transport = new MockTransport();
+    transport.validateToken = async () => {
+      validationCalls += 1;
+    };
+    const manager = new AgentInstanceManager(transport, {});
+
+    await manager.ensureTokenValid();
+    await manager.ensureTokenValid();
+
+    expect(validationCalls).toBe(1);
+  });
+
+  test('rethrows auth failures from token validation', async () => {
+    const transport = new MockTransport();
+    transport.validateToken = async () => {
+      throw new Error('bad token');
+    };
+    const manager = new AgentInstanceManager(transport, {});
+
+    await expect(manager.ensureTokenValid()).rejects.toThrow('bad token');
   });
 });

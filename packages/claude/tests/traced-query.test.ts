@@ -16,6 +16,15 @@ type HooksMap = Partial<Record<HookEvent, HookCallbackMatcher[]>>;
 
 let spanCounter = 0;
 
+function createAgentManagerStub(overrides: Record<string, unknown> = {}) {
+  return {
+    ensureTokenValid: async () => {},
+    startInstance: () => {},
+    finishInstance: () => {},
+    ...overrides,
+  };
+}
+
 function createSpan(spanType: string, inputs: Record<string, unknown>, name: string): Span {
   spanCounter += 1;
   return {
@@ -350,7 +359,7 @@ describe('createTracedQuery', () => {
         return createMockQueryStream();
       }) as ClaudeQuery,
       mock.tracer,
-      { startInstance: () => {}, finishInstance: () => {} } as never,
+      createAgentManagerStub() as never,
       { agentIdentifier: 'claude-test' },
       createClaudeRuntimeController()
     );
@@ -383,7 +392,7 @@ describe('createTracedQuery', () => {
     const middleware = createTracedQuery(
       (() => controlled.stream) as ClaudeQuery,
       createMockTracer().tracer,
-      { startInstance: () => {}, finishInstance: () => {} } as never,
+      createAgentManagerStub() as never,
       { agentIdentifier: 'claude-test' },
       createClaudeRuntimeController()
     );
@@ -399,7 +408,7 @@ describe('createTracedQuery', () => {
 
   test('allows a second run after the first run completes', async () => {
     const mock = createMockTracer();
-    const agentManager = {
+    const agentManager = createAgentManagerStub({
       startCalls: 0,
       finishCalls: 0,
       startInstance() {
@@ -408,7 +417,7 @@ describe('createTracedQuery', () => {
       finishInstance() {
         this.finishCalls += 1;
       },
-    };
+    });
 
     const middleware = createTracedQuery(
       (() =>
@@ -438,7 +447,7 @@ describe('createTracedQuery', () => {
     const controlled = createControlledQueryStream();
     const queryFn = (() => controlled.stream) as ClaudeQuery;
     const runtimeController = createClaudeRuntimeController();
-    const agentManager = {
+    const agentManager = createAgentManagerStub({
       startCalls: 0,
       finishCalls: 0,
       startInstance() {
@@ -447,7 +456,7 @@ describe('createTracedQuery', () => {
       finishInstance() {
         this.finishCalls += 1;
       },
-    };
+    });
     const middleware = createTracedQuery(
       queryFn,
       createMockTracer().tracer,
@@ -480,7 +489,7 @@ describe('createTracedQuery', () => {
     const middleware = createTracedQuery(
       (() => controlled.stream) as ClaudeQuery,
       mock.tracer,
-      { startInstance: () => {}, finishInstance: () => {} } as never,
+      createAgentManagerStub() as never,
       { agentIdentifier: 'claude-test' },
       createClaudeRuntimeController()
     );
@@ -518,7 +527,7 @@ describe('createTracedQuery', () => {
           },
         })) as ClaudeQuery,
       createMockTracer().tracer,
-      { startInstance: () => {}, finishInstance: () => {} } as never,
+      createAgentManagerStub() as never,
       { agentIdentifier: 'claude-test' },
       createClaudeRuntimeController()
     );
@@ -544,7 +553,7 @@ describe('createTracedQuery', () => {
           { type: 'result', result: 'done', subtype: 'end_turn', is_error: false } as SDKMessage,
         ])) as ClaudeQuery,
       mock.tracer,
-      { startInstance: () => {}, finishInstance: () => {} } as never,
+      createAgentManagerStub() as never,
       { agentIdentifier: 'claude-test' },
       createClaudeRuntimeController()
     );
@@ -580,7 +589,7 @@ describe('createTracedQuery', () => {
           } as SDKMessage,
         ])) as ClaudeQuery,
       mock.tracer,
-      { startInstance: () => {}, finishInstance: () => {} } as never,
+      createAgentManagerStub() as never,
       { agentIdentifier: 'claude-test' },
       createClaudeRuntimeController()
     );
@@ -618,7 +627,7 @@ describe('createTracedQuery', () => {
           } as SDKMessage,
         ])) as ClaudeQuery,
       mock.tracer,
-      { startInstance: () => {}, finishInstance: () => {} } as never,
+      createAgentManagerStub() as never,
       { agentIdentifier: 'claude-test' },
       createClaudeRuntimeController()
     );

@@ -24,7 +24,7 @@ export interface ClaudeRuntimeController {
     token: symbol,
     agentManager: AgentInstanceManager,
     agentInfo?: ClaudeAgentInfo
-  ): void;
+  ): Promise<void>;
   finishAgentInstance(token: symbol, agentManager: AgentInstanceManager): void;
   releaseRun(token: symbol): void;
   shutdown(agentManager?: AgentInstanceManager | null): void;

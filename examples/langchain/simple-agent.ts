@@ -7,7 +7,7 @@
  *
  * Prerequisites:
  * - ANTHROPIC_API_KEY environment variable set
- * - Optional: PREFACTOR_API_URL and PREFACTOR_API_TOKEN for HTTP transport
+ * - PREFACTOR_API_URL, PREFACTOR_API_TOKEN, and PREFACTOR_AGENT_ID for HTTP transport
  */
 
 import { createAgent, tool } from 'langchain';

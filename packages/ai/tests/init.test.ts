@@ -268,6 +268,7 @@ describe('ai init schema registration', () => {
 
     let finishCalls = 0;
     const agentManager = {
+      ensureTokenValid: async () => {},
       registerSchema: () => {},
       startInstance: () => {},
       finishInstance: () => {

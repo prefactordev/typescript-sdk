@@ -138,7 +138,7 @@ export class PrefactorLiveKitSession {
       this.bindMetricsEmitters(session);
 
       if (!this.rootSpan) {
-        this.startAgentInstance();
+        await this.startAgentInstance();
         this.rootSpan = this.safeStartSpan({
           name: this.agentInfo?.agentName ?? 'livekit-session',
           spanType: 'livekit:session',
@@ -940,12 +940,13 @@ export class PrefactorLiveKitSession {
     }
   }
 
-  private startAgentInstance(): void {
+  private async startAgentInstance(): Promise<void> {
     if (this.agentInstanceStarted) {
       return;
     }
 
     try {
+      await this.agentManager.ensureTokenValid();
       this.agentManager.startInstance(this.agentInfo);
       this.agentInstanceStarted = true;
     } catch (error) {

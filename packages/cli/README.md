@@ -79,6 +79,7 @@ This opens your browser to the Prefactor login page. After authenticating, copy 
 
 ```bash
 prefactor accounts list
+prefactor ping
 ```
 
 3. Query additional resources:
@@ -124,6 +125,7 @@ Environment fallback is supported when no default profile is configured:
 - `admin_user_invites`: list, retrieve, create, revoke
 - `pfid`: generate
 - `bulk`: execute
+- `ping`: verify the selected or supplied API token
 
 Run `prefactor <command> --help` for command-specific options.
 

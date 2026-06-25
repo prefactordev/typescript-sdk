@@ -84,11 +84,28 @@ describe('PrefactorClaude provider integration', () => {
         } as SDKMessage,
       ])) as typeof import('@anthropic-ai/claude-agent-sdk').query;
 
-    globalThis.fetch = (async () =>
-      new Response(JSON.stringify({ error: 'bad token' }), {
+    globalThis.fetch = (async (url, _options) => {
+      const urlString = String(url);
+
+      if (urlString.endsWith('/api/v1/ping')) {
+        return new Response(JSON.stringify({ status: 'success' }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+
+      if (urlString.endsWith('/agent_instance/register')) {
+        return new Response(JSON.stringify({ details: { id: 'agent-instance-1' } }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+
+      return new Response(JSON.stringify({ error: 'bad token' }), {
         status: 401,
         headers: { 'Content-Type': 'application/json' },
-      })) as unknown as typeof fetch;
+      });
+    }) as unknown as typeof fetch;
 
     const prefactor = init({
       provider: new PrefactorClaude({ query: queryFn }),
@@ -113,7 +130,9 @@ describe('PrefactorClaude provider integration', () => {
     expect(fatalErrors[0]?.kind).toBe('auth');
     expect(fatalErrors[0]?.operation).toBe('agent_start');
 
-    await drainQuery(tracedQuery({ prompt: 'second run' }));
+    await expect(drainQuery(tracedQuery({ prompt: 'second run' }))).rejects.toBeInstanceOf(
+      PrefactorFatalError
+    );
     await new Promise((resolve) => setTimeout(resolve, 25));
 
     expect(fatalErrors).toHaveLength(1);

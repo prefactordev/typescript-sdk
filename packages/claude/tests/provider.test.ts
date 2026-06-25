@@ -64,6 +64,7 @@ describe('PrefactorClaude', () => {
     };
 
     const mockAgentManager = {
+      ensureTokenValid: async () => {},
       startInstance: () => {},
       finishInstance: () => {},
     };
@@ -157,6 +158,7 @@ describe('PrefactorClaude', () => {
     };
 
     const mockAgentManager = {
+      ensureTokenValid: async () => {},
       startInstance: () => {},
       finishInstance: () => {},
     };

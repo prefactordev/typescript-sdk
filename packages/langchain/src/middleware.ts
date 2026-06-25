@@ -58,7 +58,7 @@ export class PrefactorMiddleware {
   // biome-ignore lint/suspicious/noExplicitAny: LangChain state can be any structure
   async beforeAgent(_state: any): Promise<void> {
     this.throwIfTerminated();
-    this.ensureAgentInstanceStarted();
+    await this.ensureAgentInstanceStarted();
   }
 
   /**
@@ -86,7 +86,7 @@ export class PrefactorMiddleware {
   // biome-ignore lint/suspicious/noExplicitAny: LangChain request/handler types are dynamic
   async wrapModelCall<T>(request: any, handler: (req: any) => Promise<T>): Promise<T> {
     this.throwIfTerminated();
-    this.ensureAgentInstanceStarted();
+    await this.ensureAgentInstanceStarted();
 
     const modelName = this.extractModelName(request);
     const span = this.tracer.startSpan({
@@ -122,7 +122,7 @@ export class PrefactorMiddleware {
   // biome-ignore lint/suspicious/noExplicitAny: LangChain request/handler types are dynamic
   async wrapToolCall<T>(request: any, handler: (req: any) => Promise<T>): Promise<T> {
     this.throwIfTerminated();
-    this.ensureAgentInstanceStarted();
+    await this.ensureAgentInstanceStarted();
 
     const toolName = this.extractToolName(request);
     const span = this.tracer.startSpan({
@@ -310,17 +310,14 @@ export class PrefactorMiddleware {
     }
   }
 
-  private ensureAgentInstanceStarted(): void {
+  private async ensureAgentInstanceStarted(): Promise<void> {
     if (this.agentInstanceStarted) {
       return;
     }
 
-    try {
-      this.agentManager.startInstance(this.agentInfo);
-      this.agentInstanceStarted = true;
-    } catch (error) {
-      logger.error('Failed to start agent instance:', error);
-    }
+    await this.agentManager.ensureTokenValid();
+    this.agentManager.startInstance(this.agentInfo);
+    this.agentInstanceStarted = true;
   }
 
   private finishAgentInstance(): void {

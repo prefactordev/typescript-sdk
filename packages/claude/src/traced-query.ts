@@ -1,6 +1,6 @@
 import type { Query, SDKMessage } from '@anthropic-ai/claude-agent-sdk';
 import type { AgentInstanceManager, Tracer } from '@prefactor/core';
-import { getLogger, serializeValue } from '@prefactor/core';
+import { getLogger, PrefactorFatalError, serializeValue } from '@prefactor/core';
 import { createInstrumentationHooks, finalizeAgentSpan, mergeHooks } from './hooks.js';
 import { startSpanWithParent } from './span-utils.js';
 import type {
@@ -113,15 +113,16 @@ export function createClaudeRuntimeController(): ClaudeRuntimeController {
       return token;
     },
 
-    startAgentInstance(
+    async startAgentInstance(
       token: symbol,
       agentManager: AgentInstanceManager,
       agentInfo?: ClaudeAgentInfo
-    ): void {
+    ): Promise<void> {
       if (!activeRun || activeRun.token !== token || activeRun.agentInstanceStarted) {
         return;
       }
 
+      await agentManager.ensureTokenValid();
       agentManager.startInstance(agentInfo);
       activeRun.agentInstanceStarted = true;
     },
@@ -207,8 +208,19 @@ async function* tapStream(
   try {
     for await (const message of stream) {
       try {
-        handleMessage(message, tracer, agentManager, agentInfo, runtimeController, runToken, state);
+        await handleMessage(
+          message,
+          tracer,
+          agentManager,
+          agentInfo,
+          runtimeController,
+          runToken,
+          state
+        );
       } catch (error) {
+        if (error instanceof PrefactorFatalError && error.kind === 'auth') {
+          throw error;
+        }
         logger.warn('Error processing message for tracing', error);
       }
 
@@ -252,7 +264,7 @@ async function* tapStream(
   }
 }
 
-function handleMessage(
+async function handleMessage(
   message: SDKMessage,
   tracer: Tracer,
   agentManager: AgentInstanceManager,
@@ -260,11 +272,11 @@ function handleMessage(
   runtimeController: ClaudeRuntimeController,
   runToken: symbol,
   state: TracedQueryState
-): void {
+): Promise<void> {
   const messageInfo = message as { type?: string; subtype?: string; event?: unknown };
 
   if (messageInfo.type === 'system' && messageInfo.subtype === 'init') {
-    handleSystemInit(
+    await handleSystemInit(
       message as ClaudeSystemInitMessage,
       tracer,
       agentManager,
@@ -294,7 +306,7 @@ function handleMessage(
   }
 }
 
-function handleSystemInit(
+async function handleSystemInit(
   msg: ClaudeSystemInitMessage,
   tracer: Tracer,
   agentManager: AgentInstanceManager,
@@ -302,8 +314,8 @@ function handleSystemInit(
   runtimeController: ClaudeRuntimeController,
   runToken: symbol,
   state: TracedQueryState
-): void {
-  runtimeController.startAgentInstance(runToken, agentManager, agentInfo);
+): Promise<void> {
+  await runtimeController.startAgentInstance(runToken, agentManager, agentInfo);
 
   state.agentSpan = tracer.startSpan({
     name: 'claude:session',

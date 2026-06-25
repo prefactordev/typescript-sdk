@@ -12,11 +12,28 @@ type AgentInstanceStartOptions = AgentInstanceOptions;
  */
 export class AgentInstanceManager {
   private registeredSchema: Record<string, unknown> | null = null;
+  private tokenValidationPromise: Promise<void> | null = null;
 
   constructor(
     private transport: Transport,
     private options: AgentInstanceManagerOptions
   ) {}
+
+  /**
+   * Validates the configured API token against the Prefactor ping endpoint.
+   *
+   * Runs once per manager instance; subsequent calls return the same promise.
+   *
+   * @throws {PrefactorFatalError} When the token is invalid, expired, or unauthorized.
+   */
+  async ensureTokenValid(): Promise<void> {
+    if (this.tokenValidationPromise) {
+      return this.tokenValidationPromise;
+    }
+
+    this.tokenValidationPromise = this.transport.validateToken();
+    return this.tokenValidationPromise;
+  }
 
   registerSchema(schema: Record<string, unknown>): void {
     if (this.registeredSchema === null) {

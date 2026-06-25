@@ -1,6 +1,6 @@
 {
   "name": "@prefactor/livekit",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "LiveKit Agents integration for Prefactor observability",
   "type": "module",
   "main": "dist/index.cjs",

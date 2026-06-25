@@ -8,6 +8,7 @@ export type PrefactorFatalErrorKind =
 export type PrefactorShutdownErrorKind = 'partial_telemetry' | 'dropped_on_shutdown';
 
 export type PrefactorTransportOperation =
+  | 'token_validate'
   | 'agent_register'
   | 'agent_start'
   | 'agent_finish'
