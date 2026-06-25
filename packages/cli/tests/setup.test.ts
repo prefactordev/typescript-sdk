@@ -309,4 +309,220 @@ describe('CLI setup command', () => {
       '/api/v1/api_token',
     ]);
   });
+
+  test('creates a deployment when none exist and prints setup values', async () => {
+    const cwd = join(tempRoot, 'cwd');
+    mkdirSync(cwd, { recursive: true });
+    process.chdir(cwd);
+    writeFileSync(
+      join(cwd, 'prefactor.json'),
+      JSON.stringify({
+        default: { api_key: 'profile-token', base_url: 'https://api.example.test' },
+      })
+    );
+
+    const calls: CapturedRequest[] = [];
+    globalThis.fetch = (async (input, init) => {
+      const url = new URL(String(input));
+      calls.push({ url: String(input), init });
+      const path = url.pathname;
+      const method = init?.method ?? 'GET';
+
+      if (path === '/api/v1/agent/agent_new' && method === 'GET') {
+        return jsonResponse({ details: { id: 'agent_new', name: 'New agent' } });
+      }
+
+      if (path === '/api/v1/agent_deployment' && method === 'GET') {
+        return jsonResponse({ summaries: [] });
+      }
+
+      if (path === '/api/v1/account' && method === 'GET') {
+        return jsonResponse({
+          summaries: [{ id: 'account_abc', name: 'My Account' }],
+        });
+      }
+
+      if (path === '/api/v1/environment' && method === 'GET') {
+        expect(url.searchParams.get('account_id')).toBe('account_abc');
+        return jsonResponse({
+          summaries: [{ id: 'env_abc', name: 'Production', account_id: 'account_abc' }],
+        });
+      }
+
+      if (path === '/api/v1/agent_deployment' && method === 'POST') {
+        expect(init?.body).toBe(
+          '{"details":{"agent_id":"agent_new","environment_id":"env_abc"}}'
+        );
+        return jsonResponse({
+          details: {
+            id: 'deployment_new',
+            agent_id: 'agent_new',
+            environment_id: 'env_abc',
+            account_id: 'account_abc',
+            current_version_id: null,
+          },
+        });
+      }
+
+      if (path === '/api/v1/api_token' && method === 'POST') {
+        return jsonResponse({
+          details: { id: 'api_token_new', token_scope: 'agent_deployment' },
+          token: 'runtime-token-new',
+        });
+      }
+
+      throw new Error(`Unexpected request: ${method} ${path}`);
+    }) as typeof fetch;
+
+    const log = mock(() => {});
+    const errorLog = mock(() => {});
+    const originalLog = console.log;
+    const originalError = console.error;
+    console.log = log;
+    console.error = errorLog;
+
+    try {
+      await createCli('1.0.0').parseAsync(['node', 'prefactor', 'setup', 'agent_new']);
+    } finally {
+      console.log = originalLog;
+      console.error = originalError;
+    }
+
+    expect(calls).toHaveLength(6);
+    expect(new URL(calls[0].url).pathname).toBe('/api/v1/agent/agent_new');
+    expect(new URL(calls[1].url).pathname).toBe('/api/v1/agent_deployment');
+    expect(calls[1].init?.method).toBe('GET');
+    expect(new URL(calls[2].url).pathname).toBe('/api/v1/account');
+    expect(new URL(calls[3].url).pathname).toBe('/api/v1/environment');
+    expect(new URL(calls[4].url).pathname).toBe('/api/v1/agent_deployment');
+    expect(calls[4].init?.method).toBe('POST');
+    expect(new URL(calls[5].url).pathname).toBe('/api/v1/api_token');
+    expect(calls[5].init?.body).toBe(
+      '{"details":{"token_scope":"agent_deployment","agent_id":"agent_new","environment_id":"env_abc"}}'
+    );
+
+    const output = log.mock.calls.flat().join('\n');
+    expect(output).toContain('PREFACTOR_API_URL=https://api.example.test');
+    expect(output).toContain('PREFACTOR_API_TOKEN=runtime-token-new');
+    expect(output).toContain('PREFACTOR_AGENT_ID=agent_new');
+    expect(output).toContain('PREFACTOR_AGENT_IDENTIFIER=1.0.0');
+
+    const stderr = errorLog.mock.calls.flat().join('\n');
+    expect(stderr).toContain('Created agent deployment');
+    expect(stderr).toContain('env_abc');
+    expect(stderr).toContain('account_abc');
+  });
+
+  test('throws when no accounts are accessible and does not create a deployment', async () => {
+    const cwd = join(tempRoot, 'cwd');
+    mkdirSync(cwd, { recursive: true });
+    process.chdir(cwd);
+    writeFileSync(
+      join(cwd, 'prefactor.json'),
+      JSON.stringify({
+        default: { api_key: 'profile-token', base_url: 'https://api.example.test' },
+      })
+    );
+
+    const paths: string[] = [];
+    globalThis.fetch = (async (input, init) => {
+      const url = new URL(String(input));
+      const path = url.pathname;
+      const method = init?.method ?? 'GET';
+      paths.push(`${method} ${path}`);
+
+      if (path === '/api/v1/agent/agent_no_accounts') {
+        return jsonResponse({ details: { id: 'agent_no_accounts', name: 'Agent' } });
+      }
+
+      if (path === '/api/v1/agent_deployment' && method === 'GET') {
+        return jsonResponse({ summaries: [] });
+      }
+
+      if (path === '/api/v1/account') {
+        return jsonResponse({ summaries: [] });
+      }
+
+      if (path === '/api/v1/environment') {
+        throw new Error('setup must not list environments when there are no accounts');
+      }
+
+      if (path === '/api/v1/api_token') {
+        throw new Error('setup must not create api token when there are no accounts');
+      }
+
+      throw new Error(`Unexpected request: ${method} ${path}`);
+    }) as typeof fetch;
+
+    await expect(
+      createCli('1.0.0').parseAsync(['node', 'prefactor', 'setup', 'agent_no_accounts'])
+    ).rejects.toThrow('No accounts accessible to this profile; cannot create a deployment.');
+
+    expect(paths).toEqual([
+      'GET /api/v1/agent/agent_no_accounts',
+      'GET /api/v1/agent_deployment',
+      'GET /api/v1/account',
+    ]);
+  });
+
+  test('throws when the account has no environments and does not create a deployment', async () => {
+    const cwd = join(tempRoot, 'cwd');
+    mkdirSync(cwd, { recursive: true });
+    process.chdir(cwd);
+    writeFileSync(
+      join(cwd, 'prefactor.json'),
+      JSON.stringify({
+        default: { api_key: 'profile-token', base_url: 'https://api.example.test' },
+      })
+    );
+
+    const paths: string[] = [];
+    globalThis.fetch = (async (input, init) => {
+      const url = new URL(String(input));
+      const path = url.pathname;
+      const method = init?.method ?? 'GET';
+      paths.push(`${method} ${path}`);
+
+      if (path === '/api/v1/agent/agent_no_envs') {
+        return jsonResponse({ details: { id: 'agent_no_envs', name: 'Agent' } });
+      }
+
+      if (path === '/api/v1/agent_deployment' && method === 'GET') {
+        return jsonResponse({ summaries: [] });
+      }
+
+      if (path === '/api/v1/account') {
+        return jsonResponse({
+          summaries: [{ id: 'account_empty', name: 'Empty Account' }],
+        });
+      }
+
+      if (path === '/api/v1/environment') {
+        return jsonResponse({ summaries: [] });
+      }
+
+      if (path === '/api/v1/agent_deployment' && method === 'POST') {
+        throw new Error('setup must not create deployment when there are no environments');
+      }
+
+      if (path === '/api/v1/api_token') {
+        throw new Error('setup must not create api token when there are no environments');
+      }
+
+      throw new Error(`Unexpected request: ${method} ${path}`);
+    }) as typeof fetch;
+
+    await expect(
+      createCli('1.0.0').parseAsync(['node', 'prefactor', 'setup', 'agent_no_envs'])
+    ).rejects.toThrow(
+      'No environments found for account account_empty; create one first.'
+    );
+
+    expect(paths).toEqual([
+      'GET /api/v1/agent/agent_no_envs',
+      'GET /api/v1/agent_deployment',
+      'GET /api/v1/account',
+      'GET /api/v1/environment',
+    ]);
+  });
 });
