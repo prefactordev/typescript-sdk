@@ -350,9 +350,7 @@ describe('CLI setup command', () => {
       }
 
       if (path === '/api/v1/agent_deployment' && method === 'POST') {
-        expect(init?.body).toBe(
-          '{"details":{"agent_id":"agent_new","environment_id":"env_abc"}}'
-        );
+        expect(init?.body).toBe('{"details":{"agent_id":"agent_new","environment_id":"env_abc"}}');
         return jsonResponse({
           details: {
             id: 'deployment_new',
@@ -514,9 +512,7 @@ describe('CLI setup command', () => {
 
     await expect(
       createCli('1.0.0').parseAsync(['node', 'prefactor', 'setup', 'agent_no_envs'])
-    ).rejects.toThrow(
-      'No environments found for account account_empty; create one first.'
-    );
+    ).rejects.toThrow('No environments found for account account_empty; create one first.');
 
     expect(paths).toEqual([
       'GET /api/v1/agent/agent_no_envs',
