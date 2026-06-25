@@ -289,6 +289,36 @@ describe('resource clients', () => {
     );
   });
 
+  test('api token create normalizes top-level token into details', async () => {
+    globalThis.fetch = (async () => {
+      return new Response(
+        JSON.stringify({
+          details: { id: 'tok_1', token_scope: 'account', status: 'active' },
+          token: 'secret-token',
+        }),
+        {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }
+      );
+    }) as typeof fetch;
+
+    const apiClient = new ApiClient('https://example.com', 'test-token');
+    const client = new ApiTokenClient(apiClient);
+
+    const result = await client.create({ token_scope: 'account', account_id: 'acct_1' });
+
+    expect(result).toEqual({
+      details: {
+        id: 'tok_1',
+        token_scope: 'account',
+        status: 'active',
+        token: 'secret-token',
+      },
+    });
+    expect(result.details.token).toBe('secret-token');
+  });
+
   test('pfid generate sends non-details payload', async () => {
     let captured: CapturedRequest | undefined;
     globalThis.fetch = (async (input, init) => {

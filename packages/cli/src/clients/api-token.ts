@@ -24,6 +24,14 @@ export interface ApiTokenResponse {
   details: ApiToken;
 }
 
+export interface ApiTokenWithValue extends ApiToken {
+  token: string;
+}
+
+export interface ApiTokenCreateResponse {
+  details: ApiTokenWithValue;
+}
+
 export interface ApiTokenListResponse {
   details: ApiToken[];
 }
@@ -42,11 +50,18 @@ export class ApiTokenClient {
     return this.client.request(`/api_token/${id}`, { method: 'GET' });
   }
 
-  create(details: ApiTokenCreateDetails): Promise<ApiTokenResponse> {
-    return this.client.request('/api_token', {
+  async create(details: ApiTokenCreateDetails): Promise<ApiTokenCreateResponse> {
+    const response = await this.client.request<{ details: ApiToken; token: string }>('/api_token', {
       method: 'POST',
       body: { details },
     });
+
+    return {
+      details: {
+        ...response.details,
+        token: response.token,
+      },
+    };
   }
 
   suspend(id: string): Promise<ApiTokenResponse> {
