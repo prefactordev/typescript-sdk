@@ -54,24 +54,10 @@ description = "Clean build artifacts"
 run = "bun install"
 description = "Install dependencies"
 
-[tasks.publish]
-description = "Publish all packages (in dependency order)"
-run = """cd packages/core && bun publish --access public &&
-cd ../cli && bun publish --access public &&
-cd ../langchain && bun publish --access public &&
-cd ../ai && bun publish --access public &&
-cd ../claude && bun publish --access public &&
-cd ../livekit && bun publish --access public &&
-cd ../openclaw-prefactor-plugin && bun publish --access public
-"""
+[tasks.release-version]
+run = "bun run release:version"
+description = "Apply pending changesets and sync release metadata"
 
-[tasks.publish-dry]
-description = "Dry run publish"
-run = """cd packages/core && bun publish --access public --dry-run &&
-cd ../cli && bun publish --access public --dry-run &&
-cd ../langchain && bun publish --access public --dry-run &&
-cd ../ai && bun publish --access public --dry-run &&
-cd ../claude && bun publish --access public --dry-run &&
-cd ../livekit && bun publish --access public --dry-run &&
-cd ../openclaw-prefactor-plugin && bun publish --access public --dry-run
-"""
+[tasks.release-npm]
+run = "bun run release:npm"
+description = "Build and publish npm packages via changesets"

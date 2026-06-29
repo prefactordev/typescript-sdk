@@ -11,7 +11,33 @@ on:
         type: string
 
 jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch'
+    outputs:
+      release_exists: ${{ steps.check.outputs.release_exists }}
+    steps:
+      - name: Check for existing GitHub release
+        id: check
+        run: |
+          version="${{ inputs.version }}"
+          case "$version" in
+            v*) tag="$version" ;;
+            *) tag="v$version" ;;
+          esac
+
+          if gh release view "$tag" >/dev/null 2>&1; then
+            echo "release_exists=true" >> "$GITHUB_OUTPUT"
+            echo "GitHub release $tag already exists; skipping binary release."
+          else
+            echo "release_exists=false" >> "$GITHUB_OUTPUT"
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
   build:
+    needs: preflight
+    if: always() && !cancelled() && !failure() && (github.event_name == 'push' || (needs.preflight.result == 'success' && needs.preflight.outputs.release_exists == 'false'))
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -79,7 +105,8 @@ jobs:
           path: dist/cli/${{ matrix.asset }}
 
   smoke-test:
-    needs: build
+    needs: [preflight, build]
+    if: always() && !cancelled() && !failure() && (github.event_name == 'push' || (needs.preflight.result == 'success' && needs.preflight.outputs.release_exists == 'false'))
     strategy:
       matrix:
         include:
@@ -259,13 +286,13 @@ jobs:
 
   release:
     runs-on: ubuntu-latest
-    needs: [build, smoke-test]
+    needs: [preflight, build, smoke-test]
+    if: always() && !cancelled() && !failure() && github.event_name == 'workflow_dispatch' && needs.preflight.result == 'success' && needs.preflight.outputs.release_exists == 'false'
+    permissions:
+      contents: write
     concurrency:
       group: ${{ format('{0}-stable-release', github.repository) }}
       cancel-in-progress: false
-    if: github.event_name == 'workflow_dispatch'
-    permissions:
-      contents: write
     steps:
       - uses: actions/checkout@v4
       - name: Prepare stable release
@@ -289,17 +316,12 @@ jobs:
           fi
 
           if git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null 2>&1; then
-            echo "Tag $tag already exists." >&2
-            exit 1
+            echo "Tag $tag already exists; reusing existing tag for release assets." >&2
+          else
+            git tag "$tag" "$GITHUB_SHA"
+            git push origin "refs/tags/$tag"
           fi
 
-          if gh release view "$tag" >/dev/null 2>&1; then
-            echo "Release $tag already exists." >&2
-            exit 1
-          fi
-
-          git tag "$tag" "$GITHUB_SHA"
-          git push origin "refs/tags/$tag"
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
