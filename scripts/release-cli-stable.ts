@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 
-import { spawnSync } from 'node:child_process';
 import packageJson from '../packages/cli/package.json';
+import { dispatchCliBinaryRelease } from './dispatch-cli-binary-release.ts';
 
 function usage(exitCode: 0 | 1): never {
   const stream = exitCode === 0 ? console.log : console.error;
@@ -42,20 +42,7 @@ if (version !== packageJson.version) {
   );
 }
 
-const result = spawnSync(
-  'gh',
-  ['workflow', 'run', 'release-cli.yml', '--ref', 'main', '--field', `version=${version}`],
-  {
-    stdio: 'inherit',
-  }
-);
-
-if (result.error) {
-  throw result.error;
-}
-if (result.status !== 0) {
-  process.exit(result.status ?? 1);
-}
+dispatchCliBinaryRelease(version);
 
 console.log(`Dispatched stable CLI release workflow for v${version}.`);
 console.log('Track it with: gh run list --workflow release-cli.yml --limit 1');
