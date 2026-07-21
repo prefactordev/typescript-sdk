@@ -957,9 +957,7 @@ export class HttpTransport implements Transport {
     if (action.options?.agentDescription !== undefined) {
       this.config.agentDescription = action.options.agentDescription;
     }
-    if (action.options?.purpose !== undefined) {
-      this.agentPurpose = action.options.purpose;
-    }
+    this.agentPurpose = action.options?.purpose;
 
     await this.ensureAgentRegistered();
     if (!this.agentInstanceId) {

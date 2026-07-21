@@ -559,6 +559,43 @@ describe('HttpTransport', () => {
     expect(registerPayload.purpose).toBeUndefined();
   });
 
+  test('resets purpose to API default when second instance omits purpose', async () => {
+    const fetchCalls: Array<{ url: string; options?: RequestInit }> = [];
+    globalThis.fetch = (async (url, options) => {
+      fetchCalls.push({ url: String(url), options });
+      if (String(url).endsWith('/agent_instance/register')) {
+        return new Response(JSON.stringify({ details: { id: 'agent-instance-1' } }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+
+      return new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }) as unknown as typeof fetch;
+
+    const transport = new HttpTransport(createConfig());
+    // First instance with explicit purpose
+    transport.startAgentInstance({ purpose: 'eval' });
+    transport.finishAgentInstance();
+    // Second instance without purpose — should reset to undefined (API default)
+    transport.startAgentInstance();
+    await transport.close();
+
+    // The second register call should not have purpose set
+    const secondRegisterCall = fetchCalls.find(
+      (call, index) => call.url.endsWith('/agent_instance/register') && index > 0
+    );
+    expect(secondRegisterCall).toBeDefined();
+    const registerPayload = JSON.parse(String(secondRegisterCall?.options?.body)) as Record<
+      string,
+      unknown
+    >;
+    expect(registerPayload.purpose).toBeUndefined();
+  });
+
   test('sends update agent instance call with quality payload', async () => {
     const fetchCalls: Array<{ url: string; options?: RequestInit }> = [];
     globalThis.fetch = (async (url, options) => {
