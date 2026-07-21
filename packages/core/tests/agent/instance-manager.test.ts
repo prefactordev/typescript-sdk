@@ -13,6 +13,7 @@ class MockTransport implements Transport {
   startedInstances: AgentInstanceOptions[] = [];
   finishedInstances = 0;
   registeredSchemas: Record<string, unknown>[] = [];
+  updatedInstances: Array<{ qualityPayload?: Record<string, unknown> | null }> = [];
 
   emit(span: Span): void {
     this.emitted.push(span);
@@ -28,6 +29,10 @@ class MockTransport implements Transport {
 
   finishAgentInstance(): void {
     this.finishedInstances += 1;
+  }
+
+  updateAgentInstance(payload: { qualityPayload?: Record<string, unknown> | null }): void {
+    this.updatedInstances.push(payload);
   }
 
   registerSchema(schema: Record<string, unknown>): void {
@@ -151,5 +156,35 @@ describe('AgentInstanceManager', () => {
     const manager = new AgentInstanceManager(transport, {});
 
     await expect(manager.ensureTokenValid()).rejects.toThrow('bad token');
+  });
+
+  test('updateInstance forwards quality payload to transport', () => {
+    const transport = new MockTransport();
+    const manager = new AgentInstanceManager(transport, {});
+
+    manager.updateInstance({ qualityPayload: { score: 95 } });
+
+    expect(transport.updatedInstances).toHaveLength(1);
+    expect(transport.updatedInstances[0]).toEqual({ qualityPayload: { score: 95 } });
+  });
+
+  test('updateInstance forwards null quality payload to transport', () => {
+    const transport = new MockTransport();
+    const manager = new AgentInstanceManager(transport, {});
+
+    manager.updateInstance({ qualityPayload: null });
+
+    expect(transport.updatedInstances).toHaveLength(1);
+    expect(transport.updatedInstances[0]).toEqual({ qualityPayload: null });
+  });
+
+  test('updateInstance with no options sends undefined quality payload', () => {
+    const transport = new MockTransport();
+    const manager = new AgentInstanceManager(transport, {});
+
+    manager.updateInstance();
+
+    expect(transport.updatedInstances).toHaveLength(1);
+    expect(transport.updatedInstances[0]).toEqual({ qualityPayload: undefined });
   });
 });

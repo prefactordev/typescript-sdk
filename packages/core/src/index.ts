@@ -112,7 +112,7 @@ export {
   SpanType,
   type TokenUsage,
 } from './tracing/span.js';
-export type { AgentSchemaVersion, SpanTypeSchema } from './tracing/span-schema.js';
+export type { AgentSchemaVersion, QualitySchema, SpanTypeSchema } from './tracing/span-schema.js';
 export { type EndSpanOptions, type StartSpanOptions, Tracer } from './tracing/tracer.js';
 export { withSpan } from './tracing/with-span.js';
 export {
@@ -121,6 +121,7 @@ export {
   type AgentInstanceRegisterPayload,
   type AgentInstanceResponse,
   type AgentInstanceStartOptions,
+  type AgentInstanceUpdatePayload,
 } from './transport/http/agent-instance-client.js';
 export {
   AgentSpanClient,

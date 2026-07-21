@@ -8,6 +8,7 @@ import { PrefactorFatalError, PrefactorShutdownError } from '../errors.js';
 import type {
   AgentFinishAction,
   AgentStartAction,
+  AgentUpdateAction,
   SpanEndAction,
   SpanFinishAction,
   TransportAction,
@@ -37,6 +38,8 @@ export type AgentInstanceOptions = {
   agentName?: string;
   /** Human-readable agent description. */
   agentDescription?: string;
+  /** Why this instance ran: 'live' for an actual agent run, 'smoke_test' for a pipeline check, or 'eval' for an evaluation run. Omit to let the API default to 'live'. */
+  purpose?: 'live' | 'smoke_test' | 'eval';
 };
 
 export type TransientFailureKind =
@@ -50,7 +53,12 @@ type HttpTransportOptions = {
   sdkHeaderEntry?: string;
 };
 
-type RetryableAction = AgentStartAction | AgentFinishAction | SpanEndAction | SpanFinishAction;
+type RetryableAction =
+  | AgentStartAction
+  | AgentFinishAction
+  | AgentUpdateAction
+  | SpanEndAction
+  | SpanFinishAction;
 type RetryTimerMetadata = {
   operation: PrefactorTransportOperation;
 };
@@ -82,6 +90,12 @@ export interface Transport {
   startAgentInstance(options?: AgentInstanceOptions): void;
 
   finishAgentInstance(): void;
+
+  /**
+   * Updates the agent instance with the given payload.
+   * Currently supports updating the quality_payload field.
+   */
+  updateAgentInstance(payload: { qualityPayload?: Record<string, unknown> | null }): void;
 
   registerSchema(schema: Record<string, unknown>): void;
 
@@ -130,6 +144,7 @@ export class HttpTransport implements Transport {
   private schemaRevision = 0;
   private agentInstanceId: string | null = null;
   private currentAgentRegisterIdempotencyKey: string | null = null;
+  private agentPurpose: 'live' | 'smoke_test' | 'eval' | undefined;
   private spanIdMap = new Map<string, string>();
   private pendingFinishes = new Map<string, SpanFinishAction>();
   private pendingChildren = new Map<string, SpanEndAction[]>();
@@ -212,6 +227,20 @@ export class HttpTransport implements Transport {
     this.assertUsable('agent_finish');
     this.enqueue({
       type: 'agent_finish',
+      idempotencyKey: createActionIdempotencyKey(),
+      retryAttempt: 0,
+    });
+  }
+
+  updateAgentInstance(payload: { qualityPayload?: Record<string, unknown> | null }): void {
+    if (this.fatalError || this.closed) {
+      return;
+    }
+
+    this.assertUsable('agent_update');
+    this.enqueue({
+      type: 'agent_update',
+      qualityPayload: payload.qualityPayload,
       idempotencyKey: createActionIdempotencyKey(),
       retryAttempt: 0,
     });
@@ -390,6 +419,9 @@ export class HttpTransport implements Transport {
       case 'agent_finish':
         await this.processAgentFinish(action);
         return;
+      case 'agent_update':
+        await this.processAgentUpdate(action);
+        return;
       case 'span_end':
         await this.processSpanCreate(action);
         return;
@@ -422,6 +454,15 @@ export class HttpTransport implements Transport {
       this.recordActionSuccess(action);
     } catch (error) {
       this.handleActionError('agent_finish', action, error);
+    }
+  }
+
+  private async processAgentUpdate(action: AgentUpdateAction): Promise<void> {
+    try {
+      await this.updateAgentInstanceHttp(action);
+      this.recordActionSuccess(action);
+    } catch (error) {
+      this.handleActionError('agent_update', action, error);
     }
   }
 
@@ -857,6 +898,10 @@ export class HttpTransport implements Transport {
       };
     }
 
+    if (this.agentPurpose) {
+      payload.purpose = this.agentPurpose;
+    }
+
     if (this.config.agentSchema) {
       payload.agent_schema_version = this.config.agentSchema;
     }
@@ -912,6 +957,9 @@ export class HttpTransport implements Transport {
     if (action.options?.agentDescription !== undefined) {
       this.config.agentDescription = action.options.agentDescription;
     }
+    if (action.options?.purpose !== undefined) {
+      this.agentPurpose = action.options.purpose;
+    }
 
     await this.ensureAgentRegistered();
     if (!this.agentInstanceId) {
@@ -948,6 +996,20 @@ export class HttpTransport implements Transport {
 
     this.agentInstanceId = null;
     this.currentAgentRegisterIdempotencyKey = null;
+  }
+
+  private async updateAgentInstanceHttp(action: AgentUpdateAction): Promise<void> {
+    if (!this.agentInstanceId) {
+      this.recordPartialTelemetry('Cannot update agent instance: not registered');
+      return;
+    }
+
+    await this.agentInstanceClient.update(this.agentInstanceId, {
+      details: {
+        quality_payload: action.qualityPayload,
+      },
+      idempotency_key: action.idempotencyKey,
+    });
   }
 
   private async sendSpan(action: SpanEndAction): Promise<void> {
@@ -1057,6 +1119,8 @@ function operationForAction(action: TransportAction): PrefactorTransportOperatio
       return 'agent_start';
     case 'agent_finish':
       return 'agent_finish';
+    case 'agent_update':
+      return 'agent_update';
     case 'span_end':
       return 'span_create';
     case 'span_finish':
@@ -1078,7 +1142,8 @@ function isAgentNotFoundFailure(
   if (
     operation !== 'agent_register' &&
     operation !== 'agent_start' &&
-    operation !== 'agent_finish'
+    operation !== 'agent_finish' &&
+    operation !== 'agent_update'
   ) {
     return false;
   }
