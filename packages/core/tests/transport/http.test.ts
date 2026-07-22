@@ -502,4 +502,157 @@ describe('HttpTransport', () => {
     const finishPayload = JSON.parse(String(finishCall?.options?.body)) as Record<string, unknown>;
     expect(finishPayload.sensitive_encoding).toBe(true);
   });
+
+  test('forwards purpose to register payload when provided', async () => {
+    const fetchCalls: Array<{ url: string; options?: RequestInit }> = [];
+    globalThis.fetch = (async (url, options) => {
+      fetchCalls.push({ url: String(url), options });
+      if (String(url).endsWith('/agent_instance/register')) {
+        return new Response(JSON.stringify({ details: { id: 'agent-instance-1' } }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+
+      return new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }) as unknown as typeof fetch;
+
+    const transport = new HttpTransport(createConfig());
+    transport.startAgentInstance({ purpose: 'eval' });
+    await transport.close();
+
+    const registerPayload = JSON.parse(fetchCalls[0]?.options?.body as string) as Record<
+      string,
+      unknown
+    >;
+    expect(registerPayload.purpose).toBe('eval');
+  });
+
+  test('omits purpose from register payload when not provided', async () => {
+    const fetchCalls: Array<{ url: string; options?: RequestInit }> = [];
+    globalThis.fetch = (async (url, options) => {
+      fetchCalls.push({ url: String(url), options });
+      if (String(url).endsWith('/agent_instance/register')) {
+        return new Response(JSON.stringify({ details: { id: 'agent-instance-1' } }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+
+      return new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }) as unknown as typeof fetch;
+
+    const transport = new HttpTransport(createConfig());
+    transport.startAgentInstance();
+    await transport.close();
+
+    const registerPayload = JSON.parse(fetchCalls[0]?.options?.body as string) as Record<
+      string,
+      unknown
+    >;
+    expect(registerPayload.purpose).toBeUndefined();
+  });
+
+  test('resets purpose to API default when second instance omits purpose', async () => {
+    const fetchCalls: Array<{ url: string; options?: RequestInit }> = [];
+    globalThis.fetch = (async (url, options) => {
+      fetchCalls.push({ url: String(url), options });
+      if (String(url).endsWith('/agent_instance/register')) {
+        return new Response(JSON.stringify({ details: { id: 'agent-instance-1' } }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+
+      return new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }) as unknown as typeof fetch;
+
+    const transport = new HttpTransport(createConfig());
+    // First instance with explicit purpose
+    transport.startAgentInstance({ purpose: 'eval' });
+    transport.finishAgentInstance();
+    // Second instance without purpose — should reset to undefined (API default)
+    transport.startAgentInstance();
+    await transport.close();
+
+    // The second register call should not have purpose set
+    const secondRegisterCall = fetchCalls.find(
+      (call, index) => call.url.endsWith('/agent_instance/register') && index > 0
+    );
+    expect(secondRegisterCall).toBeDefined();
+    const registerPayload = JSON.parse(String(secondRegisterCall?.options?.body)) as Record<
+      string,
+      unknown
+    >;
+    expect(registerPayload.purpose).toBeUndefined();
+  });
+
+  test('sends update agent instance call with quality payload', async () => {
+    const fetchCalls: Array<{ url: string; options?: RequestInit }> = [];
+    globalThis.fetch = (async (url, options) => {
+      fetchCalls.push({ url: String(url), options });
+      if (String(url).endsWith('/agent_instance/register')) {
+        return new Response(JSON.stringify({ details: { id: 'agent-instance-1' } }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+
+      return new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }) as unknown as typeof fetch;
+
+    const transport = new HttpTransport(createConfig());
+    transport.startAgentInstance();
+    transport.updateAgentInstance({ qualityPayload: { score: 95, passed: true } });
+    await transport.close();
+
+    const updateCall = fetchCalls.find((call) =>
+      call.url.endsWith('/api/v1/agent_instance/agent-instance-1')
+    );
+    expect(updateCall).toBeDefined();
+    const updatePayload = JSON.parse(String(updateCall?.options?.body)) as Record<string, unknown>;
+    expect(updatePayload.details).toEqual({ quality_payload: { score: 95, passed: true } });
+  });
+
+  test('sends update agent instance call with null quality payload', async () => {
+    const fetchCalls: Array<{ url: string; options?: RequestInit }> = [];
+    globalThis.fetch = (async (url, options) => {
+      fetchCalls.push({ url: String(url), options });
+      if (String(url).endsWith('/agent_instance/register')) {
+        return new Response(JSON.stringify({ details: { id: 'agent-instance-1' } }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+
+      return new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }) as unknown as typeof fetch;
+
+    const transport = new HttpTransport(createConfig());
+    transport.startAgentInstance();
+    transport.updateAgentInstance({ qualityPayload: null });
+    await transport.close();
+
+    const updateCall = fetchCalls.find((call) =>
+      call.url.endsWith('/api/v1/agent_instance/agent-instance-1')
+    );
+    expect(updateCall).toBeDefined();
+    const updatePayload = JSON.parse(String(updateCall?.options?.body)) as Record<string, unknown>;
+    expect(updatePayload.details).toEqual({ quality_payload: null });
+  });
 });

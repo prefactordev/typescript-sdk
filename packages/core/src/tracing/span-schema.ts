@@ -22,6 +22,23 @@ export interface SpanTypeSchema {
 }
 
 /**
+ * Schema definition for a quality evaluation, mirroring the shape of span type schemas.
+ * Rendered through the same template machinery as span schemas.
+ */
+export interface QualitySchema {
+  /** JSON Schema describing the quality payload shape. */
+  schema: JsonSchema;
+  /** Human-readable title. Defaults to 'quality' when omitted. */
+  title?: string;
+  /** Optional human-readable description. */
+  description?: string;
+  /** Liquid template for rendering the quality payload as a human-readable summary. */
+  template?: string;
+  /** Risk metadata describing data sensitivity for quality payloads. */
+  data_risk?: DataRisk;
+}
+
+/**
  * Agent schema version payload sent during agent instance registration.
  * Contains the set of span type schemas that define this agent's tracing contract.
  */
@@ -30,4 +47,6 @@ export interface AgentSchemaVersion {
   external_identifier: string;
   /** Array of span type schema definitions. */
   span_type_schemas: SpanTypeSchema[];
+  /** Optional quality schema for instance evaluations. */
+  quality_schema?: QualitySchema;
 }

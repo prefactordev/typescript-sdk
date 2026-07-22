@@ -7,6 +7,11 @@ export type AgentInstanceManagerOptions = {
 
 type AgentInstanceStartOptions = AgentInstanceOptions;
 
+type AgentInstanceUpdateOptions = {
+  /** Quality evaluation payload for this instance (omit to keep current; null to clear). */
+  qualityPayload?: Record<string, unknown> | null;
+};
+
 /**
  * Coordinates agent instance lifecycle and schema registration for a transport.
  */
@@ -62,6 +67,16 @@ export class AgentInstanceManager {
 
   finishInstance(): void {
     this.transport.finishAgentInstance();
+  }
+
+  /**
+   * Updates the current agent instance with the given payload.
+   * Currently supports updating the quality_payload field.
+   */
+  updateInstance(options: AgentInstanceUpdateOptions = {}): void {
+    this.transport.updateAgentInstance({
+      qualityPayload: options.qualityPayload,
+    });
   }
 
   getAgentInstanceId(): string | null {

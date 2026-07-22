@@ -59,6 +59,84 @@ describe('HTTP endpoint clients', () => {
     );
   });
 
+  test('agent instance client includes purpose in register payload when provided', async () => {
+    const calls: RequestCall[] = [];
+    const httpClient = {
+      request: async <TResponse>(path: string, options: HttpRequestOptions = {}) => {
+        calls.push({ path, options });
+        return { details: { id: 'agent-instance-1' } } as TResponse;
+      },
+    };
+
+    const client = new AgentInstanceClient(httpClient);
+
+    await client.register({ purpose: 'eval' });
+
+    expect(calls[0].path).toBe('/api/v1/agent_instance/register');
+    expect((calls[0].options.body as Record<string, unknown>).purpose).toBe('eval');
+  });
+
+  test('agent instance client omits purpose from register payload when not provided', async () => {
+    const calls: RequestCall[] = [];
+    const httpClient = {
+      request: async <TResponse>(path: string, options: HttpRequestOptions = {}) => {
+        calls.push({ path, options });
+        return { details: { id: 'agent-instance-1' } } as TResponse;
+      },
+    };
+
+    const client = new AgentInstanceClient(httpClient);
+
+    await client.register({});
+
+    expect((calls[0].options.body as Record<string, unknown>).purpose).toBeUndefined();
+  });
+
+  test('agent instance client posts update to expected endpoint', async () => {
+    const calls: RequestCall[] = [];
+    const httpClient = {
+      request: async <TResponse>(path: string, options: HttpRequestOptions = {}) => {
+        calls.push({ path, options });
+        return { details: { id: 'agent-instance-1' } } as TResponse;
+      },
+    };
+
+    const client = new AgentInstanceClient(httpClient);
+
+    await client.update('agent-instance-1', {
+      details: { quality_payload: { score: 95 } },
+    });
+
+    expect(calls[0].path).toBe('/api/v1/agent_instance/agent-instance-1');
+    expect(calls[0].options.method).toBe('PUT');
+    expect(calls[0].options.body).toMatchObject({
+      details: { quality_payload: { score: 95 } },
+    });
+    expect((calls[0].options.body as Record<string, unknown>).idempotency_key).toMatch(
+      UUID_V4_REGEX
+    );
+  });
+
+  test('agent instance client update sends null quality_payload', async () => {
+    const calls: RequestCall[] = [];
+    const httpClient = {
+      request: async <TResponse>(path: string, options: HttpRequestOptions = {}) => {
+        calls.push({ path, options });
+        return { details: { id: 'agent-instance-1' } } as TResponse;
+      },
+    };
+
+    const client = new AgentInstanceClient(httpClient);
+
+    await client.update('agent-instance-1', {
+      details: { quality_payload: null },
+    });
+
+    expect(calls[0].options.body).toMatchObject({
+      details: { quality_payload: null },
+    });
+  });
+
   test('agent span client posts create and finish to expected endpoints', async () => {
     const calls: RequestCall[] = [];
     const httpClient = {
