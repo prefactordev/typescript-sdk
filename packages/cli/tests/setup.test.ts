@@ -435,9 +435,7 @@ describe('CLI setup command', () => {
 
     await expect(
       createCli('1.0.0').parseAsync(['node', 'prefactor', 'setup', 'agent_no_accounts'])
-    ).rejects.toThrow(
-      'No accounts accessible to this profile; cannot create a deployment token.'
-    );
+    ).rejects.toThrow('No accounts accessible to this profile; cannot create a deployment token.');
 
     expect(paths).toEqual([
       'GET /api/v1/agent/agent_no_accounts',
