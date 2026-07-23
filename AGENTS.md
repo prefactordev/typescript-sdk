@@ -36,7 +36,8 @@ Follow this process for all non-trivial changes:
 5. Make the smallest change necessary to satisfy the current requirement.
 6. Run targeted validation first.
 7. Run broader validation if the change affects shared behavior, public exports, build output, configuration, or cross-package integration.
-8. Do not treat the task as complete while relevant checks are failing.
+8. Add or update a changeset for every release-worthy package change (see Changesets).
+9. Do not treat the task as complete while relevant checks are failing.
 
 ## Architecture and package roles
 
@@ -216,6 +217,7 @@ Do not consider work complete until all applicable items below are true:
 - Relevant typecheck passes.
 - Relevant test targets pass.
 - Public API docs or README updates were made if public usage changed.
+- A changeset exists for each release-worthy package change, and `bunx @changesets/cli status --since=origin/main` succeeds.
 
 ## Desloppify after major changes
 After completing a significant change, run the `desloppify` skill to check for technical debt introduced by your changes specifically. Report back only issues that were brought in by this change, not pre-existing issues in the codebase. Ground all observations to the diff of what was modified in this branch - both committed and uncommitted.
@@ -228,8 +230,35 @@ If the user doesn't have the desloppify cli installed, refer to the `INSTALL.md`
 - Do not add speculative abstractions, future-only hooks, or placeholder implementations unless explicitly requested.
 - Do not write tests for behavior guaranteed by the type system (e.g., type narrowing, null checks, basic input validation). Focus tests on lifecycle behavior, correctness of side effects, and data validity.
 
+## Changesets
+This monorepo uses [changesets](https://github.com/changesets/changesets) for versioning and npm releases. CI fails PRs that change publishable packages without a changeset (`bun run changeset status --since=origin/main`).
+
+After changing any package under `packages/*` that should ship in a release:
+1. Add a changeset before considering the work done (and include it in the same PR / commit set when committing).
+2. Prefer writing a markdown file under `.changeset/` with a descriptive kebab-case name. Example:
+
+```md
+---
+"@prefactor/cli": patch
+---
+
+Short summary of the user-facing change. Explain why it matters, not just which files changed.
+```
+
+3. List every affected publishable package in the frontmatter. Use:
+   - `patch` for bug fixes, internal corrections, and non-breaking behavior tweaks
+   - `minor` for new backward-compatible features or APIs
+   - `major` for breaking changes
+4. If multiple packages changed in one task, include all of them in one changeset (or one changeset per coherent release unit).
+5. Verify with `bunx @changesets/cli status --since=origin/main` (or `bun run changeset status --since=origin/main` after install). It must report the expected bumps and must not error about missing changesets.
+6. Use an empty changeset (`bunx @changesets/cli add --empty`) only when package files changed but the change must not trigger a release. Say so explicitly in the PR summary.
+7. Do not run `changeset version` or `changeset publish` unless explicitly asked; release automation owns those steps.
+8. Intentional `@prefactor/cli` changesets also gate CLI binary releases. Dependency-only CLI bumps are not enough for a binary release.
+
+Docs-only, test-only, CI-only, or root tooling changes that do not alter publishable package contents usually do not need a changeset. When unsure, add a patch changeset for the touched package(s).
+
 ## Versioning
-When bumping versions, always check the lockfile and verify dependency changes are intentional. Run a full build after version bumps to ensure the change is correct.
+Package versions are bumped via changesets, not by hand-editing `package.json` in feature PRs. When versions are bumped (for example during a release PR), always check the lockfile and verify dependency changes are intentional. Run a full build after version bumps to ensure the change is correct.
 
 ## Creating new packages
 When creating a new provider package (e.g., for a new AI framework):
