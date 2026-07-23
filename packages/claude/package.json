@@ -28,6 +28,11 @@
   ],
   "author": "Prefactor",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/prefactordev/typescript-sdk.git",
+    "directory": "packages/claude"
+  },
   "dependencies": {
     "@prefactor/pfid": "^0.1.0"
   },

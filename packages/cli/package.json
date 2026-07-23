@@ -26,6 +26,11 @@
   ],
   "author": "Prefactor",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/prefactordev/typescript-sdk.git",
+    "directory": "packages/cli"
+  },
   "dependencies": {
     "@prefactor/core": "workspace:*",
     "@prefactor/pfid": "^0.1.0",
