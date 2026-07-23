@@ -21,7 +21,8 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/prefactordev/typescript-sdk"
+    "url": "git+https://github.com/prefactordev/typescript-sdk.git",
+    "directory": "packages/openclaw-prefactor-plugin"
   },
   "keywords": [
     "openclaw",
