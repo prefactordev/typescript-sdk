@@ -1,5 +1,11 @@
 # @prefactor/core
 
+## 0.5.1
+
+### Patch Changes
+
+- [#54](https://github.com/prefactordev/typescript-sdk/pull/54) [`f74b890`](https://github.com/prefactordev/typescript-sdk/commit/f74b890de563becb24f3f3e4c74acf43a1b045d8) Thanks [@Siutan](https://github.com/Siutan)! - Add package `repository` metadata so npm provenance validation succeeds on publish.
+
 ## 0.5.0
 
 ### Minor Changes
