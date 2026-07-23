@@ -1,7 +1,7 @@
 {
   "id": "openclaw-prefactor-plugin",
   "name": "@prefactor/openclaw-prefactor-plugin",
-  "version": "0.0.23",
+  "version": "1.0.0",
   "description": "Comprehensive lifecycle event monitoring and instrumentation for OpenClaw",
   "runtime": "node",
   "entry": "./dist/index.js",
@@ -31,7 +31,12 @@
       },
       "logLevel": {
         "type": "string",
-        "enum": ["debug", "info", "warn", "error"],
+        "enum": [
+          "debug",
+          "info",
+          "warn",
+          "error"
+        ],
         "default": "info"
       },
       "userInteractionTimeoutMinutes": {
