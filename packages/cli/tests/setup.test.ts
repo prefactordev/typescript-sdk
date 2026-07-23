@@ -310,7 +310,7 @@ describe('CLI setup command', () => {
     ]);
   });
 
-  test('creates a deployment when none exist and prints setup values', async () => {
+  test('resolves an environment and creates a deployment token when no deployments exist', async () => {
     const cwd = join(tempRoot, 'cwd');
     mkdirSync(cwd, { recursive: true });
     process.chdir(cwd);
@@ -350,16 +350,7 @@ describe('CLI setup command', () => {
       }
 
       if (path === '/api/v1/agent_deployment' && method === 'POST') {
-        expect(init?.body).toBe('{"details":{"agent_id":"agent_new","environment_id":"env_abc"}}');
-        return jsonResponse({
-          details: {
-            id: 'deployment_new',
-            agent_id: 'agent_new',
-            environment_id: 'env_abc',
-            account_id: 'account_abc',
-            current_version_id: null,
-          },
-        });
+        throw new Error('setup must not create an agent deployment manually');
       }
 
       if (path === '/api/v1/api_token' && method === 'POST') {
@@ -373,29 +364,24 @@ describe('CLI setup command', () => {
     }) as typeof fetch;
 
     const log = mock(() => {});
-    const errorLog = mock(() => {});
     const originalLog = console.log;
-    const originalError = console.error;
     console.log = log;
-    console.error = errorLog;
 
     try {
       await createCli('1.0.0').parseAsync(['node', 'prefactor', 'setup', 'agent_new']);
     } finally {
       console.log = originalLog;
-      console.error = originalError;
     }
 
-    expect(calls).toHaveLength(6);
+    expect(calls).toHaveLength(5);
     expect(new URL(calls[0].url).pathname).toBe('/api/v1/agent/agent_new');
     expect(new URL(calls[1].url).pathname).toBe('/api/v1/agent_deployment');
     expect(calls[1].init?.method).toBe('GET');
     expect(new URL(calls[2].url).pathname).toBe('/api/v1/account');
     expect(new URL(calls[3].url).pathname).toBe('/api/v1/environment');
-    expect(new URL(calls[4].url).pathname).toBe('/api/v1/agent_deployment');
+    expect(new URL(calls[4].url).pathname).toBe('/api/v1/api_token');
     expect(calls[4].init?.method).toBe('POST');
-    expect(new URL(calls[5].url).pathname).toBe('/api/v1/api_token');
-    expect(calls[5].init?.body).toBe(
+    expect(calls[4].init?.body).toBe(
       '{"details":{"token_scope":"agent_deployment","agent_id":"agent_new","environment_id":"env_abc"}}'
     );
 
@@ -404,14 +390,9 @@ describe('CLI setup command', () => {
     expect(output).toContain('PREFACTOR_API_TOKEN=runtime-token-new');
     expect(output).toContain('PREFACTOR_AGENT_ID=agent_new');
     expect(output).toContain('PREFACTOR_AGENT_IDENTIFIER=1.0.0');
-
-    const stderr = errorLog.mock.calls.flat().join('\n');
-    expect(stderr).toContain('Created agent deployment');
-    expect(stderr).toContain('env_abc');
-    expect(stderr).toContain('account_abc');
   });
 
-  test('throws when no accounts are accessible and does not create a deployment', async () => {
+  test('throws when no accounts are accessible and does not create a deployment token', async () => {
     const cwd = join(tempRoot, 'cwd');
     mkdirSync(cwd, { recursive: true });
     process.chdir(cwd);
@@ -454,7 +435,9 @@ describe('CLI setup command', () => {
 
     await expect(
       createCli('1.0.0').parseAsync(['node', 'prefactor', 'setup', 'agent_no_accounts'])
-    ).rejects.toThrow('No accounts accessible to this profile; cannot create a deployment.');
+    ).rejects.toThrow(
+      'No accounts accessible to this profile; cannot create a deployment token.'
+    );
 
     expect(paths).toEqual([
       'GET /api/v1/agent/agent_no_accounts',
@@ -463,7 +446,7 @@ describe('CLI setup command', () => {
     ]);
   });
 
-  test('throws when the account has no environments and does not create a deployment', async () => {
+  test('throws when the account has no environments and does not create a deployment token', async () => {
     const cwd = join(tempRoot, 'cwd');
     mkdirSync(cwd, { recursive: true });
     process.chdir(cwd);

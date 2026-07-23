@@ -88,7 +88,7 @@ prefactor ping
 prefactor setup <agent_id>
 ```
 
-This verifies the selected profile can access the agent, selects the deployment for that agent, creates a deployment-scoped runtime API token, and prints shell-style setup values:
+This verifies the selected profile can access the agent, resolves an environment for that agent (from an existing deployment when available), creates a deployment-scoped runtime API token (which creates a deployment if needed), and prints shell-style setup values:
 
 ```bash
 PREFACTOR_API_URL=...
