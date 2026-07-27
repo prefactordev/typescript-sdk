@@ -1,5 +1,11 @@
 # @prefactor/cli
 
+## 0.1.6
+
+### Patch Changes
+
+- [#53](https://github.com/prefactordev/typescript-sdk/pull/53) [`61f85dd`](https://github.com/prefactordev/typescript-sdk/commit/61f85dd4432a56658e267beca43d126f1634a07d) Thanks [@Siutan](https://github.com/Siutan)! - Stop creating agent deployments manually in `prefactor setup`. Setup now resolves an environment and creates a deployment-scoped token; the backend creates the deployment when the token is issued if one does not already exist.
+
 ## 0.1.5
 
 ### Patch Changes
