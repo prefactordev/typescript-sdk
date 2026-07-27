@@ -85,10 +85,17 @@ prefactor ping
 3. Print setup values for an agent:
 
 ```bash
+# Existing agent
 prefactor setup <agent_id>
+
+# Create a new agent, then print setup values
+prefactor setup --create --name "<agent-name>" --description "<description>"
+
+# Machine-readable output (includes suggested_package when the cwd has a known framework)
+prefactor setup <agent_id> --json
 ```
 
-This verifies the selected profile can access the agent, resolves an environment for that agent (from an existing deployment when available), creates a deployment-scoped runtime API token (which creates a deployment if needed), and prints shell-style setup values:
+This verifies the selected profile can access the agent (or creates one with `--create`), resolves an environment for that agent (from an existing deployment when available), creates a deployment-scoped runtime API token (which creates a deployment if needed), pings that token to confirm it is valid for the agent, and prints shell-style setup values:
 
 ```bash
 PREFACTOR_API_URL=...
@@ -97,7 +104,7 @@ PREFACTOR_AGENT_ID=...
 PREFACTOR_AGENT_IDENTIFIER=1.0.0
 ```
 
-`PREFACTOR_API_TOKEN` is an agent-deployment token. Use it for tracing from that agent deployment.
+If ping validation fails, setup exits with an error and does not treat the token as usable. `PREFACTOR_API_TOKEN` is an agent-deployment token. Use it for tracing from that agent deployment.
 
 4. Query additional resources:
 
@@ -138,7 +145,7 @@ Environment fallback is supported when no default profile is configured:
 - `agent_instances`: list, retrieve, agent_context, register, start, finish
 - `agent_spans`: list, create, finish, create_test_spans
 - `api_tokens`: list, retrieve, create, suspend, activate, revoke, delete
-- `setup`: verify an agent and print setup values for instrumentation
+- `setup`: create an agent (optional), mint a validated deployment token, and print setup values for instrumentation
 - `admin_users`: list, retrieve
 - `admin_user_invites`: list, retrieve, create, revoke
 - `pfid`: generate

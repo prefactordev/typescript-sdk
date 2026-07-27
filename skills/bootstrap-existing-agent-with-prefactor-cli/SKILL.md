@@ -1,148 +1,103 @@
 ---
 name: bootstrap-existing-agent-with-prefactor-cli
-description: Use when an existing agent needs Prefactor resources created via the Prefactor CLI before SDK instrumentation is added.
+description: Use when Prefactor resources and runtime credentials need to be provisioned via the Prefactor CLI before SDK instrumentation is added.
 ---
 
-# Bootstrap Existing Agent With Prefactor CLI
+# Bootstrap agent with Prefactor CLI
 
-Set up Prefactor resources for an already-working agent before instrumentation code changes.
+Provision Prefactor credentials with the CLI before changing application code.
 
 Core principle: provision first, instrument second.
 
-## Coding Assistant Usage
+## Coding assistant usage
 
 Apply this skill first when the user asks to:
 
-- "set up Prefactor for this existing agent"
-- "create Prefactor environment/agent/instance"
-- "use CLI to bootstrap Prefactor"
+- "set up Prefactor for this agent"
+- "register a Prefactor agent and get env vars"
+- "use the CLI to bootstrap Prefactor"
 - "prepare IDs and env vars before instrumentation"
 
 After this skill completes:
 
-1. If provider is supported, continue with `skills/instrument-existing-agent-with-prefactor-sdk/SKILL.md`.
-2. If provider is unsupported, continue with `skills/create-provider-package-with-core/SKILL.md`.
-3. Return a copy/paste block with exported env vars and the selected package.
+1. If the provider is supported, continue with `skills/instrument-existing-agent-with-prefactor-sdk/SKILL.md`.
+2. If the provider is unsupported, continue with `skills/create-provider-package-with-core/SKILL.md`.
+3. Hand off the setup env values and the selected package.
 
-## Inputs You Need
+## Prerequisites
 
-- Prefactor API token (for CLI profile)
-- Base URL (optional, defaults to Prefactor cloud)
-- Account ID
-- Target provider/framework (`langchain`, `ai`, `openclaw`, or custom)
-- Human-readable names for environment and agent
-- Working directory to store config (recommended: repo root)
+- The Prefactor CLI is installed (`prefactor` on PATH, or via `npx @prefactor/cli`).
+- The human has already run `prefactor login` in a real terminal.
+- You are working in the project root (or the directory that should receive env values).
 
-## CLI Workflow
+Do not run `prefactor login`, `prefactor profiles add`, or invent API tokens. If setup fails because the CLI is not signed in, stop and ask the human to run `prefactor login`.
 
-Before running CLI commands, choose package first, then install required Prefactor package(s).
+## CLI workflow
 
-- Use whichever package manager the project already uses (`bun`, `npm`, `pnpm`, or `yarn`).
-- Install `@prefactor/cli` for bootstrap commands.
+Use one setup command. Prefer `--json` so you can parse fields reliably.
 
-`prefactor` command requirement:
-
-- The `prefactor` command comes from the npm package `@prefactor/cli`.
-- If the command is not globally available, run it via the package manager launcher (`bunx @prefactor/cli`, `npx @prefactor/cli`, `pnpm dlx @prefactor/cli`, or `yarn dlx @prefactor/cli`).
-- Use `prefactor help` or `prefactor <group> help` for command details.
-
-Examples:
+Existing agent:
 
 ```bash
-# bun
-bun add @prefactor/cli
-
-# npm
-npm install @prefactor/cli
-
-# pnpm
-pnpm add @prefactor/cli
-
-# yarn
-yarn add @prefactor/cli
+prefactor setup <agent_id> --json
 ```
 
-Run these in order:
+New agent:
 
 ```bash
-prefactor profiles add default [base-url] --api-token <api-token>
-prefactor accounts list
-prefactor environments create --name <env-name> --account_id <account-id>
-prefactor agents create --name <agent-name> --environment_id <environment-id>
-prefactor agent_instances register \
-  --agent_id <agent-id> \
-  --agent_version_external_identifier <agent-version-id> \
-  --agent_version_name <agent-version-name> \
-  --agent_schema_version_external_identifier <schema-version-id> \
-  --update_current_version
+prefactor setup --create --name "<short-agent-name>" --description "<short description>" --json
 ```
 
-Profile notes:
+`prefactor setup` creates a deployment when needed, mints a deployment-scoped runtime token, validates that token with ping, and prints:
 
-- `<profile-name>` is any key like `default`, `staging`, or `prod`.
-- Select profile with `--profile <name>`.
-- When using launchers, prefix commands consistently (for example `npx @prefactor/cli profiles add ...`).
-
-Config resolution notes:
-
-- CLI config resolution order is:
-  1. `./prefactor.json`
-  2. `~/.prefactor/prefactor.json`
-  3. if none exists, profile creation writes `./prefactor.json`
-- Global CLI install does not make config global; command working directory still controls which config file is used.
-
-Collect and persist these IDs from command output:
-
-- `environment_id`
+- `api_url`
+- `api_token`
 - `agent_id`
-- `agent_instance_id`
+- `agent_identifier`
+- optional `language` and `suggested_package` when the working directory has one clear known framework
 
-## Package Selection
+Treat setup output as the single source of truth for Prefactor configuration. Do not list accounts, create environments, create API tokens manually, or register agent instances as part of first-run bootstrap.
 
-Choose package by provider:
+## Write env values
+
+Add the setup values to the project's existing env pattern (same file type, loading mechanism, and naming conventions as other secrets). Prefer the API-key pattern if several exist.
+
+Map JSON fields to:
+
+```bash
+PREFACTOR_API_URL=<api_url>
+PREFACTOR_API_TOKEN=<api_token>
+PREFACTOR_AGENT_ID=<agent_id>
+PREFACTOR_AGENT_IDENTIFIER=<agent_identifier>
+```
+
+Do not invent a new secret layout. Do not commit `prefactor.json` (it can contain profile tokens).
+
+## Package selection
+
+Prefer `suggested_package` from setup JSON when present.
+
+Otherwise choose by provider:
 
 - LangChain -> `@prefactor/langchain`
 - AI SDK -> `@prefactor/ai`
 - OpenClaw -> `@prefactor/openclaw`
+- Claude SDK -> `@prefactor/claude`
 - Custom/unsupported provider -> use `skills/create-provider-package-with-core/SKILL.md`
 
-When handing off to SDK instrumentation, import helpers from that selected package directly, for example:
-
-```ts
-import { init, withSpan, shutdown } from '@prefactor/ai';
-// or '@prefactor/langchain'
-```
-
-Do not mix adapter `init` with `withSpan`/`shutdown` from `@prefactor/core` unless an explicit tracer is passed.
-This guidance targets adapter-style integrations (`@prefactor/ai`, `@prefactor/langchain`) and does not change `@prefactor/openclaw` plugin runtime behavior.
-
-If you have identified and selected an existing package, use `skills/instrument-existing-agent-with-prefactor-sdk/SKILL.md`
-
-## Runtime Environment Variables
-
-Produce this output for the user after setup:
-
-```bash
-export PREFACTOR_API_URL="<api-url>"
-export PREFACTOR_API_TOKEN="<api-token>"
-export PREFACTOR_AGENT_ID="<agent-id>"
-```
-
-Use the created `agent_id` for `PREFACTOR_AGENT_ID`.
+Install the chosen package with the project's existing package manager. When handing off to instrumentation, import helpers from that same adapter package.
 
 ## Verification
 
-- Confirm CLI commands succeeded without HTTP/auth errors.
-- Confirm IDs were returned and captured.
-- Confirm package selection matches provider.
-- Confirm env vars match created resources.
-- Confirm `prefactor.json` is ignored by git (`git check-ignore prefactor.json`, `git status --short`).
+- Setup exited successfully.
+- Env values match setup output.
+- Package choice matches the provider or setup suggestion.
+- `prefactor.json` is not staged for commit.
 
-## Common Mistakes
+## Common mistakes
 
-- Instrumenting code before creating Prefactor resources.
-- Using account ID where environment ID is required.
-- Forgetting to propagate created `agent_id` to `PREFACTOR_AGENT_ID`.
-- Picking `@prefactor/core` directly when a built-in adapter exists.
-- Running commands from the wrong directory and reading/writing the wrong `prefactor.json`.
-- Committing `prefactor.json` (contains API tokens).
+- Instrumenting code before running `prefactor setup`.
+- Running `prefactor login` or creating tokens outside setup.
+- Ignoring setup JSON and inventing env keys or package names.
+- Mixing adapter `init` with `withSpan`/`shutdown` from `@prefactor/core` unless an explicit tracer is passed.
+- Committing `prefactor.json`.

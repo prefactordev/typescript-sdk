@@ -45,6 +45,8 @@ export function createCli(version: string): Command {
       'Examples:',
       '  prefactor profiles add default --api-token <api-token>',
       '  prefactor setup <agent_id>',
+      '  prefactor setup --create --name "<agent-name>" --description "<description>"',
+      '  prefactor setup <agent_id> --json',
       '  prefactor accounts list',
       '  prefactor agents list',
       '  prefactor agent_deployments create --agent_id <agent_id> --environment_id <environment_id>',
