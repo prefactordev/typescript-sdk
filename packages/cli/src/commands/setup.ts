@@ -2,7 +2,7 @@ import type { Command } from 'commander';
 import type { ApiClient } from '../api-client.js';
 import { AccountClient } from '../clients/account.js';
 import { AgentClient } from '../clients/agent.js';
-import { type AgentDeployment, AgentDeploymentClient } from '../clients/agent-deployment.js';
+import { AgentDeploymentClient } from '../clients/agent-deployment.js';
 import { ApiTokenClient } from '../clients/api-token.js';
 import { EnvironmentClient } from '../clients/environment.js';
 import { getAuthedContext } from './shared.js';
@@ -17,11 +17,11 @@ export function registerSetupCommand(program: Command): void {
       const { apiClient, baseUrl } = await getAuthedContext(this);
 
       await new AgentClient(apiClient).retrieve(agentId);
-      const deployment = await resolveAgentDeployment(apiClient, agentId);
+      const environmentId = await resolveEnvironmentId(apiClient, agentId);
       const tokenResponse = await new ApiTokenClient(apiClient).create({
         token_scope: 'agent_deployment',
         agent_id: agentId,
-        environment_id: deployment.environment_id,
+        environment_id: environmentId,
       });
 
       console.log(`PREFACTOR_API_URL=${baseUrl}`);
@@ -31,19 +31,16 @@ export function registerSetupCommand(program: Command): void {
     });
 }
 
-async function resolveAgentDeployment(
-  apiClient: ApiClient,
-  agentId: string
-): Promise<AgentDeployment> {
+async function resolveEnvironmentId(apiClient: ApiClient, agentId: string): Promise<string> {
   const deploymentResponse = await new AgentDeploymentClient(apiClient).list(agentId);
   const deployments = getListItems(deploymentResponse);
 
   if (deployments.length === 0) {
-    return createAgentDeployment(apiClient, agentId);
+    return resolveEnvironmentIdFromAccount(apiClient);
   }
 
   if (deployments.length === 1) {
-    return deployments[0];
+    return deployments[0].environment_id;
   }
 
   const deploymentsWithCurrentVersion = deployments.filter(
@@ -51,7 +48,7 @@ async function resolveAgentDeployment(
   );
 
   if (deploymentsWithCurrentVersion.length === 1) {
-    return deploymentsWithCurrentVersion[0];
+    return deploymentsWithCurrentVersion[0].environment_id;
   }
 
   throw new Error(
@@ -59,15 +56,12 @@ async function resolveAgentDeployment(
   );
 }
 
-async function createAgentDeployment(
-  apiClient: ApiClient,
-  agentId: string
-): Promise<AgentDeployment> {
+async function resolveEnvironmentIdFromAccount(apiClient: ApiClient): Promise<string> {
   const accountResponse = await new AccountClient(apiClient).list();
   const accounts = getListItems(accountResponse);
 
   if (accounts.length === 0) {
-    throw new Error('No accounts accessible to this profile; cannot create a deployment.');
+    throw new Error('No accounts accessible to this profile; cannot create a deployment token.');
   }
 
   const account = accounts[0];
@@ -78,17 +72,7 @@ async function createAgentDeployment(
     throw new Error(`No environments found for account ${account.id}; create one first.`);
   }
 
-  const environment = environments[0];
-  const createResponse = await new AgentDeploymentClient(apiClient).create({
-    agent_id: agentId,
-    environment_id: environment.id,
-  });
-
-  console.error(
-    `Created agent deployment for agent '${agentId}' in environment '${environment.name}' (${environment.id}) under account '${account.name}' (${account.id}).`
-  );
-
-  return createResponse.details;
+  return environments[0].id;
 }
 
 function getListItems<T>(response: { details?: T[]; summaries?: T[] }): T[] {
