@@ -67,7 +67,11 @@ export function detectSuggestedIntegration(cwd: string): SuggestedIntegration | 
       });
     }
 
-    if (rule.language === 'python' && pythonNames.size > 0 && matchesPythonRule(pythonNames, rule)) {
+    if (
+      rule.language === 'python' &&
+      pythonNames.size > 0 &&
+      matchesPythonRule(pythonNames, rule)
+    ) {
       matches.push({
         language: rule.language,
         suggested_package: rule.suggested_package,
