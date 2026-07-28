@@ -11,28 +11,27 @@ Core principle: instrument boundaries, not business logic.
 
 ## Quick Start
 
-1. Bootstrap Prefactor resources with `skills/bootstrap-existing-agent-with-prefactor-cli/SKILL.md`.
-2. Install required Prefactor packages with the project's existing package manager (`bun`, `npm`, `pnpm`, or `yarn`).
-3. Identify runtime path: built-in adapter (`@prefactor/langchain`, `@prefactor/ai`, `@prefactor/openclaw`) or custom `@prefactor/core` adapter.
+1. Bootstrap Prefactor credentials with `skills/bootstrap-existing-agent-with-prefactor-cli/SKILL.md` (`prefactor setup` or `prefactor setup --create`).
+2. Inspect the project and install the matching Prefactor adapter with the project's existing package manager (`bun`, `npm`, `pnpm`, or `yarn`).
+3. Identify runtime path: built-in adapter (`@prefactor/langchain`, `@prefactor/ai`, `@prefactor/openclaw`, `@prefactor/claude`) or custom `@prefactor/core` adapter.
 4. Add one top-level run span and child spans around LLM/tool boundaries.
 5. Preserve context propagation and package-prefixed span types.
 6. Record error metadata and rethrow original errors.
 7. Finish spans on success, error, cancel, and stream terminal paths.
-8. Verify in your project's build/test/typecheck flow.
+8. Verify in your project's build/test/typecheck flow, then confirm traces with `prefactor agent_instances list --agent_id <agent_id>` and `prefactor agent_instances agent_context <instance_id>`.
 
 ## Prerequisite
 
-Before instrumentation, ensure these runtime credentials are set from CLI bootstrap output:
+Before instrumentation, ensure these runtime credentials are set from `prefactor setup` output:
 
 - `PREFACTOR_API_URL`
 - `PREFACTOR_API_TOKEN`
 - `PREFACTOR_AGENT_ID`
+- `PREFACTOR_AGENT_IDENTIFIER` (from setup; usually `1.0.0`)
 
-Use the created `agent_id` for `PREFACTOR_AGENT_ID`.
+Also ensure dependencies are installed via the project's package manager:
 
-Also ensure dependencies are installed from npm via the project's package manager:
-
-- one of `@prefactor/langchain`, `@prefactor/ai`, `@prefactor/openclaw`
+- one of `@prefactor/langchain`, `@prefactor/ai`, `@prefactor/openclaw`, `@prefactor/claude`
 - `@prefactor/core` only when no built-in adapter is available
 
 ## Coding Tool Trigger Phrases

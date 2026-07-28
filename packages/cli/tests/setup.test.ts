@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -14,6 +14,42 @@ function jsonResponse(body: unknown): Response {
     status: 200,
     headers: { 'Content-Type': 'application/json' },
   });
+}
+
+function pingSuccess(agentId: string): Response {
+  return jsonResponse({
+    status: 'success',
+    details: {
+      token_type: 'api_session_agent_deployment_scope',
+      agent_id: agentId,
+    },
+  });
+}
+
+function writeProfile(cwd: string): void {
+  writeFileSync(
+    join(cwd, 'prefactor.json'),
+    JSON.stringify({
+      default: { api_key: 'profile-token', base_url: 'https://api.example.test' },
+    })
+  );
+}
+
+async function captureStdout(run: () => Promise<void>): Promise<string> {
+  const chunks: string[] = [];
+  const originalWrite = process.stdout.write.bind(process.stdout);
+  process.stdout.write = ((chunk: string | Uint8Array) => {
+    chunks.push(typeof chunk === 'string' ? chunk : Buffer.from(chunk).toString('utf8'));
+    return true;
+  }) as typeof process.stdout.write;
+
+  try {
+    await run();
+  } finally {
+    process.stdout.write = originalWrite;
+  }
+
+  return chunks.join('');
 }
 
 describe('CLI setup command', () => {
@@ -71,22 +107,18 @@ describe('CLI setup command', () => {
     const cwd = join(tempRoot, 'cwd');
     mkdirSync(cwd, { recursive: true });
     process.chdir(cwd);
-    writeFileSync(
-      join(cwd, 'prefactor.json'),
-      JSON.stringify({
-        default: { api_key: 'profile-token', base_url: 'https://api.example.test' },
-      })
-    );
+    writeProfile(cwd);
 
     const calls: CapturedRequest[] = [];
     globalThis.fetch = (async (input, init) => {
       calls.push({ url: String(input), init });
+      const path = new URL(String(input)).pathname;
 
-      if (calls.length === 1) {
+      if (path === '/api/v1/agent/agent_123') {
         return jsonResponse({ details: { id: 'agent_123', name: 'Support agent' } });
       }
 
-      if (calls.length === 2) {
+      if (path === '/api/v1/agent_deployment') {
         return jsonResponse({
           summaries: [
             {
@@ -99,23 +131,25 @@ describe('CLI setup command', () => {
         });
       }
 
-      return jsonResponse({
-        details: { id: 'api_token_123', token_scope: 'agent_deployment' },
-        token: 'runtime-token',
-      });
+      if (path === '/api/v1/api_token') {
+        return jsonResponse({
+          details: { id: 'api_token_123', token_scope: 'agent_deployment' },
+          token: 'runtime-token',
+        });
+      }
+
+      if (path === '/api/v1/ping') {
+        return pingSuccess('agent_123');
+      }
+
+      throw new Error(`Unexpected request: ${path}`);
     }) as typeof fetch;
 
-    const log = mock(() => {});
-    const originalLog = console.log;
-    console.log = log;
-
-    try {
+    const output = await captureStdout(async () => {
       await createCli('1.0.0').parseAsync(['node', 'prefactor', 'setup', 'agent_123']);
-    } finally {
-      console.log = originalLog;
-    }
+    });
 
-    expect(calls).toHaveLength(3);
+    expect(calls).toHaveLength(4);
     expect(new URL(calls[0].url).pathname).toBe('/api/v1/agent/agent_123');
     expect(calls[0].init?.method).toBe('GET');
     expect(new URL(calls[1].url).pathname).toBe('/api/v1/agent_deployment');
@@ -126,8 +160,9 @@ describe('CLI setup command', () => {
     expect(calls[2].init?.body).toBe(
       '{"details":{"token_scope":"agent_deployment","agent_id":"agent_123","environment_id":"env_123"}}'
     );
+    expect(new URL(calls[3].url).pathname).toBe('/api/v1/ping');
+    expect(calls[3].init?.method).toBe('GET');
 
-    const output = log.mock.calls.flat().join('\n');
     expect(output).toContain('PREFACTOR_API_URL=https://api.example.test');
     expect(output).toContain('PREFACTOR_API_TOKEN=runtime-token');
     expect(output).toContain('PREFACTOR_AGENT_ID=agent_123');
@@ -151,11 +186,13 @@ describe('CLI setup command', () => {
     const calls: CapturedRequest[] = [];
     globalThis.fetch = (async (input, init) => {
       calls.push({ url: String(input), init });
-      if (calls.length === 1) {
+      const path = new URL(String(input)).pathname;
+
+      if (path === '/api/v1/agent/agent_456') {
         return jsonResponse({ details: { id: 'agent_456', name: 'Team agent' } });
       }
 
-      if (calls.length === 2) {
+      if (path === '/api/v1/agent_deployment') {
         return jsonResponse({
           summaries: [
             {
@@ -168,14 +205,18 @@ describe('CLI setup command', () => {
         });
       }
 
-      return jsonResponse({ details: { id: 'api_token_456' }, token: 'team-runtime-token' });
+      if (path === '/api/v1/api_token') {
+        return jsonResponse({ details: { id: 'api_token_456' }, token: 'team-runtime-token' });
+      }
+
+      if (path === '/api/v1/ping') {
+        return pingSuccess('agent_456');
+      }
+
+      throw new Error(`Unexpected request: ${path}`);
     }) as typeof fetch;
 
-    const log = mock(() => {});
-    const originalLog = console.log;
-    console.log = log;
-
-    try {
+    const output = await captureStdout(async () => {
       await createCli('1.0.0').parseAsync([
         'node',
         'prefactor',
@@ -184,14 +225,11 @@ describe('CLI setup command', () => {
         'setup',
         'agent_456',
       ]);
-    } finally {
-      console.log = originalLog;
-    }
+    });
 
     expect(
       calls.every((call) => new URL(call.url).origin === 'https://team.example.test')
     ).toBeTrue();
-    const output = log.mock.calls.flat().join('\n');
     expect(output).toContain('PREFACTOR_API_URL=https://team.example.test');
     expect(output).toContain('PREFACTOR_API_TOKEN=team-runtime-token');
   });
@@ -200,12 +238,7 @@ describe('CLI setup command', () => {
     const cwd = join(tempRoot, 'cwd');
     mkdirSync(cwd, { recursive: true });
     process.chdir(cwd);
-    writeFileSync(
-      join(cwd, 'prefactor.json'),
-      JSON.stringify({
-        default: { api_key: 'profile-token', base_url: 'https://api.example.test' },
-      })
-    );
+    writeProfile(cwd);
 
     let tokenBody = '';
     globalThis.fetch = (async (input, init) => {
@@ -234,35 +267,32 @@ describe('CLI setup command', () => {
         });
       }
 
-      tokenBody = String(init?.body);
-      return jsonResponse({ details: { id: 'api_token_789' }, token: 'runtime-token' });
+      if (path === '/api/v1/api_token') {
+        tokenBody = String(init?.body);
+        return jsonResponse({ details: { id: 'api_token_789' }, token: 'runtime-token' });
+      }
+
+      if (path === '/api/v1/ping') {
+        return pingSuccess('agent_789');
+      }
+
+      throw new Error(`Unexpected request: ${path}`);
     }) as typeof fetch;
 
-    const log = mock(() => {});
-    const originalLog = console.log;
-    console.log = log;
-
-    try {
+    await captureStdout(async () => {
       await createCli('1.0.0').parseAsync(['node', 'prefactor', 'setup', 'agent_789']);
-    } finally {
-      console.log = originalLog;
-    }
+    });
 
     expect(tokenBody).toBe(
       '{"details":{"token_scope":"agent_deployment","agent_id":"agent_789","environment_id":"env_with_version"}}'
     );
   });
 
-  test('does not list accounts during setup', async () => {
+  test('does not list accounts during setup when a deployment already exists', async () => {
     const cwd = join(tempRoot, 'cwd');
     mkdirSync(cwd, { recursive: true });
     process.chdir(cwd);
-    writeFileSync(
-      join(cwd, 'prefactor.json'),
-      JSON.stringify({
-        default: { api_key: 'profile-token', base_url: 'https://api.example.test' },
-      })
-    );
+    writeProfile(cwd);
 
     const paths: string[] = [];
     globalThis.fetch = (async (input) => {
@@ -290,23 +320,26 @@ describe('CLI setup command', () => {
         });
       }
 
-      return jsonResponse({ details: { id: 'api_token_no_account' }, token: 'runtime-token' });
+      if (path === '/api/v1/api_token') {
+        return jsonResponse({ details: { id: 'api_token_no_account' }, token: 'runtime-token' });
+      }
+
+      if (path === '/api/v1/ping') {
+        return pingSuccess('agent_no_account');
+      }
+
+      throw new Error(`Unexpected request: ${path}`);
     }) as typeof fetch;
 
-    const log = mock(() => {});
-    const originalLog = console.log;
-    console.log = log;
-
-    try {
+    await captureStdout(async () => {
       await createCli('1.0.0').parseAsync(['node', 'prefactor', 'setup', 'agent_no_account']);
-    } finally {
-      console.log = originalLog;
-    }
+    });
 
     expect(paths).toEqual([
       '/api/v1/agent/agent_no_account',
       '/api/v1/agent_deployment',
       '/api/v1/api_token',
+      '/api/v1/ping',
     ]);
   });
 
@@ -314,12 +347,7 @@ describe('CLI setup command', () => {
     const cwd = join(tempRoot, 'cwd');
     mkdirSync(cwd, { recursive: true });
     process.chdir(cwd);
-    writeFileSync(
-      join(cwd, 'prefactor.json'),
-      JSON.stringify({
-        default: { api_key: 'profile-token', base_url: 'https://api.example.test' },
-      })
-    );
+    writeProfile(cwd);
 
     const calls: CapturedRequest[] = [];
     globalThis.fetch = (async (input, init) => {
@@ -360,20 +388,18 @@ describe('CLI setup command', () => {
         });
       }
 
+      if (path === '/api/v1/ping') {
+        return pingSuccess('agent_new');
+      }
+
       throw new Error(`Unexpected request: ${method} ${path}`);
     }) as typeof fetch;
 
-    const log = mock(() => {});
-    const originalLog = console.log;
-    console.log = log;
-
-    try {
+    const output = await captureStdout(async () => {
       await createCli('1.0.0').parseAsync(['node', 'prefactor', 'setup', 'agent_new']);
-    } finally {
-      console.log = originalLog;
-    }
+    });
 
-    expect(calls).toHaveLength(5);
+    expect(calls).toHaveLength(6);
     expect(new URL(calls[0].url).pathname).toBe('/api/v1/agent/agent_new');
     expect(new URL(calls[1].url).pathname).toBe('/api/v1/agent_deployment');
     expect(calls[1].init?.method).toBe('GET');
@@ -384,8 +410,8 @@ describe('CLI setup command', () => {
     expect(calls[4].init?.body).toBe(
       '{"details":{"token_scope":"agent_deployment","agent_id":"agent_new","environment_id":"env_abc"}}'
     );
+    expect(new URL(calls[5].url).pathname).toBe('/api/v1/ping');
 
-    const output = log.mock.calls.flat().join('\n');
     expect(output).toContain('PREFACTOR_API_URL=https://api.example.test');
     expect(output).toContain('PREFACTOR_API_TOKEN=runtime-token-new');
     expect(output).toContain('PREFACTOR_AGENT_ID=agent_new');
@@ -396,12 +422,7 @@ describe('CLI setup command', () => {
     const cwd = join(tempRoot, 'cwd');
     mkdirSync(cwd, { recursive: true });
     process.chdir(cwd);
-    writeFileSync(
-      join(cwd, 'prefactor.json'),
-      JSON.stringify({
-        default: { api_key: 'profile-token', base_url: 'https://api.example.test' },
-      })
-    );
+    writeProfile(cwd);
 
     const paths: string[] = [];
     globalThis.fetch = (async (input, init) => {
@@ -448,12 +469,7 @@ describe('CLI setup command', () => {
     const cwd = join(tempRoot, 'cwd');
     mkdirSync(cwd, { recursive: true });
     process.chdir(cwd);
-    writeFileSync(
-      join(cwd, 'prefactor.json'),
-      JSON.stringify({
-        default: { api_key: 'profile-token', base_url: 'https://api.example.test' },
-      })
-    );
+    writeProfile(cwd);
 
     const paths: string[] = [];
     globalThis.fetch = (async (input, init) => {
@@ -501,5 +517,231 @@ describe('CLI setup command', () => {
       'GET /api/v1/account',
       'GET /api/v1/environment',
     ]);
+  });
+
+  test('creates an agent with --create --name and --description then prints setup values', async () => {
+    const cwd = join(tempRoot, 'cwd');
+    mkdirSync(cwd, { recursive: true });
+    process.chdir(cwd);
+    writeProfile(cwd);
+
+    const calls: CapturedRequest[] = [];
+    globalThis.fetch = (async (input, init) => {
+      calls.push({ url: String(input), init });
+      const path = new URL(String(input)).pathname;
+      const method = init?.method ?? 'GET';
+
+      if (path === '/api/v1/agent' && method === 'POST') {
+        expect(init?.body).toBe(
+          '{"details":{"name":"support-bot","description":"Handles support chats"}}'
+        );
+        return jsonResponse({
+          details: {
+            id: 'agent_created',
+            name: 'support-bot',
+            description: 'Handles support chats',
+          },
+        });
+      }
+
+      if (path === '/api/v1/agent/agent_created' && method === 'GET') {
+        return jsonResponse({ details: { id: 'agent_created', name: 'support-bot' } });
+      }
+
+      if (path === '/api/v1/agent_deployment' && method === 'GET') {
+        return jsonResponse({
+          summaries: [
+            {
+              id: 'deployment_created',
+              agent_id: 'agent_created',
+              environment_id: 'env_created',
+              current_version_id: null,
+            },
+          ],
+        });
+      }
+
+      if (path === '/api/v1/api_token' && method === 'POST') {
+        return jsonResponse({
+          details: { id: 'api_token_created', token_scope: 'agent_deployment' },
+          token: 'created-runtime-token',
+        });
+      }
+
+      if (path === '/api/v1/ping') {
+        return pingSuccess('agent_created');
+      }
+
+      throw new Error(`Unexpected request: ${method} ${path}`);
+    }) as typeof fetch;
+
+    const output = await captureStdout(async () => {
+      await createCli('1.0.0').parseAsync([
+        'node',
+        'prefactor',
+        'setup',
+        '--create',
+        '--name',
+        'support-bot',
+        '--description',
+        'Handles support chats',
+      ]);
+    });
+
+    expect(new URL(calls[0].url).pathname).toBe('/api/v1/agent');
+    expect(calls[0].init?.method).toBe('POST');
+    expect(output).toContain('PREFACTOR_AGENT_ID=agent_created');
+    expect(output).toContain('PREFACTOR_API_TOKEN=created-runtime-token');
+  });
+
+  test('fails when ping validation rejects the setup token', async () => {
+    const cwd = join(tempRoot, 'cwd');
+    mkdirSync(cwd, { recursive: true });
+    process.chdir(cwd);
+    writeProfile(cwd);
+
+    globalThis.fetch = (async (input) => {
+      const path = new URL(String(input)).pathname;
+
+      if (path === '/api/v1/agent/agent_bad_ping') {
+        return jsonResponse({ details: { id: 'agent_bad_ping', name: 'Agent' } });
+      }
+
+      if (path === '/api/v1/agent_deployment') {
+        return jsonResponse({
+          summaries: [
+            {
+              id: 'deployment_bad_ping',
+              agent_id: 'agent_bad_ping',
+              environment_id: 'env_bad_ping',
+              current_version_id: null,
+            },
+          ],
+        });
+      }
+
+      if (path === '/api/v1/api_token') {
+        return jsonResponse({
+          details: { id: 'api_token_bad_ping', token_scope: 'agent_deployment' },
+          token: 'bad-token',
+        });
+      }
+
+      if (path === '/api/v1/ping') {
+        return jsonResponse({
+          status: 'success',
+          details: {
+            token_type: 'api_session_account_scope',
+            agent_id: 'agent_bad_ping',
+          },
+        });
+      }
+
+      throw new Error(`Unexpected request: ${path}`);
+    }) as typeof fetch;
+
+    await expect(
+      createCli('1.0.0').parseAsync(['node', 'prefactor', 'setup', 'agent_bad_ping'])
+    ).rejects.toThrow('expected token_type "api_session_agent_deployment_scope"');
+  });
+
+  test('prints JSON setup values', async () => {
+    const cwd = join(tempRoot, 'cwd');
+    mkdirSync(cwd, { recursive: true });
+    process.chdir(cwd);
+    writeProfile(cwd);
+
+    globalThis.fetch = (async (input) => {
+      const path = new URL(String(input)).pathname;
+
+      if (path === '/api/v1/agent/agent_json') {
+        return jsonResponse({ details: { id: 'agent_json', name: 'JSON agent' } });
+      }
+
+      if (path === '/api/v1/agent_deployment') {
+        return jsonResponse({
+          summaries: [
+            {
+              id: 'deployment_json',
+              agent_id: 'agent_json',
+              environment_id: 'env_json',
+              current_version_id: null,
+            },
+          ],
+        });
+      }
+
+      if (path === '/api/v1/api_token') {
+        return jsonResponse({
+          details: { id: 'api_token_json', token_scope: 'agent_deployment' },
+          token: 'json-runtime-token',
+        });
+      }
+
+      if (path === '/api/v1/ping') {
+        return pingSuccess('agent_json');
+      }
+
+      throw new Error(`Unexpected request: ${path}`);
+    }) as typeof fetch;
+
+    const output = await captureStdout(async () => {
+      await createCli('1.0.0').parseAsync(['node', 'prefactor', 'setup', 'agent_json', '--json']);
+    });
+
+    const parsed = JSON.parse(output) as {
+      api_url: string;
+      api_token: string;
+      agent_id: string;
+      agent_identifier: string;
+    };
+
+    expect(parsed).toEqual({
+      api_url: 'https://api.example.test',
+      api_token: 'json-runtime-token',
+      agent_id: 'agent_json',
+      agent_identifier: '1.0.0',
+    });
+  });
+
+  test('requires --name with --create and rejects agent_id with --create', async () => {
+    const cwd = join(tempRoot, 'cwd');
+    mkdirSync(cwd, { recursive: true });
+    process.chdir(cwd);
+    writeProfile(cwd);
+
+    await expect(
+      createCli('1.0.0').parseAsync(['node', 'prefactor', 'setup', '--create'])
+    ).rejects.toThrow("prefactor setup --create requires --name '<agent-name>'.");
+
+    await expect(
+      createCli('1.0.0').parseAsync([
+        'node',
+        'prefactor',
+        'setup',
+        'agent_123',
+        '--create',
+        '--name',
+        'x',
+      ])
+    ).rejects.toThrow('prefactor setup --create does not accept an agent_id argument.');
+  });
+
+  test('rejects --description without --create', async () => {
+    const cwd = join(tempRoot, 'cwd');
+    mkdirSync(cwd, { recursive: true });
+    process.chdir(cwd);
+    writeProfile(cwd);
+
+    await expect(
+      createCli('1.0.0').parseAsync([
+        'node',
+        'prefactor',
+        'setup',
+        'agent_123',
+        '--description',
+        'Handles support chats',
+      ])
+    ).rejects.toThrow('--description is only valid with --create.');
   });
 });
