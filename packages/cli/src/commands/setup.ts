@@ -5,7 +5,6 @@ import { AgentClient } from '../clients/agent.js';
 import { AgentDeploymentClient } from '../clients/agent-deployment.js';
 import { ApiTokenClient } from '../clients/api-token.js';
 import { EnvironmentClient } from '../clients/environment.js';
-import { detectSuggestedIntegration } from './setup-detect.js';
 import { getAuthedContext } from './shared.js';
 
 const DEFAULT_AGENT_IDENTIFIER = '1.0.0';
@@ -23,8 +22,6 @@ type SetupValues = {
   api_token: string;
   agent_id: string;
   agent_identifier: string;
-  language?: 'typescript' | 'python';
-  suggested_package?: string;
 };
 
 type PingDetails = {
@@ -60,18 +57,11 @@ export function registerSetupCommand(program: Command): void {
 
       await validateSetupToken(baseUrl, apiToken, agentId);
 
-      const suggestion = detectSuggestedIntegration(process.cwd());
       const values: SetupValues = {
         api_url: baseUrl,
         api_token: apiToken,
         agent_id: agentId,
         agent_identifier: DEFAULT_AGENT_IDENTIFIER,
-        ...(suggestion
-          ? {
-              language: suggestion.language,
-              suggested_package: suggestion.suggested_package,
-            }
-          : {}),
       };
 
       printSetupValues(values, options.json === true);

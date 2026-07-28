@@ -91,7 +91,7 @@ prefactor setup <agent_id>
 # Create a new agent, then print setup values
 prefactor setup --create --name "<agent-name>" --description "<description>"
 
-# Machine-readable output (includes suggested_package when the cwd has a known framework)
+# Machine-readable output
 prefactor setup <agent_id> --json
 ```
 

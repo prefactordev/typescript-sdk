@@ -31,7 +31,7 @@ When instrumenting an existing agent, default to this order:
 
 1. Confirm the human has run `prefactor login`.
 2. Run `skills/bootstrap-existing-agent-with-prefactor-cli/SKILL.md` (`prefactor setup` or `prefactor setup --create --name ... --description ...`).
-3. Install the Prefactor package from setup's `suggested_package` or the matching adapter (`@prefactor/langchain`, `@prefactor/ai`, `@prefactor/openclaw`, `@prefactor/claude`).
+3. Inspect the project and install the matching Prefactor adapter (`@prefactor/langchain`, `@prefactor/ai`, `@prefactor/openclaw`, `@prefactor/claude`).
 4. For adapter-style instrumentation, keep `init`, `withSpan`, and `shutdown` imports from that same adapter package (or pass an explicit tracer when using core `withSpan`).
 5. If no matching adapter package exists, use `skills/create-provider-package-with-core/SKILL.md`.
 6. Instrument the existing agent with `skills/instrument-existing-agent-with-prefactor-sdk/SKILL.md`.

@@ -645,21 +645,11 @@ describe('CLI setup command', () => {
     ).rejects.toThrow('expected token_type "api_session_agent_deployment_scope"');
   });
 
-  test('prints JSON setup values with suggested_package when langchain is present', async () => {
+  test('prints JSON setup values', async () => {
     const cwd = join(tempRoot, 'cwd');
     mkdirSync(cwd, { recursive: true });
     process.chdir(cwd);
     writeProfile(cwd);
-    writeFileSync(
-      join(cwd, 'package.json'),
-      JSON.stringify({
-        name: 'demo',
-        dependencies: {
-          '@langchain/core': '0.3.0',
-          langchain: '0.3.0',
-        },
-      })
-    );
 
     globalThis.fetch = (async (input) => {
       const path = new URL(String(input)).pathname;
@@ -704,8 +694,6 @@ describe('CLI setup command', () => {
       api_token: string;
       agent_id: string;
       agent_identifier: string;
-      language?: string;
-      suggested_package?: string;
     };
 
     expect(parsed).toEqual({
@@ -713,8 +701,6 @@ describe('CLI setup command', () => {
       api_token: 'json-runtime-token',
       agent_id: 'agent_json',
       agent_identifier: '1.0.0',
-      language: 'typescript',
-      suggested_package: '@prefactor/langchain',
     });
   });
 

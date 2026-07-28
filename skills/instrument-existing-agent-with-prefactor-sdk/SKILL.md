@@ -12,7 +12,7 @@ Core principle: instrument boundaries, not business logic.
 ## Quick Start
 
 1. Bootstrap Prefactor credentials with `skills/bootstrap-existing-agent-with-prefactor-cli/SKILL.md` (`prefactor setup` or `prefactor setup --create`).
-2. Install required Prefactor packages with the project's existing package manager (`bun`, `npm`, `pnpm`, or `yarn`), preferring `suggested_package` from setup JSON when present.
+2. Inspect the project and install the matching Prefactor adapter with the project's existing package manager (`bun`, `npm`, `pnpm`, or `yarn`).
 3. Identify runtime path: built-in adapter (`@prefactor/langchain`, `@prefactor/ai`, `@prefactor/openclaw`, `@prefactor/claude`) or custom `@prefactor/core` adapter.
 4. Add one top-level run span and child spans around LLM/tool boundaries.
 5. Preserve context propagation and package-prefixed span types.

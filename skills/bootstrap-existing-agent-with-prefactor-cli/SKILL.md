@@ -54,7 +54,6 @@ prefactor setup --create --name "<short-agent-name>" --description "<short descr
 - `api_token`
 - `agent_id`
 - `agent_identifier`
-- optional `language` and `suggested_package` when the working directory has one clear known framework
 
 Treat setup output as the single source of truth for Prefactor configuration. Do not list accounts, create environments, create API tokens manually, or register agent instances as part of first-run bootstrap.
 
@@ -75,9 +74,7 @@ Do not invent a new secret layout. Do not commit `prefactor.json` (it can contai
 
 ## Package selection
 
-Prefer `suggested_package` from setup JSON when present.
-
-Otherwise choose by provider:
+Inspect the project and choose the matching Prefactor adapter:
 
 - LangChain -> `@prefactor/langchain`
 - AI SDK -> `@prefactor/ai`
