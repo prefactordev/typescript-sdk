@@ -83,8 +83,8 @@ export function registerSetupCommand(program: Command): void {
  * The deployment token is intentional CLI output, not application logging.
  */
 function printSetupValues(values: SetupValues, asJson: boolean): void {
-  // codeql[js/clear-text-logging] Intentional: setup prints the deployment token for the caller to capture.
   if (asJson) {
+    // codeql[js/clear-text-logging] Intentional: setup prints the deployment token for the caller to capture.
     process.stdout.write(`${JSON.stringify(values, null, 2)}\n`);
     return;
   }

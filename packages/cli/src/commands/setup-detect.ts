@@ -153,15 +153,47 @@ function readPythonDependencyNames(cwd: string): Set<string> {
   const pyprojectPath = join(cwd, 'pyproject.toml');
   if (existsSync(pyprojectPath)) {
     const content = readFileSync(pyprojectPath, 'utf8');
-    const listBlock = content.match(/dependencies\s*=\s*\[([\s\S]*?)\]/);
+    const listBlock = extractDependencyListBlock(content);
     if (listBlock) {
-      for (const name of extractQuotedNames(listBlock[1])) {
-        names.add(normalizePythonPackageName(name));
+      for (const name of extractQuotedNames(listBlock)) {
+        names.add(name);
       }
     }
   }
 
   return names;
+}
+
+/**
+ * Returns the contents of a `dependencies = [...]` list, respecting `]` inside
+ * quoted extras such as `"livekit-agents[openai]"`.
+ */
+function extractDependencyListBlock(content: string): string | null {
+  const startMatch = content.match(/dependencies\s*=\s*\[/);
+  if (!startMatch || startMatch.index === undefined) {
+    return null;
+  }
+
+  let index = startMatch.index + startMatch[0].length;
+  let inQuote: '"' | "'" | null = null;
+
+  while (index < content.length) {
+    const char = content[index];
+
+    if (inQuote) {
+      if (char === inQuote) {
+        inQuote = null;
+      }
+    } else if (char === '"' || char === "'") {
+      inQuote = char;
+    } else if (char === ']') {
+      return content.slice(startMatch.index + startMatch[0].length, index);
+    }
+
+    index += 1;
+  }
+
+  return null;
 }
 
 function parsePythonRequirementLine(line: string): string | null {
@@ -176,10 +208,13 @@ function parsePythonRequirementLine(line: string): string | null {
 
 function extractQuotedNames(text: string): string[] {
   const names: string[] = [];
-  const re = /["']([A-Za-z0-9_.-]+)["']/g;
+  const re = /["']([^"']+)["']/g;
   let match = re.exec(text);
   while (match) {
-    names.push(match[1]);
+    const name = parsePythonRequirementLine(match[1]);
+    if (name) {
+      names.push(name);
+    }
     match = re.exec(text);
   }
   return names;
