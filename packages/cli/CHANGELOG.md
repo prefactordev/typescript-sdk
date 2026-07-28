@@ -1,5 +1,11 @@
 # @prefactor/cli
 
+## 0.2.0
+
+### Minor Changes
+
+- [#57](https://github.com/prefactordev/typescript-sdk/pull/57) [`cbd9aa0`](https://github.com/prefactordev/typescript-sdk/commit/cbd9aa0586893a57b7cb16a04df47da2e89c2d28) Thanks [@Siutan](https://github.com/Siutan)! - Add agent create options, token validation, and JSON output to `prefactor setup`. Setup prints credentials only; package selection is left to the caller.
+
 ## 0.1.6
 
 ### Patch Changes
