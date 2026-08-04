@@ -73,6 +73,16 @@ export class AgentInstanceClient {
     });
   }
 
+  /**
+   * Records a named quality payload on an agent instance.
+   *
+   * A null payload removes the recorded value for that name. Other names
+   * are left unchanged. An idempotency key is auto-generated when omitted.
+   *
+   * @param agentInstanceId - Backend agent instance ID.
+   * @param payload - Quality schema name and payload (or null to remove).
+   * @returns The API response containing the updated instance details.
+   */
   recordQuality(
     agentInstanceId: string,
     payload: AgentInstanceRecordQualityPayload

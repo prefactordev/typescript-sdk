@@ -232,6 +232,14 @@ export class HttpTransport implements Transport {
     });
   }
 
+  /**
+   * Enqueues a record-quality action for the current agent instance.
+   *
+   * A null payload removes the recorded value for that name. The action
+   * is queued and retried like other transport actions.
+   *
+   * @param payload - Quality schema name and payload (or null to remove).
+   */
   recordQuality(payload: { name: string; payload: Record<string, unknown> | null }): void {
     if (this.fatalError || this.closed) {
       return;
