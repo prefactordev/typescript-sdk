@@ -33,11 +33,11 @@ export type AgentInstanceFinishOptions = {
   idempotency_key?: string;
 };
 
-export type AgentInstanceUpdatePayload = {
-  details: {
-    /** Quality evaluation payload for this instance (omit to keep current; null to clear). */
-    quality_payload?: Record<string, unknown> | null;
-  };
+export type AgentInstanceRecordQualityPayload = {
+  /** Quality schema name (key in the agent schema version quality_schemas). */
+  name: string;
+  /** Quality payload for this name, or null to remove the recorded payload. */
+  payload: Record<string, unknown> | null;
   idempotency_key?: string;
 };
 
@@ -73,13 +73,27 @@ export class AgentInstanceClient {
     });
   }
 
-  update(
+  /**
+   * Records a named quality payload on an agent instance.
+   *
+   * A null payload removes the recorded value for that name. Other names
+   * are left unchanged. An idempotency key is auto-generated when omitted.
+   *
+   * @param agentInstanceId - Backend agent instance ID.
+   * @param payload - Quality schema name and payload (or null to remove).
+   * @returns The API response containing the updated instance details.
+   */
+  recordQuality(
     agentInstanceId: string,
-    payload: AgentInstanceUpdatePayload
+    payload: AgentInstanceRecordQualityPayload
   ): Promise<AgentInstanceResponse> {
-    return this.httpClient.request(`/api/v1/agent_instance/${agentInstanceId}`, {
-      method: 'PUT',
-      body: { ...payload, idempotency_key: ensureIdempotencyKey(payload.idempotency_key) },
+    return this.httpClient.request(`/api/v1/agent_instance/${agentInstanceId}/record_quality`, {
+      method: 'POST',
+      body: {
+        name: payload.name,
+        payload: payload.payload,
+        idempotency_key: ensureIdempotencyKey(payload.idempotency_key),
+      },
     });
   }
 }

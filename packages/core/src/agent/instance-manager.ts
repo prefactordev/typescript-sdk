@@ -7,9 +7,11 @@ export type AgentInstanceManagerOptions = {
 
 type AgentInstanceStartOptions = AgentInstanceOptions;
 
-type AgentInstanceUpdateOptions = {
-  /** Quality evaluation payload for this instance (omit to keep current; null to clear). */
-  qualityPayload?: Record<string, unknown> | null;
+type AgentInstanceRecordQualityOptions = {
+  /** Quality schema name (key in the agent schema version quality_schemas). */
+  name: string;
+  /** Quality payload for this name, or null to remove the recorded payload. */
+  payload: Record<string, unknown> | null;
 };
 
 /**
@@ -70,12 +72,13 @@ export class AgentInstanceManager {
   }
 
   /**
-   * Updates the current agent instance with the given payload.
-   * Currently supports updating the quality_payload field.
+   * Records a quality payload on the agent instance for a named quality schema.
+   * A null payload removes the recorded value for that name.
    */
-  updateInstance(options: AgentInstanceUpdateOptions = {}): void {
-    this.transport.updateAgentInstance({
-      qualityPayload: options.qualityPayload,
+  recordQuality(options: AgentInstanceRecordQualityOptions): void {
+    this.transport.recordQuality({
+      name: options.name,
+      payload: options.payload,
     });
   }
 

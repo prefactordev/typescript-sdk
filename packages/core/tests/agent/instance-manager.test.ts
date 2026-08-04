@@ -13,7 +13,7 @@ class MockTransport implements Transport {
   startedInstances: AgentInstanceOptions[] = [];
   finishedInstances = 0;
   registeredSchemas: Record<string, unknown>[] = [];
-  updatedInstances: Array<{ qualityPayload?: Record<string, unknown> | null }> = [];
+  recordedQuality: Array<{ name: string; payload: Record<string, unknown> | null }> = [];
 
   emit(span: Span): void {
     this.emitted.push(span);
@@ -31,8 +31,8 @@ class MockTransport implements Transport {
     this.finishedInstances += 1;
   }
 
-  updateAgentInstance(payload: { qualityPayload?: Record<string, unknown> | null }): void {
-    this.updatedInstances.push(payload);
+  recordQuality(payload: { name: string; payload: Record<string, unknown> | null }): void {
+    this.recordedQuality.push(payload);
   }
 
   registerSchema(schema: Record<string, unknown>): void {
@@ -158,33 +158,26 @@ describe('AgentInstanceManager', () => {
     await expect(manager.ensureTokenValid()).rejects.toThrow('bad token');
   });
 
-  test('updateInstance forwards quality payload to transport', () => {
+  test('recordQuality forwards named quality payload to transport', () => {
     const transport = new MockTransport();
     const manager = new AgentInstanceManager(transport, {});
 
-    manager.updateInstance({ qualityPayload: { score: 95 } });
+    manager.recordQuality({ name: 'summary_quality', payload: { score: 95 } });
 
-    expect(transport.updatedInstances).toHaveLength(1);
-    expect(transport.updatedInstances[0]).toEqual({ qualityPayload: { score: 95 } });
+    expect(transport.recordedQuality).toHaveLength(1);
+    expect(transport.recordedQuality[0]).toEqual({
+      name: 'summary_quality',
+      payload: { score: 95 },
+    });
   });
 
-  test('updateInstance forwards null quality payload to transport', () => {
+  test('recordQuality forwards null payload to remove a named quality entry', () => {
     const transport = new MockTransport();
     const manager = new AgentInstanceManager(transport, {});
 
-    manager.updateInstance({ qualityPayload: null });
+    manager.recordQuality({ name: 'summary_quality', payload: null });
 
-    expect(transport.updatedInstances).toHaveLength(1);
-    expect(transport.updatedInstances[0]).toEqual({ qualityPayload: null });
-  });
-
-  test('updateInstance with no options sends undefined quality payload', () => {
-    const transport = new MockTransport();
-    const manager = new AgentInstanceManager(transport, {});
-
-    manager.updateInstance();
-
-    expect(transport.updatedInstances).toHaveLength(1);
-    expect(transport.updatedInstances[0]).toEqual({ qualityPayload: undefined });
+    expect(transport.recordedQuality).toHaveLength(1);
+    expect(transport.recordedQuality[0]).toEqual({ name: 'summary_quality', payload: null });
   });
 });

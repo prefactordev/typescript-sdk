@@ -92,7 +92,7 @@ describe('HTTP endpoint clients', () => {
     expect((calls[0].options.body as Record<string, unknown>).purpose).toBeUndefined();
   });
 
-  test('agent instance client posts update to expected endpoint', async () => {
+  test('agent instance client posts record_quality to expected endpoint', async () => {
     const calls: RequestCall[] = [];
     const httpClient = {
       request: async <TResponse>(path: string, options: HttpRequestOptions = {}) => {
@@ -103,21 +103,23 @@ describe('HTTP endpoint clients', () => {
 
     const client = new AgentInstanceClient(httpClient);
 
-    await client.update('agent-instance-1', {
-      details: { quality_payload: { score: 95 } },
+    await client.recordQuality('agent-instance-1', {
+      name: 'summary_quality',
+      payload: { score: 95 },
     });
 
-    expect(calls[0].path).toBe('/api/v1/agent_instance/agent-instance-1');
-    expect(calls[0].options.method).toBe('PUT');
+    expect(calls[0].path).toBe('/api/v1/agent_instance/agent-instance-1/record_quality');
+    expect(calls[0].options.method).toBe('POST');
     expect(calls[0].options.body).toMatchObject({
-      details: { quality_payload: { score: 95 } },
+      name: 'summary_quality',
+      payload: { score: 95 },
     });
     expect((calls[0].options.body as Record<string, unknown>).idempotency_key).toMatch(
       UUID_V4_REGEX
     );
   });
 
-  test('agent instance client update sends null quality_payload', async () => {
+  test('agent instance client record_quality sends null payload to remove entry', async () => {
     const calls: RequestCall[] = [];
     const httpClient = {
       request: async <TResponse>(path: string, options: HttpRequestOptions = {}) => {
@@ -128,12 +130,14 @@ describe('HTTP endpoint clients', () => {
 
     const client = new AgentInstanceClient(httpClient);
 
-    await client.update('agent-instance-1', {
-      details: { quality_payload: null },
+    await client.recordQuality('agent-instance-1', {
+      name: 'summary_quality',
+      payload: null,
     });
 
     expect(calls[0].options.body).toMatchObject({
-      details: { quality_payload: null },
+      name: 'summary_quality',
+      payload: null,
     });
   });
 

@@ -118,10 +118,10 @@ export { withSpan } from './tracing/with-span.js';
 export {
   AgentInstanceClient,
   type AgentInstanceFinishOptions,
+  type AgentInstanceRecordQualityPayload,
   type AgentInstanceRegisterPayload,
   type AgentInstanceResponse,
   type AgentInstanceStartOptions,
-  type AgentInstanceUpdatePayload,
 } from './transport/http/agent-instance-client.js';
 export {
   AgentSpanClient,

@@ -12,7 +12,7 @@ export type PrefactorTransportOperation =
   | 'agent_register'
   | 'agent_start'
   | 'agent_finish'
-  | 'agent_update'
+  | 'agent_record_quality'
   | 'span_create'
   | 'span_finish'
   | 'shutdown';
