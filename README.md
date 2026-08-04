@@ -387,9 +387,12 @@ const config: Config = {
 
 See the `examples/` directory for complete examples:
 
-- [`examples/basic.ts`](./examples/basic.ts) - Simple LangChain.js agent example
 - [`examples/langchain/simple-agent.ts`](./examples/langchain/simple-agent.ts) - Full working example with LangChain
+- [`examples/langchain/termination-demo.ts`](./examples/langchain/termination-demo.ts) - LangChain agent termination example
 - [`examples/ai-sdk/simple-agent.ts`](./examples/ai-sdk/simple-agent.ts) - Vercel AI SDK example with tools
+- [`examples/ai-sdk/custom-schema.ts`](./examples/ai-sdk/custom-schema.ts) - Vercel AI SDK example with a custom agent schema
+- [`examples/livekit/simple-session.ts`](./examples/livekit/simple-session.ts) - LiveKit session example
+- [`examples/claude-agent/simple-agent.ts`](./examples/claude-agent/simple-agent.ts) - Claude agent example
 
 ## Skills
 
@@ -443,30 +446,30 @@ This project uses Bun with mise for toolchain management.
 mise install
 
 # Install dependencies (monorepo-wide)
-just install
+mise run install
 ```
 
 ```bash
 # Build all packages
-just build
+mise run build
 
 # Run tests
-just test
+mise run test
 
 # Type check
-just typecheck
+mise run typecheck
 
 # Lint
-just lint
+mise run lint
 
 # Format
-just format
+mise run format
 
 # Run all checks (typecheck + lint + test)
-just check
+mise run check
 
 # Clean build artifacts
-just clean
+mise run clean
 ```
 
 ### Per-Package Commands
