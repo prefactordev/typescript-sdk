@@ -36,15 +36,17 @@ export type SpanFinishAction = {
 } & FinishSpanOptions &
   RetryableActionMetadata;
 
-export type AgentUpdateAction = {
-  type: 'agent_update';
-  /** Quality evaluation payload for this instance (omit to keep current; null to clear). */
-  qualityPayload?: Record<string, unknown> | null;
+export type AgentRecordQualityAction = {
+  type: 'agent_record_quality';
+  /** Quality schema name (key in the agent schema version quality_schemas). */
+  name: string;
+  /** Quality payload for this name, or null to remove the recorded payload. */
+  payload: Record<string, unknown> | null;
 } & RetryableActionMetadata;
 
 export type TransportAction =
   | AgentStartAction
   | AgentFinishAction
-  | AgentUpdateAction
+  | AgentRecordQualityAction
   | SpanEndAction
   | SpanFinishAction;

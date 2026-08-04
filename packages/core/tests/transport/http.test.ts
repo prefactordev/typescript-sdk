@@ -596,7 +596,7 @@ describe('HttpTransport', () => {
     expect(registerPayload.purpose).toBeUndefined();
   });
 
-  test('sends update agent instance call with quality payload', async () => {
+  test('sends record_quality call with named quality payload', async () => {
     const fetchCalls: Array<{ url: string; options?: RequestInit }> = [];
     globalThis.fetch = (async (url, options) => {
       fetchCalls.push({ url: String(url), options });
@@ -615,18 +615,19 @@ describe('HttpTransport', () => {
 
     const transport = new HttpTransport(createConfig());
     transport.startAgentInstance();
-    transport.updateAgentInstance({ qualityPayload: { score: 95, passed: true } });
+    transport.recordQuality({ name: 'summary_quality', payload: { score: 95, passed: true } });
     await transport.close();
 
-    const updateCall = fetchCalls.find((call) =>
-      call.url.endsWith('/api/v1/agent_instance/agent-instance-1')
+    const recordCall = fetchCalls.find((call) =>
+      call.url.endsWith('/api/v1/agent_instance/agent-instance-1/record_quality')
     );
-    expect(updateCall).toBeDefined();
-    const updatePayload = JSON.parse(String(updateCall?.options?.body)) as Record<string, unknown>;
-    expect(updatePayload.details).toEqual({ quality_payload: { score: 95, passed: true } });
+    expect(recordCall).toBeDefined();
+    const recordPayload = JSON.parse(String(recordCall?.options?.body)) as Record<string, unknown>;
+    expect(recordPayload.name).toBe('summary_quality');
+    expect(recordPayload.payload).toEqual({ score: 95, passed: true });
   });
 
-  test('sends update agent instance call with null quality payload', async () => {
+  test('sends record_quality call with null payload to remove entry', async () => {
     const fetchCalls: Array<{ url: string; options?: RequestInit }> = [];
     globalThis.fetch = (async (url, options) => {
       fetchCalls.push({ url: String(url), options });
@@ -645,14 +646,15 @@ describe('HttpTransport', () => {
 
     const transport = new HttpTransport(createConfig());
     transport.startAgentInstance();
-    transport.updateAgentInstance({ qualityPayload: null });
+    transport.recordQuality({ name: 'summary_quality', payload: null });
     await transport.close();
 
-    const updateCall = fetchCalls.find((call) =>
-      call.url.endsWith('/api/v1/agent_instance/agent-instance-1')
+    const recordCall = fetchCalls.find((call) =>
+      call.url.endsWith('/api/v1/agent_instance/agent-instance-1/record_quality')
     );
-    expect(updateCall).toBeDefined();
-    const updatePayload = JSON.parse(String(updateCall?.options?.body)) as Record<string, unknown>;
-    expect(updatePayload.details).toEqual({ quality_payload: null });
+    expect(recordCall).toBeDefined();
+    const recordPayload = JSON.parse(String(recordCall?.options?.body)) as Record<string, unknown>;
+    expect(recordPayload.name).toBe('summary_quality');
+    expect(recordPayload.payload).toBeNull();
   });
 });

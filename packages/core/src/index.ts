@@ -121,7 +121,7 @@ export {
   type AgentInstanceRegisterPayload,
   type AgentInstanceResponse,
   type AgentInstanceStartOptions,
-  type AgentInstanceUpdatePayload,
+  type AgentInstanceRecordQualityPayload,
 } from './transport/http/agent-instance-client.js';
 export {
   AgentSpanClient,

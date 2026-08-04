@@ -22,13 +22,20 @@ export interface SpanTypeSchema {
 }
 
 /**
- * Schema definition for a quality evaluation, mirroring the shape of span type schemas.
- * Rendered through the same template machinery as span schemas.
+ * Named schema definition for a quality evaluation.
+ *
+ * Each entry in `AgentSchemaVersion.quality_schemas` carries a name (the key
+ * used when recording quality payloads on an agent instance) alongside the
+ * JSON schema, optional display metadata, and data-risk fields.
+ *
+ * Rendered through the same template machinery as span type schemas.
  */
 export interface QualitySchema {
+  /** Schema name — the key used when recording quality payloads. */
+  name: string;
   /** JSON Schema describing the quality payload shape. */
   schema: JsonSchema;
-  /** Human-readable title. Defaults to 'quality' when omitted. */
+  /** Human-readable title. Defaults to `name` when omitted. */
   title?: string;
   /** Optional human-readable description. */
   description?: string;
@@ -47,6 +54,6 @@ export interface AgentSchemaVersion {
   external_identifier: string;
   /** Array of span type schema definitions. */
   span_type_schemas: SpanTypeSchema[];
-  /** Optional quality schema for instance evaluations. */
-  quality_schema?: QualitySchema;
+  /** Named quality schemas for instance evaluations. */
+  quality_schemas?: QualitySchema[];
 }

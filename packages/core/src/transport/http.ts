@@ -7,8 +7,8 @@ import type {
 import { PrefactorFatalError, PrefactorShutdownError } from '../errors.js';
 import type {
   AgentFinishAction,
+  AgentRecordQualityAction,
   AgentStartAction,
-  AgentUpdateAction,
   SpanEndAction,
   SpanFinishAction,
   TransportAction,
@@ -56,7 +56,7 @@ type HttpTransportOptions = {
 type RetryableAction =
   | AgentStartAction
   | AgentFinishAction
-  | AgentUpdateAction
+  | AgentRecordQualityAction
   | SpanEndAction
   | SpanFinishAction;
 type RetryTimerMetadata = {
@@ -92,10 +92,13 @@ export interface Transport {
   finishAgentInstance(): void;
 
   /**
-   * Updates the agent instance with the given payload.
-   * Currently supports updating the quality_payload field.
+   * Records a quality payload on the agent instance for a named quality schema.
+   * A null payload removes the recorded value for that name.
    */
-  updateAgentInstance(payload: { qualityPayload?: Record<string, unknown> | null }): void;
+  recordQuality(payload: {
+    name: string;
+    payload: Record<string, unknown> | null;
+  }): void;
 
   registerSchema(schema: Record<string, unknown>): void;
 
@@ -232,15 +235,19 @@ export class HttpTransport implements Transport {
     });
   }
 
-  updateAgentInstance(payload: { qualityPayload?: Record<string, unknown> | null }): void {
+  recordQuality(payload: {
+    name: string;
+    payload: Record<string, unknown> | null;
+  }): void {
     if (this.fatalError || this.closed) {
       return;
     }
 
-    this.assertUsable('agent_update');
+    this.assertUsable('agent_record_quality');
     this.enqueue({
-      type: 'agent_update',
-      qualityPayload: payload.qualityPayload,
+      type: 'agent_record_quality',
+      name: payload.name,
+      payload: payload.payload,
       idempotencyKey: createActionIdempotencyKey(),
       retryAttempt: 0,
     });
@@ -419,8 +426,8 @@ export class HttpTransport implements Transport {
       case 'agent_finish':
         await this.processAgentFinish(action);
         return;
-      case 'agent_update':
-        await this.processAgentUpdate(action);
+      case 'agent_record_quality':
+        await this.processAgentRecordQuality(action);
         return;
       case 'span_end':
         await this.processSpanCreate(action);
@@ -457,12 +464,12 @@ export class HttpTransport implements Transport {
     }
   }
 
-  private async processAgentUpdate(action: AgentUpdateAction): Promise<void> {
+  private async processAgentRecordQuality(action: AgentRecordQualityAction): Promise<void> {
     try {
-      await this.updateAgentInstanceHttp(action);
+      await this.recordQualityHttp(action);
       this.recordActionSuccess(action);
     } catch (error) {
-      this.handleActionError('agent_update', action, error);
+      this.handleActionError('agent_record_quality', action, error);
     }
   }
 
@@ -996,16 +1003,15 @@ export class HttpTransport implements Transport {
     this.currentAgentRegisterIdempotencyKey = null;
   }
 
-  private async updateAgentInstanceHttp(action: AgentUpdateAction): Promise<void> {
+  private async recordQualityHttp(action: AgentRecordQualityAction): Promise<void> {
     if (!this.agentInstanceId) {
-      this.recordPartialTelemetry('Cannot update agent instance: not registered');
+      this.recordPartialTelemetry('Cannot record quality: agent instance not registered');
       return;
     }
 
-    await this.agentInstanceClient.update(this.agentInstanceId, {
-      details: {
-        quality_payload: action.qualityPayload,
-      },
+    await this.agentInstanceClient.recordQuality(this.agentInstanceId, {
+      name: action.name,
+      payload: action.payload,
       idempotency_key: action.idempotencyKey,
     });
   }
@@ -1117,8 +1123,8 @@ function operationForAction(action: TransportAction): PrefactorTransportOperatio
       return 'agent_start';
     case 'agent_finish':
       return 'agent_finish';
-    case 'agent_update':
-      return 'agent_update';
+    case 'agent_record_quality':
+      return 'agent_record_quality';
     case 'span_end':
       return 'span_create';
     case 'span_finish':
@@ -1141,7 +1147,7 @@ function isAgentNotFoundFailure(
     operation !== 'agent_register' &&
     operation !== 'agent_start' &&
     operation !== 'agent_finish' &&
-    operation !== 'agent_update'
+    operation !== 'agent_record_quality'
   ) {
     return false;
   }
