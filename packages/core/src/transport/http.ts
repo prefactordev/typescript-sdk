@@ -95,10 +95,7 @@ export interface Transport {
    * Records a quality payload on the agent instance for a named quality schema.
    * A null payload removes the recorded value for that name.
    */
-  recordQuality(payload: {
-    name: string;
-    payload: Record<string, unknown> | null;
-  }): void;
+  recordQuality(payload: { name: string; payload: Record<string, unknown> | null }): void;
 
   registerSchema(schema: Record<string, unknown>): void;
 
@@ -235,10 +232,7 @@ export class HttpTransport implements Transport {
     });
   }
 
-  recordQuality(payload: {
-    name: string;
-    payload: Record<string, unknown> | null;
-  }): void {
+  recordQuality(payload: { name: string; payload: Record<string, unknown> | null }): void {
     if (this.fatalError || this.closed) {
       return;
     }

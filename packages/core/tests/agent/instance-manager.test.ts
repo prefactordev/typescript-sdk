@@ -165,7 +165,10 @@ describe('AgentInstanceManager', () => {
     manager.recordQuality({ name: 'summary_quality', payload: { score: 95 } });
 
     expect(transport.recordedQuality).toHaveLength(1);
-    expect(transport.recordedQuality[0]).toEqual({ name: 'summary_quality', payload: { score: 95 } });
+    expect(transport.recordedQuality[0]).toEqual({
+      name: 'summary_quality',
+      payload: { score: 95 },
+    });
   });
 
   test('recordQuality forwards null payload to remove a named quality entry', () => {
