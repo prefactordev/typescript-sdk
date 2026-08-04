@@ -1,5 +1,12 @@
 # @prefactor/cli
 
+## 0.2.1
+
+### Patch Changes
+
+- Updated dependencies [[`f768847`](https://github.com/prefactordev/typescript-sdk/commit/f768847fa1d1c79a239553cb7e8cf1111554da49), [`83a3c2f`](https://github.com/prefactordev/typescript-sdk/commit/83a3c2f36366be0021dba16d90799a9ec9e3b782)]:
+  - @prefactor/core@1.0.0
+
 ## 0.2.0
 
 ### Minor Changes
