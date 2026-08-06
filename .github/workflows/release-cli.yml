@@ -334,7 +334,7 @@ jobs:
           cd dist/cli
           sha256sum -- *.tar.gz *.zip > SHA256SUMS
       - name: Create stable release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ steps.release.outputs.tag }}
           target_commitish: ${{ github.sha }}
@@ -353,7 +353,10 @@ jobs:
       cancel-in-progress: true
     steps:
       - name: Delete canary tag
-        run: gh api -X DELETE /repos/${{ github.repository }}/git/refs/tags/canary || true
+        run: |
+          output=$(gh api -X DELETE /repos/${{ github.repository }}/git/refs/tags/canary 2>&1) || {
+            echo "$output" | grep -q "404" || { echo "$output" >&2; exit 1; }
+          }
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - uses: actions/download-artifact@v4
@@ -365,7 +368,7 @@ jobs:
           cd dist/cli
           sha256sum -- *.tar.gz *.zip > SHA256SUMS
       - name: Publish canary release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: canary
           target_commitish: ${{ github.sha }}
