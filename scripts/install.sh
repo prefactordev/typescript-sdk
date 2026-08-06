@@ -97,7 +97,7 @@ detect_libc() {
     return
   fi
 
-  if command_exists ldd && ldd --version 2>&1 | grep -qi musl; then
+  if command_exists ldd && { ldd --version 2>&1 || true; } | grep -qi musl; then
     printf 'musl'
     return
   fi
