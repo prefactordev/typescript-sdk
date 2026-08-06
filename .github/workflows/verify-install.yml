@@ -14,7 +14,9 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: Release tag to verify (e.g. v0.2.0 or canary).
+        description: Release tag to verify — a stable version (e.g. v0.2.0),
+          "canary" for the rolling build, or "stable" to resolve and test
+          whatever releases/latest currently points to.
         required: true
         type: string
 
@@ -39,6 +41,8 @@ jobs:
         env:
           DISPATCH_TAG: ${{ inputs.tag }}
           RELEASE_TAG: ${{ github.event.release.tag_name }}
+          REPO: prefactordev/typescript-sdk
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -eu
 
@@ -48,19 +52,24 @@ jobs:
             tag="$RELEASE_TAG"
           fi
 
-          # Only CLI releases are verified: the rolling canary build, or a
-          # tagged vX.Y.Z stable release. Any other release (e.g. a stray npm
-          # package release) is skipped.
+          # Only CLI releases are verified: the rolling canary build, a
+          # tagged vX.Y.Z stable release, or the special "stable" keyword
+          # which resolves whatever releases/latest currently points to.
+          # Any other release (e.g. a stray npm package release) is skipped.
           if [ "$tag" = "canary" ]; then
             channels='["latest"]'
             expected_tag="canary"
+          elif [ "$tag" = "stable" ]; then
+            tag="$(gh release view --repo "$REPO" latest --json tagName --jq .tagName)"
+            channels='["stable"]'
+            expected_tag="$tag"
           elif [[ "$tag" =~ ^v?[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
             channels='["stable","pinned"]'
             norm="$tag"
             [[ "$norm" != v* ]] && norm="v$norm"
             expected_tag="$norm"
           else
-            echo "Skipping: release tag '$tag' is not a CLI release (canary or vX.Y.Z)."
+            echo "Skipping: release tag '$tag' is not a CLI release (canary, stable, or vX.Y.Z)."
             echo "skip=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
