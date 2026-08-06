@@ -186,7 +186,7 @@ jobs:
             latest) arg="latest" ;;
             pinned) arg="$EXPECTED_TAG" ;;
           esac
-          curl -fsSL "https://raw.githubusercontent.com/$REPO/$EXPECTED_TAG/scripts/install.sh" | bash -s -- $arg
+          curl -fsSL "https://raw.githubusercontent.com/$REPO/main/scripts/install.sh" | bash -s -- $arg
           version_output="$("$HOME/.prefactor/bin/prefactor" --version)"
           [ -n "$version_output" ] || { echo "Empty version output"; exit 1; }
           echo "Installed version: $version_output"
@@ -212,7 +212,7 @@ jobs:
                 latest) arg="latest" ;;
                 pinned) arg="$EXPECTED_TAG" ;;
               esac
-              curl -fsSL "https://raw.githubusercontent.com/$REPO/$EXPECTED_TAG/scripts/install.sh" | bash -s -- $arg
+              curl -fsSL "https://raw.githubusercontent.com/$REPO/main/scripts/install.sh" | bash -s -- $arg
               version_output="$("$HOME/.prefactor/bin/prefactor" --version)"
               [ -n "$version_output" ] || { echo "Empty version output"; exit 1; }
               echo "Installed version: $version_output"
@@ -232,7 +232,7 @@ jobs:
             "latest" { "latest" }
             "pinned" { $env:EXPECTED_TAG }
           }
-          $script = (irm "https://raw.githubusercontent.com/$env:REPO/$env:EXPECTED_TAG/scripts/install.ps1")
+          $script = (irm "https://raw.githubusercontent.com/$env:REPO/main/scripts/install.ps1")
           if ($arg) {
             & ([scriptblock]::Create($script)) $arg
           } else {
