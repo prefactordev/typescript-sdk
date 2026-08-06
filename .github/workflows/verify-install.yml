@@ -36,13 +36,16 @@ jobs:
     steps:
       - name: Resolve channels and build platform matrix
         id: matrix
+        env:
+          DISPATCH_TAG: ${{ inputs.tag }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
         run: |
           set -eu
 
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            tag="${{ inputs.tag }}"
+            tag="$DISPATCH_TAG"
           else
-            tag="${{ github.event.release.tag_name }}"
+            tag="$RELEASE_TAG"
           fi
 
           # Only CLI releases are verified: the rolling canary build, or a
@@ -155,8 +158,11 @@ jobs:
             pinned) arg="$EXPECTED_TAG" ;;
           esac
           curl -fsSL "https://raw.githubusercontent.com/$REPO/$EXPECTED_TAG/scripts/install.sh" | bash -s -- $arg
-          "$HOME/.prefactor/bin/prefactor" --version
+          version_output="$("$HOME/.prefactor/bin/prefactor" --version)"
+          [ -n "$version_output" ] || { echo "Empty version output"; exit 1; }
+          echo "Installed version: $version_output"
           "$HOME/.prefactor/bin/prefactor" doctor | tee doctor.log
+          grep -q "channel: $CHANNEL" doctor.log
           grep -q "resolvedTag: $EXPECTED_TAG" doctor.log
 
       - name: Install via install.sh (real release, musl in alpine)
@@ -178,8 +184,11 @@ jobs:
                 pinned) arg="$EXPECTED_TAG" ;;
               esac
               curl -fsSL "https://raw.githubusercontent.com/$REPO/$EXPECTED_TAG/scripts/install.sh" | bash -s -- $arg
-              "$HOME/.prefactor/bin/prefactor" --version
+              version_output="$("$HOME/.prefactor/bin/prefactor" --version)"
+              [ -n "$version_output" ] || { echo "Empty version output"; exit 1; }
+              echo "Installed version: $version_output"
               "$HOME/.prefactor/bin/prefactor" doctor | tee /tmp/doctor.log
+              grep -q "channel: $CHANNEL" /tmp/doctor.log
               grep -q "resolvedTag: $EXPECTED_TAG" /tmp/doctor.log
             '
 
@@ -200,9 +209,15 @@ jobs:
           } else {
             & ([scriptblock]::Create($script))
           }
-          & "$env:USERPROFILE\.prefactor\bin\prefactor.exe" --version
+          $versionOutput = & "$env:USERPROFILE\.prefactor\bin\prefactor.exe" --version
+          if (-not $versionOutput) { Write-Error "Empty version output"; exit 1 }
+          Write-Host "Installed version: $versionOutput"
           $doctor = & "$env:USERPROFILE\.prefactor\bin\prefactor.exe" doctor 2>&1 | Out-String
           Write-Host $doctor
+          if ($doctor -notmatch "channel: $env:CHANNEL") {
+            Write-Error "Expected channel '$env:CHANNEL' not found in doctor output"
+            exit 1
+          }
           if ($doctor -notmatch "resolvedTag: $env:EXPECTED_TAG") {
             Write-Error "Expected resolvedTag '$env:EXPECTED_TAG' not found in doctor output"
             exit 1
