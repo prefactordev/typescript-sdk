@@ -334,10 +334,53 @@ jobs:
           cd dist/cli
           sha256sum -- *.tar.gz *.zip > SHA256SUMS
       - name: Create stable release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ steps.release.outputs.tag }}
           target_commitish: ${{ github.sha }}
           prerelease: false
           draft: false
           files: dist/cli/*
+
+  release-canary:
+    runs-on: ubuntu-latest
+    needs: [build, smoke-test]
+    if: always() && !cancelled() && !failure() && github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.build.result == 'success' && needs.smoke-test.result == 'success'
+    permissions:
+      contents: write
+    concurrency:
+      group: ${{ format('{0}-canary-release', github.repository) }}
+      cancel-in-progress: true
+    steps:
+      - name: Delete canary tag
+        run: |
+          output=$(gh api -X DELETE /repos/${{ github.repository }}/git/refs/tags/canary 2>&1) || {
+            echo "$output" | grep -q "404" || { echo "$output" >&2; exit 1; }
+          }
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist/cli
+          merge-multiple: true
+      - name: Generate checksums
+        run: |
+          cd dist/cli
+          sha256sum -- *.tar.gz *.zip > SHA256SUMS
+      - name: Publish canary release
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: canary
+          target_commitish: ${{ github.sha }}
+          prerelease: true
+          make_latest: "false"
+          draft: false
+          files: dist/cli/*
+          body: |
+            Rolling canary build of the Prefactor CLI from `${{ github.sha }}` on `${{ github.ref_name }}`.
+
+            Install with:
+
+            ```bash
+            curl -fsSL https://raw.githubusercontent.com/prefactordev/typescript-sdk/main/scripts/install.sh | bash -s -- latest
+            ```

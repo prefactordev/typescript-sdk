@@ -45,6 +45,7 @@ jobs:
           publish: bun run release:npm
           commit: 'chore: version packages'
           title: 'chore: version packages'
+          createGithubReleases: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
