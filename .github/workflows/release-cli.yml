@@ -355,7 +355,7 @@ jobs:
       - name: Delete canary tag
         run: |
           output=$(gh api -X DELETE /repos/${{ github.repository }}/git/refs/tags/canary 2>&1) || {
-            echo "$output" | grep -q "404" || { echo "$output" >&2; exit 1; }
+            echo "$output" | grep -qE "404|422|Reference does not exist" || { echo "$output" >&2; exit 1; }
           }
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
