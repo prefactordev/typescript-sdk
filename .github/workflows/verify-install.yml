@@ -60,7 +60,12 @@ jobs:
             channels='["latest"]'
             expected_tag="canary"
           elif [ "$tag" = "stable" ]; then
-            tag="$(gh release view --repo "$REPO" latest --json tagName --jq .tagName)"
+            tag="$(gh release view --repo "$REPO" --json tagName --jq .tagName)"
+            if ! [[ "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              echo "Skipping: releases/latest resolved to '$tag' which is not a CLI release (vX.Y.Z)."
+              echo "skip=true" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
             channels='["stable"]'
             expected_tag="$tag"
           elif [[ "$tag" =~ ^v?[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
@@ -109,6 +114,7 @@ jobs:
       CHANNEL: ${{ matrix.channel }}
       ASSET: ${{ matrix.asset }}
       REPO: prefactordev/typescript-sdk
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - name: Wait for release assets to be resolvable (unix)
         if: matrix.script == 'bash'
@@ -116,7 +122,13 @@ jobs:
         run: |
           set -eu
           case "$CHANNEL" in
-            stable) base="https://github.com/$REPO/releases/latest/download" ;;
+            stable)
+              current_latest="$(gh release view --repo "$REPO" --json tagName --jq .tagName)"
+              if [ "$current_latest" != "$EXPECTED_TAG" ]; then
+                echo "releases/latest moved from $EXPECTED_TAG to $current_latest during run; aborting"
+                exit 1
+              fi
+              base="https://github.com/$REPO/releases/latest/download" ;;
             pinned) base="https://github.com/$REPO/releases/download/$EXPECTED_TAG" ;;
             latest) base="https://github.com/$REPO/releases/download/canary" ;;
           esac
@@ -137,7 +149,14 @@ jobs:
         shell: pwsh
         run: |
           switch ($env:CHANNEL) {
-            "stable" { $base = "https://github.com/$env:REPO/releases/latest/download" }
+            "stable" {
+              $currentLatest = gh release view --repo $env:REPO --json tagName --jq .tagName
+              if ($currentLatest -ne $env:EXPECTED_TAG) {
+                Write-Error "releases/latest moved from $env:EXPECTED_TAG to $currentLatest during run; aborting"
+                exit 1
+              }
+              $base = "https://github.com/$env:REPO/releases/latest/download"
+            }
             "pinned" { $base = "https://github.com/$env:REPO/releases/download/$env:EXPECTED_TAG" }
             "latest" { $base = "https://github.com/$env:REPO/releases/download/canary" }
           }
