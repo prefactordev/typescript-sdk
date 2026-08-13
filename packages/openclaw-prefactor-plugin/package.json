@@ -38,7 +38,7 @@
     "@prefactor/core": "^1.0.0"
   },
   "devDependencies": {
-    "openclaw": "^2026.3.28",
+    "openclaw": "^2026.7.1",
     "typescript": "^5.0.0",
     "@types/node": "^22.0.0"
   },
