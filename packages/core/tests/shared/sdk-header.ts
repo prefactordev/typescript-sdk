@@ -97,5 +97,5 @@ export function expectRuntimeEnvironment(
   expect(runtimeEnvironment?.agent_sdk).toEqual(expectedAgentSdk);
   expect(runtimeEnvironment?.prefactor_sdk).toEqual([`${PACKAGE_NAME}@${PACKAGE_VERSION}`]);
   expect(typeof runtimeEnvironment?.os).toBe('string');
-  expect(typeof runtimeEnvironment?.runtime).toBe('string');
+  expect(runtimeEnvironment?.runtime).toMatch(/^(node|bun|deno)@.+/);
 }

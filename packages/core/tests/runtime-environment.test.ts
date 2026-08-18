@@ -16,7 +16,7 @@ describe('buildRuntimeEnvironment', () => {
 
   test('runtime identifies the JavaScript runtime', () => {
     const result = buildRuntimeEnvironment();
-    expect(result.runtime).toMatch(/^(node|bun|deno)@/);
+    expect(result.runtime).toMatch(/^(node|bun|deno)@.+/);
   });
 
   test('prefactor_sdk includes the core package', () => {
