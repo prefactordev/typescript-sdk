@@ -6,7 +6,7 @@ import { withSpan } from '../src/tracing/with-span.js';
 import { PACKAGE_NAME, PACKAGE_VERSION } from '../src/version.js';
 import {
   createSdkHeaderFetchRecorder,
-  expectRuntimeMetadataOmitted,
+  expectRuntimeEnvironment,
   expectSdkHeaderHeaders,
 } from './shared/sdk-header.js';
 
@@ -118,7 +118,7 @@ describe('createCore', () => {
       const payload = recorder.getRegisterPayload();
 
       expect(headers.get('X-Prefactor-SDK')).toBe(CORE_SDK_HEADER_ENTRY);
-      expectRuntimeMetadataOmitted(payload);
+      expectRuntimeEnvironment(payload);
     } finally {
       if (!isShutdown) {
         await core.shutdown();
@@ -147,6 +147,7 @@ describe('createCore', () => {
       isShutdown = true;
 
       expectSdkHeaderHeaders(recorder.getRegisterHeaders(), 'prefactor/ai@0.3.1');
+      expectRuntimeEnvironment(recorder.getRegisterPayload(), ['@prefactor/ai@0.3.1']);
     } finally {
       if (!isShutdown) {
         await core.shutdown();

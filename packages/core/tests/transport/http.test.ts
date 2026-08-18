@@ -55,8 +55,44 @@ describe('HttpTransport', () => {
     const registerHeaders = new Headers(fetchCalls[0]?.options?.headers);
     expect(registerPayload.agent_id).toBe('agent-123');
     expect(registerPayload.agent_schema_version).toEqual({ type: 'object' });
-    expect(registerPayload.runtime_environment).toBeUndefined();
+    const agentVersion = registerPayload.agent_version as Record<string, unknown>;
+    expect(agentVersion.runtime_environment).toBeDefined();
     expect(registerHeaders.get('X-Prefactor-SDK')).toBe(DEFAULT_SDK_HEADER);
+  });
+
+  test('includes runtime_environment in agent_version on register', async () => {
+    const fetchCalls: Array<{ url: string; options?: RequestInit }> = [];
+    globalThis.fetch = (async (url, options) => {
+      fetchCalls.push({ url: String(url), options });
+      if (String(url).endsWith('/agent_instance/register')) {
+        return new Response(JSON.stringify({ details: { id: 'agent-instance-1' } }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+
+      return new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }) as unknown as typeof fetch;
+
+    const transport = new HttpTransport(createConfig(), {
+      sdkHeaderEntry: '@prefactor/langchain@2.0.0',
+    });
+    transport.startAgentInstance();
+    await transport.close();
+
+    const registerPayload = JSON.parse(fetchCalls[0]?.options?.body as string) as Record<
+      string,
+      unknown
+    >;
+    const agentVersion = registerPayload.agent_version as Record<string, unknown>;
+    const runtimeEnvironment = agentVersion.runtime_environment as Record<string, unknown>;
+    expect(runtimeEnvironment.agent_sdk).toEqual(['@prefactor/langchain@2.0.0']);
+    expect(runtimeEnvironment.prefactor_sdk).toEqual([`${PACKAGE_NAME}@${PACKAGE_VERSION}`]);
+    expect(typeof runtimeEnvironment.os).toBe('string');
+    expect(typeof runtimeEnvironment.runtime).toBe('string');
   });
 
   test('buffers span finish until span emit maps backend id', async () => {
@@ -325,7 +361,7 @@ describe('HttpTransport', () => {
       unknown
     >;
     expect(registerPayload.agent_schema_version).toEqual(updatedSchema);
-    expect(registerPayload.agent_version).toEqual({
+    expect(registerPayload.agent_version).toMatchObject({
       external_identifier: 'v1.1.0',
       name: 'Agent',
       description: '',

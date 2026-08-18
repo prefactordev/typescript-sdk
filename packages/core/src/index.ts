@@ -89,6 +89,7 @@ export {
   type TerminationCallback,
   TerminationMonitor,
 } from './monitoring/termination-monitor.js';
+export { buildRuntimeEnvironment, type RuntimeEnvironment } from './runtime-environment.js';
 export {
   type JsonSchema,
   normalizeAgentToolSchemas,
