@@ -1,5 +1,11 @@
 # @prefactor/core
 
+## 1.1.0
+
+### Minor Changes
+
+- [#68](https://github.com/prefactordev/typescript-sdk/pull/68) [`3cc5275`](https://github.com/prefactordev/typescript-sdk/commit/3cc527593726818214bdb4fb4c80f592c18dc8cb) Thanks [@joshgillies](https://github.com/joshgillies)! - Report runtime environment at agent registration. The SDK now automatically populates the optional `runtime_environment` field of `agent_version` with `prefactor_sdk` (the core SDK `@prefactor/core@<version>` entry), `agent_sdk` (upstream adaptor packages from the SDK header chain), `runtime` (the JavaScript runtime and version, e.g. `node@22.12.0` or `bun@1.2.3`), and `os` (the host platform). No user configuration is required.
+
 ## 1.0.0
 
 ### Major Changes
