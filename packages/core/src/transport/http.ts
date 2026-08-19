@@ -15,6 +15,7 @@ import type {
 } from '../queue/actions.js';
 import { InMemoryQueue } from '../queue/in-memory-queue.js';
 import { TaskExecutor } from '../queue/task-executor.js';
+import { buildRuntimeEnvironment } from '../runtime-environment.js';
 import { buildSpanResultPayload } from '../tracing/result-payload.js';
 import type { Span } from '../tracing/span.js';
 import { getLogger } from '../utils/logging.js';
@@ -135,6 +136,7 @@ export class HttpTransport implements Transport {
   private readonly agentSpanClient: AgentSpanClient;
   private readonly httpClient: HttpClient;
   private readonly onFatalError?: (error: PrefactorFatalError) => void;
+  private readonly sdkHeaderEntry: string | undefined;
   private readonly retryTimers = new Map<ReturnType<typeof setTimeout>, RetryTimerMetadata>();
   private readonly transientFailureCounts = new Map<string, number>();
   private previousAgentSchema: string | null = null;
@@ -168,6 +170,7 @@ export class HttpTransport implements Transport {
     this.agentInstanceClient = new AgentInstanceClient(httpClient);
     this.agentSpanClient = new AgentSpanClient(httpClient);
     this.onFatalError = resolvedOptions.failureHandling?.onFatalError;
+    this.sdkHeaderEntry = resolvedOptions.sdkHeaderEntry;
     this.latestAgentIdentifier = config.agentIdentifier;
     this.taskExecutor = new TaskExecutor(this.actionQueue, this.processAction, {
       workerCount: 1,
@@ -904,6 +907,7 @@ export class HttpTransport implements Transport {
         external_identifier: this.config.agentIdentifier,
         name: this.config.agentName || 'Agent',
         description: this.config.agentDescription || '',
+        runtime_environment: buildRuntimeEnvironment(this.sdkHeaderEntry),
       };
     }
 

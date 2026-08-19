@@ -10,7 +10,7 @@ import {
 } from '@prefactor/core';
 import {
   createSdkHeaderFetchRecorder,
-  expectRuntimeMetadataOmitted,
+  expectRuntimeEnvironment,
   expectSdkHeaderHeaders,
 } from '../../core/tests/shared/sdk-header.js';
 import { init, shutdown, withSpan } from '../src/init.js';
@@ -304,7 +304,7 @@ describe('ai init schema registration', () => {
     expect(finishCalls).toBe(1);
   });
 
-  test('sends adapter sdk header for package init and omits runtime metadata body fields', async () => {
+  test('sends adapter sdk header and runtime environment for package init', async () => {
     const recorder = createSdkHeaderFetchRecorder({ includeSpanResponses: true });
     globalThis.fetch = recorder.fetch;
 
@@ -320,7 +320,7 @@ describe('ai init schema registration', () => {
     await shutdown();
 
     expectSdkHeaderHeaders(recorder.getRegisterHeaders(), AI_SDK_HEADER_ENTRY);
-    expectRuntimeMetadataOmitted(recorder.getRegisterPayload());
+    expectRuntimeEnvironment(recorder.getRegisterPayload(), [AI_SDK_HEADER_ENTRY]);
   });
 
   test('sends adapter sdk header for the core provider path', async () => {

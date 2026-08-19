@@ -1,3 +1,4 @@
+import type { RuntimeEnvironment } from '../../runtime-environment.js';
 import type { AgentSchemaVersion } from '../../tracing/span-schema.js';
 import type { HttpRequester } from './http-client.js';
 import { ensureIdempotencyKey } from './idempotency.js';
@@ -11,6 +12,7 @@ export type AgentInstanceRegisterPayload = {
     external_identifier: string;
     name: string;
     description: string;
+    runtime_environment?: RuntimeEnvironment;
   };
   agent_schema_version?: AgentSchemaVersion;
   idempotency_key?: string;

@@ -731,13 +731,13 @@ describe('HttpTransport failure modes', () => {
 
     expect(registerBodies).toHaveLength(2);
     expect(registerBodies[0]?.agent_schema_version).toEqual({ type: 'object' });
-    expect(registerBodies[0]?.agent_version).toEqual({
+    expect(registerBodies[0]?.agent_version).toMatchObject({
       external_identifier: 'v1.0.0',
       name: 'Agent',
       description: '',
     });
     expect(registerBodies[1]?.agent_schema_version).toEqual(updatedSchema);
-    expect(registerBodies[1]?.agent_version).toEqual({
+    expect(registerBodies[1]?.agent_version).toMatchObject({
       external_identifier: 'v1.1.0',
       name: 'Agent',
       description: '',

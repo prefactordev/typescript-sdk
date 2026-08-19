@@ -1,4 +1,5 @@
 import { expect } from 'bun:test';
+import { PACKAGE_NAME, PACKAGE_VERSION } from '../../src/version.js';
 
 type FetchCall = {
   url: string;
@@ -82,6 +83,19 @@ export function expectSdkHeaderHeaders(headers: Headers, sdkHeaderEntry: string)
   expect(headers.get('X-Prefactor-SDK')).toContain('prefactor/core@');
 }
 
-export function expectRuntimeMetadataOmitted(payload: Record<string, unknown>): void {
-  expect(payload.runtime_environment).toBeUndefined();
+export function expectRuntimeEnvironment(
+  payload: Record<string, unknown>,
+  expectedAgentSdk: string[] = []
+): void {
+  const agentVersion = payload.agent_version as Record<string, unknown> | undefined;
+  expect(agentVersion).toBeDefined();
+
+  const runtimeEnvironment = agentVersion?.runtime_environment as
+    | Record<string, unknown>
+    | undefined;
+  expect(runtimeEnvironment).toBeDefined();
+  expect(runtimeEnvironment?.agent_sdk).toEqual(expectedAgentSdk);
+  expect(runtimeEnvironment?.prefactor_sdk).toEqual([`${PACKAGE_NAME}@${PACKAGE_VERSION}`]);
+  expect(typeof runtimeEnvironment?.os).toBe('string');
+  expect(runtimeEnvironment?.runtime).toMatch(/^(node|bun|deno)@.+/);
 }

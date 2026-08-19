@@ -3,7 +3,7 @@ import type { Query } from '@anthropic-ai/claude-agent-sdk';
 import { getClient, init as initCore } from '@prefactor/core';
 import {
   createSdkHeaderFetchRecorder,
-  expectRuntimeMetadataOmitted,
+  expectRuntimeEnvironment,
   expectSdkHeaderHeaders,
 } from '../../core/tests/shared/sdk-header.js';
 import { DEFAULT_CLAUDE_AGENT_SCHEMA, PrefactorClaude } from '../src/index.js';
@@ -225,7 +225,7 @@ describe('PrefactorClaude', () => {
     expect((provider as any).runtimeController).toBeNull();
   });
 
-  test('sends adapter sdk header for the core provider path and omits runtime metadata fields', async () => {
+  test('sends adapter sdk header and runtime environment for the core provider path', async () => {
     const recorder = createSdkHeaderFetchRecorder();
     globalThis.fetch = recorder.fetch;
 
@@ -241,6 +241,6 @@ describe('PrefactorClaude', () => {
     await prefactor.shutdown();
 
     expectSdkHeaderHeaders(recorder.getRegisterHeaders(), CLAUDE_SDK_HEADER_ENTRY);
-    expectRuntimeMetadataOmitted(recorder.getRegisterPayload());
+    expectRuntimeEnvironment(recorder.getRegisterPayload(), [CLAUDE_SDK_HEADER_ENTRY]);
   });
 });
