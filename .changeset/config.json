@@ -12,6 +12,7 @@
   "access": "public",
   "baseBranch": "main",
   "updateInternalDependencies": "patch",
+  "onlyUpdatePeerDependentsWhenOutOfRange": true,
   "ignore": [],
   "privatePackages": {
     "version": true,
