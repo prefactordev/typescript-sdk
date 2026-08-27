@@ -818,6 +818,44 @@ describe('CLI command validation', () => {
     ]);
   });
 
+  test('agents update sends name and description without current_version_id', async () => {
+    const cwd = join(tempRoot, 'cwd');
+    mkdirSync(cwd, { recursive: true });
+    process.chdir(cwd);
+    writeFileSync(
+      join(cwd, 'prefactor.json'),
+      JSON.stringify({ default: { api_key: 'token', base_url: 'https://example.com' } })
+    );
+
+    let capturedBody: Record<string, unknown> = {};
+    globalThis.fetch = (async (_input, init) => {
+      capturedBody = JSON.parse(String(init?.body ?? '{}')) as Record<string, unknown>;
+      return new Response(JSON.stringify({ details: { id: 'agent_123' } }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }) as typeof fetch;
+
+    await createCli('1.0.0').parseAsync([
+      'node',
+      'prefactor',
+      'agents',
+      'update',
+      'agent_123',
+      '--name',
+      'Renamed',
+      '--description',
+      'Updated description',
+    ]);
+
+    expect(capturedBody).toEqual({
+      details: {
+        name: 'Renamed',
+        description: 'Updated description',
+      },
+    });
+  });
+
   test('supports @file JSON parsing for --payload', async () => {
     const cwd = join(tempRoot, 'cwd');
     mkdirSync(cwd, { recursive: true });
@@ -848,11 +886,17 @@ describe('CLI command validation', () => {
       'create',
       '--agent_instance_id',
       'agent_instance_1',
+      '--schema_name',
+      'llm',
+      '--status',
+      'complete',
       '--payload',
       `@${payloadPath}`,
     ]);
 
     expect(capturedBody).toContain('"payload":{"message":"hello","count":2}');
+    expect(capturedBody).toContain('"schema_name":"llm"');
+    expect(capturedBody).toContain('"status":"complete"');
   });
 
   test('includes option context when @file JSON path cannot be read', async () => {
@@ -874,6 +918,10 @@ describe('CLI command validation', () => {
         'create',
         '--agent_instance_id',
         'agent_instance_1',
+        '--schema_name',
+        'llm',
+        '--status',
+        'complete',
         '--payload',
         '@/definitely/missing/file.json',
       ])

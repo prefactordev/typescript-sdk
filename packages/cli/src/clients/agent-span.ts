@@ -40,8 +40,8 @@ export interface AgentSpanListParams {
 
 export interface AgentSpanCreateDetails {
   agent_instance_id: string;
-  schema_name?: string;
-  status?: string;
+  schema_name: string;
+  status: 'active' | 'complete' | 'failed' | 'cancelled';
   payload: Record<string, unknown>;
   id?: string;
   parent_span_id?: string;

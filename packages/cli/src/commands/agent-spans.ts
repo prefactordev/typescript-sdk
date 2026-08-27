@@ -1,4 +1,4 @@
-import type { Command } from 'commander';
+import { type Command, Option } from 'commander';
 import { AgentSpanClient } from '../clients/agent-span.js';
 import {
   executeAuthed,
@@ -43,8 +43,12 @@ export function registerAgentSpansCommands(program: Command): void {
     .description('Create agent span')
     .requiredOption('--agent_instance_id <agent_instance_id>', 'Agent instance ID')
     .requiredOption('--payload <payload>', 'JSON object or @file')
-    .option('--schema_name <schema_name>', 'Schema name')
-    .option('--status <status>', 'Status')
+    .requiredOption('--schema_name <schema_name>', 'Schema name')
+    .addOption(
+      new Option('--status <status>', 'Status')
+        .choices(['active', 'complete', 'failed', 'cancelled'])
+        .makeOptionMandatory()
+    )
     .option('--id <id>', 'Span ID')
     .option('--parent_span_id <parent_span_id>', 'Parent span ID')
     .option('--started_at <started_at>', 'Started at')
@@ -55,8 +59,8 @@ export function registerAgentSpansCommands(program: Command): void {
       options: {
         agent_instance_id: string;
         payload: string;
-        schema_name?: string;
-        status?: string;
+        schema_name: string;
+        status: 'active' | 'complete' | 'failed' | 'cancelled';
         id?: string;
         parent_span_id?: string;
         started_at?: string;
@@ -70,13 +74,13 @@ export function registerAgentSpansCommands(program: Command): void {
 
         const result = await new AgentSpanClient(apiClient).create({
           agent_instance_id: options.agent_instance_id,
+          schema_name: options.schema_name,
+          status: options.status,
           payload: await parseJsonOption<Record<string, unknown>>(
             options.payload,
             '--payload',
             'object'
           ),
-          ...(options.schema_name ? { schema_name: options.schema_name } : {}),
-          ...(options.status ? { status: options.status } : {}),
           ...(options.id ? { id: options.id } : {}),
           ...(options.parent_span_id ? { parent_span_id: options.parent_span_id } : {}),
           ...(options.started_at ? { started_at: options.started_at } : {}),

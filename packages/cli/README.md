@@ -160,7 +160,7 @@ Some options accept JSON directly or from a file using `@path` syntax:
 
 ```bash
 prefactor bulk execute --items @./bulk-items.json
-prefactor agent_spans create --payload @./span.json
+prefactor agent_spans create --agent_instance_id <id> --schema_name llm --status complete --payload @./span.json
 ```
 
 ## Programmatic Usage

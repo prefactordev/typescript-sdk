@@ -383,7 +383,7 @@ describe('resource clients', () => {
     });
     await client.finish('agent_instance_1', {
       timestamp: '2026-02-24T12:05:00.000Z',
-      status: 'finished',
+      status: 'complete',
     });
 
     const expected: Array<{ path: string; method: string; body: string }> = [
@@ -400,7 +400,7 @@ describe('resource clients', () => {
       {
         path: '/api/v1/agent_instance/agent_instance_1/finish',
         method: 'POST',
-        body: '{"timestamp":"2026-02-24T12:05:00.000Z","status":"finished"}',
+        body: '{"timestamp":"2026-02-24T12:05:00.000Z","status":"complete"}',
       },
     ];
 

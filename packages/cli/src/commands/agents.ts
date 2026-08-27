@@ -56,17 +56,15 @@ export function registerAgentsCommands(program: Command): void {
     .description('Update agent')
     .option('--name <name>', 'Agent name')
     .option('--description <description>', 'Agent description')
-    .option('--current_version_id <current_version_id>', 'Current version ID')
     .action(function (
       this: Command,
       id: string,
-      options: { name?: string; description?: string; current_version_id?: string }
+      options: { name?: string; description?: string }
     ) {
       return executeAuthed(this, async (apiClient) => {
         const result = await new AgentClient(apiClient).update(id, {
           ...(options.name ? { name: options.name } : {}),
           ...(options.description ? { description: options.description } : {}),
-          ...(options.current_version_id ? { current_version_id: options.current_version_id } : {}),
         });
         printJson(result);
       });

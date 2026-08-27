@@ -50,7 +50,7 @@ export function createCli(version: string): Command {
       '  prefactor accounts list',
       '  prefactor agents list',
       '  prefactor agent_deployments create --agent_id <agent_id> --environment_id <environment_id>',
-      '  prefactor agent_spans create --agent_instance_id <id> --payload \'{"step":"tool"}\'',
+      '  prefactor agent_spans create --agent_instance_id <id> --schema_name <schema> --status active --payload \'{"step":"tool"}\'',
     ].join('\n')
   );
 

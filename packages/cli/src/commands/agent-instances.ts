@@ -1,6 +1,6 @@
 import { writeFile } from 'node:fs/promises';
 import type { SpanTypeSchema } from '@prefactor/core';
-import type { Command } from 'commander';
+import { type Command, Option } from 'commander';
 import { AgentInstanceClient } from '../clients/agent-instance.js';
 import {
   executeAuthed,
@@ -159,13 +159,19 @@ export function registerAgentInstancesCommands(program: Command): void {
     .command('finish <id>')
     .description('Finish agent instance')
     .option('--timestamp <timestamp>', 'Timestamp')
-    .option('--status <status>', 'Status')
-    .action(function (this: Command, id: string, options: { timestamp?: string; status?: string }) {
+    .addOption(
+      new Option('--status <status>', 'Status').choices(['complete', 'failed', 'cancelled'])
+    )
+    .action(function (
+      this: Command,
+      id: string,
+      options: { timestamp?: string; status?: 'complete' | 'failed' | 'cancelled' }
+    ) {
       return executeAuthed(this, async (apiClient) => {
         const result = await new AgentInstanceClient(apiClient).finish(id, {
           ...(options.timestamp ? { timestamp: options.timestamp } : {}),
           ...(options.status ? { status: options.status } : {}),
-        } as Parameters<AgentInstanceClient['finish']>[1]);
+        });
         printJson(result);
       });
     });

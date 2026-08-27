@@ -46,7 +46,6 @@ export interface AgentDetails {
   id?: string;
   name?: string;
   description?: string;
-  current_version_id?: string;
 }
 
 export interface AgentResponse {
