@@ -3,7 +3,6 @@ import { AgentSpanClient } from '../clients/agent-span.js';
 import {
   executeAuthed,
   parseJsonOption,
-  parsePositiveInt,
   printJson,
   validateOptionalPfid,
 } from './shared.js';
@@ -123,31 +122,6 @@ export function registerAgentSpansCommands(program: Command): void {
                 ),
               }
             : {}),
-        });
-        printJson(result);
-      });
-    });
-
-  agentSpans
-    .command('create_test_spans')
-    .description('Create test spans')
-    .requiredOption('--agent_instance_id <agent_instance_id>', 'Agent instance ID')
-    .option('--count <count>', 'Count', parsePositiveInt)
-    .option('--parent_span_id <parent_span_id>', 'Parent span ID')
-    .action(function (
-      this: Command,
-      options: { agent_instance_id: string; count?: number; parent_span_id?: string }
-    ) {
-      return executeAuthed(this, async (apiClient) => {
-        validateOptionalPfid(options.parent_span_id, '--parent_span_id');
-
-        const result = await apiClient.request('/agent_spans/create_test_spans', {
-          method: 'POST',
-          body: {
-            agent_instance_id: options.agent_instance_id,
-            ...(options.count ? { count: options.count } : {}),
-            ...(options.parent_span_id ? { parent_span_id: options.parent_span_id } : {}),
-          },
         });
         printJson(result);
       });
