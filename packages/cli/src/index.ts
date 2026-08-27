@@ -54,6 +54,7 @@ export {
   type AgentInstanceRegistrationPayload,
   type AgentInstanceResponse,
   type AgentInstanceSummary,
+  type AgentInstanceTerminateOptions,
 } from './clients/agent-instance.js';
 export {
   type AgentSchemaVersion,

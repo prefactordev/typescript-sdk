@@ -175,6 +175,21 @@ export function registerAgentInstancesCommands(program: Command): void {
         printJson(result);
       });
     });
+
+  agentInstances
+    .command('terminate <id>')
+    .description('Terminate agent instance')
+    .requiredOption('--reason <reason>', 'Termination reason')
+    .option('--timestamp <timestamp>', 'Timestamp')
+    .action(function (this: Command, id: string, options: { reason: string; timestamp?: string }) {
+      return executeAuthed(this, async (apiClient) => {
+        const result = await new AgentInstanceClient(apiClient).terminate(id, {
+          reason: options.reason,
+          ...(options.timestamp ? { timestamp: options.timestamp } : {}),
+        });
+        printJson(result);
+      });
+    });
 }
 
 function extractAgentContextBody(result: Record<string, unknown>): unknown {

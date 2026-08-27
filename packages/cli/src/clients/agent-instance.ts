@@ -5,6 +5,7 @@ export {
   type AgentInstanceFinishOptions,
   type AgentInstanceRegisterPayload as AgentInstanceRegistrationPayload,
   type AgentInstanceResponse,
+  type AgentInstanceTerminateOptions,
 } from '@prefactor/core';
 
 export interface AgentInstance {

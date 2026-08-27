@@ -123,6 +123,7 @@ export {
   type AgentInstanceRegisterPayload,
   type AgentInstanceResponse,
   type AgentInstanceStartOptions,
+  type AgentInstanceTerminateOptions,
 } from './transport/http/agent-instance-client.js';
 export {
   AgentSpanClient,

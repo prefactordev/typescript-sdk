@@ -1015,6 +1015,45 @@ describe('CLI command validation', () => {
     });
   });
 
+  test('agent_instances terminate sends reason and timestamp', async () => {
+    const cwd = join(tempRoot, 'cwd');
+    mkdirSync(cwd, { recursive: true });
+    process.chdir(cwd);
+    writeFileSync(
+      join(cwd, 'prefactor.json'),
+      JSON.stringify({ default: { api_key: 'token', base_url: 'https://example.com' } })
+    );
+
+    let capturedPath = '';
+    let capturedBody: Record<string, unknown> = {};
+    globalThis.fetch = (async (input, init) => {
+      capturedPath = new URL(String(input)).pathname;
+      capturedBody = JSON.parse(String(init?.body ?? '{}')) as Record<string, unknown>;
+      return new Response(JSON.stringify({ details: { id: 'agent_instance_1' } }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }) as typeof fetch;
+
+    await createCli('1.0.0').parseAsync([
+      'node',
+      'prefactor',
+      'agent_instances',
+      'terminate',
+      'agent_instance_1',
+      '--reason',
+      'operator requested stop',
+      '--timestamp',
+      '2026-02-24T12:10:00.000Z',
+    ]);
+
+    expect(capturedPath).toBe('/api/v1/agent_instance/agent_instance_1/terminate');
+    expect(capturedBody).toMatchObject({
+      reason: 'operator requested stop',
+      timestamp: '2026-02-24T12:10:00.000Z',
+    });
+  });
+
   test('agent_instances agent_context writes context body to output file', async () => {
     const cwd = join(tempRoot, 'cwd');
     mkdirSync(cwd, { recursive: true });

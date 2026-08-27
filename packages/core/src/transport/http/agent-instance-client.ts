@@ -42,6 +42,12 @@ export type AgentInstanceFinishOptions = {
   idempotency_key?: string;
 };
 
+export type AgentInstanceTerminateOptions = {
+  reason: string;
+  timestamp?: string;
+  idempotency_key?: string;
+};
+
 export type AgentInstanceRecordQualityPayload = {
   /** Quality schema name (key in the agent schema version quality_schemas). */
   name: string;
@@ -79,6 +85,16 @@ export class AgentInstanceClient {
     return this.httpClient.request(`/api/v1/agent_instance/${agentInstanceId}/finish`, {
       method: 'POST',
       body: { ...opts, idempotency_key: ensureIdempotencyKey(opts.idempotency_key) },
+    });
+  }
+
+  terminate(
+    agentInstanceId: string,
+    options: AgentInstanceTerminateOptions
+  ): Promise<AgentInstanceResponse> {
+    return this.httpClient.request(`/api/v1/agent_instance/${agentInstanceId}/terminate`, {
+      method: 'POST',
+      body: { ...options, idempotency_key: ensureIdempotencyKey(options.idempotency_key) },
     });
   }
 

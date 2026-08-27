@@ -433,6 +433,35 @@ describe('resource clients', () => {
     }
   });
 
+  test('agent instance terminate posts reason and timestamp', async () => {
+    let captured: CapturedRequest | undefined;
+    globalThis.fetch = (async (input, init) => {
+      captured = { url: String(input), init };
+      return new Response(JSON.stringify({ details: { id: 'agent_instance_1' } }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }) as typeof fetch;
+
+    const apiClient = new ApiClient('https://example.com', 'test-token');
+    const client = new AgentInstanceClient(apiClient);
+
+    await client.terminate('agent_instance_1', {
+      reason: 'operator requested stop',
+      timestamp: '2026-02-24T12:10:00.000Z',
+    });
+
+    const url = new URL(captured?.url ?? 'https://example.com');
+    expect(url.pathname).toBe('/api/v1/agent_instance/agent_instance_1/terminate');
+    expect(captured?.init?.method).toBe('POST');
+    const body = JSON.parse(String(captured?.init?.body)) as Record<string, unknown>;
+    const { idempotency_key: _key, ...rest } = body;
+    expect(rest).toEqual({
+      reason: 'operator requested stop',
+      timestamp: '2026-02-24T12:10:00.000Z',
+    });
+  });
+
   test('covers additional wrapper request shapes', async () => {
     const calls: CapturedRequest[] = [];
     globalThis.fetch = (async (input, init) => {
