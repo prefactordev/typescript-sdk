@@ -924,6 +924,49 @@ describe('CLI command validation', () => {
     expect(log.mock.calls.flat().join('\n')).toContain('"agent_context"');
   });
 
+  test('agent_instances register sends id and update_current_version when provided', async () => {
+    const cwd = join(tempRoot, 'cwd');
+    mkdirSync(cwd, { recursive: true });
+    process.chdir(cwd);
+    writeFileSync(
+      join(cwd, 'prefactor.json'),
+      JSON.stringify({ default: { api_key: 'token', base_url: 'https://example.com' } })
+    );
+
+    let capturedBody: Record<string, unknown> = {};
+    globalThis.fetch = (async (_input, init) => {
+      capturedBody = JSON.parse(String(init?.body ?? '{}')) as Record<string, unknown>;
+      return new Response(JSON.stringify({ details: { id: 'agent_instance_1' } }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }) as typeof fetch;
+
+    await createCli('1.0.0').parseAsync([
+      'node',
+      'prefactor',
+      'agent_instances',
+      'register',
+      '--agent_id',
+      'agent_1',
+      '--agent_version_external_identifier',
+      'v1',
+      '--agent_version_name',
+      'Agent',
+      '--agent_schema_version_external_identifier',
+      'schema_v1',
+      '--id',
+      '013xrzp12g3nqk8n5pj6qzmkvdr8mw1v',
+      '--update_current_version',
+    ]);
+
+    expect(capturedBody).toMatchObject({
+      agent_id: 'agent_1',
+      id: '013xrzp12g3nqk8n5pj6qzmkvdr8mw1v',
+      update_current_version: true,
+    });
+  });
+
   test('agent_instances agent_context writes context body to output file', async () => {
     const cwd = join(tempRoot, 'cwd');
     mkdirSync(cwd, { recursive: true });

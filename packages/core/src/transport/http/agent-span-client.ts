@@ -1,7 +1,7 @@
 import { HttpClientError, type HttpRequester } from './http-client.js';
 import { ensureIdempotencyKey } from './idempotency.js';
 
-export type AgentSpanStatus = 'active' | 'complete' | 'failed';
+export type AgentSpanStatus = 'active' | 'complete' | 'failed' | 'cancelled';
 
 export type AgentSpanFinishStatus = 'complete' | 'failed' | 'cancelled';
 
@@ -14,7 +14,7 @@ export type AgentSpanFinishOptions = {
 
 export type AgentSpanCreatePayload = {
   details: {
-    agent_instance_id: string | null;
+    agent_instance_id: string;
     schema_name: string;
     status: AgentSpanStatus;
     payload: Record<string, unknown>;

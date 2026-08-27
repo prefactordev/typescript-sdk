@@ -92,6 +92,30 @@ describe('HTTP endpoint clients', () => {
     expect((calls[0].options.body as Record<string, unknown>).purpose).toBeUndefined();
   });
 
+  test('agent instance client includes id, update_current_version, and external_identifier in register payload when provided', async () => {
+    const calls: RequestCall[] = [];
+    const httpClient = {
+      request: async <TResponse>(path: string, options: HttpRequestOptions = {}) => {
+        calls.push({ path, options });
+        return { details: { id: 'agent-instance-1' } } as TResponse;
+      },
+    };
+
+    const client = new AgentInstanceClient(httpClient);
+
+    await client.register({
+      id: '013xrzp12g3nqk8n5pj6qzmkvdr8mw1v',
+      update_current_version: true,
+      external_identifier: 'run-abc123',
+    });
+
+    expect(calls[0].options.body).toMatchObject({
+      id: '013xrzp12g3nqk8n5pj6qzmkvdr8mw1v',
+      update_current_version: true,
+      external_identifier: 'run-abc123',
+    });
+  });
+
   test('agent instance client posts record_quality to expected endpoint', async () => {
     const calls: RequestCall[] = [];
     const httpClient = {

@@ -6,15 +6,22 @@ import { ensureIdempotencyKey } from './idempotency.js';
 export type AgentInstanceRegisterPayload = {
   agent_id?: string;
   environment_id?: string;
+  id?: string;
+  /** Optional external identifier for this agent instance in an external system (unique per agent). */
+  external_identifier?: string;
   /** Why this instance ran: 'live' for an actual agent run, 'smoke_test' for a pipeline check, or 'eval' for an evaluation run. Omit to let the API default to 'live'. */
   purpose?: 'live' | 'smoke_test' | 'eval';
   agent_version?: {
     external_identifier: string;
-    name: string;
-    description: string;
+    name?: string;
+    description?: string;
     runtime_environment?: RuntimeEnvironment;
   };
-  agent_schema_version?: AgentSchemaVersion;
+  agent_schema_version?: Partial<AgentSchemaVersion> & {
+    span_schemas?: Record<string, unknown>;
+    span_result_schemas?: Record<string, unknown>;
+  };
+  update_current_version?: boolean;
   idempotency_key?: string;
 };
 

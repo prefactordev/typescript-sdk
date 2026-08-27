@@ -1,4 +1,5 @@
 import { writeFile } from 'node:fs/promises';
+import type { SpanTypeSchema } from '@prefactor/core';
 import type { Command } from 'commander';
 import { AgentInstanceClient } from '../clients/agent-instance.js';
 import {
@@ -117,7 +118,7 @@ export function registerAgentInstancesCommands(program: Command): void {
               : {}),
             ...(options.span_type_schemas
               ? {
-                  span_type_schemas: await parseJsonOption<unknown[]>(
+                  span_type_schemas: await parseJsonOption<SpanTypeSchema[]>(
                     options.span_type_schemas,
                     '--span_type_schemas',
                     'array'
@@ -136,7 +137,7 @@ export function registerAgentInstancesCommands(program: Command): void {
           },
           ...(options.id ? { id: options.id } : {}),
           ...(options.update_current_version ? { update_current_version: true } : {}),
-        } as Parameters<AgentInstanceClient['register']>[0]);
+        });
         printJson(result);
       });
     });

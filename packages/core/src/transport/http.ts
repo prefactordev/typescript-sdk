@@ -829,7 +829,7 @@ export class HttpTransport implements Transport {
     }
   }
 
-  private transformSpanToApiFormat(span: Span): AgentSpanCreatePayload {
+  private transformSpanToApiFormat(span: Span, agentInstanceId: string): AgentSpanCreatePayload {
     const startedAt = new Date(span.startTime).toISOString();
     const finishedAt = span.endTime ? new Date(span.endTime).toISOString() : null;
     const apiStatus = this.mapStatusForApi(span.status);
@@ -867,7 +867,7 @@ export class HttpTransport implements Transport {
 
     return {
       details: {
-        agent_instance_id: this.agentInstanceId,
+        agent_instance_id: agentInstanceId,
         schema_name: span.spanType,
         status: apiStatus,
         payload,
@@ -1032,13 +1032,25 @@ export class HttpTransport implements Transport {
       }
     }
 
+    const agentInstanceId = this.agentInstanceId;
+    if (!agentInstanceId) {
+      throw new PrefactorFatalError(
+        'contract',
+        'Prefactor span create requires a registered agent instance id.',
+        {
+          operation: 'span_create',
+          consecutiveFailures: 1,
+        }
+      );
+    }
+
     if (action.span.parentSpanId && !this.spanIdMap.has(action.span.parentSpanId)) {
       this.queuePendingChild(action.span.parentSpanId, action);
       return;
     }
 
     const response = await this.agentSpanClient.create({
-      ...this.transformSpanToApiFormat(action.span),
+      ...this.transformSpanToApiFormat(action.span, agentInstanceId),
       idempotency_key: action.idempotencyKey,
     });
 
