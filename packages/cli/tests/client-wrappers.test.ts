@@ -344,20 +344,38 @@ describe('resource clients', () => {
     let captured: CapturedRequest | undefined;
     globalThis.fetch = (async (input, init) => {
       captured = { url: String(input), init };
-      return new Response(JSON.stringify({ details: { items: [] } }), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-      });
+      return new Response(
+        JSON.stringify({
+          status: 'success',
+          outputs: {
+            'list-agents-001': { status: 'success', summaries: [] },
+          },
+        }),
+        {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }
+      );
     }) as typeof fetch;
 
     const apiClient = new ApiClient('https://example.com', 'test-token');
     const client = new BulkClient(apiClient);
 
-    await client.execute([{ method: 'GET', path: '/account' }]);
+    const result = await client.execute([
+      { _type: 'agents/list', idempotency_key: 'list-agents-001' },
+    ]);
 
     expect(new URL(captured?.url ?? 'https://example.com').pathname).toBe('/api/v1/bulk');
     expect(captured?.init?.method).toBe('POST');
-    expect(captured?.init?.body).toBe('{"items":[{"method":"GET","path":"/account"}]}');
+    expect(captured?.init?.body).toBe(
+      '{"items":[{"_type":"agents/list","idempotency_key":"list-agents-001"}]}'
+    );
+    expect(result).toEqual({
+      status: 'success',
+      outputs: {
+        'list-agents-001': { status: 'success', summaries: [] },
+      },
+    });
   });
 
   test('agent instance register/start/finish contract remains unchanged', async () => {

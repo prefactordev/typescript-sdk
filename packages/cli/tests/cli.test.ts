@@ -1126,4 +1126,82 @@ describe('CLI command validation', () => {
       cli.parseAsync(['node', 'prefactor', 'bulk', 'execute', '--items', '{}'])
     ).rejects.toThrow('--items must be a JSON array.');
   });
+
+  test('requires bulk items to include _type and an 8–128 character idempotency_key', async () => {
+    const cwd = join(tempRoot, 'cwd');
+    mkdirSync(cwd, { recursive: true });
+    process.chdir(cwd);
+    writeFileSync(
+      join(cwd, 'prefactor.json'),
+      JSON.stringify({ default: { api_key: 'token', base_url: 'https://example.com' } })
+    );
+
+    const cli = createCli('1.0.0');
+
+    await expect(
+      cli.parseAsync([
+        'node',
+        'prefactor',
+        'bulk',
+        'execute',
+        '--items',
+        '[{"idempotency_key":"list-agents-001"}]',
+      ])
+    ).rejects.toThrow('--items[0]._type must be a string.');
+
+    await expect(
+      cli.parseAsync([
+        'node',
+        'prefactor',
+        'bulk',
+        'execute',
+        '--items',
+        '[{"_type":"agents/list","idempotency_key":"short"}]',
+      ])
+    ).rejects.toThrow('--items[0].idempotency_key must be 8–128 characters.');
+  });
+
+  test('bulk execute sends _type and idempotency_key items', async () => {
+    const cwd = join(tempRoot, 'cwd');
+    mkdirSync(cwd, { recursive: true });
+    process.chdir(cwd);
+    writeFileSync(
+      join(cwd, 'prefactor.json'),
+      JSON.stringify({ default: { api_key: 'token', base_url: 'https://example.com' } })
+    );
+
+    let capturedBody: Record<string, unknown> = {};
+    globalThis.fetch = (async (_input, init) => {
+      capturedBody = JSON.parse(String(init?.body ?? '{}')) as Record<string, unknown>;
+      return new Response(JSON.stringify({ status: 'success', outputs: {} }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }) as typeof fetch;
+
+    await createCli('1.0.0').parseAsync([
+      'node',
+      'prefactor',
+      'bulk',
+      'execute',
+      '--items',
+      JSON.stringify([
+        {
+          _type: 'agents/create',
+          idempotency_key: 'create-agent-001',
+          details: { name: 'Support bot' },
+        },
+      ]),
+    ]);
+
+    expect(capturedBody).toEqual({
+      items: [
+        {
+          _type: 'agents/create',
+          idempotency_key: 'create-agent-001',
+          details: { name: 'Support bot' },
+        },
+      ],
+    });
+  });
 });

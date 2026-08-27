@@ -33,7 +33,7 @@ This is a consumption tool, NOT shared infrastructure.
 - `admin_user_invites`: Manage admin user invites
 - `api_tokens`: Manage API tokens
 - `pfid`: Generate Prefactor IDs
-- `bulk`: Execute bulk API requests
+- `bulk`: Execute bulk query/action operations (`_type` + `idempotency_key` items)
 - `version`: Print CLI version
 
 ## Client architecture

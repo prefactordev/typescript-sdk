@@ -211,37 +211,43 @@ export function parsePositiveInt(value: string): number {
 export async function parseBulkItems(value: string): Promise<BulkItem[]> {
   const parsed = await parseJsonOption<unknown[]>(value, '--items', 'array');
 
+  if (parsed.length === 0) {
+    throw new Error('--items must contain at least one item.');
+  }
+
+  const seenKeys = new Set<string>();
+  const items: BulkItem[] = [];
+
   for (const [index, item] of parsed.entries()) {
     if (!item || typeof item !== 'object' || Array.isArray(item)) {
       throw new Error(`--items[${index}] must be a JSON object.`);
     }
 
-    const entry = item as {
-      method?: unknown;
-      path?: unknown;
-      body?: unknown;
-    };
+    const entry = item as Record<string, unknown>;
 
-    if (
-      entry.method !== 'GET' &&
-      entry.method !== 'POST' &&
-      entry.method !== 'PUT' &&
-      entry.method !== 'DELETE'
-    ) {
-      throw new Error(`--items[${index}].method must be one of GET, POST, PUT, DELETE.`);
+    if (typeof entry._type !== 'string') {
+      throw new Error(`--items[${index}]._type must be a string.`);
     }
 
-    if (typeof entry.path !== 'string') {
-      throw new Error(`--items[${index}].path must be a string.`);
+    if (typeof entry.idempotency_key !== 'string') {
+      throw new Error(`--items[${index}].idempotency_key must be a string.`);
     }
 
-    if (
-      entry.body !== undefined &&
-      (!entry.body || typeof entry.body !== 'object' || Array.isArray(entry.body))
-    ) {
-      throw new Error(`--items[${index}].body must be a JSON object when provided.`);
+    if (entry.idempotency_key.length < 8 || entry.idempotency_key.length > 128) {
+      throw new Error(`--items[${index}].idempotency_key must be 8–128 characters.`);
     }
+
+    if (seenKeys.has(entry.idempotency_key)) {
+      throw new Error(`--items[${index}].idempotency_key must be unique within the request.`);
+    }
+
+    seenKeys.add(entry.idempotency_key);
+    items.push({
+      ...entry,
+      _type: entry._type,
+      idempotency_key: entry.idempotency_key,
+    });
   }
 
-  return parsed as BulkItem[];
+  return items;
 }

@@ -163,6 +163,19 @@ prefactor bulk execute --items @./bulk-items.json
 prefactor agent_spans create --agent_instance_id <id> --schema_name llm --status complete --payload @./span.json
 ```
 
+Bulk `--items` is an array of objects with `_type`, `idempotency_key` (8–128 characters, unique in the request), and any extra fields the operation needs:
+
+```json
+[
+  { "_type": "agents/list", "idempotency_key": "list-agents-001" },
+  {
+    "_type": "agents/create",
+    "idempotency_key": "create-agent-001",
+    "details": { "name": "Support bot" }
+  }
+]
+```
+
 ## Programmatic Usage
 
 `@prefactor/cli` also exports typed clients that can be used directly in scripts.

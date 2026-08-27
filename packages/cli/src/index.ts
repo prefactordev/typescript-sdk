@@ -91,10 +91,8 @@ export {
 } from './clients/api-token.js';
 export {
   BulkClient,
-  type BulkDetails,
   type BulkItem,
   type BulkResponse,
-  type BulkResponseItem,
 } from './clients/bulk.js';
 export {
   type Environment,
