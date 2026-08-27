@@ -1,9 +1,20 @@
 import type { ApiClient } from '../api-client.js';
+import type { ListResponse } from './list-response.js';
 
 export interface Environment {
   id: string;
   name: string;
   account_id: string;
+}
+
+export interface EnvironmentSummary {
+  account_id?: string;
+  description?: string | null;
+  external_identifier?: string | null;
+  id?: string;
+  name?: string;
+  purpose?: 'development' | 'staging' | 'testing' | 'production';
+  type?: 'environment';
 }
 
 export interface EnvironmentDetails {
@@ -16,9 +27,7 @@ export interface EnvironmentResponse {
   details: Environment;
 }
 
-export interface EnvironmentListResponse {
-  details: Environment[];
-}
+export type EnvironmentListResponse = ListResponse<EnvironmentSummary>;
 
 export class EnvironmentClient {
   constructor(private readonly client: ApiClient) {}

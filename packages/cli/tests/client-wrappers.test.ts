@@ -53,7 +53,7 @@ describe('resource clients', () => {
     let captured: CapturedRequest | undefined;
     globalThis.fetch = (async (input, init) => {
       captured = { url: String(input), init };
-      return new Response(JSON.stringify({ details: [] }), {
+      return new Response(JSON.stringify({ summaries: [] }), {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
       });
@@ -69,14 +69,14 @@ describe('resource clients', () => {
     expect(url.searchParams.toString()).toBe('');
     expect(captured?.init?.method).toBe('GET');
     expect(captured?.init?.body).toBeUndefined();
-    expect(response).toEqual({ details: [] });
+    expect(response).toEqual({ summaries: [] });
   });
 
   test('agent deployment list uses agent_id query param', async () => {
     let captured: CapturedRequest | undefined;
     globalThis.fetch = (async (input, init) => {
       captured = { url: String(input), init };
-      return new Response(JSON.stringify({ details: [] }), {
+      return new Response(JSON.stringify({ summaries: [] }), {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
       });
@@ -91,7 +91,7 @@ describe('resource clients', () => {
     expect(url.pathname).toBe('/api/v1/agent_deployment');
     expect(url.searchParams.get('agent_id')).toBe('agent_123');
     expect(captured?.init?.method).toBe('GET');
-    expect(response).toEqual({ details: [] });
+    expect(response).toEqual({ summaries: [] });
   });
 
   test('agent deployment create wraps payload in details', async () => {
@@ -323,7 +323,7 @@ describe('resource clients', () => {
     let captured: CapturedRequest | undefined;
     globalThis.fetch = (async (input, init) => {
       captured = { url: String(input), init };
-      return new Response(JSON.stringify({ details: { pfids: ['pfid_1'] } }), {
+      return new Response(JSON.stringify({ pfids: ['pfid_1'], status: 'success' }), {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
       });
@@ -332,11 +332,12 @@ describe('resource clients', () => {
     const apiClient = new ApiClient('https://example.com', 'test-token');
     const client = new PfidClient(apiClient);
 
-    await client.generate(3, 'acct_123');
+    const result = await client.generate(3, 'acct_123');
 
     expect(new URL(captured?.url ?? 'https://example.com').pathname).toBe('/api/v1/pfid/generate');
     expect(captured?.init?.method).toBe('POST');
     expect(captured?.init?.body).toBe('{"count":3,"account_id":"acct_123"}');
+    expect(result).toEqual({ pfids: ['pfid_1'], status: 'success' });
   });
 
   test('bulk execute sends items as top-level body key', async () => {

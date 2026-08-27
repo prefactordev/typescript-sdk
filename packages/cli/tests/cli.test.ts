@@ -368,7 +368,7 @@ describe('CLI command validation', () => {
     let requestUrl = '';
     globalThis.fetch = (async (input) => {
       requestUrl = String(input);
-      return new Response(JSON.stringify({ details: [] }), {
+      return new Response(JSON.stringify({ summaries: [] }), {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
       });
@@ -389,7 +389,7 @@ describe('CLI command validation', () => {
     let requestUrl = '';
     globalThis.fetch = (async (input) => {
       requestUrl = String(input);
-      return new Response(JSON.stringify({ details: [] }), {
+      return new Response(JSON.stringify({ summaries: [] }), {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
       });
@@ -417,7 +417,7 @@ describe('CLI command validation', () => {
     let requestUrl = '';
     globalThis.fetch = (async (input) => {
       requestUrl = String(input);
-      return new Response(JSON.stringify({ details: [] }), {
+      return new Response(JSON.stringify({ summaries: [] }), {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
       });

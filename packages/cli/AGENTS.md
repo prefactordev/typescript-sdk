@@ -39,7 +39,7 @@ This is a consumption tool, NOT shared infrastructure.
 ## Client architecture
 - **`ApiClient`**: Core HTTP wrapper using `@prefactor/core`'s `HttpClient`
 - **Resource Clients**: Thin wrappers (e.g., `AgentClient`, `AccountClient`) with typed methods
-- Response format: `{ details: T }` for single items, `{ details: T[] }` for lists
+- Response format: `{ details: T }` for single items, `{ summaries?: T[], pagination?, sorting?, status? }` for lists. PFID generate is `{ account_id?, pfids?, status? }` with no details wrapper.
 
 ## Profile management
 - Storage: `prefactor.json` (local first, then `~/.prefactor/prefactor.json`)

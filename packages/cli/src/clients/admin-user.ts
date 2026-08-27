@@ -1,4 +1,5 @@
 import type { ApiClient } from '../api-client.js';
+import type { ListResponse } from './list-response.js';
 
 export interface AdminUser {
   id: string;
@@ -6,13 +7,24 @@ export interface AdminUser {
   account_id: string;
 }
 
+export interface AdminUserSummary {
+  account_id?: string;
+  email?: string;
+  id?: string;
+  inserted_at?: string;
+  job_title?: string | null;
+  last_active_at?: string | null;
+  name?: string | null;
+  profile_completed_at?: string | null;
+  type?: 'admin_user';
+  updated_at?: string;
+}
+
 export interface AdminUserResponse {
   details: AdminUser;
 }
 
-export interface AdminUserListResponse {
-  details: AdminUser[];
-}
+export type AdminUserListResponse = ListResponse<AdminUserSummary>;
 
 export class AdminUserClient {
   constructor(private readonly client: ApiClient) {}

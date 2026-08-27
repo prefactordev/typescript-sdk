@@ -182,11 +182,11 @@ const deployments = new AgentDeploymentClient(api);
 
 const accountList = await accounts.list();
 const agentList = await agents.list();
-const agentId = agentList.details[0]?.id;
+const agentId = agentList.summaries?.[0]?.id;
 
-if (accountList.details[0]?.id && agentId) {
+if (accountList.summaries?.[0]?.id && agentId) {
   const deploymentList = await deployments.list(agentId);
-  console.log(deploymentList.details);
+  console.log(deploymentList.summaries);
 }
 ```
 

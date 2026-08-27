@@ -1,4 +1,5 @@
 import type { ApiClient } from '../api-client.js';
+import type { ListResponse } from './list-response.js';
 
 export interface AgentVersion {
   id: string;
@@ -6,13 +7,40 @@ export interface AgentVersion {
   external_identifier: string;
 }
 
+export interface AgentVersionSummary {
+  account_id?: string;
+  agent_id?: string;
+  agent_schema_version_id?: string;
+  current_agent_deployment_refs?: string[];
+  external_identifier?: string;
+  external_identifier_repeats?: number;
+  id?: string;
+  inserted_at?: string;
+  observed_classification?:
+    | 'unknown'
+    | 'public'
+    | 'internal'
+    | 'confidential'
+    | 'restricted'
+    | 'secret'
+    | null;
+  theoretical_classification?:
+    | 'unknown'
+    | 'public'
+    | 'internal'
+    | 'confidential'
+    | 'restricted'
+    | 'secret'
+    | null;
+  type?: 'agent_version';
+  updated_at?: string;
+}
+
 export interface AgentVersionResponse {
   details: AgentVersion;
 }
 
-export interface AgentVersionListResponse {
-  details: AgentVersion[];
-}
+export type AgentVersionListResponse = ListResponse<AgentVersionSummary>;
 
 export class AgentVersionClient {
   constructor(private readonly client: ApiClient) {}

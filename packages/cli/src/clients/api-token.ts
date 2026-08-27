@@ -1,4 +1,5 @@
 import type { ApiClient } from '../api-client.js';
+import type { ListResponse } from './list-response.js';
 
 export interface ApiToken {
   id: string;
@@ -10,6 +11,22 @@ export interface ApiToken {
   expires_at: string;
   last_used_at: string | null;
   status: string;
+}
+
+export interface ApiTokenSummary {
+  account_id?: string;
+  agent_deployment_id?: string | null;
+  agent_id?: string | null;
+  created_by_admin_user_id?: string | null;
+  environment_id?: string | null;
+  expires_at?: string;
+  id?: string;
+  inserted_at?: string;
+  last_used_at?: string | null;
+  status?: 'active' | 'suspended' | 'revoked';
+  token_scope?: 'account' | 'agent_deployment';
+  type?: 'api_token';
+  updated_at?: string;
 }
 
 export interface ApiTokenCreateDetails {
@@ -32,9 +49,7 @@ export interface ApiTokenCreateResponse {
   details: ApiTokenWithValue;
 }
 
-export interface ApiTokenListResponse {
-  details: ApiToken[];
-}
+export type ApiTokenListResponse = ListResponse<ApiTokenSummary>;
 
 export class ApiTokenClient {
   constructor(private readonly client: ApiClient) {}

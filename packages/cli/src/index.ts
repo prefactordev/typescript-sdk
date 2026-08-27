@@ -11,25 +11,31 @@ export {
   type AccountDetails,
   type AccountListResponse,
   type AccountResponse,
+  type AccountSummary,
 } from './clients/account.js';
 export {
   type AdminUser,
   AdminUserClient,
   type AdminUserListResponse,
   type AdminUserResponse,
+  type AdminUserSummary,
 } from './clients/admin-user.js';
 export {
   type AdminUserInvite,
   AdminUserInviteClient,
   type AdminUserInviteListResponse,
   type AdminUserInviteResponse,
+  type AdminUserInviteSummary,
 } from './clients/admin-user-invite.js';
 export {
   type Agent,
+  type AgentAvailableActions,
   AgentClient,
   type AgentDetails,
+  type AgentInstanceCounts,
   type AgentListResponse,
   type AgentResponse,
+  type AgentSummary,
 } from './clients/agent.js';
 export {
   type AgentDeployment,
@@ -37,6 +43,7 @@ export {
   type AgentDeploymentCreateDetails,
   type AgentDeploymentListResponse,
   type AgentDeploymentResponse,
+  type AgentDeploymentSummary,
   type AgentDeploymentUpdateDetails,
 } from './clients/agent-deployment.js';
 export {
@@ -46,6 +53,7 @@ export {
   type AgentInstanceListResponse,
   type AgentInstanceRegistrationPayload,
   type AgentInstanceResponse,
+  type AgentInstanceSummary,
 } from './clients/agent-instance.js';
 export {
   type AgentSchemaVersion,
@@ -53,6 +61,7 @@ export {
   type AgentSchemaVersionCreateOptions,
   type AgentSchemaVersionListResponse,
   type AgentSchemaVersionResponse,
+  type AgentSchemaVersionSummary,
 } from './clients/agent-schema-version.js';
 export {
   type AgentSpan,
@@ -63,12 +72,14 @@ export {
   type AgentSpanListParams,
   type AgentSpanListResponse,
   type AgentSpanResponse,
+  type AgentSpanSummary,
 } from './clients/agent-span.js';
 export {
   type AgentVersion,
   AgentVersionClient,
   type AgentVersionListResponse,
   type AgentVersionResponse,
+  type AgentVersionSummary,
 } from './clients/agent-version.js';
 export {
   type ApiToken,
@@ -76,6 +87,7 @@ export {
   type ApiTokenCreateDetails,
   type ApiTokenListResponse,
   type ApiTokenResponse,
+  type ApiTokenSummary,
 } from './clients/api-token.js';
 export {
   BulkClient,
@@ -90,5 +102,11 @@ export {
   type EnvironmentDetails,
   type EnvironmentListResponse,
   type EnvironmentResponse,
+  type EnvironmentSummary,
 } from './clients/environment.js';
-export { PfidClient, type PfidDetails, type PfidResponse } from './clients/pfid.js';
+export {
+  type ListResponse,
+  type PaginationOutput,
+  type Sorting,
+} from './clients/list-response.js';
+export { PfidClient, type PfidResponse } from './clients/pfid.js';

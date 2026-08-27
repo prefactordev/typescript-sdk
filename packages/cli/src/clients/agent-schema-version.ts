@@ -1,9 +1,23 @@
 import type { ApiClient } from '../api-client.js';
+import type { ListResponse } from './list-response.js';
 
 export interface AgentSchemaVersion {
   id: string;
   agent_id: string;
   external_identifier: string;
+}
+
+export interface AgentSchemaVersionSummary {
+  account_id?: string;
+  agent_id?: string;
+  current_agent_deployment_refs?: string[];
+  external_identifier?: string;
+  external_identifier_repeats?: number;
+  id?: string;
+  inserted_at?: string;
+  span_schemas_count?: number;
+  type?: 'agent_schema_version';
+  updated_at?: string;
 }
 
 export interface AgentSchemaVersionCreateOptions {
@@ -16,9 +30,7 @@ export interface AgentSchemaVersionResponse {
   details: AgentSchemaVersion;
 }
 
-export interface AgentSchemaVersionListResponse {
-  details: AgentSchemaVersion[];
-}
+export type AgentSchemaVersionListResponse = ListResponse<AgentSchemaVersionSummary>;
 
 export class AgentSchemaVersionClient {
   constructor(private readonly client: ApiClient) {}
