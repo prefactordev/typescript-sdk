@@ -462,6 +462,33 @@ describe('resource clients', () => {
     });
   });
 
+  test('admin user update sends details', async () => {
+    let captured: CapturedRequest | undefined;
+    globalThis.fetch = (async (input, init) => {
+      captured = { url: String(input), init };
+      return new Response(JSON.stringify({ details: { id: 'admin_user_1' } }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }) as typeof fetch;
+
+    const apiClient = new ApiClient('https://example.com', 'test-token');
+    const client = new AdminUserClient(apiClient);
+
+    await client.update('admin_user_1', {
+      name: 'Ada Lovelace',
+      job_title: 'Engineer',
+      profile_completed_at: null,
+    });
+
+    const url = new URL(captured?.url ?? 'https://example.com');
+    expect(url.pathname).toBe('/api/v1/admin_user/admin_user_1');
+    expect(captured?.init?.method).toBe('PUT');
+    expect(captured?.init?.body).toBe(
+      '{"details":{"name":"Ada Lovelace","job_title":"Engineer","profile_completed_at":null}}'
+    );
+  });
+
   test('covers additional wrapper request shapes', async () => {
     const calls: CapturedRequest[] = [];
     globalThis.fetch = (async (input, init) => {

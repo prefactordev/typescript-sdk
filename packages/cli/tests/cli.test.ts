@@ -1054,6 +1054,50 @@ describe('CLI command validation', () => {
     });
   });
 
+  test('admin_users update sends details', async () => {
+    const cwd = join(tempRoot, 'cwd');
+    mkdirSync(cwd, { recursive: true });
+    process.chdir(cwd);
+    writeFileSync(
+      join(cwd, 'prefactor.json'),
+      JSON.stringify({ default: { api_key: 'token', base_url: 'https://example.com' } })
+    );
+
+    let capturedPath = '';
+    let capturedBody: Record<string, unknown> = {};
+    globalThis.fetch = (async (input, init) => {
+      capturedPath = new URL(String(input)).pathname;
+      capturedBody = JSON.parse(String(init?.body ?? '{}')) as Record<string, unknown>;
+      return new Response(JSON.stringify({ details: { id: 'admin_user_1' } }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }) as typeof fetch;
+
+    await createCli('1.0.0').parseAsync([
+      'node',
+      'prefactor',
+      'admin_users',
+      'update',
+      'admin_user_1',
+      '--name',
+      'Ada Lovelace',
+      '--job_title',
+      'Engineer',
+      '--profile_completed_at',
+      '2026-02-24T12:00:00.000Z',
+    ]);
+
+    expect(capturedPath).toBe('/api/v1/admin_user/admin_user_1');
+    expect(capturedBody).toEqual({
+      details: {
+        name: 'Ada Lovelace',
+        job_title: 'Engineer',
+        profile_completed_at: '2026-02-24T12:00:00.000Z',
+      },
+    });
+  });
+
   test('agent_instances agent_context writes context body to output file', async () => {
     const cwd = join(tempRoot, 'cwd');
     mkdirSync(cwd, { recursive: true });

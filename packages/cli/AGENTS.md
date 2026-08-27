@@ -29,7 +29,7 @@ This is a consumption tool, NOT shared infrastructure.
 - `agent_schema_versions`: Manage agent schema versions
 - `agent_instances`: Manage agent instances (register, start, finish, terminate)
 - `agent_spans`: Manage agent spans
-- `admin_users`: Manage admin users
+- `admin_users`: Manage admin users (list, retrieve, update)
 - `admin_user_invites`: Manage admin user invites
 - `api_tokens`: Manage API tokens
 - `pfid`: Generate Prefactor IDs

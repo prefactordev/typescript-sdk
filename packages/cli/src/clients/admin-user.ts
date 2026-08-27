@@ -26,6 +26,12 @@ export interface AdminUserResponse {
 
 export type AdminUserListResponse = ListResponse<AdminUserSummary>;
 
+export interface AdminUserDetailsForUpdate {
+  job_title?: string | null;
+  name?: string;
+  profile_completed_at?: string | null;
+}
+
 export class AdminUserClient {
   constructor(private readonly client: ApiClient) {}
 
@@ -38,5 +44,12 @@ export class AdminUserClient {
 
   retrieve(id: string): Promise<AdminUserResponse> {
     return this.client.request(`/admin_user/${id}`, { method: 'GET' });
+  }
+
+  update(id: string, details: AdminUserDetailsForUpdate): Promise<AdminUserResponse> {
+    return this.client.request(`/admin_user/${id}`, {
+      method: 'PUT',
+      body: { details },
+    });
   }
 }

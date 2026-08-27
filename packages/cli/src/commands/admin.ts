@@ -27,6 +27,39 @@ export function registerAdminCommands(program: Command): void {
       });
     });
 
+  adminUsers
+    .command('update <id>')
+    .description('Update admin user')
+    .option('--name <name>', 'Name')
+    .option('--job_title <job_title>', 'Job title')
+    .option('--profile_completed_at <profile_completed_at>', 'Profile completed at')
+    .action(function (
+      this: Command,
+      id: string,
+      options: { name?: string; job_title?: string; profile_completed_at?: string }
+    ) {
+      return executeAuthed(this, async (apiClient) => {
+        if (
+          options.name === undefined &&
+          options.job_title === undefined &&
+          options.profile_completed_at === undefined
+        ) {
+          throw new Error(
+            'No fields provided to update. Specify --name, --job_title, or --profile_completed_at.'
+          );
+        }
+
+        const result = await new AdminUserClient(apiClient).update(id, {
+          ...(options.name !== undefined ? { name: options.name } : {}),
+          ...(options.job_title !== undefined ? { job_title: options.job_title } : {}),
+          ...(options.profile_completed_at !== undefined
+            ? { profile_completed_at: options.profile_completed_at }
+            : {}),
+        });
+        printJson(result);
+      });
+    });
+
   const adminUserInvites = program
     .command('admin_user_invites')
     .description('Manage admin user invites');

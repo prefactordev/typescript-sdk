@@ -16,6 +16,7 @@ export {
 export {
   type AdminUser,
   AdminUserClient,
+  type AdminUserDetailsForUpdate,
   type AdminUserListResponse,
   type AdminUserResponse,
   type AdminUserSummary,
