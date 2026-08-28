@@ -95,6 +95,7 @@ export {
   type AgentSpanListParams,
   type AgentSpanListResponse,
   type AgentSpanResponse,
+  type AgentSpanRetrieveOptions,
   type AgentSpanSummary,
 } from './clients/agent-span.js';
 export {

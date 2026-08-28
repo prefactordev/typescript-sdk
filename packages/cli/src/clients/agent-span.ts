@@ -6,6 +6,20 @@ export interface AgentSpan {
   agent_instance_id: string;
   schema_name: string;
   status: string;
+  account_id?: string;
+  agent_id?: string;
+  data_risk?: Record<string, unknown> | null;
+  finished_at?: string | null;
+  parent_span_id?: string | null;
+  payload?: Record<string, unknown>;
+  payload_byte_size_estimate?: number;
+  purpose?: 'activity' | 'quality' | 'alert';
+  result_payload?: Record<string, unknown> | null;
+  schema_title?: string;
+  sensitive_encoding?: boolean;
+  started_at?: string;
+  summary?: string | null;
+  type?: 'agent_span';
 }
 
 export interface AgentSpanSummary {
@@ -57,7 +71,12 @@ export interface AgentSpanFinishOptions {
 }
 
 export interface AgentSpanResponse {
-  details: AgentSpan;
+  details?: AgentSpan;
+  status?: 'success';
+}
+
+export interface AgentSpanRetrieveOptions {
+  redacted?: boolean;
 }
 
 export type AgentSpanListResponse = ListResponse<AgentSpanSummary>;
@@ -77,6 +96,15 @@ export class AgentSpanClient {
         ...(params.include_summaries !== undefined
           ? { include_summaries: params.include_summaries }
           : {}),
+      },
+    });
+  }
+
+  retrieve(id: string, options: AgentSpanRetrieveOptions = {}): Promise<AgentSpanResponse> {
+    return this.client.request(`/agent_spans/${id}`, {
+      method: 'GET',
+      query: {
+        ...(options.redacted !== undefined ? { redacted: options.redacted } : {}),
       },
     });
   }

@@ -298,6 +298,48 @@ describe('resource clients', () => {
     expect(response).toEqual({ details: { id: 'span_123' } });
   });
 
+  test('agent span retrieve sends GET with optional redacted query', async () => {
+    let captured: CapturedRequest | undefined;
+    globalThis.fetch = (async (input, init) => {
+      captured = { url: String(input), init };
+      return new Response(
+        JSON.stringify({
+          details: {
+            id: 'span_123',
+            agent_instance_id: 'agent_instance_1',
+            schema_name: 'llm',
+            status: 'complete',
+            purpose: 'activity',
+            schema_title: 'LLM call',
+            summary: 'gpt-4 completed',
+            payload_byte_size_estimate: 128,
+            data_risk: null,
+          },
+          status: 'success',
+        }),
+        {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }
+      );
+    }) as typeof fetch;
+
+    const apiClient = new ApiClient('https://example.com', 'test-token');
+    const client = new AgentSpanClient(apiClient);
+
+    const response = await client.retrieve('span_123', { redacted: true });
+
+    const url = new URL(captured?.url ?? 'https://example.com');
+    expect(url.pathname).toBe('/api/v1/agent_spans/span_123');
+    expect(url.searchParams.get('redacted')).toBe('true');
+    expect(captured?.init?.method).toBe('GET');
+    expect(response.details?.purpose).toBe('activity');
+    expect(response.details?.schema_title).toBe('LLM call');
+    expect(response.details?.summary).toBe('gpt-4 completed');
+    expect(response.details?.payload_byte_size_estimate).toBe(128);
+    expect(response.details?.data_risk).toBeNull();
+  });
+
   test('api token activate posts empty action body', async () => {
     let captured: CapturedRequest | undefined;
     globalThis.fetch = (async (input, init) => {

@@ -33,6 +33,19 @@ export function registerAgentSpansCommands(program: Command): void {
     });
 
   agentSpans
+    .command('retrieve <id>')
+    .description('Retrieve agent span')
+    .option('--redacted', 'Return redacted payloads')
+    .action(function (this: Command, id: string, options: { redacted?: boolean }) {
+      return executeAuthed(this, async (apiClient) => {
+        const result = await new AgentSpanClient(apiClient).retrieve(id, {
+          ...(options.redacted ? { redacted: true } : {}),
+        });
+        printJson(result);
+      });
+    });
+
+  agentSpans
     .command('create')
     .description('Create agent span')
     .requiredOption('--agent_instance_id <agent_instance_id>', 'Agent instance ID')
