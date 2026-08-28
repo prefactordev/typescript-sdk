@@ -26,8 +26,8 @@ export type AgentInstanceRegisterPayload = {
 };
 
 export type AgentInstanceResponse = {
-  details?: {
-    id?: string;
+  details: {
+    id: string;
   };
 };
 

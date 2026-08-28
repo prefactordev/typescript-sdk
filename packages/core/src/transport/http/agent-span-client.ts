@@ -28,13 +28,13 @@ export type AgentSpanCreatePayload = {
 };
 
 export type AgentSpanControlSignal = {
-  terminate?: boolean;
-  reason?: string | null;
+  terminate: boolean;
+  reason: string;
 };
 
 export type AgentSpanResponse = {
-  details?: {
-    id?: string;
+  details: {
+    id: string;
     started_at?: string;
   };
   control?: AgentSpanControlSignal;
@@ -73,7 +73,8 @@ export class AgentSpanClient {
         error.status === 409 &&
         isAlreadyFinishedError(error.responseBody)
       ) {
-        return {};
+        // 409 invalid_action has no success envelope; callers only read optional control.
+        return {} as AgentSpanResponse;
       }
 
       throw error;

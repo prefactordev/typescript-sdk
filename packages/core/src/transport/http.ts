@@ -22,6 +22,7 @@ import { getLogger } from '../utils/logging.js';
 import { AgentInstanceClient } from './http/agent-instance-client.js';
 import {
   AgentSpanClient,
+  type AgentSpanControlSignal,
   type AgentSpanCreatePayload,
   type AgentSpanFinishStatus,
   type AgentSpanStatus,
@@ -1100,9 +1101,7 @@ export class HttpTransport implements Transport {
     this.recordActionSuccess(action);
   }
 
-  private checkControlSignal(
-    control: { terminate?: boolean; reason?: string | null } | undefined
-  ): void {
+  private checkControlSignal(control: AgentSpanControlSignal | undefined): void {
     if (control?.terminate && this.controlSignalCallback) {
       this.controlSignalCallback(control.reason ?? null);
     }
