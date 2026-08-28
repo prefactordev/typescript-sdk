@@ -18,10 +18,10 @@ Verify the download is the spec (`jq -e '.paths' /tmp/prefactor-openapi.json`); 
 
 The entire purpose of this skill is a complete account of what the SDK/CLI is missing or mismatching. A run that silently omits findings is a failed run, worse than no run at all.
 
-- Compare exhaustively. Every operation in the digest's operations index and every schema in the schema index must end up accounted for: matched, breaking drift, mismatch, or gap. Do not sample, do not stop early, do not skip entries that look uninteresting.
-- New spec operations (actions) with no SDK/CLI caller and new spec schemas (datatypes) with no SDK/CLI type are exactly what the user runs this skill to find. Never drop them, never collapse them into a count.
-- Every difference is listed with a fix. There is no "intentionally unused, skip it" bucket controlled by the agent.
-- Never declare a gap intentional yourself. Intent comes from exactly two places: documentation in the SDK/CLI code stating the omission is deliberate (quote it as evidence and highlight it in the plan), or the user's decision at roadmap review.
+- Compare exhaustively. Every operation in the digest's operations index and every schema in the schema index must end up accounted for in working notes: matched, breaking drift, mismatch, coverage gap, or documented omission. Do not sample, do not stop early, do not skip entries that look uninteresting.
+- New spec operations (actions) with no SDK/CLI caller and new spec schemas (datatypes) with no SDK/CLI type are exactly what the user runs this skill to find. Never drop them from working notes, never collapse undocumented gaps into a count.
+- Every undocumented difference is listed with a fix. There is no "intentionally unused, skip it" bucket controlled by the agent.
+- Never declare a gap intentional yourself. The only source of intent the agent may honor is SDK/CLI documentation that states the omission is deliberate (quote file + sentence). Classify that entry as a documented omission: account for it in working notes, include it in the Spec state count, and do not put it in the coverage-gap list, emit a stage or todo, or attach a closing recipe. All other gaps stay in the coverage-gap list with no intent judgement — what is intentionally omitted among those is the user's decision at roadmap review.
 - A practical technique: copy the full operations index and schema index into your working notes and mark every single entry before writing the roadmap.
 
 ## Digest the spec
@@ -53,7 +53,8 @@ Apply the comparison rules in [reference.md](reference.md): path-param normaliza
 
 - **Breaking drift** — the SDK/CLI relies on something the spec removed or changed incompatibly: missing path, missing or renamed field, narrowed type, or a new required field the SDK never sends.
 - **Contract mismatch** — a real difference on a shared endpoint that is not breaking: envelope differences, type widening, optional/required flips in the compatible direction.
-- **Coverage gap** — a spec endpoint with no SDK/CLI caller, or a spec schema with no SDK/CLI type. Every difference is listed with a fix: each gap appears by name in the roadmap's coverage-gap list with the concrete steps to close it (per the recipes in reference.md). If the SDK/CLI code itself documents the omission as deliberate, highlight that in the plan with the code evidence (file and note); otherwise attach no intent judgement — what is intentionally omitted is the user's decision, never the agent's.
+- **Coverage gap** — a spec endpoint with no SDK/CLI caller, or a spec schema with no SDK/CLI type, and the SDK/CLI docs do not state the omission is deliberate. Every such difference is listed with a fix: each gap appears by name in the roadmap's coverage-gap list with the concrete steps to close it (per the recipes in reference.md). Attach no intent judgement.
+- **Documented omission** — a spec endpoint or schema with no SDK/CLI caller/type, where SDK/CLI docs state the omission is deliberate (quote file + sentence in working notes). Accounted, not staged: include it in the Spec state count only. Do not name it in Coverage gaps or Stages. Do not attach a closing recipe. See [reference.md](reference.md) for the canonical example.
 
 Every finding must cite both sides: spec evidence (path, field, shape from the digest) and code evidence (file, what it sends or reads).
 
@@ -61,7 +62,7 @@ Every finding must cite both sides: spec evidence (path, field, shape from the d
 
 - One stage = one coherent commit. If two changes must land together to keep the build and tests green, they are one stage.
 - Order by dependency: core contract changes before CLI changes that consume them; breaking drift and mismatches before coverage gaps.
-- Coverage gaps get stages too — one stage per resource or coherent unit, built from the closing recipes in reference.md. Each gap stage names the exact files to create or extend, the types to add with the spec-derived shapes inline, the command wiring for CLI resources, tests, and a changeset. Gaps the code documents as deliberate omissions get stages like everything else, marked with the evidence so the user can strike them at review.
+- Coverage gaps get stages too — one stage per resource or coherent unit, built from the closing recipes in reference.md. Each gap stage names the exact files to create or extend, the types to add with the spec-derived shapes inline, the command wiring for CLI resources, tests, and a changeset. Documented omissions do not get stages, todos, or closing recipes. A future pass that sees `POST /api/v1/account/{id}/implode` plus the AGENTS.md sentences in [reference.md](reference.md) must not create a coverage-gap entry or a stage for it.
 - Write each stage as a ready-to-paste agent prompt with the spec evidence inline (endpoint, field, expected shape) and the files it touches. For any claim about existing code the analysis could not verify, name the claim in the prompt, give the executor the verification step, and tell it to stop and report to the user if the claim is false. Detailed test strategy stays deferred to the per-stage planning pass.
 - Each stage prompt carries the AGENTS.md release rules that apply to it: a changeset for every release-worthy package change, and tests added or updated when behavior changes.
 
@@ -86,8 +87,8 @@ Work through every stage in this roadmap, in order. For each one: do the work in
 ```
 ````
 
-3. **Spec state**: the spec URL, the fetch timestamp, and a one-line drift summary (counts by class: breaking / mismatch / coverage gap).
-4. **Coverage gaps**: the complete list, by name, of every spec operation with no SDK/CLI caller and every spec schema with no SDK/CLI type. Each entry carries the concrete steps required to close it (files, types, wiring, tests, changeset, per the recipes in reference.md). Entries whose omission is documented as deliberate in the SDK/CLI code are highlighted with that evidence; all other entries carry no intent judgement — the user decides what is intentional at review. This list is mandatory and exhaustive; a count or a sample is a failed run.
+3. **Spec state**: the spec URL, the fetch timestamp, and a one-line drift summary (counts by class: breaking / mismatch / coverage gap / documented omission). Documented omissions appear only as a count here (e.g. "documented omission 1"), never by name.
+4. **Coverage gaps**: the complete list, by name, of every undocumented spec operation with no SDK/CLI caller and every undocumented spec schema with no SDK/CLI type. Each entry carries the concrete steps required to close it (files, types, wiring, tests, changeset, per the recipes in reference.md). Do not name documented omissions in this list. For undocumented gaps, attach no intent judgement — the user decides what is intentional at review. This list is mandatory and exhaustive for undocumented gaps; a count or a sample of those is a failed run.
 5. **Stages**: numbered list, one entry per stage, each following this template:
 
 ````markdown

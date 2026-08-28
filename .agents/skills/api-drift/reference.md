@@ -17,6 +17,20 @@ Non-obvious facts and rules for the drift analysis. The contract inventory itsel
 1. **Response dependence:** the SDK only depends on the response fields it actually reads (e.g. `details.id`, `control.terminate`, `details.status`). New or extra spec response fields are not drift; removed or renamed read fields are.
 2. **Request dependence:** every field the SDK sends must exist in the spec with a compatible type. Spec-required fields the SDK never sends are drift candidates; spec-optional fields the SDK omits are not.
 
+## Documented omissions
+
+A spec operation or schema with no SDK/CLI caller/type is a **documented omission** only when SDK/CLI docs state the omission is deliberate. Quote the file and the sentence in working notes. Then treat it as accounted: include it in the Spec state count, and do not put it in the coverage-gap list, emit a stage or todo, or attach a closing recipe.
+
+Leave the documenting AGENTS.md notes in place. They are the evidence the next run must honor.
+
+Canonical example:
+
+- **POST `/api/v1/account/{id}/implode`** (`Action.Account.Implode`)
+- [packages/cli/AGENTS.md](../../../packages/cli/AGENTS.md): "The CLI does not expose `POST /api/v1/account/{id}/implode`. That endpoint is a destructive account wipe; `AccountClient` and `accounts` commands stay list/retrieve/update only."
+- [packages/core/AGENTS.md](../../../packages/core/AGENTS.md): "Do not implement `POST /api/v1/account/{id}/implode`. That endpoint is a destructive account wipe and is not an observability primitive."
+
+A future api-drift pass that sees implode plus those sentences must not create a coverage-gap entry or a stage for it. Do not implement implode.
+
 ## Recipes for closing gaps
 
 Standard steps for closing a coverage gap. Gap stages in the roadmap must name these files concretely, with the spec-derived shapes inline.
