@@ -147,4 +147,14 @@ export type {
   PaginationOutput,
   Sorting,
 } from './clients/list-response.js';
+export {
+  PersonClient,
+  type PersonDetails,
+  type PersonForCreate,
+  type PersonForUpdate,
+  type PersonListParams,
+  type PersonListResponse,
+  type PersonResponse,
+  type PersonSummary,
+} from './clients/person.js';
 export { PfidClient, type PfidResponse } from './clients/pfid.js';

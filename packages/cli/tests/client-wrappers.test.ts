@@ -14,6 +14,7 @@ import { AlertClient } from '../src/clients/alert.js';
 import { ApiTokenClient } from '../src/clients/api-token.js';
 import { BulkClient } from '../src/clients/bulk.js';
 import { EnvironmentClient } from '../src/clients/environment.js';
+import { PersonClient } from '../src/clients/person.js';
 import { PfidClient } from '../src/clients/pfid.js';
 import * as cliExports from '../src/index.js';
 
@@ -43,6 +44,7 @@ describe('resource clients', () => {
     expect(typeof cliExports.AgentInstanceClient).toBe('function');
     expect(typeof cliExports.AgentSpanClient).toBe('function');
     expect(typeof cliExports.AlertClient).toBe('function');
+    expect(typeof cliExports.PersonClient).toBe('function');
     expect(typeof cliExports.AdminUserClient).toBe('function');
     expect(typeof cliExports.AdminUserInviteClient).toBe('function');
     expect(typeof cliExports.ApiTokenClient).toBe('function');
@@ -474,6 +476,106 @@ describe('resource clients', () => {
     expect(captured?.init?.body).toBe(
       '{"agent_instance_id":"agent_instance_1","name":"high_error_rate"}'
     );
+  });
+
+  test('person list serializes team_id and nested pagination query keys', async () => {
+    let captured: CapturedRequest | undefined;
+    globalThis.fetch = (async (input, init) => {
+      captured = { url: String(input), init };
+      return new Response(JSON.stringify({ summaries: [] }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }) as typeof fetch;
+
+    const apiClient = new ApiClient('https://example.com', 'test-token');
+    const client = new PersonClient(apiClient);
+
+    await client.list({
+      team_id: 'team_1',
+      sorting: 'name',
+      pagination: { offset: 0, page_size: 25 },
+    });
+
+    const url = new URL(captured?.url ?? 'https://example.com');
+    expect(url.pathname).toBe('/api/v1/person');
+    expect(url.searchParams.get('team_id')).toBe('team_1');
+    expect(url.searchParams.get('sorting')).toBe('name');
+    expect(url.searchParams.get('pagination[offset]')).toBe('0');
+    expect(url.searchParams.get('pagination[page_size]')).toBe('25');
+    expect(captured?.init?.method).toBe('GET');
+  });
+
+  test('person create wraps details without an idempotency key', async () => {
+    let captured: CapturedRequest | undefined;
+    globalThis.fetch = (async (input, init) => {
+      captured = { url: String(input), init };
+      return new Response(JSON.stringify({ details: { id: 'person_1' }, status: 'success' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }) as typeof fetch;
+
+    const apiClient = new ApiClient('https://example.com', 'test-token');
+    const client = new PersonClient(apiClient);
+
+    await client.create({
+      email: 'jane@example.com',
+      name: 'Jane Doe',
+      team_ids: ['team_1'],
+      title: 'Engineer',
+    });
+
+    expect(new URL(captured?.url ?? 'https://example.com').pathname).toBe('/api/v1/person');
+    expect(captured?.init?.method).toBe('POST');
+    expect(captured?.init?.body).toBe(
+      '{"details":{"email":"jane@example.com","name":"Jane Doe","team_ids":["team_1"],"title":"Engineer"}}'
+    );
+  });
+
+  test('person update can clear team_ids and title', async () => {
+    let captured: CapturedRequest | undefined;
+    globalThis.fetch = (async (input, init) => {
+      captured = { url: String(input), init };
+      return new Response(JSON.stringify({ details: { id: 'person_1' }, status: 'success' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }) as typeof fetch;
+
+    const apiClient = new ApiClient('https://example.com', 'test-token');
+    const client = new PersonClient(apiClient);
+
+    await client.update('person_1', { team_ids: [], title: null });
+
+    expect(new URL(captured?.url ?? 'https://example.com').pathname).toBe(
+      '/api/v1/person/person_1'
+    );
+    expect(captured?.init?.method).toBe('PUT');
+    expect(captured?.init?.body).toBe('{"details":{"team_ids":[],"title":null}}');
+  });
+
+  test('person delete sends DELETE and returns details', async () => {
+    let captured: CapturedRequest | undefined;
+    globalThis.fetch = (async (input, init) => {
+      captured = { url: String(input), init };
+      return new Response(JSON.stringify({ details: { id: 'person_1' }, status: 'success' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }) as typeof fetch;
+
+    const apiClient = new ApiClient('https://example.com', 'test-token');
+    const client = new PersonClient(apiClient);
+
+    const response = await client.delete('person_1');
+
+    expect(new URL(captured?.url ?? 'https://example.com').pathname).toBe(
+      '/api/v1/person/person_1'
+    );
+    expect(captured?.init?.method).toBe('DELETE');
+    expect(captured?.init?.body).toBeUndefined();
+    expect(response.details?.id).toBe('person_1');
   });
 
   test('api token activate posts empty action body', async () => {

@@ -145,6 +145,7 @@ Environment fallback is supported when no default profile is configured:
 - `agent_instances`: list, retrieve, show, agent_context, register, start, finish, terminate
 - `agent_spans`: list, retrieve, create, finish, discard_sensitive
 - `alerts`: list, retrieve, count, raise, clear
+- `people`: list, retrieve, create, update, delete
 - `api_tokens`: list, retrieve, create, suspend, activate, revoke, delete
 - `setup`: create an agent (optional), mint a validated deployment token, and print setup values for instrumentation
 - `admin_users`: list, retrieve, update
@@ -230,6 +231,7 @@ if (accountList.summaries?.[0]?.id && agentId) {
 - `ApiTokenClient`
 - `AdminUserClient`
 - `AdminUserInviteClient`
+- `PersonClient`
 - `PfidClient`
 - `BulkClient`
 
