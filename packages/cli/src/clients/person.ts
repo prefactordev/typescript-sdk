@@ -2,23 +2,23 @@ import type { ApiClient } from '../api-client.js';
 import type { ListResponse } from './list-response.js';
 
 export interface PersonDetails {
-  email?: string;
-  id?: string;
-  inserted_at?: string;
-  name?: string;
-  team_ids?: string[];
-  title?: string | null;
-  type?: 'person';
-  updated_at?: string;
+  email: string;
+  id: string;
+  inserted_at: string;
+  name: string;
+  team_ids: string[];
+  title: string | null;
+  type: 'person';
+  updated_at: string;
 }
 
 export interface PersonSummary {
-  email?: string;
-  id?: string;
-  name?: string;
-  team_ids?: string[];
-  title?: string | null;
-  type?: 'person';
+  email: string;
+  id: string;
+  name: string;
+  team_ids: string[];
+  title: string | null;
+  type: 'person';
 }
 
 export interface PersonForCreate {
@@ -46,8 +46,8 @@ export interface PersonListParams {
 }
 
 export interface PersonResponse {
-  details?: PersonDetails;
-  status?: 'success';
+  details: PersonDetails;
+  status: 'success';
 }
 
 export type PersonListResponse = ListResponse<PersonSummary>;

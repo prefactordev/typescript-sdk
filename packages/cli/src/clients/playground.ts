@@ -9,8 +9,8 @@ export type PlaygroundScenario = 'good' | 'mixed' | 'bad' | 'timeout' | 'active'
 export type PlaygroundInstancePurpose = 'live' | 'smoke_test' | 'eval';
 
 export interface PlaygroundCreateAgentResponse {
-  agent?: AgentShowDetails;
-  status?: 'success';
+  agent: AgentShowDetails;
+  status: 'success';
 }
 
 export interface PlaygroundCreateFirstAccountAgentParams {
@@ -19,9 +19,9 @@ export interface PlaygroundCreateFirstAccountAgentParams {
 }
 
 export interface PlaygroundCreateFirstAccountAgentResponse {
-  agent?: AgentShowDetails;
-  agent_instance_ids?: string[];
-  status?: 'success';
+  agent: AgentShowDetails;
+  agent_instance_ids: string[];
+  status: 'success';
 }
 
 export interface PlaygroundRecordSpansParams {
@@ -34,8 +34,8 @@ export interface PlaygroundRecordFirstAccountSpansParams {
 }
 
 export interface PlaygroundRecordSpansResponse {
-  ids?: string[];
-  status?: 'success';
+  ids: string[];
+  status: 'success';
 }
 
 export interface PlaygroundRegisterInstanceParams {
@@ -59,10 +59,10 @@ export interface PlaygroundRegisterQualityReviewInstanceParams {
 }
 
 export interface PlaygroundRegisterInstanceResponse {
-  agent_schema_version?: AgentSchemaVersionSummary;
-  agent_version?: AgentVersionSummary;
-  details?: AgentInstanceDetails;
-  status?: 'success';
+  agent_schema_version: AgentSchemaVersionSummary;
+  agent_version: AgentVersionSummary;
+  details: AgentInstanceDetails;
+  status: 'success';
 }
 
 export class PlaygroundClient {

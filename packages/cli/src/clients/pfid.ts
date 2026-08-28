@@ -1,9 +1,9 @@
 import type { ApiClient } from '../api-client.js';
 
 export interface PfidResponse {
-  account_id?: string;
-  pfids?: string[];
-  status?: string;
+  account_id: string;
+  pfids: string[];
+  status: 'success';
 }
 
 export class PfidClient {

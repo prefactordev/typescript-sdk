@@ -7,9 +7,9 @@ export interface Account {
 }
 
 export interface AccountSummary {
-  id?: string;
-  name?: string;
-  type?: 'account';
+  id: string;
+  name: string;
+  type: 'account';
 }
 
 export interface AccountDetails {

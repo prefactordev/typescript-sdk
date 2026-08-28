@@ -7,8 +7,8 @@ export interface BulkItem {
 }
 
 export interface BulkResponse {
-  outputs?: Record<string, Record<string, unknown>>;
-  status?: 'success';
+  outputs: Record<string, Record<string, unknown>>;
+  status: 'success';
 }
 
 export class BulkClient {

@@ -54,112 +54,112 @@ export type AgentInstanceClassification =
   | 'secret';
 
 export interface AgentInstanceCostBreakdownGroup {
-  cache_read?: number;
-  cache_read_cost?: number | null;
-  context_limit?: number | null;
-  input?: number;
-  input_cost?: number | null;
-  model_name?: string;
-  output?: number;
-  output_cost?: number | null;
-  provider?: string | null;
-  total_cost?: number | null;
+  cache_read: number;
+  cache_read_cost: number | null;
+  context_limit: number | null;
+  input: number;
+  input_cost: number | null;
+  model_name: string;
+  output: number;
+  output_cost: number | null;
+  provider: string | null;
+  total_cost: number | null;
 }
 
 export interface AgentInstanceCostBreakdown {
-  cache_read?: number;
-  cache_read_cost?: number | null;
-  groups?: AgentInstanceCostBreakdownGroup[];
-  input?: number;
-  input_cost?: number | null;
-  output?: number;
-  output_cost?: number | null;
-  total_cost?: number | null;
+  cache_read: number;
+  cache_read_cost: number | null;
+  groups: AgentInstanceCostBreakdownGroup[];
+  input: number;
+  input_cost: number | null;
+  output: number;
+  output_cost: number | null;
+  total_cost: number | null;
 }
 
 export interface AgentInstanceRiskScorePerType {
-  count?: number;
-  risk_level?: AgentInstanceRiskLevel;
-  schema_name?: string;
-  total_contribution?: number;
-  type_score?: number;
+  count: number;
+  risk_level: AgentInstanceRiskLevel;
+  schema_name: string;
+  total_contribution: number;
+  type_score: number;
 }
 
 export interface AgentInstanceRiskScore {
-  all_data_categories?: AgentInstanceDataCategory[];
-  allowed_actions?: AgentInstanceAllowedAction[];
-  any_assessable?: boolean;
-  critical_threshold?: number;
-  peak_classification?: AgentInstanceClassification | null;
-  per_type?: AgentInstanceRiskScorePerType[];
-  risk_level?: AgentInstanceRiskLevel | null;
-  total_score?: number;
+  all_data_categories: AgentInstanceDataCategory[];
+  allowed_actions: AgentInstanceAllowedAction[];
+  any_assessable: boolean;
+  critical_threshold: number;
+  peak_classification: AgentInstanceClassification | null;
+  per_type: AgentInstanceRiskScorePerType[];
+  risk_level: AgentInstanceRiskLevel | null;
+  total_score: number;
 }
 
 export interface AgentSpanCounts {
-  active?: number;
-  cancelled?: number;
-  complete?: number;
-  failed?: number;
-  finished?: number;
-  pending?: number;
-  total?: number;
+  active: number;
+  cancelled: number;
+  complete: number;
+  failed: number;
+  finished: number;
+  pending: number;
+  total: number;
 }
 
 export interface AgentSpanSchemaCounts {
-  by_name?: Record<string, number>;
+  by_name: Record<string, number>;
 }
 
 export interface AgentInstanceAgentContext {
-  body?: Record<string, unknown>;
-  generated_at?: string;
-  span_count?: number;
+  body: Record<string, unknown>;
+  generated_at: string;
+  span_count: number;
 }
 
 export interface AgentInstanceDetails {
-  account_id?: string;
-  agent_deployment_id?: string;
-  agent_id?: string;
-  agent_version_id?: string;
-  cost_breakdown?: AgentInstanceCostBreakdown | null;
-  environment_id?: string;
-  external_identifier?: string | null;
-  finished_at?: string | null;
-  id?: string;
-  inserted_at?: string;
-  last_activity_span_at?: string | null;
-  purpose?: 'live' | 'smoke_test' | 'eval';
-  quality_payloads?: Record<string, Record<string, unknown>>;
-  quality_summaries?: Record<string, string>;
-  raised_alert_count?: number | null;
-  risk_score?: AgentInstanceRiskScore | null;
-  span_counts?: AgentSpanCounts;
-  span_schema_counts?: AgentSpanSchemaCounts | null;
-  started_at?: string | null;
-  status?: 'pending' | 'active' | 'complete' | 'failed' | 'cancelled' | 'terminated';
-  termination_reason?: string | null;
-  type?: 'agent_instance';
-  updated_at?: string;
+  account_id: string;
+  agent_deployment_id: string;
+  agent_id: string;
+  agent_version_id: string;
+  cost_breakdown: AgentInstanceCostBreakdown | null;
+  environment_id: string;
+  external_identifier: string | null;
+  finished_at: string | null;
+  id: string;
+  inserted_at: string;
+  last_activity_span_at: string | null;
+  purpose: 'live' | 'smoke_test' | 'eval';
+  quality_payloads: Record<string, Record<string, unknown>>;
+  quality_summaries: Record<string, string>;
+  raised_alert_count: number | null;
+  risk_score: AgentInstanceRiskScore | null;
+  span_counts: AgentSpanCounts;
+  span_schema_counts: AgentSpanSchemaCounts | null;
+  started_at: string | null;
+  status: 'pending' | 'active' | 'complete' | 'failed' | 'cancelled' | 'terminated';
+  termination_reason: string | null;
+  type: 'agent_instance';
+  updated_at: string;
 }
 
 export interface AgentInstanceSummary {
-  account_id?: string;
-  agent_id?: string;
-  agent_version_id?: string;
-  environment_id?: string;
-  external_identifier?: string | null;
-  finished_at?: string | null;
-  id?: string;
-  inserted_at?: string;
-  last_activity_span_at?: string | null;
-  purpose?: 'live' | 'smoke_test' | 'eval';
-  raised_alert_count?: number | null;
-  risk_score?: AgentInstanceRiskScore | null;
-  started_at?: string | null;
-  status?: 'pending' | 'active' | 'complete' | 'failed' | 'cancelled' | 'terminated';
-  termination_reason?: string | null;
-  type?: 'agent_instance';
-  updated_at?: string;
+  account_id: string;
+  agent_id: string;
+  agent_version_id: string;
+  environment_id: string;
+  external_identifier: string | null;
+  finished_at: string | null;
+  id: string;
+  inserted_at: string;
+  last_activity_span_at: string | null;
+  purpose: 'live' | 'smoke_test' | 'eval';
+  raised_alert_count: number | null;
+  risk_score: AgentInstanceRiskScore | null;
+  started_at: string | null;
+  status: 'pending' | 'active' | 'complete' | 'failed' | 'cancelled' | 'terminated';
+  termination_reason: string | null;
+  type: 'agent_instance';
+  updated_at: string;
 }
 
 export type AgentInstanceListResponse = ListResponse<AgentInstanceSummary>;
@@ -174,8 +174,8 @@ export interface AgentInstanceShowParams {
 }
 
 export interface AgentInstanceShowResponse {
-  details?: AgentInstanceDetails;
-  status?: 'success';
+  details: AgentInstanceDetails;
+  status: 'success';
 }
 
 export function showAgentInstance(

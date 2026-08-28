@@ -43,21 +43,21 @@ export interface RiskProfileRuleset {
 }
 
 export interface RiskProfileDetails {
-  agreed_data_risk?: Record<string, unknown>;
-  description?: string | null;
-  id?: string;
-  inserted_at?: string;
-  name?: string;
-  ruleset?: RiskProfileRuleset;
-  type?: 'risk_profile';
-  updated_at?: string;
+  agreed_data_risk: Record<string, unknown>;
+  description: string | null;
+  id: string;
+  inserted_at: string;
+  name: string;
+  ruleset: RiskProfileRuleset;
+  type: 'risk_profile';
+  updated_at: string;
 }
 
 export interface RiskProfileSummary {
-  description?: string | null;
-  id?: string;
-  name?: string;
-  type?: 'risk_profile';
+  description: string | null;
+  id: string;
+  name: string;
+  type: 'risk_profile';
 }
 
 export interface RiskProfileForCreate {
@@ -82,13 +82,13 @@ export interface RiskProfileListParams {
 }
 
 export interface RiskProfileResponse {
-  details?: RiskProfileDetails;
-  status?: 'success';
+  details: RiskProfileDetails;
+  status: 'success';
 }
 
 export interface RiskProfileTemplateResponse {
-  ruleset?: RiskProfileRuleset;
-  status?: 'success';
+  ruleset: RiskProfileRuleset;
+  status: 'success';
 }
 
 export type RiskProfileListResponse = ListResponse<RiskProfileSummary>;

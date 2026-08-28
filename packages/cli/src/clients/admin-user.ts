@@ -8,16 +8,16 @@ export interface AdminUser {
 }
 
 export interface AdminUserSummary {
-  account_id?: string;
-  email?: string;
-  id?: string;
-  inserted_at?: string;
-  job_title?: string | null;
-  last_active_at?: string | null;
-  name?: string | null;
-  profile_completed_at?: string | null;
-  type?: 'admin_user';
-  updated_at?: string;
+  account_id: string;
+  email: string;
+  id: string;
+  inserted_at: string;
+  job_title: string | null;
+  last_active_at: string | null;
+  name: string | null;
+  profile_completed_at: string | null;
+  type: 'admin_user';
+  updated_at: string;
 }
 
 export interface AdminUserResponse {

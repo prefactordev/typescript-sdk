@@ -9,14 +9,14 @@ export interface AdminUserInvite {
 }
 
 export interface AdminUserInviteSummary {
-  account_id?: string;
-  email?: string;
-  id?: string;
-  inserted_at?: string;
-  invite_url?: string;
-  status?: 'pending' | 'used' | 'revoked';
-  type?: 'admin_user_invite';
-  updated_at?: string;
+  account_id: string;
+  email: string;
+  id: string;
+  inserted_at: string;
+  invite_url: string;
+  status: 'pending' | 'used' | 'revoked';
+  type: 'admin_user_invite';
+  updated_at: string;
 }
 
 export interface AdminUserInviteResponse {

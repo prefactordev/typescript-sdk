@@ -8,16 +8,16 @@ export interface AgentSchemaVersion {
 }
 
 export interface AgentSchemaVersionSummary {
-  account_id?: string;
-  agent_id?: string;
-  current_agent_deployment_refs?: string[];
-  external_identifier?: string;
-  external_identifier_repeats?: number;
-  id?: string;
-  inserted_at?: string;
-  span_schemas_count?: number;
-  type?: 'agent_schema_version';
-  updated_at?: string;
+  account_id: string;
+  agent_id: string;
+  current_agent_deployment_refs: string[];
+  external_identifier: string;
+  external_identifier_repeats: number;
+  id: string;
+  inserted_at: string;
+  span_schemas_count: number;
+  type: 'agent_schema_version';
+  updated_at: string;
 }
 
 export interface AgentSchemaVersionCreateOptions {

@@ -2,21 +2,21 @@ import type { ApiClient } from '../api-client.js';
 import type { ListResponse } from './list-response.js';
 
 export interface TeamDetails {
-  agent_count?: number;
-  id?: string;
-  inserted_at?: string;
-  name?: string;
-  people_count?: number;
-  type?: 'team';
-  updated_at?: string;
+  agent_count: number;
+  id: string;
+  inserted_at: string;
+  name: string;
+  people_count: number;
+  type: 'team';
+  updated_at: string;
 }
 
 export interface TeamSummary {
-  agent_count?: number;
-  id?: string;
-  name?: string;
-  people_count?: number;
-  type?: 'team';
+  agent_count: number;
+  id: string;
+  name: string;
+  people_count: number;
+  type: 'team';
 }
 
 export interface TeamForCreate {
@@ -37,8 +37,8 @@ export interface TeamListParams {
 }
 
 export interface TeamResponse {
-  details?: TeamDetails;
-  status?: 'success';
+  details: TeamDetails;
+  status: 'success';
 }
 
 export type TeamListResponse = ListResponse<TeamSummary>;

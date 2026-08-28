@@ -13,14 +13,14 @@ export interface AgentDeployment {
 }
 
 export interface AgentDeploymentSummary {
-  account_id?: string;
-  agent_id?: string;
-  current_version_id?: string | null;
-  environment_id?: string;
-  id?: string;
-  inserted_at?: string;
-  type?: 'agent_deployment';
-  updated_at?: string;
+  account_id: string;
+  agent_id: string;
+  current_version_id: string | null;
+  environment_id: string;
+  id: string;
+  inserted_at: string;
+  type: 'agent_deployment';
+  updated_at: string;
 }
 
 export interface AgentDeploymentCreateDetails {

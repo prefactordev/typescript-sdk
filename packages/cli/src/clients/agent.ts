@@ -4,42 +4,42 @@ import type { ListResponse } from './list-response.js';
 export interface Agent {
   id: string;
   name: string;
-  description?: string;
+  description: string | null;
   status: string;
 }
 
 export interface AgentAvailableActions {
-  delete?: boolean;
-  reinstate?: boolean;
-  retire?: boolean;
-  update?: boolean;
+  delete: boolean;
+  reinstate: boolean;
+  retire: boolean;
+  update: boolean;
 }
 
 export interface AgentInstanceCounts {
-  active?: number;
-  cancelled?: number;
-  complete?: number;
-  failed?: number;
-  finished?: number;
-  pending?: number;
-  terminated?: number;
-  total?: number;
+  active: number;
+  cancelled: number;
+  complete: number;
+  failed: number;
+  finished: number;
+  pending: number;
+  terminated: number;
+  total: number;
 }
 
 export interface AgentSummary {
-  available_actions?: AgentAvailableActions;
-  description?: string | null;
-  external_identifier?: string | null;
-  id?: string;
-  inserted_at?: string;
-  instance_counts?: AgentInstanceCounts;
-  last_activity_span_at?: string | null;
-  name?: string;
-  owner_person_id?: string | null;
-  status?: 'pending' | 'active' | 'dormant' | 'retired';
-  team_id?: string | null;
-  type?: 'agent';
-  updated_at?: string;
+  available_actions: AgentAvailableActions;
+  description: string | null;
+  external_identifier: string | null;
+  id: string;
+  inserted_at: string;
+  instance_counts: AgentInstanceCounts;
+  last_activity_span_at: string | null;
+  name: string;
+  owner_person_id: string | null;
+  status: 'pending' | 'active' | 'dormant' | 'retired';
+  team_id: string | null;
+  type: 'agent';
+  updated_at: string;
 }
 
 export interface AgentDetails {
@@ -63,9 +63,9 @@ export type AgentClassification =
   | 'secret';
 
 export interface AgentRiskSummary {
-  all_data_categories?: string[];
-  assessed_span_types?: number;
-  classification_counts?: {
+  all_data_categories: string[];
+  assessed_span_types: number;
+  classification_counts: {
     confidential?: number;
     internal?: number;
     public?: number;
@@ -73,32 +73,32 @@ export interface AgentRiskSummary {
     secret?: number;
     unknown?: number;
   };
-  external_communication_count?: number;
-  highest_classification?: AgentClassification;
-  total_span_types?: number;
-  unassessed_span_types?: number;
+  external_communication_count: number;
+  highest_classification: AgentClassification;
+  total_span_types: number;
+  unassessed_span_types: number;
 }
 
 export interface AgentRiskRollup {
-  observed_risk?: AgentRiskSummary | null;
-  theoretical_risk?: AgentRiskSummary | null;
+  observed_risk: AgentRiskSummary | null;
+  theoretical_risk: AgentRiskSummary | null;
 }
 
 export interface AgentShowDetails {
-  available_actions?: AgentAvailableActions;
-  description?: string | null;
-  external_identifier?: string | null;
-  id?: string;
-  inserted_at?: string;
-  instance_counts?: AgentInstanceCounts;
-  last_activity_span_at?: string | null;
-  name?: string;
-  owner_person_id?: string | null;
-  risk_profile_id?: string | null;
-  status?: 'pending' | 'active' | 'dormant' | 'retired';
-  team_id?: string | null;
-  type?: 'agent';
-  updated_at?: string;
+  available_actions: AgentAvailableActions;
+  description: string | null;
+  external_identifier: string | null;
+  id: string;
+  inserted_at: string;
+  instance_counts: AgentInstanceCounts;
+  last_activity_span_at: string | null;
+  name: string;
+  owner_person_id: string | null;
+  risk_profile_id: string | null;
+  status: 'pending' | 'active' | 'dormant' | 'retired';
+  team_id: string | null;
+  type: 'agent';
+  updated_at: string;
 }
 
 export interface AgentShowParams {
@@ -110,9 +110,9 @@ export interface AgentShowParams {
 }
 
 export interface AgentGetDetailsOutput {
-  details?: AgentShowDetails;
+  details: AgentShowDetails;
   risk_rollup?: AgentRiskRollup | null;
-  status?: 'success';
+  status: 'success';
 }
 
 export class AgentClient {

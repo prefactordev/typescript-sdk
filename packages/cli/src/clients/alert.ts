@@ -6,43 +6,43 @@ export type AlertSeverity = 'critical' | 'error' | 'warning' | 'info';
 export type AlertStatus = 'raised' | 'cleared';
 
 export interface AlertDetails {
-  account_id?: string;
-  agent_id?: string;
-  agent_instance_id?: string;
-  cleared_at?: string | null;
-  environment_id?: string;
-  id?: string;
-  inserted_at?: string;
-  name?: string;
-  payload?: Record<string, unknown>;
-  payload_sensitive_encoding?: boolean;
-  raised_at?: string;
-  severity?: AlertSeverity;
-  status?: AlertStatus;
-  summary?: string | null;
-  title?: string;
-  type?: 'alert';
-  updated_at?: string;
-  version?: number;
+  account_id: string;
+  agent_id: string;
+  agent_instance_id: string;
+  cleared_at: string | null;
+  environment_id: string;
+  id: string;
+  inserted_at: string;
+  name: string;
+  payload: Record<string, unknown>;
+  payload_sensitive_encoding: boolean;
+  raised_at: string;
+  severity: AlertSeverity;
+  status: AlertStatus;
+  summary: string | null;
+  title: string;
+  type: 'alert';
+  updated_at: string;
+  version: number;
 }
 
 export interface AlertSummary {
-  account_id?: string;
-  agent_id?: string;
-  agent_instance_id?: string;
-  cleared_at?: string | null;
-  environment_id?: string;
-  id?: string;
-  inserted_at?: string;
-  name?: string;
-  raised_at?: string;
-  severity?: AlertSeverity;
-  status?: AlertStatus;
-  summary?: string | null;
-  title?: string;
-  type?: 'alert';
-  updated_at?: string;
-  version?: number;
+  account_id: string;
+  agent_id: string;
+  agent_instance_id: string;
+  cleared_at: string | null;
+  environment_id: string;
+  id: string;
+  inserted_at: string;
+  name: string;
+  raised_at: string;
+  severity: AlertSeverity;
+  status: AlertStatus;
+  summary: string | null;
+  title: string;
+  type: 'alert';
+  updated_at: string;
+  version: number;
 }
 
 export interface AlertListParams {
@@ -87,15 +87,15 @@ export interface AlertClearParams {
 }
 
 export interface AlertResponse {
-  details?: AlertDetails;
-  status?: 'success';
+  details: AlertDetails;
+  status: 'success';
 }
 
 export type AlertListResponse = ListResponse<AlertSummary>;
 
 export interface AlertCountResponse {
-  count?: number;
-  status?: 'success';
+  count: number;
+  status: 'success';
 }
 
 export class AlertClient {

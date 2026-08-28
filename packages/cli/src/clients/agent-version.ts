@@ -8,14 +8,14 @@ export interface AgentVersion {
 }
 
 export interface AgentVersionSummary {
-  account_id?: string;
-  agent_id?: string;
-  agent_schema_version_id?: string;
-  current_agent_deployment_refs?: string[];
-  external_identifier?: string;
-  external_identifier_repeats?: number;
-  id?: string;
-  inserted_at?: string;
+  account_id: string;
+  agent_id: string;
+  agent_schema_version_id: string;
+  current_agent_deployment_refs: string[];
+  external_identifier: string;
+  external_identifier_repeats: number;
+  id: string;
+  inserted_at: string;
   observed_classification?:
     | 'unknown'
     | 'public'
@@ -32,8 +32,8 @@ export interface AgentVersionSummary {
     | 'restricted'
     | 'secret'
     | null;
-  type?: 'agent_version';
-  updated_at?: string;
+  type: 'agent_version';
+  updated_at: string;
 }
 
 export interface AgentVersionResponse {

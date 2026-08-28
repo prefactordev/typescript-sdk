@@ -8,13 +8,13 @@ export interface Environment {
 }
 
 export interface EnvironmentSummary {
-  account_id?: string;
-  description?: string | null;
-  external_identifier?: string | null;
-  id?: string;
-  name?: string;
-  purpose?: 'development' | 'staging' | 'testing' | 'production';
-  type?: 'environment';
+  account_id: string;
+  description: string | null;
+  external_identifier: string | null;
+  id: string;
+  name: string;
+  purpose: 'development' | 'staging' | 'testing' | 'production';
+  type: 'environment';
 }
 
 export interface EnvironmentDetails {
@@ -35,8 +35,8 @@ export interface EnvironmentShowParams {
 }
 
 export interface EnvironmentShowResponse {
-  details?: EnvironmentSummary;
-  status?: 'success';
+  details: EnvironmentSummary;
+  status: 'success';
 }
 
 export class EnvironmentClient {
