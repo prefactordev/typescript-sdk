@@ -82,9 +82,13 @@ export {
   type AgentSchemaVersion,
   AgentSchemaVersionClient,
   type AgentSchemaVersionCreateOptions,
+  type AgentSchemaVersionDetails,
   type AgentSchemaVersionListResponse,
   type AgentSchemaVersionResponse,
   type AgentSchemaVersionSummary,
+  type SchemaDetails,
+  type SchemaValidationResult,
+  type SpanTypeSchemaDetails,
 } from './clients/agent-schema-version.js';
 export {
   type AgentSpan,

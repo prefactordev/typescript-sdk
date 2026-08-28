@@ -215,6 +215,60 @@ describe('resource clients', () => {
     expect(captured?.init?.method).toBe('DELETE');
   });
 
+  test('agent schema version retrieve returns nested schema maps', async () => {
+    let captured: CapturedRequest | undefined;
+    globalThis.fetch = (async (input, init) => {
+      captured = { url: String(input), init };
+      return new Response(
+        JSON.stringify({
+          details: {
+            id: 'asv_1',
+            agent_id: 'agent_1',
+            alert_schemas: {
+              high_risk: {
+                name: 'high_risk',
+                title: 'High risk',
+                description: null,
+                template: null,
+                schema: { type: 'object' },
+                schema_validation: { message: null, status: 'success' },
+              },
+            },
+            quality_schemas: {},
+            span_type_schemas: {
+              llm: {
+                name: 'llm',
+                title: 'LLM',
+                description: null,
+                template: null,
+                params_schema: { type: 'object' },
+                params_schema_validation: { message: null, status: 'success' },
+                result_schema: { type: 'object' },
+                result_schema_validation: { message: null, status: 'success' },
+              },
+            },
+          },
+        }),
+        {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }
+      );
+    }) as typeof fetch;
+
+    const apiClient = new ApiClient('https://example.com', 'test-token');
+    const client = new AgentSchemaVersionClient(apiClient);
+
+    const response = await client.retrieve('asv_1');
+
+    const url = new URL(captured?.url ?? 'https://example.com');
+    expect(url.pathname).toBe('/api/v1/agent_schema_version/asv_1');
+    expect(captured?.init?.method).toBe('GET');
+    expect(captured?.init?.body).toBeUndefined();
+    expect(response.details.alert_schemas.high_risk.name).toBe('high_risk');
+    expect(response.details.span_type_schemas.llm.params_schema).toEqual({ type: 'object' });
+  });
+
   test('environment create wraps payload in details', async () => {
     let captured: CapturedRequest | undefined;
     globalThis.fetch = (async (input, init) => {

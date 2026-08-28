@@ -1,10 +1,53 @@
+import type { DataRisk } from '@prefactor/core';
 import type { ApiClient } from '../api-client.js';
 import type { ListResponse } from './list-response.js';
+
+export interface SchemaValidationResult {
+  message: string | null;
+  status: 'success' | 'error';
+}
+
+export interface SchemaDetails {
+  data_risk: DataRisk;
+  description: string | null;
+  name: string;
+  schema: Record<string, unknown>;
+  schema_validation: SchemaValidationResult;
+  template: string | null;
+  title: string;
+}
+
+export interface SpanTypeSchemaDetails {
+  data_risk: DataRisk;
+  description: string | null;
+  name: string;
+  params_schema: Record<string, unknown>;
+  params_schema_validation: SchemaValidationResult;
+  result_schema: Record<string, unknown>;
+  result_schema_validation: SchemaValidationResult;
+  template: string | null;
+  title: string;
+}
 
 export interface AgentSchemaVersion {
   id: string;
   agent_id: string;
   external_identifier: string;
+}
+
+export interface AgentSchemaVersionDetails {
+  account_id: string;
+  agent_id: string;
+  alert_schemas: Record<string, SchemaDetails>;
+  current_agent_deployment_refs: string[];
+  external_identifier: string;
+  external_identifier_repeats: number;
+  id: string;
+  inserted_at: string;
+  quality_schemas: Record<string, SchemaDetails>;
+  span_type_schemas: Record<string, SpanTypeSchemaDetails>;
+  type: 'agent_schema_version';
+  updated_at: string;
 }
 
 export interface AgentSchemaVersionSummary {
@@ -27,7 +70,7 @@ export interface AgentSchemaVersionCreateOptions {
 }
 
 export interface AgentSchemaVersionResponse {
-  details: AgentSchemaVersion;
+  details: AgentSchemaVersionDetails;
 }
 
 export type AgentSchemaVersionListResponse = ListResponse<AgentSchemaVersionSummary>;
