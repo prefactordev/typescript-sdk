@@ -143,7 +143,7 @@ Environment fallback is supported when no default profile is configured:
 - `agent_versions`: list, retrieve, create
 - `agent_schema_versions`: list, retrieve, create
 - `agent_instances`: list, retrieve, show, agent_context, register, start, finish, terminate
-- `agent_spans`: list, retrieve, create, finish
+- `agent_spans`: list, retrieve, create, finish, discard_sensitive
 - `api_tokens`: list, retrieve, create, suspend, activate, revoke, delete
 - `setup`: create an agent (optional), mint a validated deployment token, and print setup values for instrumentation
 - `admin_users`: list, retrieve, update

@@ -122,4 +122,11 @@ export class AgentSpanClient {
       body: options,
     });
   }
+
+  discardSensitive(id: string): Promise<AgentSpanResponse> {
+    return this.client.request(`/agent_spans/${id}/discard_sensitive`, {
+      method: 'POST',
+      body: {},
+    });
+  }
 }

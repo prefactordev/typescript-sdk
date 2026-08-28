@@ -340,6 +340,28 @@ describe('resource clients', () => {
     expect(response.details?.data_risk).toBeNull();
   });
 
+  test('agent span discardSensitive posts empty body', async () => {
+    let captured: CapturedRequest | undefined;
+    globalThis.fetch = (async (input, init) => {
+      captured = { url: String(input), init };
+      return new Response(JSON.stringify({ details: { id: 'span_123' }, status: 'success' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }) as typeof fetch;
+
+    const apiClient = new ApiClient('https://example.com', 'test-token');
+    const client = new AgentSpanClient(apiClient);
+
+    await client.discardSensitive('span_123');
+
+    expect(new URL(captured?.url ?? 'https://example.com').pathname).toBe(
+      '/api/v1/agent_spans/span_123/discard_sensitive'
+    );
+    expect(captured?.init?.method).toBe('POST');
+    expect(captured?.init?.body).toBe('{}');
+  });
+
   test('api token activate posts empty action body', async () => {
     let captured: CapturedRequest | undefined;
     globalThis.fetch = (async (input, init) => {

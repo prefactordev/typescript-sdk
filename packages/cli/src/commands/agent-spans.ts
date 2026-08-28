@@ -134,4 +134,14 @@ export function registerAgentSpansCommands(program: Command): void {
         printJson(result);
       });
     });
+
+  agentSpans
+    .command('discard_sensitive <id>')
+    .description('Discard sensitive payload data from an agent span')
+    .action(function (this: Command, id: string) {
+      return executeAuthed(this, async (apiClient) => {
+        const result = await new AgentSpanClient(apiClient).discardSensitive(id);
+        printJson(result);
+      });
+    });
 }

@@ -28,7 +28,7 @@ This is a consumption tool, NOT shared infrastructure.
 - `agent_versions`: Manage agent versions
 - `agent_schema_versions`: Manage agent schema versions
 - `agent_instances`: Manage agent instances (register, start, finish, terminate, show)
-- `agent_spans`: Manage agent spans (list, retrieve, create, finish)
+- `agent_spans`: Manage agent spans (list, retrieve, create, finish, discard_sensitive)
 - `admin_users`: Manage admin users (list, retrieve, update)
 - `admin_user_invites`: Manage admin user invites
 - `api_tokens`: Manage API tokens

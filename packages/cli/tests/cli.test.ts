@@ -1237,6 +1237,38 @@ describe('CLI command validation', () => {
     expect(url.searchParams.get('redacted')).toBe('true');
   });
 
+  test('agent_spans discard_sensitive posts empty body', async () => {
+    const cwd = join(tempRoot, 'cwd');
+    mkdirSync(cwd, { recursive: true });
+    process.chdir(cwd);
+    writeFileSync(
+      join(cwd, 'prefactor.json'),
+      JSON.stringify({ default: { api_key: 'token', base_url: 'https://example.com' } })
+    );
+
+    let capturedPath = '';
+    let capturedBody = '';
+    globalThis.fetch = (async (input, init) => {
+      capturedPath = new URL(String(input)).pathname;
+      capturedBody = String(init?.body ?? '');
+      return new Response(JSON.stringify({ details: { id: 'span_1' }, status: 'success' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }) as typeof fetch;
+
+    await createCli('1.0.0').parseAsync([
+      'node',
+      'prefactor',
+      'agent_spans',
+      'discard_sensitive',
+      'span_1',
+    ]);
+
+    expect(capturedPath).toBe('/api/v1/agent_spans/span_1/discard_sensitive');
+    expect(capturedBody).toBe('{}');
+  });
+
   test('agent_instances agent_context writes context body to output file', async () => {
     const cwd = join(tempRoot, 'cwd');
     mkdirSync(cwd, { recursive: true });
