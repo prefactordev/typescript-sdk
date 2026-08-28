@@ -135,6 +135,7 @@ export {
 
 // HTTP Client & API Clients
 export {
+  type ApiError,
   HttpClient,
   HttpClientError,
   type HttpRequester,

@@ -1,4 +1,4 @@
-import { HttpClientError, type HttpRequester } from './http-client.js';
+import { HttpClientError, type ApiError, type HttpRequester } from './http-client.js';
 import { ensureIdempotencyKey } from './idempotency.js';
 
 export type AgentSpanStatus = 'active' | 'complete' | 'failed' | 'cancelled';
@@ -87,6 +87,5 @@ function isAlreadyFinishedError(responseBody: unknown): boolean {
     return false;
   }
 
-  const payload = responseBody as Record<string, unknown>;
-  return payload.code === 'invalid_action';
+  return (responseBody as { code?: ApiError['code'] }).code === 'invalid_action';
 }
