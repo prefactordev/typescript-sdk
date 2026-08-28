@@ -10,6 +10,7 @@ import { AgentInstanceClient, showAgentInstance } from '../src/clients/agent-ins
 import { AgentSchemaVersionClient } from '../src/clients/agent-schema-version.js';
 import { AgentSpanClient } from '../src/clients/agent-span.js';
 import { AgentVersionClient } from '../src/clients/agent-version.js';
+import { AlertClient } from '../src/clients/alert.js';
 import { ApiTokenClient } from '../src/clients/api-token.js';
 import { BulkClient } from '../src/clients/bulk.js';
 import { EnvironmentClient } from '../src/clients/environment.js';
@@ -41,6 +42,7 @@ describe('resource clients', () => {
     expect(typeof cliExports.AgentSchemaVersionClient).toBe('function');
     expect(typeof cliExports.AgentInstanceClient).toBe('function');
     expect(typeof cliExports.AgentSpanClient).toBe('function');
+    expect(typeof cliExports.AlertClient).toBe('function');
     expect(typeof cliExports.AdminUserClient).toBe('function');
     expect(typeof cliExports.AdminUserInviteClient).toBe('function');
     expect(typeof cliExports.ApiTokenClient).toBe('function');
@@ -360,6 +362,118 @@ describe('resource clients', () => {
     );
     expect(captured?.init?.method).toBe('POST');
     expect(captured?.init?.body).toBe('{}');
+  });
+
+  test('alert list serializes nested active_during and pagination query keys', async () => {
+    let captured: CapturedRequest | undefined;
+    globalThis.fetch = (async (input, init) => {
+      captured = { url: String(input), init };
+      return new Response(JSON.stringify({ summaries: [] }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }) as typeof fetch;
+
+    const apiClient = new ApiClient('https://example.com', 'test-token');
+    const client = new AlertClient(apiClient);
+
+    await client.list({
+      agent_instance_id: 'agent_instance_1',
+      status: 'raised',
+      severity: 'warning',
+      active_during: {
+        start_at: '2024-01-01T00:00:00Z',
+        finish_at: '2024-01-02T00:00:00Z',
+      },
+      pagination: { offset: 0, page_size: 25 },
+    });
+
+    const url = new URL(captured?.url ?? 'https://example.com');
+    expect(url.pathname).toBe('/api/v1/alerts');
+    expect(url.searchParams.get('agent_instance_id')).toBe('agent_instance_1');
+    expect(url.searchParams.get('status')).toBe('raised');
+    expect(url.searchParams.get('severity')).toBe('warning');
+    expect(url.searchParams.get('active_during[start_at]')).toBe('2024-01-01T00:00:00Z');
+    expect(url.searchParams.get('active_during[finish_at]')).toBe('2024-01-02T00:00:00Z');
+    expect(url.searchParams.get('pagination[offset]')).toBe('0');
+    expect(url.searchParams.get('pagination[page_size]')).toBe('25');
+    expect(captured?.init?.method).toBe('GET');
+  });
+
+  test('alert count sends GET without a details wrapper', async () => {
+    let captured: CapturedRequest | undefined;
+    globalThis.fetch = (async (input, init) => {
+      captured = { url: String(input), init };
+      return new Response(JSON.stringify({ count: 3, status: 'success' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }) as typeof fetch;
+
+    const apiClient = new ApiClient('https://example.com', 'test-token');
+    const client = new AlertClient(apiClient);
+
+    const response = await client.count({ status: 'raised', severity: 'error' });
+
+    const url = new URL(captured?.url ?? 'https://example.com');
+    expect(url.pathname).toBe('/api/v1/alerts/count');
+    expect(url.searchParams.get('status')).toBe('raised');
+    expect(url.searchParams.get('severity')).toBe('error');
+    expect(captured?.init?.method).toBe('GET');
+    expect(response).toEqual({ count: 3, status: 'success' });
+  });
+
+  test('alert raise posts top-level fields without a details wrapper', async () => {
+    let captured: CapturedRequest | undefined;
+    globalThis.fetch = (async (input, init) => {
+      captured = { url: String(input), init };
+      return new Response(JSON.stringify({ details: { id: 'alert_1' }, status: 'success' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }) as typeof fetch;
+
+    const apiClient = new ApiClient('https://example.com', 'test-token');
+    const client = new AlertClient(apiClient);
+
+    await client.raise({
+      agent_instance_id: 'agent_instance_1',
+      name: 'high_error_rate',
+      severity: 'warning',
+      payload: { count: 12 },
+      payload_sensitive_encoding: true,
+    });
+
+    expect(new URL(captured?.url ?? 'https://example.com').pathname).toBe('/api/v1/alerts/raise');
+    expect(captured?.init?.method).toBe('POST');
+    expect(captured?.init?.body).toBe(
+      '{"agent_instance_id":"agent_instance_1","name":"high_error_rate","severity":"warning","payload":{"count":12},"payload_sensitive_encoding":true}'
+    );
+  });
+
+  test('alert clear posts top-level fields without a details wrapper', async () => {
+    let captured: CapturedRequest | undefined;
+    globalThis.fetch = (async (input, init) => {
+      captured = { url: String(input), init };
+      return new Response(JSON.stringify({ details: { id: 'alert_1' }, status: 'success' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }) as typeof fetch;
+
+    const apiClient = new ApiClient('https://example.com', 'test-token');
+    const client = new AlertClient(apiClient);
+
+    await client.clear({
+      agent_instance_id: 'agent_instance_1',
+      name: 'high_error_rate',
+    });
+
+    expect(new URL(captured?.url ?? 'https://example.com').pathname).toBe('/api/v1/alerts/clear');
+    expect(captured?.init?.method).toBe('POST');
+    expect(captured?.init?.body).toBe(
+      '{"agent_instance_id":"agent_instance_1","name":"high_error_rate"}'
+    );
   });
 
   test('api token activate posts empty action body', async () => {

@@ -8,6 +8,7 @@ import { registerAgentSchemaVersionsCommands } from './commands/agent-schema-ver
 import { registerAgentSpansCommands } from './commands/agent-spans.js';
 import { registerAgentVersionsCommands } from './commands/agent-versions.js';
 import { registerAgentsCommands } from './commands/agents.js';
+import { registerAlertsCommands } from './commands/alerts.js';
 import { registerApiTokensCommands } from './commands/api-tokens.js';
 import { registerEnvironmentsCommands } from './commands/environments.js';
 import { registerLifecycleCommands } from './commands/lifecycle.js';
@@ -64,6 +65,7 @@ export function createCli(version: string): Command {
   registerAgentInstancesCommands(program);
   registerAgentDeploymentsCommands(program);
   registerAgentSpansCommands(program);
+  registerAlertsCommands(program);
   registerAdminCommands(program);
   registerApiTokensCommands(program);
   registerSetupCommand(program);

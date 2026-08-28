@@ -106,6 +106,20 @@ export {
   type AgentVersionSummary,
 } from './clients/agent-version.js';
 export {
+  type AlertClearParams,
+  AlertClient,
+  type AlertCountParams,
+  type AlertCountResponse,
+  type AlertDetails,
+  type AlertListParams,
+  type AlertListResponse,
+  type AlertRaiseParams,
+  type AlertResponse,
+  type AlertSeverity,
+  type AlertStatus,
+  type AlertSummary,
+} from './clients/alert.js';
+export {
   type ApiToken,
   ApiTokenClient,
   type ApiTokenCreateDetails,

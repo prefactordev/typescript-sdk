@@ -64,6 +64,7 @@ describe('CLI profiles command', () => {
       'agent_instances',
       'agent_deployments',
       'agent_spans',
+      'alerts',
       'admin_users',
       'admin_user_invites',
       'api_tokens',
@@ -1267,6 +1268,133 @@ describe('CLI command validation', () => {
 
     expect(capturedPath).toBe('/api/v1/agent_spans/span_1/discard_sensitive');
     expect(capturedBody).toBe('{}');
+  });
+
+  test('alerts list sends nested active_during and pagination query keys', async () => {
+    const cwd = join(tempRoot, 'cwd');
+    mkdirSync(cwd, { recursive: true });
+    process.chdir(cwd);
+    writeFileSync(
+      join(cwd, 'prefactor.json'),
+      JSON.stringify({ default: { api_key: 'token', base_url: 'https://example.com' } })
+    );
+
+    let capturedUrl = '';
+    globalThis.fetch = (async (input) => {
+      capturedUrl = String(input);
+      return new Response(JSON.stringify({ summaries: [] }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }) as typeof fetch;
+
+    await createCli('1.0.0').parseAsync([
+      'node',
+      'prefactor',
+      'alerts',
+      'list',
+      '--agent_instance_id',
+      'agent_instance_1',
+      '--status',
+      'raised',
+      '--severity',
+      'warning',
+      '--active_during_start_at',
+      '2024-01-01T00:00:00Z',
+      '--active_during_finish_at',
+      '2024-01-02T00:00:00Z',
+      '--pagination_offset',
+      '0',
+      '--pagination_page_size',
+      '25',
+    ]);
+
+    const url = new URL(capturedUrl);
+    expect(url.pathname).toBe('/api/v1/alerts');
+    expect(url.searchParams.get('agent_instance_id')).toBe('agent_instance_1');
+    expect(url.searchParams.get('status')).toBe('raised');
+    expect(url.searchParams.get('severity')).toBe('warning');
+    expect(url.searchParams.get('active_during[start_at]')).toBe('2024-01-01T00:00:00Z');
+    expect(url.searchParams.get('active_during[finish_at]')).toBe('2024-01-02T00:00:00Z');
+    expect(url.searchParams.get('pagination[offset]')).toBe('0');
+    expect(url.searchParams.get('pagination[page_size]')).toBe('25');
+  });
+
+  test('alerts raise posts top-level fields without a details wrapper', async () => {
+    const cwd = join(tempRoot, 'cwd');
+    mkdirSync(cwd, { recursive: true });
+    process.chdir(cwd);
+    writeFileSync(
+      join(cwd, 'prefactor.json'),
+      JSON.stringify({ default: { api_key: 'token', base_url: 'https://example.com' } })
+    );
+
+    let capturedPath = '';
+    let capturedBody = '';
+    globalThis.fetch = (async (input, init) => {
+      capturedPath = new URL(String(input)).pathname;
+      capturedBody = String(init?.body ?? '');
+      return new Response(JSON.stringify({ details: { id: 'alert_1' }, status: 'success' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }) as typeof fetch;
+
+    await createCli('1.0.0').parseAsync([
+      'node',
+      'prefactor',
+      'alerts',
+      'raise',
+      '--agent_instance_id',
+      'agent_instance_1',
+      '--name',
+      'high_error_rate',
+      '--severity',
+      'warning',
+      '--payload',
+      '{"count":12}',
+      '--payload_sensitive_encoding',
+    ]);
+
+    expect(capturedPath).toBe('/api/v1/alerts/raise');
+    expect(capturedBody).toBe(
+      '{"agent_instance_id":"agent_instance_1","name":"high_error_rate","severity":"warning","payload":{"count":12},"payload_sensitive_encoding":true}'
+    );
+  });
+
+  test('alerts clear posts required top-level fields without a details wrapper', async () => {
+    const cwd = join(tempRoot, 'cwd');
+    mkdirSync(cwd, { recursive: true });
+    process.chdir(cwd);
+    writeFileSync(
+      join(cwd, 'prefactor.json'),
+      JSON.stringify({ default: { api_key: 'token', base_url: 'https://example.com' } })
+    );
+
+    let capturedPath = '';
+    let capturedBody = '';
+    globalThis.fetch = (async (input, init) => {
+      capturedPath = new URL(String(input)).pathname;
+      capturedBody = String(init?.body ?? '');
+      return new Response(JSON.stringify({ details: { id: 'alert_1' }, status: 'success' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }) as typeof fetch;
+
+    await createCli('1.0.0').parseAsync([
+      'node',
+      'prefactor',
+      'alerts',
+      'clear',
+      '--agent_instance_id',
+      'agent_instance_1',
+      '--name',
+      'high_error_rate',
+    ]);
+
+    expect(capturedPath).toBe('/api/v1/alerts/clear');
+    expect(capturedBody).toBe('{"agent_instance_id":"agent_instance_1","name":"high_error_rate"}');
   });
 
   test('agent_instances agent_context writes context body to output file', async () => {
