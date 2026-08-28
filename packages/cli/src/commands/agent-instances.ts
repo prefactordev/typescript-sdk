@@ -1,7 +1,7 @@
 import { writeFile } from 'node:fs/promises';
 import type { SpanTypeSchema } from '@prefactor/core';
 import { type Command, Option } from 'commander';
-import { AgentInstanceClient } from '../clients/agent-instance.js';
+import { AgentInstanceClient, showAgentInstance } from '../clients/agent-instance.js';
 import {
   executeAuthed,
   parseJsonOption,
@@ -33,6 +33,45 @@ export function registerAgentInstancesCommands(program: Command): void {
     .action(function (this: Command, id: string) {
       return executeAuthed(this, async (apiClient) => {
         const result = await apiClient.request(`/agent_instance/${id}`, { method: 'GET' });
+        printJson(result);
+      });
+    });
+
+  agentInstances
+    .command('show')
+    .description('Show agent instance by id or external identifier')
+    .option('--agent_instance_id <agent_instance_id>', 'Agent instance ID')
+    .option('--external_identifier <external_identifier>', 'External identifier')
+    .option('--include_counts', 'Include span counts')
+    .option('--include_costs', 'Include cost breakdown')
+    .option('--include_risk_score', 'Include risk score')
+    .option('--include_alert_count', 'Include raised alert count')
+    .action(function (
+      this: Command,
+      options: {
+        agent_instance_id?: string;
+        external_identifier?: string;
+        include_counts?: boolean;
+        include_costs?: boolean;
+        include_risk_score?: boolean;
+        include_alert_count?: boolean;
+      }
+    ) {
+      return executeAuthed(this, async (apiClient) => {
+        if (!options.agent_instance_id && !options.external_identifier) {
+          throw new Error('Specify --agent_instance_id or --external_identifier.');
+        }
+
+        const result = await showAgentInstance(apiClient, {
+          ...(options.agent_instance_id ? { agent_instance_id: options.agent_instance_id } : {}),
+          ...(options.external_identifier
+            ? { external_identifier: options.external_identifier }
+            : {}),
+          ...(options.include_counts ? { include_counts: true } : {}),
+          ...(options.include_costs ? { include_costs: true } : {}),
+          ...(options.include_risk_score ? { include_risk_score: true } : {}),
+          ...(options.include_alert_count ? { include_alert_count: true } : {}),
+        });
         printJson(result);
       });
     });

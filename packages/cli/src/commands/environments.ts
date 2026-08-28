@@ -27,6 +27,30 @@ export function registerEnvironmentsCommands(program: Command): void {
     });
 
   environments
+    .command('show')
+    .description('Show environment by id or external identifier')
+    .option('--environment_id <environment_id>', 'Environment ID')
+    .option('--external_identifier <external_identifier>', 'External identifier')
+    .action(function (
+      this: Command,
+      options: { environment_id?: string; external_identifier?: string }
+    ) {
+      return executeAuthed(this, async (apiClient) => {
+        if (!options.environment_id && !options.external_identifier) {
+          throw new Error('Specify --environment_id or --external_identifier.');
+        }
+
+        const result = await new EnvironmentClient(apiClient).show({
+          ...(options.environment_id ? { environment_id: options.environment_id } : {}),
+          ...(options.external_identifier
+            ? { external_identifier: options.external_identifier }
+            : {}),
+        });
+        printJson(result);
+      });
+    });
+
+  environments
     .command('create')
     .description('Create environment')
     .requiredOption('--name <name>', 'Environment name')

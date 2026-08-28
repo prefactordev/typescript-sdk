@@ -1,11 +1,6 @@
 import { type Command, Option } from 'commander';
 import { AgentSpanClient } from '../clients/agent-span.js';
-import {
-  executeAuthed,
-  parseJsonOption,
-  printJson,
-  validateOptionalPfid,
-} from './shared.js';
+import { executeAuthed, parseJsonOption, printJson, validateOptionalPfid } from './shared.js';
 
 export function registerAgentSpansCommands(program: Command): void {
   const agentSpans = program.command('agent_spans').description('Manage agent spans');

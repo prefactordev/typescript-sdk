@@ -29,6 +29,16 @@ export interface EnvironmentResponse {
 
 export type EnvironmentListResponse = ListResponse<EnvironmentSummary>;
 
+export interface EnvironmentShowParams {
+  environment_id?: string;
+  external_identifier?: string;
+}
+
+export interface EnvironmentShowResponse {
+  details?: EnvironmentSummary;
+  status?: 'success';
+}
+
 export class EnvironmentClient {
   constructor(private readonly client: ApiClient) {}
 
@@ -41,6 +51,16 @@ export class EnvironmentClient {
 
   retrieve(id: string): Promise<EnvironmentResponse> {
     return this.client.request(`/environment/${id}`, { method: 'GET' });
+  }
+
+  show(params: EnvironmentShowParams): Promise<EnvironmentShowResponse> {
+    return this.client.request('/environment/show', {
+      method: 'GET',
+      query: {
+        ...(params.environment_id ? { environment_id: params.environment_id } : {}),
+        ...(params.external_identifier ? { external_identifier: params.external_identifier } : {}),
+      },
+    });
   }
 
   create(details: EnvironmentDetails & { account_id: string }): Promise<EnvironmentResponse> {

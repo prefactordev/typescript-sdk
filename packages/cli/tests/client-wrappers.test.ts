@@ -6,7 +6,7 @@ import { AdminUserClient } from '../src/clients/admin-user.js';
 import { AdminUserInviteClient } from '../src/clients/admin-user-invite.js';
 import { AgentClient } from '../src/clients/agent.js';
 import { AgentDeploymentClient } from '../src/clients/agent-deployment.js';
-import { AgentInstanceClient } from '../src/clients/agent-instance.js';
+import { AgentInstanceClient, showAgentInstance } from '../src/clients/agent-instance.js';
 import { AgentSchemaVersionClient } from '../src/clients/agent-schema-version.js';
 import { AgentSpanClient } from '../src/clients/agent-span.js';
 import { AgentVersionClient } from '../src/clients/agent-version.js';
@@ -70,6 +70,33 @@ describe('resource clients', () => {
     expect(captured?.init?.method).toBe('GET');
     expect(captured?.init?.body).toBeUndefined();
     expect(response).toEqual({ summaries: [] });
+  });
+
+  test('agent show sends lookup query params', async () => {
+    let captured: CapturedRequest | undefined;
+    globalThis.fetch = (async (input, init) => {
+      captured = { url: String(input), init };
+      return new Response(JSON.stringify({ details: { id: 'agent_1' }, status: 'success' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }) as typeof fetch;
+
+    const apiClient = new ApiClient('https://example.com', 'test-token');
+    const client = new AgentClient(apiClient);
+
+    await client.show({
+      agent_id: 'agent_1',
+      include_counts: true,
+      include_risk_rollup: true,
+    });
+
+    const url = new URL(captured?.url ?? 'https://example.com');
+    expect(url.pathname).toBe('/api/v1/agent/show');
+    expect(url.searchParams.get('agent_id')).toBe('agent_1');
+    expect(url.searchParams.get('include_counts')).toBe('true');
+    expect(url.searchParams.get('include_risk_rollup')).toBe('true');
+    expect(captured?.init?.method).toBe('GET');
   });
 
   test('agent deployment list uses agent_id query param', async () => {
@@ -196,6 +223,56 @@ describe('resource clients', () => {
     expect(new URL(captured?.url ?? 'https://example.com').pathname).toBe('/api/v1/environment');
     expect(captured?.init?.method).toBe('POST');
     expect(captured?.init?.body).toBe('{"details":{"account_id":"acct_123","name":"Production"}}');
+  });
+
+  test('environment show sends lookup query params', async () => {
+    let captured: CapturedRequest | undefined;
+    globalThis.fetch = (async (input, init) => {
+      captured = { url: String(input), init };
+      return new Response(JSON.stringify({ details: { id: 'env_1' }, status: 'success' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }) as typeof fetch;
+
+    const apiClient = new ApiClient('https://example.com', 'test-token');
+    const client = new EnvironmentClient(apiClient);
+
+    await client.show({ environment_id: 'env_1' });
+
+    const url = new URL(captured?.url ?? 'https://example.com');
+    expect(url.pathname).toBe('/api/v1/environment/show');
+    expect(url.searchParams.get('environment_id')).toBe('env_1');
+    expect(captured?.init?.method).toBe('GET');
+  });
+
+  test('agent instance show sends lookup query params', async () => {
+    let captured: CapturedRequest | undefined;
+    globalThis.fetch = (async (input, init) => {
+      captured = { url: String(input), init };
+      return new Response(
+        JSON.stringify({ details: { id: 'agent_instance_1' }, status: 'success' }),
+        {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }
+      );
+    }) as typeof fetch;
+
+    const apiClient = new ApiClient('https://example.com', 'test-token');
+
+    await showAgentInstance(apiClient, {
+      agent_instance_id: 'agent_instance_1',
+      include_counts: true,
+      include_costs: true,
+    });
+
+    const url = new URL(captured?.url ?? 'https://example.com');
+    expect(url.pathname).toBe('/api/v1/agent_instance/show');
+    expect(url.searchParams.get('agent_instance_id')).toBe('agent_instance_1');
+    expect(url.searchParams.get('include_counts')).toBe('true');
+    expect(url.searchParams.get('include_costs')).toBe('true');
+    expect(captured?.init?.method).toBe('GET');
   });
 
   test('agent span finish sends action payload without details wrapper', async () => {

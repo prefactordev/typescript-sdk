@@ -26,6 +26,42 @@ export function registerAgentsCommands(program: Command): void {
     });
 
   agents
+    .command('show')
+    .description('Show agent by id or external identifier')
+    .option('--agent_id <agent_id>', 'Agent ID')
+    .option('--external_identifier <external_identifier>', 'External identifier')
+    .option('--environment_id <environment_id>', 'Environment ID')
+    .option('--include_counts', 'Include instance counts')
+    .option('--include_risk_rollup', 'Include risk rollup')
+    .action(function (
+      this: Command,
+      options: {
+        agent_id?: string;
+        external_identifier?: string;
+        environment_id?: string;
+        include_counts?: boolean;
+        include_risk_rollup?: boolean;
+      }
+    ) {
+      return executeAuthed(this, async (apiClient) => {
+        if (!options.agent_id && !options.external_identifier) {
+          throw new Error('Specify --agent_id or --external_identifier.');
+        }
+
+        const result = await new AgentClient(apiClient).show({
+          ...(options.agent_id ? { agent_id: options.agent_id } : {}),
+          ...(options.external_identifier
+            ? { external_identifier: options.external_identifier }
+            : {}),
+          ...(options.environment_id ? { environment_id: options.environment_id } : {}),
+          ...(options.include_counts ? { include_counts: true } : {}),
+          ...(options.include_risk_rollup ? { include_risk_rollup: true } : {}),
+        });
+        printJson(result);
+      });
+    });
+
+  agents
     .command('create')
     .description('Create agent')
     .requiredOption('--name <name>', 'Agent name')
@@ -56,11 +92,7 @@ export function registerAgentsCommands(program: Command): void {
     .description('Update agent')
     .option('--name <name>', 'Agent name')
     .option('--description <description>', 'Agent description')
-    .action(function (
-      this: Command,
-      id: string,
-      options: { name?: string; description?: string }
-    ) {
+    .action(function (this: Command, id: string, options: { name?: string; description?: string }) {
       return executeAuthed(this, async (apiClient) => {
         const result = await new AgentClient(apiClient).update(id, {
           ...(options.name ? { name: options.name } : {}),

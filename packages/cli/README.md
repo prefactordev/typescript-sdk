@@ -137,12 +137,12 @@ Environment fallback is supported when no default profile is configured:
 - `login`: authenticate and save credentials to the default profile
 - `profiles`: add, list, remove
 - `accounts`: list, retrieve, update
-- `environments`: list, retrieve, create, update, delete
-- `agents`: list, retrieve, create, update, delete, retire, reinstate
+- `environments`: list, retrieve, show, create, update, delete
+- `agents`: list, retrieve, show, create, update, delete, retire, reinstate
 - `agent_deployments`: list, retrieve, create, update, delete
 - `agent_versions`: list, retrieve, create
 - `agent_schema_versions`: list, retrieve, create
-- `agent_instances`: list, retrieve, agent_context, register, start, finish, terminate
+- `agent_instances`: list, retrieve, show, agent_context, register, start, finish, terminate
 - `agent_spans`: list, create, finish
 - `api_tokens`: list, retrieve, create, suspend, activate, revoke, delete
 - `setup`: create an agent (optional), mint a validated deployment token, and print setup values for instrumentation

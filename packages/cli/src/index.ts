@@ -31,11 +31,17 @@ export {
 export {
   type Agent,
   type AgentAvailableActions,
+  type AgentClassification,
   AgentClient,
   type AgentDetails,
+  type AgentGetDetailsOutput,
   type AgentInstanceCounts,
   type AgentListResponse,
   type AgentResponse,
+  type AgentRiskRollup,
+  type AgentRiskSummary,
+  type AgentShowDetails,
+  type AgentShowParams,
   type AgentSummary,
 } from './clients/agent.js';
 export {
@@ -49,13 +55,28 @@ export {
 } from './clients/agent-deployment.js';
 export {
   type AgentInstance,
+  type AgentInstanceAgentContext,
+  type AgentInstanceAllowedAction,
+  type AgentInstanceClassification,
   AgentInstanceClient,
+  type AgentInstanceCostBreakdown,
+  type AgentInstanceCostBreakdownGroup,
+  type AgentInstanceDataCategory,
+  type AgentInstanceDetails,
   type AgentInstanceFinishOptions,
   type AgentInstanceListResponse,
   type AgentInstanceRegistrationPayload,
   type AgentInstanceResponse,
+  type AgentInstanceRiskLevel,
+  type AgentInstanceRiskScore,
+  type AgentInstanceRiskScorePerType,
+  type AgentInstanceShowParams,
+  type AgentInstanceShowResponse,
   type AgentInstanceSummary,
   type AgentInstanceTerminateOptions,
+  type AgentSpanCounts,
+  type AgentSpanSchemaCounts,
+  showAgentInstance,
 } from './clients/agent-instance.js';
 export {
   type AgentSchemaVersion,
@@ -102,11 +123,13 @@ export {
   type EnvironmentDetails,
   type EnvironmentListResponse,
   type EnvironmentResponse,
+  type EnvironmentShowParams,
+  type EnvironmentShowResponse,
   type EnvironmentSummary,
 } from './clients/environment.js';
-export {
-  type ListResponse,
-  type PaginationOutput,
-  type Sorting,
+export type {
+  ListResponse,
+  PaginationOutput,
+  Sorting,
 } from './clients/list-response.js';
 export { PfidClient, type PfidResponse } from './clients/pfid.js';
