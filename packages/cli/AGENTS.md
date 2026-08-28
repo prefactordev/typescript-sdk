@@ -80,3 +80,4 @@ Examples:
 
 ## Known issues
 - CLI `instance` command does not return actual span count - use `agent_spans` command instead.
+- The CLI does not expose `POST /api/v1/account/{id}/implode`. That endpoint is a destructive account wipe; `AccountClient` and `accounts` commands stay list/retrieve/update only.
