@@ -148,6 +148,7 @@ Environment fallback is supported when no default profile is configured:
 - `people`: list, retrieve, create, update, delete
 - `teams`: list, retrieve, create, update, delete
 - `risk_profiles`: list, retrieve, template, create, update, delete
+- `playground`: create, record, and register demo agents, instances, and spans
 - `api_tokens`: list, retrieve, create, suspend, activate, revoke, delete
 - `setup`: create an agent (optional), mint a validated deployment token, and print setup values for instrumentation
 - `admin_users`: list, retrieve, update
@@ -236,6 +237,7 @@ if (accountList.summaries?.[0]?.id && agentId) {
 - `AdminUserInviteClient`
 - `PersonClient`
 - `PfidClient`
+- `PlaygroundClient`
 - `RiskProfileClient`
 - `TeamClient`
 - `BulkClient`

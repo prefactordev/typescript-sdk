@@ -68,6 +68,7 @@ describe('CLI profiles command', () => {
       'people',
       'teams',
       'risk_profiles',
+      'playground',
       'admin_users',
       'admin_user_invites',
       'api_tokens',
@@ -1706,6 +1707,109 @@ describe('CLI command validation', () => {
     expect(capturedBody).toBe(
       '{"details":{"name":"Standard","ruleset":{"thresholds":{"critical":80,"high":50,"medium":20},"action_multipliers":{},"category_weights":{}}}}'
     );
+  });
+
+  test('playground create_openclaw_agent posts an empty body', async () => {
+    const cwd = join(tempRoot, 'cwd');
+    mkdirSync(cwd, { recursive: true });
+    process.chdir(cwd);
+    writeFileSync(
+      join(cwd, 'prefactor.json'),
+      JSON.stringify({ default: { api_key: 'token', base_url: 'https://example.com' } })
+    );
+
+    let capturedPath = '';
+    let capturedBody = '';
+    globalThis.fetch = (async (input, init) => {
+      capturedPath = new URL(String(input)).pathname;
+      capturedBody = String(init?.body ?? '');
+      return new Response(JSON.stringify({ status: 'success' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }) as typeof fetch;
+
+    await createCli('1.0.0').parseAsync([
+      'node',
+      'prefactor',
+      'playground',
+      'create_openclaw_agent',
+    ]);
+
+    expect(capturedPath).toBe('/api/v1/playground/create_openclaw_agent');
+    expect(capturedBody).toBe('{}');
+  });
+
+  test('playground record_first_account_spans posts required instance and scenario', async () => {
+    const cwd = join(tempRoot, 'cwd');
+    mkdirSync(cwd, { recursive: true });
+    process.chdir(cwd);
+    writeFileSync(
+      join(cwd, 'prefactor.json'),
+      JSON.stringify({ default: { api_key: 'token', base_url: 'https://example.com' } })
+    );
+
+    let capturedPath = '';
+    let capturedBody = '';
+    globalThis.fetch = (async (input, init) => {
+      capturedPath = new URL(String(input)).pathname;
+      capturedBody = String(init?.body ?? '');
+      return new Response(JSON.stringify({ ids: ['span_1'], status: 'success' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }) as typeof fetch;
+
+    await createCli('1.0.0').parseAsync([
+      'node',
+      'prefactor',
+      'playground',
+      'record_first_account_spans',
+      '--agent_instance_id',
+      'agent_instance_1',
+      '--scenario',
+      'good',
+    ]);
+
+    expect(capturedPath).toBe('/api/v1/playground/record_first_account_spans');
+    expect(capturedBody).toBe('{"agent_instance_id":"agent_instance_1","scenario":"good"}');
+  });
+
+  test('playground register_quality_review_agent_instance posts required ids and purpose', async () => {
+    const cwd = join(tempRoot, 'cwd');
+    mkdirSync(cwd, { recursive: true });
+    process.chdir(cwd);
+    writeFileSync(
+      join(cwd, 'prefactor.json'),
+      JSON.stringify({ default: { api_key: 'token', base_url: 'https://example.com' } })
+    );
+
+    let capturedPath = '';
+    let capturedBody = '';
+    globalThis.fetch = (async (input, init) => {
+      capturedPath = new URL(String(input)).pathname;
+      capturedBody = String(init?.body ?? '');
+      return new Response(JSON.stringify({ status: 'success' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }) as typeof fetch;
+
+    await createCli('1.0.0').parseAsync([
+      'node',
+      'prefactor',
+      'playground',
+      'register_quality_review_agent_instance',
+      '--agent_id',
+      'agent_1',
+      '--environment_id',
+      'env_1',
+      '--purpose',
+      'eval',
+    ]);
+
+    expect(capturedPath).toBe('/api/v1/playground/register_quality_review_agent_instance');
+    expect(capturedBody).toBe('{"agent_id":"agent_1","environment_id":"env_1","purpose":"eval"}');
   });
 
   test('agent_instances agent_context writes context body to output file', async () => {

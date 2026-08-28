@@ -20,7 +20,7 @@ This is a consumption tool, NOT shared infrastructure.
 - Other packages should NOT depend on this package.
 
 ## Command groups
-18 command groups:
+19 command groups:
 - `profiles`: Manage CLI authentication profiles
 - `accounts`: Manage accounts
 - `agents`: Manage agents
@@ -33,6 +33,7 @@ This is a consumption tool, NOT shared infrastructure.
 - `people`: Manage people (list, retrieve, create, update, delete)
 - `teams`: Manage teams (list, retrieve, create, update, delete)
 - `risk_profiles`: Manage risk profiles (list, retrieve, template, create, update, delete)
+- `playground`: Run playground demo create, record, and register operations
 - `admin_users`: Manage admin users (list, retrieve, update)
 - `admin_user_invites`: Manage admin user invites
 - `api_tokens`: Manage API tokens

@@ -159,6 +159,21 @@ export {
 } from './clients/person.js';
 export { PfidClient, type PfidResponse } from './clients/pfid.js';
 export {
+  PlaygroundClient,
+  type PlaygroundCreateAgentResponse,
+  type PlaygroundCreateFirstAccountAgentParams,
+  type PlaygroundCreateFirstAccountAgentResponse,
+  type PlaygroundInstancePurpose,
+  type PlaygroundRecordFirstAccountSpansParams,
+  type PlaygroundRecordSpansParams,
+  type PlaygroundRecordSpansResponse,
+  type PlaygroundRegisterFirstAccountInstanceParams,
+  type PlaygroundRegisterInstanceParams,
+  type PlaygroundRegisterInstanceResponse,
+  type PlaygroundRegisterQualityReviewInstanceParams,
+  type PlaygroundScenario,
+} from './clients/playground.js';
+export {
   RiskProfileClient,
   type RiskProfileDetails,
   type RiskProfileForCreate,

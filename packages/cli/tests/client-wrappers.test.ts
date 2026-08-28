@@ -16,6 +16,7 @@ import { BulkClient } from '../src/clients/bulk.js';
 import { EnvironmentClient } from '../src/clients/environment.js';
 import { PersonClient } from '../src/clients/person.js';
 import { PfidClient } from '../src/clients/pfid.js';
+import { PlaygroundClient } from '../src/clients/playground.js';
 import { RiskProfileClient, type RiskProfileRuleset } from '../src/clients/risk-profile.js';
 import { TeamClient } from '../src/clients/team.js';
 import * as cliExports from '../src/index.js';
@@ -49,6 +50,7 @@ describe('resource clients', () => {
     expect(typeof cliExports.PersonClient).toBe('function');
     expect(typeof cliExports.TeamClient).toBe('function');
     expect(typeof cliExports.RiskProfileClient).toBe('function');
+    expect(typeof cliExports.PlaygroundClient).toBe('function');
     expect(typeof cliExports.AdminUserClient).toBe('function');
     expect(typeof cliExports.AdminUserInviteClient).toBe('function');
     expect(typeof cliExports.ApiTokenClient).toBe('function');
@@ -774,6 +776,133 @@ describe('resource clients', () => {
     expect(captured?.init?.method).toBe('GET');
     expect(response.ruleset?.thresholds?.critical).toBe(80);
     expect(response.status).toBe('success');
+  });
+
+  test('playground client posts each operation path and required body', async () => {
+    const calls: CapturedRequest[] = [];
+    globalThis.fetch = (async (input, init) => {
+      calls.push({ url: String(input), init });
+      return new Response(JSON.stringify({ status: 'success' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }) as typeof fetch;
+
+    const apiClient = new ApiClient('https://example.com', 'test-token');
+    const client = new PlaygroundClient(apiClient);
+
+    await client.createCustomerSupportAgent();
+    await client.createLoanApplicationReviewAgent();
+    await client.createNorthstarSupportAgent();
+    await client.createOpenclawAgent();
+    await client.createQualityReviewAgent();
+    await client.createFirstAccountAgent({
+      environment_id: 'env_1',
+      seed_instances_and_spans: true,
+    });
+    await client.recordCustomerSupportSpans({ agent_instance_id: 'agent_instance_1' });
+    await client.recordLoanApplicationReviewSpans({ agent_instance_id: 'agent_instance_1' });
+    await client.recordNorthstarSupportSpans({ agent_instance_id: 'agent_instance_1' });
+    await client.recordOpenclawSpans({ agent_instance_id: 'agent_instance_1' });
+    await client.recordQualityReviewSpans({ agent_instance_id: 'agent_instance_1' });
+    await client.recordFirstAccountSpans({
+      agent_instance_id: 'agent_instance_1',
+      scenario: 'good',
+    });
+    await client.registerCustomerSupportAgentInstance({
+      agent_id: 'agent_1',
+      environment_id: 'env_1',
+    });
+    await client.registerLoanApplicationReviewAgentInstance({
+      agent_id: 'agent_1',
+      environment_id: 'env_1',
+    });
+    await client.registerNorthstarSupportAgentInstance({
+      agent_id: 'agent_1',
+      environment_id: 'env_1',
+    });
+    await client.registerOpenclawAgentInstance({
+      agent_id: 'agent_1',
+      environment_id: 'env_1',
+    });
+    await client.registerFirstAccountAgentInstance({
+      agent_id: 'agent_1',
+      environment_id: 'env_1',
+      scenario: 'mixed',
+    });
+    await client.registerQualityReviewAgentInstance({
+      agent_id: 'agent_1',
+      environment_id: 'env_1',
+      purpose: 'eval',
+    });
+
+    const expected: Array<{ path: string; body: string }> = [
+      { path: '/api/v1/playground/create_customer_support_agent', body: '{}' },
+      { path: '/api/v1/playground/create_loan_application_review_agent', body: '{}' },
+      { path: '/api/v1/playground/create_northstar_support_agent', body: '{}' },
+      { path: '/api/v1/playground/create_openclaw_agent', body: '{}' },
+      { path: '/api/v1/playground/create_quality_review_agent', body: '{}' },
+      {
+        path: '/api/v1/playground/create_first_account_agent',
+        body: '{"environment_id":"env_1","seed_instances_and_spans":true}',
+      },
+      {
+        path: '/api/v1/playground/record_customer_support_spans',
+        body: '{"agent_instance_id":"agent_instance_1"}',
+      },
+      {
+        path: '/api/v1/playground/record_loan_application_review_spans',
+        body: '{"agent_instance_id":"agent_instance_1"}',
+      },
+      {
+        path: '/api/v1/playground/record_northstar_support_spans',
+        body: '{"agent_instance_id":"agent_instance_1"}',
+      },
+      {
+        path: '/api/v1/playground/record_openclaw_spans',
+        body: '{"agent_instance_id":"agent_instance_1"}',
+      },
+      {
+        path: '/api/v1/playground/record_quality_review_spans',
+        body: '{"agent_instance_id":"agent_instance_1"}',
+      },
+      {
+        path: '/api/v1/playground/record_first_account_spans',
+        body: '{"agent_instance_id":"agent_instance_1","scenario":"good"}',
+      },
+      {
+        path: '/api/v1/playground/register_customer_support_agent_instance',
+        body: '{"agent_id":"agent_1","environment_id":"env_1"}',
+      },
+      {
+        path: '/api/v1/playground/register_loan_application_review_agent_instance',
+        body: '{"agent_id":"agent_1","environment_id":"env_1"}',
+      },
+      {
+        path: '/api/v1/playground/register_northstar_support_agent_instance',
+        body: '{"agent_id":"agent_1","environment_id":"env_1"}',
+      },
+      {
+        path: '/api/v1/playground/register_openclaw_agent_instance',
+        body: '{"agent_id":"agent_1","environment_id":"env_1"}',
+      },
+      {
+        path: '/api/v1/playground/register_first_account_agent_instance',
+        body: '{"agent_id":"agent_1","environment_id":"env_1","scenario":"mixed"}',
+      },
+      {
+        path: '/api/v1/playground/register_quality_review_agent_instance',
+        body: '{"agent_id":"agent_1","environment_id":"env_1","purpose":"eval"}',
+      },
+    ];
+
+    expect(calls).toHaveLength(expected.length);
+    for (const [index, check] of expected.entries()) {
+      const call = calls[index];
+      expect(new URL(call?.url ?? 'https://example.com').pathname).toBe(check.path);
+      expect(call?.init?.method).toBe('POST');
+      expect(call?.init?.body).toBe(check.body);
+    }
   });
 
   test('api token activate posts empty action body', async () => {
