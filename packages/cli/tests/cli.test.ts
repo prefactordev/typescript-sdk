@@ -66,6 +66,7 @@ describe('CLI profiles command', () => {
       'agent_spans',
       'alerts',
       'people',
+      'teams',
       'admin_users',
       'admin_user_invites',
       'api_tokens',
@@ -1537,6 +1538,103 @@ describe('CLI command validation', () => {
     await createCli('1.0.0').parseAsync(['node', 'prefactor', 'people', 'delete', 'person_1']);
 
     expect(capturedPath).toBe('/api/v1/person/person_1');
+    expect(capturedMethod).toBe('DELETE');
+  });
+
+  test('teams list sends nested pagination query keys', async () => {
+    const cwd = join(tempRoot, 'cwd');
+    mkdirSync(cwd, { recursive: true });
+    process.chdir(cwd);
+    writeFileSync(
+      join(cwd, 'prefactor.json'),
+      JSON.stringify({ default: { api_key: 'token', base_url: 'https://example.com' } })
+    );
+
+    let capturedUrl = '';
+    globalThis.fetch = (async (input) => {
+      capturedUrl = String(input);
+      return new Response(JSON.stringify({ summaries: [] }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }) as typeof fetch;
+
+    await createCli('1.0.0').parseAsync([
+      'node',
+      'prefactor',
+      'teams',
+      'list',
+      '--sorting',
+      'name',
+      '--pagination_offset',
+      '0',
+      '--pagination_page_size',
+      '25',
+    ]);
+
+    const url = new URL(capturedUrl);
+    expect(url.pathname).toBe('/api/v1/team');
+    expect(url.searchParams.get('sorting')).toBe('name');
+    expect(url.searchParams.get('pagination[offset]')).toBe('0');
+    expect(url.searchParams.get('pagination[page_size]')).toBe('25');
+  });
+
+  test('teams create wraps details without an idempotency key', async () => {
+    const cwd = join(tempRoot, 'cwd');
+    mkdirSync(cwd, { recursive: true });
+    process.chdir(cwd);
+    writeFileSync(
+      join(cwd, 'prefactor.json'),
+      JSON.stringify({ default: { api_key: 'token', base_url: 'https://example.com' } })
+    );
+
+    let capturedPath = '';
+    let capturedBody = '';
+    globalThis.fetch = (async (input, init) => {
+      capturedPath = new URL(String(input)).pathname;
+      capturedBody = String(init?.body ?? '');
+      return new Response(JSON.stringify({ details: { id: 'team_1' }, status: 'success' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }) as typeof fetch;
+
+    await createCli('1.0.0').parseAsync([
+      'node',
+      'prefactor',
+      'teams',
+      'create',
+      '--name',
+      'Sales',
+    ]);
+
+    expect(capturedPath).toBe('/api/v1/team');
+    expect(capturedBody).toBe('{"details":{"name":"Sales"}}');
+  });
+
+  test('teams delete sends DELETE and prints the details envelope', async () => {
+    const cwd = join(tempRoot, 'cwd');
+    mkdirSync(cwd, { recursive: true });
+    process.chdir(cwd);
+    writeFileSync(
+      join(cwd, 'prefactor.json'),
+      JSON.stringify({ default: { api_key: 'token', base_url: 'https://example.com' } })
+    );
+
+    let capturedPath = '';
+    let capturedMethod = '';
+    globalThis.fetch = (async (input, init) => {
+      capturedPath = new URL(String(input)).pathname;
+      capturedMethod = String(init?.method ?? '');
+      return new Response(JSON.stringify({ details: { id: 'team_1' }, status: 'success' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }) as typeof fetch;
+
+    await createCli('1.0.0').parseAsync(['node', 'prefactor', 'teams', 'delete', 'team_1']);
+
+    expect(capturedPath).toBe('/api/v1/team/team_1');
     expect(capturedMethod).toBe('DELETE');
   });
 

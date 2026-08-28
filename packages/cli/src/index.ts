@@ -158,3 +158,13 @@ export {
   type PersonSummary,
 } from './clients/person.js';
 export { PfidClient, type PfidResponse } from './clients/pfid.js';
+export {
+  TeamClient,
+  type TeamDetails,
+  type TeamForCreate,
+  type TeamForUpdate,
+  type TeamListParams,
+  type TeamListResponse,
+  type TeamResponse,
+  type TeamSummary,
+} from './clients/team.js';

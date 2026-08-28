@@ -16,6 +16,7 @@ import { registerLoginCommand } from './commands/login.js';
 import { registerPeopleCommands } from './commands/people.js';
 import { registerProfilesCommands } from './commands/profiles.js';
 import { registerSetupCommand } from './commands/setup.js';
+import { registerTeamsCommands } from './commands/teams.js';
 import { registerUtilitiesCommands } from './commands/utilities.js';
 
 const CLI_VERSION = typeof packageJson.version === 'string' ? packageJson.version : '0.0.0';
@@ -68,6 +69,7 @@ export function createCli(version: string): Command {
   registerAgentSpansCommands(program);
   registerAlertsCommands(program);
   registerPeopleCommands(program);
+  registerTeamsCommands(program);
   registerAdminCommands(program);
   registerApiTokensCommands(program);
   registerSetupCommand(program);

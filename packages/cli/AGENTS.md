@@ -20,7 +20,7 @@ This is a consumption tool, NOT shared infrastructure.
 - Other packages should NOT depend on this package.
 
 ## Command groups
-16 command groups:
+17 command groups:
 - `profiles`: Manage CLI authentication profiles
 - `accounts`: Manage accounts
 - `agents`: Manage agents
@@ -31,6 +31,7 @@ This is a consumption tool, NOT shared infrastructure.
 - `agent_spans`: Manage agent spans (list, retrieve, create, finish, discard_sensitive)
 - `alerts`: Manage alerts (list, retrieve, count, raise, clear)
 - `people`: Manage people (list, retrieve, create, update, delete)
+- `teams`: Manage teams (list, retrieve, create, update, delete)
 - `admin_users`: Manage admin users (list, retrieve, update)
 - `admin_user_invites`: Manage admin user invites
 - `api_tokens`: Manage API tokens
