@@ -1,6 +1,7 @@
 # AGENTS.md
 
-This file provides repository-wide instructions for coding agents working in this repo.
+This repo is the set of Typescript packages that form the Prefactor SDK.  It is a public repo, and should not
+include and references to internal Prefactor code or repos.
 
 ## Scope and precedence
 This file applies across the repository unless a more specific `AGENTS.md` exists in a subdirectory.
