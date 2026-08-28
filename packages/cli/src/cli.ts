@@ -15,6 +15,7 @@ import { registerLifecycleCommands } from './commands/lifecycle.js';
 import { registerLoginCommand } from './commands/login.js';
 import { registerPeopleCommands } from './commands/people.js';
 import { registerProfilesCommands } from './commands/profiles.js';
+import { registerRiskProfilesCommands } from './commands/risk-profiles.js';
 import { registerSetupCommand } from './commands/setup.js';
 import { registerTeamsCommands } from './commands/teams.js';
 import { registerUtilitiesCommands } from './commands/utilities.js';
@@ -70,6 +71,7 @@ export function createCli(version: string): Command {
   registerAlertsCommands(program);
   registerPeopleCommands(program);
   registerTeamsCommands(program);
+  registerRiskProfilesCommands(program);
   registerAdminCommands(program);
   registerApiTokensCommands(program);
   registerSetupCommand(program);

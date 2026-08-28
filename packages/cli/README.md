@@ -147,6 +147,7 @@ Environment fallback is supported when no default profile is configured:
 - `alerts`: list, retrieve, count, raise, clear
 - `people`: list, retrieve, create, update, delete
 - `teams`: list, retrieve, create, update, delete
+- `risk_profiles`: list, retrieve, template, create, update, delete
 - `api_tokens`: list, retrieve, create, suspend, activate, revoke, delete
 - `setup`: create an agent (optional), mint a validated deployment token, and print setup values for instrumentation
 - `admin_users`: list, retrieve, update
@@ -164,6 +165,7 @@ Some options accept JSON directly or from a file using `@path` syntax:
 ```bash
 prefactor bulk execute --items @./bulk-items.json
 prefactor agent_spans create --agent_instance_id <id> --schema_name llm --status complete --payload @./span.json
+prefactor risk_profiles create --name Standard --ruleset @./ruleset.json
 ```
 
 Bulk `--items` is an array of objects with `_type`, `idempotency_key` (8–128 characters, unique in the request), and any extra fields the operation needs:
@@ -234,6 +236,7 @@ if (accountList.summaries?.[0]?.id && agentId) {
 - `AdminUserInviteClient`
 - `PersonClient`
 - `PfidClient`
+- `RiskProfileClient`
 - `TeamClient`
 - `BulkClient`
 

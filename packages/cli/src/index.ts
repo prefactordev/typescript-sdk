@@ -159,6 +159,21 @@ export {
 } from './clients/person.js';
 export { PfidClient, type PfidResponse } from './clients/pfid.js';
 export {
+  RiskProfileClient,
+  type RiskProfileDetails,
+  type RiskProfileForCreate,
+  type RiskProfileForUpdate,
+  type RiskProfileListParams,
+  type RiskProfileListResponse,
+  type RiskProfileResponse,
+  type RiskProfileRuleset,
+  type RiskProfileRulesetActionMultipliers,
+  type RiskProfileRulesetCategoryWeights,
+  type RiskProfileRulesetThresholds,
+  type RiskProfileSummary,
+  type RiskProfileTemplateResponse,
+} from './clients/risk-profile.js';
+export {
   TeamClient,
   type TeamDetails,
   type TeamForCreate,

@@ -67,6 +67,7 @@ describe('CLI profiles command', () => {
       'alerts',
       'people',
       'teams',
+      'risk_profiles',
       'admin_users',
       'admin_user_invites',
       'api_tokens',
@@ -1636,6 +1637,75 @@ describe('CLI command validation', () => {
 
     expect(capturedPath).toBe('/api/v1/team/team_1');
     expect(capturedMethod).toBe('DELETE');
+  });
+
+  test('risk_profiles template sends template_name without a details wrapper', async () => {
+    const cwd = join(tempRoot, 'cwd');
+    mkdirSync(cwd, { recursive: true });
+    process.chdir(cwd);
+    writeFileSync(
+      join(cwd, 'prefactor.json'),
+      JSON.stringify({ default: { api_key: 'token', base_url: 'https://example.com' } })
+    );
+
+    let capturedUrl = '';
+    globalThis.fetch = (async (input) => {
+      capturedUrl = String(input);
+      return new Response(JSON.stringify({ ruleset: {}, status: 'success' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }) as typeof fetch;
+
+    await createCli('1.0.0').parseAsync([
+      'node',
+      'prefactor',
+      'risk_profiles',
+      'template',
+      '--template_name',
+      'Standard',
+    ]);
+
+    const url = new URL(capturedUrl);
+    expect(url.pathname).toBe('/api/v1/risk_profile/template');
+    expect(url.searchParams.get('template_name')).toBe('Standard');
+  });
+
+  test('risk_profiles create wraps name and ruleset in details', async () => {
+    const cwd = join(tempRoot, 'cwd');
+    mkdirSync(cwd, { recursive: true });
+    process.chdir(cwd);
+    writeFileSync(
+      join(cwd, 'prefactor.json'),
+      JSON.stringify({ default: { api_key: 'token', base_url: 'https://example.com' } })
+    );
+
+    let capturedPath = '';
+    let capturedBody = '';
+    globalThis.fetch = (async (input, init) => {
+      capturedPath = new URL(String(input)).pathname;
+      capturedBody = String(init?.body ?? '');
+      return new Response(JSON.stringify({ details: { id: 'rp_1' }, status: 'success' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }) as typeof fetch;
+
+    await createCli('1.0.0').parseAsync([
+      'node',
+      'prefactor',
+      'risk_profiles',
+      'create',
+      '--name',
+      'Standard',
+      '--ruleset',
+      '{"thresholds":{"critical":80,"high":50,"medium":20},"action_multipliers":{},"category_weights":{}}',
+    ]);
+
+    expect(capturedPath).toBe('/api/v1/risk_profile');
+    expect(capturedBody).toBe(
+      '{"details":{"name":"Standard","ruleset":{"thresholds":{"critical":80,"high":50,"medium":20},"action_multipliers":{},"category_weights":{}}}}'
+    );
   });
 
   test('agent_instances agent_context writes context body to output file', async () => {

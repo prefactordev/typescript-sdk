@@ -16,6 +16,7 @@ import { BulkClient } from '../src/clients/bulk.js';
 import { EnvironmentClient } from '../src/clients/environment.js';
 import { PersonClient } from '../src/clients/person.js';
 import { PfidClient } from '../src/clients/pfid.js';
+import { RiskProfileClient, type RiskProfileRuleset } from '../src/clients/risk-profile.js';
 import { TeamClient } from '../src/clients/team.js';
 import * as cliExports from '../src/index.js';
 
@@ -47,6 +48,7 @@ describe('resource clients', () => {
     expect(typeof cliExports.AlertClient).toBe('function');
     expect(typeof cliExports.PersonClient).toBe('function');
     expect(typeof cliExports.TeamClient).toBe('function');
+    expect(typeof cliExports.RiskProfileClient).toBe('function');
     expect(typeof cliExports.AdminUserClient).toBe('function');
     expect(typeof cliExports.AdminUserInviteClient).toBe('function');
     expect(typeof cliExports.ApiTokenClient).toBe('function');
@@ -665,6 +667,113 @@ describe('resource clients', () => {
     expect(captured?.init?.method).toBe('DELETE');
     expect(captured?.init?.body).toBeUndefined();
     expect(response.details?.id).toBe('team_1');
+  });
+
+  test('risk profile list serializes nested pagination query keys', async () => {
+    let captured: CapturedRequest | undefined;
+    globalThis.fetch = (async (input, init) => {
+      captured = { url: String(input), init };
+      return new Response(JSON.stringify({ summaries: [] }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }) as typeof fetch;
+
+    const apiClient = new ApiClient('https://example.com', 'test-token');
+    const client = new RiskProfileClient(apiClient);
+
+    await client.list({
+      sorting: 'name',
+      pagination: { offset: 0, page_size: 25 },
+    });
+
+    const url = new URL(captured?.url ?? 'https://example.com');
+    expect(url.pathname).toBe('/api/v1/risk_profile');
+    expect(url.searchParams.get('sorting')).toBe('name');
+    expect(url.searchParams.get('pagination[offset]')).toBe('0');
+    expect(url.searchParams.get('pagination[page_size]')).toBe('25');
+    expect(captured?.init?.method).toBe('GET');
+  });
+
+  test('risk profile create wraps name and ruleset in details', async () => {
+    let captured: CapturedRequest | undefined;
+    globalThis.fetch = (async (input, init) => {
+      captured = { url: String(input), init };
+      return new Response(JSON.stringify({ details: { id: 'rp_1' }, status: 'success' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }) as typeof fetch;
+
+    const apiClient = new ApiClient('https://example.com', 'test-token');
+    const client = new RiskProfileClient(apiClient);
+    const ruleset: RiskProfileRuleset = {
+      action_multipliers: {
+        create_data: 1,
+        destroy_data: null,
+        external_communication: 1,
+        financial_transactions: null,
+        read_data: 1,
+        update_data: 1,
+      },
+      category_weights: {
+        authentication_and_secrets: 1,
+        behavioural_and_inferred: 0,
+        contact_information: 1,
+        criminal_justice: null,
+        financial_information: 1,
+        gdpr_biometric_for_identification: null,
+        gdpr_genetic_data: null,
+        gdpr_political_opinions: null,
+        gdpr_racial_or_ethnic_origin: null,
+        gdpr_religious_or_philosophical_beliefs: null,
+        gdpr_sex_life_or_sexual_orientation: null,
+        gdpr_trade_union_membership: null,
+        health_and_medical: 1,
+        location_and_tracking: 0,
+        minors_data: 1,
+        organisational_confidential: 1,
+        personal_identifiers: 1,
+      },
+      thresholds: { critical: 80, high: 50, medium: 20 },
+    };
+
+    await client.create({ name: 'Standard', ruleset });
+
+    expect(new URL(captured?.url ?? 'https://example.com').pathname).toBe('/api/v1/risk_profile');
+    expect(captured?.init?.method).toBe('POST');
+    expect(JSON.parse(String(captured?.init?.body))).toEqual({
+      details: { name: 'Standard', ruleset },
+    });
+  });
+
+  test('risk profile template sends template_name without a details wrapper', async () => {
+    let captured: CapturedRequest | undefined;
+    globalThis.fetch = (async (input, init) => {
+      captured = { url: String(input), init };
+      return new Response(
+        JSON.stringify({
+          ruleset: { thresholds: { critical: 80, high: 50, medium: 20 } },
+          status: 'success',
+        }),
+        {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }
+      );
+    }) as typeof fetch;
+
+    const apiClient = new ApiClient('https://example.com', 'test-token');
+    const client = new RiskProfileClient(apiClient);
+
+    const response = await client.getTemplate('Standard');
+
+    const url = new URL(captured?.url ?? 'https://example.com');
+    expect(url.pathname).toBe('/api/v1/risk_profile/template');
+    expect(url.searchParams.get('template_name')).toBe('Standard');
+    expect(captured?.init?.method).toBe('GET');
+    expect(response.ruleset?.thresholds?.critical).toBe(80);
+    expect(response.status).toBe('success');
   });
 
   test('api token activate posts empty action body', async () => {
