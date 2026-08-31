@@ -1,11 +1,14 @@
 #!/usr/bin/env bash
 # Run preflight checks (bin/preflight), then the test suite (bun test).
+# Prints "<step>: OK" per successful step; on failure prints that step's output.
 
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 # shellcheck source=lib/interrupt.sh
 source "$ROOT/bin/lib/interrupt.sh"
+# shellcheck source=lib/quiet-run.sh
+source "$ROOT/bin/lib/quiet-run.sh"
 cd "$ROOT"
 
 # Load mise environment so bun and other tools are available
@@ -19,6 +22,7 @@ usage() {
 Usage: bin/qc [bun test args...]
 
 Run preflight checks (bin/preflight), then the test suite (bun test).
+Prints "<step>: OK" for each successful step. On failure, prints that step's output.
 All arguments are passed through to bun test:
 
 Examples:
@@ -36,4 +40,4 @@ case "${1:-}" in
 esac
 
 "$ROOT/bin/preflight"
-exec bun test "$@"
+quiet_run "tests" bun test --only-failures "$@"

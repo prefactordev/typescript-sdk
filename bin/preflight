@@ -6,6 +6,8 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 # shellcheck source=lib/interrupt.sh
 source "$ROOT/bin/lib/interrupt.sh"
+# shellcheck source=lib/quiet-run.sh
+source "$ROOT/bin/lib/quiet-run.sh"
 cd "$ROOT"
 
 # Load mise environment so bun and other tools are available
@@ -36,22 +38,8 @@ case "${1:-}" in
   ;;
 esac
 
-echo "changeset status:"
-bun run changeset status --since=origin/main
-echo "ok"
-
-echo "generated versions:"
-bun run versions:check
-echo "ok"
-
-echo "lint and format:"
-bun run lint
-echo "ok"
-
-echo "typecheck:"
-bun run typecheck
-echo "ok"
-
-echo "build:"
-bun run build
-echo "ok"
+quiet_run "changeset status" bun run changeset status --since=origin/main
+quiet_run "generated versions" bun run versions:check
+quiet_run "lint" bun run lint
+quiet_run "typecheck" bun run typecheck
+quiet_run "build" bun run build
