@@ -1103,6 +1103,44 @@ describe('CLI command validation', () => {
     });
   });
 
+  test('admin_users update accepts null sentinel to clear nullable fields', async () => {
+    const cwd = join(tempRoot, 'cwd');
+    mkdirSync(cwd, { recursive: true });
+    process.chdir(cwd);
+    writeFileSync(
+      join(cwd, 'prefactor.json'),
+      JSON.stringify({ default: { api_key: 'token', base_url: 'https://example.com' } })
+    );
+
+    let capturedBody: Record<string, unknown> = {};
+    globalThis.fetch = (async (_input, init) => {
+      capturedBody = JSON.parse(String(init?.body ?? '{}')) as Record<string, unknown>;
+      return new Response(JSON.stringify({ details: { id: 'admin_user_1' } }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }) as typeof fetch;
+
+    await createCli('1.0.0').parseAsync([
+      'node',
+      'prefactor',
+      'admin_users',
+      'update',
+      'admin_user_1',
+      '--job_title',
+      'null',
+      '--profile_completed_at',
+      'null',
+    ]);
+
+    expect(capturedBody).toEqual({
+      details: {
+        job_title: null,
+        profile_completed_at: null,
+      },
+    });
+  });
+
   test('agents show sends lookup query params', async () => {
     const cwd = join(tempRoot, 'cwd');
     mkdirSync(cwd, { recursive: true });
