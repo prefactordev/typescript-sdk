@@ -1,4 +1,4 @@
-import { HttpClientError, type ApiError, type HttpRequester } from './http-client.js';
+import { type ApiError, HttpClientError, type HttpRequester } from './http-client.js';
 import { ensureIdempotencyKey } from './idempotency.js';
 
 export type AgentSpanStatus = 'active' | 'complete' | 'failed' | 'cancelled';
