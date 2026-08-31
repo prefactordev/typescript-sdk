@@ -1374,7 +1374,7 @@ describe('CLI command validation', () => {
   test('rejects pagination_offset values with trailing characters or a decimal portion', async () => {
     const cli = createCli('1.0.0');
 
-    for (const command of ['alerts', 'people', 'risk_profiles'] as const) {
+    for (const command of ['alerts', 'people', 'risk_profiles', 'teams'] as const) {
       await expect(
         cli.parseAsync(['node', 'prefactor', command, 'list', '--pagination_offset', '10abc'])
       ).rejects.toThrow('--pagination_offset must be a non-negative integer.');
