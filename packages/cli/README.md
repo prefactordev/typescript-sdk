@@ -137,25 +137,26 @@ Environment fallback is supported when no default profile is configured:
 - `login`: authenticate and save credentials to the default profile
 - `profiles`: add, list, remove
 - `accounts`: list, retrieve, update
-- `environments`: list, retrieve, show, create, update, delete
 - `agents`: list, retrieve, show, create, update, delete, retire, reinstate
-- `agent_deployments`: list, retrieve, create, update, delete
+- `environments`: list, retrieve, show, create, update, delete
 - `agent_versions`: list, retrieve, create
 - `agent_schema_versions`: list, retrieve, create
 - `agent_instances`: list, retrieve, show, agent_context, register, start, finish, terminate
+- `agent_deployments`: list, retrieve, create, update, delete
 - `agent_spans`: list, retrieve, create, finish, discard_sensitive
 - `alerts`: list, retrieve, count, raise, clear
 - `people`: list, retrieve, create, update, delete
 - `teams`: list, retrieve, create, update, delete
 - `risk_profiles`: list, retrieve, template, create, update, delete
 - `playground`: create, record, and register demo agents, instances, and spans
-- `api_tokens`: list, retrieve, create, suspend, activate, revoke, delete
-- `setup`: create an agent (optional), mint a validated deployment token, and print setup values for instrumentation
 - `admin_users`: list, retrieve, update
 - `admin_user_invites`: list, retrieve, create, revoke
+- `api_tokens`: list, retrieve, create, suspend, activate, revoke, delete
+- `setup`: create an agent (optional), mint a validated deployment token, and print setup values for instrumentation
 - `pfid`: generate
 - `bulk`: execute
 - `ping`: verify the selected or supplied API token
+- `version`: print CLI version
 
 Run `prefactor <command> --help` for command-specific options.
 

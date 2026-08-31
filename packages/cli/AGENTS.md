@@ -20,14 +20,16 @@ This is a consumption tool, NOT shared infrastructure.
 - Other packages should NOT depend on this package.
 
 ## Command groups
-19 command groups:
+23 command groups:
+- `login`: Authenticate and save credentials to the default profile
 - `profiles`: Manage CLI authentication profiles
 - `accounts`: Manage accounts
 - `agents`: Manage agents
 - `environments`: Manage environments
 - `agent_versions`: Manage agent versions
 - `agent_schema_versions`: Manage agent schema versions
-- `agent_instances`: Manage agent instances (register, start, finish, terminate, show)
+- `agent_instances`: Manage agent instances (list, retrieve, show, agent_context, register, start, finish, terminate)
+- `agent_deployments`: Manage agent deployments (list, retrieve, create, update, delete)
 - `agent_spans`: Manage agent spans (list, retrieve, create, finish, discard_sensitive)
 - `alerts`: Manage alerts (list, retrieve, count, raise, clear)
 - `people`: Manage people (list, retrieve, create, update, delete)
@@ -37,8 +39,10 @@ This is a consumption tool, NOT shared infrastructure.
 - `admin_users`: Manage admin users (list, retrieve, update)
 - `admin_user_invites`: Manage admin user invites
 - `api_tokens`: Manage API tokens
+- `setup`: Create an agent (optional), mint a validated deployment token, and print setup values
 - `pfid`: Generate Prefactor IDs
 - `bulk`: Execute bulk query/action operations (`_type` + `idempotency_key` items)
+- `ping`: Verify the selected or supplied API token
 - `version`: Print CLI version
 
 ## Client architecture
