@@ -190,6 +190,7 @@ Follow this process for all non-trivial changes:
 - Typecheck: `mise run typecheck` or `bun run typecheck`
 - Tests (all): `mise run test` or `bun test`
 - Tests (watch): `mise run test-watch` or `bun test --watch`
+- Quick check (preflight + tests): `bin/qc`
 
 ### Targeted and filtered commands
 - Build with filter: `bun run scripts/build.ts --filter <package-name>`
