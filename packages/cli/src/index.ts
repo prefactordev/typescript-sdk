@@ -105,6 +105,7 @@ export {
 export {
   type AgentVersion,
   AgentVersionClient,
+  type AgentVersionDetails,
   type AgentVersionListResponse,
   type AgentVersionResponse,
   type AgentVersionSummary,

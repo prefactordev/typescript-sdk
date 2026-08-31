@@ -1,3 +1,4 @@
+import type { RuntimeEnvironment } from '@prefactor/core';
 import type { ApiClient } from '../api-client.js';
 import type { ListResponse } from './list-response.js';
 
@@ -5,6 +6,20 @@ export interface AgentVersion {
   id: string;
   agent_id: string;
   external_identifier: string;
+}
+
+export interface AgentVersionDetails {
+  account_id: string;
+  agent_id: string;
+  agent_schema_version_id: string;
+  current_agent_deployment_refs: string[];
+  external_identifier: string;
+  external_identifier_repeats: number;
+  id: string;
+  inserted_at: string;
+  runtime_environment: RuntimeEnvironment | null;
+  type: 'agent_version';
+  updated_at: string;
 }
 
 export interface AgentVersionSummary {

@@ -1,8 +1,8 @@
 import type { ApiClient } from '../api-client.js';
 import type { AgentShowDetails } from './agent.js';
 import type { AgentInstanceDetails } from './agent-instance.js';
-import type { AgentSchemaVersionSummary } from './agent-schema-version.js';
-import type { AgentVersionSummary } from './agent-version.js';
+import type { AgentSchemaVersionDetails } from './agent-schema-version.js';
+import type { AgentVersionDetails } from './agent-version.js';
 
 export type PlaygroundScenario = 'good' | 'mixed' | 'bad' | 'timeout' | 'active';
 
@@ -59,8 +59,8 @@ export interface PlaygroundRegisterQualityReviewInstanceParams {
 }
 
 export interface PlaygroundRegisterInstanceResponse {
-  agent_schema_version: AgentSchemaVersionSummary;
-  agent_version: AgentVersionSummary;
+  agent_schema_version: AgentSchemaVersionDetails;
+  agent_version: AgentVersionDetails;
   details: AgentInstanceDetails;
   status: 'success';
 }
