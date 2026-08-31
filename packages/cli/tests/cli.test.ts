@@ -2035,6 +2035,32 @@ describe('CLI command validation', () => {
     ).rejects.toThrow('--items[0].idempotency_key must be 8–128 characters.');
   });
 
+  test('rejects bulk execute items that share an idempotency_key', async () => {
+    const cwd = join(tempRoot, 'cwd');
+    mkdirSync(cwd, { recursive: true });
+    process.chdir(cwd);
+    writeFileSync(
+      join(cwd, 'prefactor.json'),
+      JSON.stringify({ default: { api_key: 'token', base_url: 'https://example.com' } })
+    );
+
+    const cli = createCli('1.0.0');
+
+    await expect(
+      cli.parseAsync([
+        'node',
+        'prefactor',
+        'bulk',
+        'execute',
+        '--items',
+        JSON.stringify([
+          { _type: 'agents/list', idempotency_key: 'list-agents-001' },
+          { _type: 'agents/list', idempotency_key: 'list-agents-001' },
+        ]),
+      ])
+    ).rejects.toThrow('--items[1].idempotency_key must be unique within the request.');
+  });
+
   test('bulk execute sends _type and idempotency_key items', async () => {
     const cwd = join(tempRoot, 'cwd');
     mkdirSync(cwd, { recursive: true });
