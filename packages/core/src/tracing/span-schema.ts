@@ -11,10 +11,10 @@ export interface SpanTypeSchema {
   params_schema: JsonSchema;
   /** JSON Schema describing the span's result payload. */
   result_schema?: JsonSchema;
-  /** Liquid template for rendering the span's params as a human-readable summary. */
+  /** Liquid template for rendering the span as a human-readable summary. */
   template?: string | null;
-  /** Liquid template for rendering the span's result as a human-readable summary. */
-  result_template?: string | null;
+  /** Human-readable title. Defaults to `name` when omitted. */
+  title?: string;
   /** Human-readable description of what this span type represents. */
   description?: string;
   /** Risk metadata describing data sensitivity and permitted actions for this span type. */

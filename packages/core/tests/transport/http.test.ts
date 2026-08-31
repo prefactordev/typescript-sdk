@@ -167,6 +167,158 @@ describe('HttpTransport', () => {
     });
   });
 
+  test('invokes control-signal callback when span finish returns terminate', async () => {
+    globalThis.fetch = (async (url) => {
+      const urlString = String(url);
+
+      if (urlString.endsWith('/agent_instance/register')) {
+        return new Response(JSON.stringify({ details: { id: 'agent-instance-1' } }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+
+      if (urlString.endsWith('/agent_spans')) {
+        return new Response(JSON.stringify({ details: { id: 'backend-span-1' } }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+
+      if (urlString.endsWith('/agent_spans/backend-span-1/finish')) {
+        return new Response(
+          JSON.stringify({
+            details: { id: 'backend-span-1' },
+            control: { terminate: true, reason: 'stop' },
+          }),
+          {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          }
+        );
+      }
+
+      return new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }) as unknown as typeof fetch;
+
+    const reasons: Array<string | null> = [];
+    const transport = new HttpTransport(createConfig());
+    transport.registerControlSignalCallback((reason) => {
+      reasons.push(reason);
+    });
+
+    const endTime = 1700000000000;
+    const span: Span = {
+      spanId: 'span-1',
+      parentSpanId: null,
+      traceId: 'trace-1',
+      name: 'Test Span',
+      spanType: SpanType.LLM,
+      startTime: endTime - 1000,
+      endTime,
+      status: SpanStatus.SUCCESS,
+      inputs: { prompt: 'hi' },
+      outputs: { result: 'ok' },
+      tokenUsage: null,
+      error: null,
+      metadata: {},
+    };
+
+    transport.emit(span);
+    transport.finishSpan(span.spanId, endTime, {
+      status: 'complete',
+      resultPayload: { result: 'ok' },
+    });
+    await transport.close();
+
+    expect(reasons).toEqual(['stop']);
+  });
+
+  test('does not invoke control-signal callback when span finish is already finished', async () => {
+    let finishAttempts = 0;
+    globalThis.fetch = (async (url) => {
+      const urlString = String(url);
+
+      if (urlString.endsWith('/agent_instance/register')) {
+        return new Response(JSON.stringify({ details: { id: 'agent-instance-1' } }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+
+      if (urlString.endsWith('/agent_spans')) {
+        return new Response(JSON.stringify({ details: { id: 'backend-span-1' } }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+
+      if (urlString.endsWith('/agent_spans/backend-span-1/finish')) {
+        finishAttempts += 1;
+        return new Response(
+          JSON.stringify({
+            code: 'invalid_action',
+            message: 'already finished',
+            control: { terminate: true, reason: 'should-not-fire' },
+          }),
+          {
+            status: 409,
+            headers: { 'Content-Type': 'application/json' },
+          }
+        );
+      }
+
+      return new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }) as unknown as typeof fetch;
+
+    const reasons: Array<string | null> = [];
+    const fatalErrors: unknown[] = [];
+    const transport = new HttpTransport(createConfig(), {
+      failureHandling: {
+        onFatalError: (error) => {
+          fatalErrors.push(error);
+        },
+      },
+    });
+    transport.registerControlSignalCallback((reason) => {
+      reasons.push(reason);
+    });
+
+    const endTime = 1700000000000;
+    const span: Span = {
+      spanId: 'span-1',
+      parentSpanId: null,
+      traceId: 'trace-1',
+      name: 'Test Span',
+      spanType: SpanType.LLM,
+      startTime: endTime - 1000,
+      endTime,
+      status: SpanStatus.SUCCESS,
+      inputs: { prompt: 'hi' },
+      outputs: { result: 'ok' },
+      tokenUsage: null,
+      error: null,
+      metadata: {},
+    };
+
+    transport.emit(span);
+    transport.finishSpan(span.spanId, endTime, {
+      status: 'complete',
+      resultPayload: { result: 'ok' },
+    });
+    await transport.close();
+
+    expect(finishAttempts).toBe(1);
+    expect(reasons).toEqual([]);
+    expect(fatalErrors).toEqual([]);
+  });
+
   test('buffers child span emission until parent backend id is available', async () => {
     const spanPayloads: Array<Record<string, unknown>> = [];
 

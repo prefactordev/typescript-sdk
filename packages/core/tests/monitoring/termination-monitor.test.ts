@@ -5,7 +5,7 @@ import type { HttpRequester } from '../../src/transport/http/http-client.js';
 function makeHttpClient(statusOverride?: string): HttpRequester {
   return {
     request: mock(async () => ({
-      details: { status: statusOverride ?? 'active' },
+      details: { status: statusOverride ?? 'active', termination_reason: null },
     })),
   };
 }

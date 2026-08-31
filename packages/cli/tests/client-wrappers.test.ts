@@ -1,5 +1,4 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { AgentInstanceClient as CoreAgentInstanceClient } from '@prefactor/core';
 import { ApiClient } from '../src/api-client.js';
 import { AccountClient } from '../src/clients/account.js';
 import { AdminUserClient } from '../src/clients/admin-user.js';
@@ -10,10 +9,15 @@ import { AgentInstanceClient } from '../src/clients/agent-instance.js';
 import { AgentSchemaVersionClient } from '../src/clients/agent-schema-version.js';
 import { AgentSpanClient } from '../src/clients/agent-span.js';
 import { AgentVersionClient } from '../src/clients/agent-version.js';
+import { AlertClient } from '../src/clients/alert.js';
 import { ApiTokenClient } from '../src/clients/api-token.js';
 import { BulkClient } from '../src/clients/bulk.js';
 import { EnvironmentClient } from '../src/clients/environment.js';
+import { PersonClient } from '../src/clients/person.js';
 import { PfidClient } from '../src/clients/pfid.js';
+import { PlaygroundClient } from '../src/clients/playground.js';
+import { RiskProfileClient, type RiskProfileRuleset } from '../src/clients/risk-profile.js';
+import { TeamClient } from '../src/clients/team.js';
 import * as cliExports from '../src/index.js';
 
 type CapturedRequest = {
@@ -41,19 +45,23 @@ describe('resource clients', () => {
     expect(typeof cliExports.AgentSchemaVersionClient).toBe('function');
     expect(typeof cliExports.AgentInstanceClient).toBe('function');
     expect(typeof cliExports.AgentSpanClient).toBe('function');
+    expect(typeof cliExports.AlertClient).toBe('function');
+    expect(typeof cliExports.PersonClient).toBe('function');
+    expect(typeof cliExports.TeamClient).toBe('function');
+    expect(typeof cliExports.RiskProfileClient).toBe('function');
+    expect(typeof cliExports.PlaygroundClient).toBe('function');
     expect(typeof cliExports.AdminUserClient).toBe('function');
     expect(typeof cliExports.AdminUserInviteClient).toBe('function');
     expect(typeof cliExports.ApiTokenClient).toBe('function');
     expect(typeof cliExports.PfidClient).toBe('function');
     expect(typeof cliExports.BulkClient).toBe('function');
-    expect(cliExports.AgentInstanceClient).toBe(CoreAgentInstanceClient);
   });
 
   test('agent list sends GET without filters', async () => {
     let captured: CapturedRequest | undefined;
     globalThis.fetch = (async (input, init) => {
       captured = { url: String(input), init };
-      return new Response(JSON.stringify({ details: [] }), {
+      return new Response(JSON.stringify({ summaries: [] }), {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
       });
@@ -69,14 +77,41 @@ describe('resource clients', () => {
     expect(url.searchParams.toString()).toBe('');
     expect(captured?.init?.method).toBe('GET');
     expect(captured?.init?.body).toBeUndefined();
-    expect(response).toEqual({ details: [] });
+    expect(response).toEqual({ summaries: [] });
+  });
+
+  test('agent show sends lookup query params', async () => {
+    let captured: CapturedRequest | undefined;
+    globalThis.fetch = (async (input, init) => {
+      captured = { url: String(input), init };
+      return new Response(JSON.stringify({ details: { id: 'agent_1' }, status: 'success' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }) as typeof fetch;
+
+    const apiClient = new ApiClient('https://example.com', 'test-token');
+    const client = new AgentClient(apiClient);
+
+    await client.show({
+      agent_id: 'agent_1',
+      include_counts: true,
+      include_risk_rollup: true,
+    });
+
+    const url = new URL(captured?.url ?? 'https://example.com');
+    expect(url.pathname).toBe('/api/v1/agent/show');
+    expect(url.searchParams.get('agent_id')).toBe('agent_1');
+    expect(url.searchParams.get('include_counts')).toBe('true');
+    expect(url.searchParams.get('include_risk_rollup')).toBe('true');
+    expect(captured?.init?.method).toBe('GET');
   });
 
   test('agent deployment list uses agent_id query param', async () => {
     let captured: CapturedRequest | undefined;
     globalThis.fetch = (async (input, init) => {
       captured = { url: String(input), init };
-      return new Response(JSON.stringify({ details: [] }), {
+      return new Response(JSON.stringify({ summaries: [] }), {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
       });
@@ -91,7 +126,7 @@ describe('resource clients', () => {
     expect(url.pathname).toBe('/api/v1/agent_deployment');
     expect(url.searchParams.get('agent_id')).toBe('agent_123');
     expect(captured?.init?.method).toBe('GET');
-    expect(response).toEqual({ details: [] });
+    expect(response).toEqual({ summaries: [] });
   });
 
   test('agent deployment create wraps payload in details', async () => {
@@ -178,6 +213,60 @@ describe('resource clients', () => {
     expect(captured?.init?.method).toBe('DELETE');
   });
 
+  test('agent schema version retrieve returns nested schema maps', async () => {
+    let captured: CapturedRequest | undefined;
+    globalThis.fetch = (async (input, init) => {
+      captured = { url: String(input), init };
+      return new Response(
+        JSON.stringify({
+          details: {
+            id: 'asv_1',
+            agent_id: 'agent_1',
+            alert_schemas: {
+              high_risk: {
+                name: 'high_risk',
+                title: 'High risk',
+                description: null,
+                template: null,
+                schema: { type: 'object' },
+                schema_validation: { message: null, status: 'success' },
+              },
+            },
+            quality_schemas: {},
+            span_type_schemas: {
+              llm: {
+                name: 'llm',
+                title: 'LLM',
+                description: null,
+                template: null,
+                params_schema: { type: 'object' },
+                params_schema_validation: { message: null, status: 'success' },
+                result_schema: { type: 'object' },
+                result_schema_validation: { message: null, status: 'success' },
+              },
+            },
+          },
+        }),
+        {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }
+      );
+    }) as typeof fetch;
+
+    const apiClient = new ApiClient('https://example.com', 'test-token');
+    const client = new AgentSchemaVersionClient(apiClient);
+
+    const response = await client.retrieve('asv_1');
+
+    const url = new URL(captured?.url ?? 'https://example.com');
+    expect(url.pathname).toBe('/api/v1/agent_schema_version/asv_1');
+    expect(captured?.init?.method).toBe('GET');
+    expect(captured?.init?.body).toBeUndefined();
+    expect(response.details.alert_schemas.high_risk.name).toBe('high_risk');
+    expect(response.details.span_type_schemas.llm.params_schema).toEqual({ type: 'object' });
+  });
+
   test('environment create wraps payload in details', async () => {
     let captured: CapturedRequest | undefined;
     globalThis.fetch = (async (input, init) => {
@@ -198,6 +287,57 @@ describe('resource clients', () => {
     expect(captured?.init?.body).toBe('{"details":{"account_id":"acct_123","name":"Production"}}');
   });
 
+  test('environment show sends lookup query params', async () => {
+    let captured: CapturedRequest | undefined;
+    globalThis.fetch = (async (input, init) => {
+      captured = { url: String(input), init };
+      return new Response(JSON.stringify({ details: { id: 'env_1' }, status: 'success' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }) as typeof fetch;
+
+    const apiClient = new ApiClient('https://example.com', 'test-token');
+    const client = new EnvironmentClient(apiClient);
+
+    await client.show({ environment_id: 'env_1' });
+
+    const url = new URL(captured?.url ?? 'https://example.com');
+    expect(url.pathname).toBe('/api/v1/environment/show');
+    expect(url.searchParams.get('environment_id')).toBe('env_1');
+    expect(captured?.init?.method).toBe('GET');
+  });
+
+  test('agent instance show sends lookup query params', async () => {
+    let captured: CapturedRequest | undefined;
+    globalThis.fetch = (async (input, init) => {
+      captured = { url: String(input), init };
+      return new Response(
+        JSON.stringify({ details: { id: 'agent_instance_1' }, status: 'success' }),
+        {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }
+      );
+    }) as typeof fetch;
+
+    const apiClient = new ApiClient('https://example.com', 'test-token');
+    const client = new AgentInstanceClient(apiClient);
+
+    await client.show({
+      agent_instance_id: 'agent_instance_1',
+      include_counts: true,
+      include_costs: true,
+    });
+
+    const url = new URL(captured?.url ?? 'https://example.com');
+    expect(url.pathname).toBe('/api/v1/agent_instance/show');
+    expect(url.searchParams.get('agent_instance_id')).toBe('agent_instance_1');
+    expect(url.searchParams.get('include_counts')).toBe('true');
+    expect(url.searchParams.get('include_costs')).toBe('true');
+    expect(captured?.init?.method).toBe('GET');
+  });
+
   test('agent span finish sends action payload without details wrapper', async () => {
     let captured: CapturedRequest | undefined;
     globalThis.fetch = (async (input, init) => {
@@ -211,14 +351,611 @@ describe('resource clients', () => {
     const apiClient = new ApiClient('https://example.com', 'test-token');
     const client = new AgentSpanClient(apiClient);
 
-    const response = await client.finish('span_123', { status: 'finished' });
+    const response = await client.finish('span_123', { status: 'complete' });
 
     expect(new URL(captured?.url ?? 'https://example.com').pathname).toBe(
       '/api/v1/agent_spans/span_123/finish'
     );
     expect(captured?.init?.method).toBe('POST');
-    expect(captured?.init?.body).toBe('{"status":"finished"}');
+    expect(captured?.init?.body).toBe('{"status":"complete"}');
     expect(response).toEqual({ details: { id: 'span_123' } });
+  });
+
+  test('agent span retrieve sends GET with optional redacted query', async () => {
+    let captured: CapturedRequest | undefined;
+    globalThis.fetch = (async (input, init) => {
+      captured = { url: String(input), init };
+      return new Response(
+        JSON.stringify({
+          details: {
+            id: 'span_123',
+            agent_instance_id: 'agent_instance_1',
+            schema_name: 'llm',
+            status: 'complete',
+            purpose: 'activity',
+            schema_title: 'LLM call',
+            summary: 'gpt-4 completed',
+            payload_byte_size_estimate: 128,
+            data_risk: null,
+          },
+          status: 'success',
+        }),
+        {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }
+      );
+    }) as typeof fetch;
+
+    const apiClient = new ApiClient('https://example.com', 'test-token');
+    const client = new AgentSpanClient(apiClient);
+
+    const response = await client.retrieve('span_123', { redacted: true });
+
+    const url = new URL(captured?.url ?? 'https://example.com');
+    expect(url.pathname).toBe('/api/v1/agent_spans/span_123');
+    expect(url.searchParams.get('redacted')).toBe('true');
+    expect(captured?.init?.method).toBe('GET');
+    expect(response.details?.purpose).toBe('activity');
+    expect(response.details?.schema_title).toBe('LLM call');
+    expect(response.details?.summary).toBe('gpt-4 completed');
+    expect(response.details?.payload_byte_size_estimate).toBe(128);
+    expect(response.details?.data_risk).toBeNull();
+  });
+
+  test('agent span discardSensitive posts empty body', async () => {
+    let captured: CapturedRequest | undefined;
+    globalThis.fetch = (async (input, init) => {
+      captured = { url: String(input), init };
+      return new Response(JSON.stringify({ details: { id: 'span_123' }, status: 'success' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }) as typeof fetch;
+
+    const apiClient = new ApiClient('https://example.com', 'test-token');
+    const client = new AgentSpanClient(apiClient);
+
+    await client.discardSensitive('span_123');
+
+    expect(new URL(captured?.url ?? 'https://example.com').pathname).toBe(
+      '/api/v1/agent_spans/span_123/discard_sensitive'
+    );
+    expect(captured?.init?.method).toBe('POST');
+    expect(captured?.init?.body).toBe('{}');
+  });
+
+  test('alert list serializes nested active_during and pagination query keys', async () => {
+    let captured: CapturedRequest | undefined;
+    globalThis.fetch = (async (input, init) => {
+      captured = { url: String(input), init };
+      return new Response(JSON.stringify({ summaries: [] }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }) as typeof fetch;
+
+    const apiClient = new ApiClient('https://example.com', 'test-token');
+    const client = new AlertClient(apiClient);
+
+    await client.list({
+      agent_instance_id: 'agent_instance_1',
+      status: 'raised',
+      severity: 'warning',
+      active_during: {
+        start_at: '2024-01-01T00:00:00Z',
+        finish_at: '2024-01-02T00:00:00Z',
+      },
+      pagination: { offset: 0, page_size: 25 },
+    });
+
+    const url = new URL(captured?.url ?? 'https://example.com');
+    expect(url.pathname).toBe('/api/v1/alerts');
+    expect(url.searchParams.get('agent_instance_id')).toBe('agent_instance_1');
+    expect(url.searchParams.get('status')).toBe('raised');
+    expect(url.searchParams.get('severity')).toBe('warning');
+    expect(url.searchParams.get('active_during[start_at]')).toBe('2024-01-01T00:00:00Z');
+    expect(url.searchParams.get('active_during[finish_at]')).toBe('2024-01-02T00:00:00Z');
+    expect(url.searchParams.get('pagination[offset]')).toBe('0');
+    expect(url.searchParams.get('pagination[page_size]')).toBe('25');
+    expect(captured?.init?.method).toBe('GET');
+  });
+
+  test('alert count sends GET without a details wrapper', async () => {
+    let captured: CapturedRequest | undefined;
+    globalThis.fetch = (async (input, init) => {
+      captured = { url: String(input), init };
+      return new Response(JSON.stringify({ count: 3, status: 'success' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }) as typeof fetch;
+
+    const apiClient = new ApiClient('https://example.com', 'test-token');
+    const client = new AlertClient(apiClient);
+
+    const response = await client.count({ status: 'raised', severity: 'error' });
+
+    const url = new URL(captured?.url ?? 'https://example.com');
+    expect(url.pathname).toBe('/api/v1/alerts/count');
+    expect(url.searchParams.get('status')).toBe('raised');
+    expect(url.searchParams.get('severity')).toBe('error');
+    expect(captured?.init?.method).toBe('GET');
+    expect(response).toEqual({ count: 3, status: 'success' });
+  });
+
+  test('alert raise posts top-level fields without a details wrapper', async () => {
+    let captured: CapturedRequest | undefined;
+    globalThis.fetch = (async (input, init) => {
+      captured = { url: String(input), init };
+      return new Response(JSON.stringify({ details: { id: 'alert_1' }, status: 'success' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }) as typeof fetch;
+
+    const apiClient = new ApiClient('https://example.com', 'test-token');
+    const client = new AlertClient(apiClient);
+
+    await client.raise({
+      agent_instance_id: 'agent_instance_1',
+      name: 'high_error_rate',
+      severity: 'warning',
+      payload: { count: 12 },
+      payload_sensitive_encoding: true,
+    });
+
+    expect(new URL(captured?.url ?? 'https://example.com').pathname).toBe('/api/v1/alerts/raise');
+    expect(captured?.init?.method).toBe('POST');
+    expect(captured?.init?.body).toBe(
+      '{"agent_instance_id":"agent_instance_1","name":"high_error_rate","severity":"warning","payload":{"count":12},"payload_sensitive_encoding":true}'
+    );
+  });
+
+  test('alert clear posts top-level fields without a details wrapper', async () => {
+    let captured: CapturedRequest | undefined;
+    globalThis.fetch = (async (input, init) => {
+      captured = { url: String(input), init };
+      return new Response(JSON.stringify({ details: { id: 'alert_1' }, status: 'success' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }) as typeof fetch;
+
+    const apiClient = new ApiClient('https://example.com', 'test-token');
+    const client = new AlertClient(apiClient);
+
+    await client.clear({
+      agent_instance_id: 'agent_instance_1',
+      name: 'high_error_rate',
+    });
+
+    expect(new URL(captured?.url ?? 'https://example.com').pathname).toBe('/api/v1/alerts/clear');
+    expect(captured?.init?.method).toBe('POST');
+    expect(captured?.init?.body).toBe(
+      '{"agent_instance_id":"agent_instance_1","name":"high_error_rate"}'
+    );
+  });
+
+  test('person list serializes team_id and nested pagination query keys', async () => {
+    let captured: CapturedRequest | undefined;
+    globalThis.fetch = (async (input, init) => {
+      captured = { url: String(input), init };
+      return new Response(JSON.stringify({ summaries: [] }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }) as typeof fetch;
+
+    const apiClient = new ApiClient('https://example.com', 'test-token');
+    const client = new PersonClient(apiClient);
+
+    await client.list({
+      team_id: 'team_1',
+      sorting: 'name',
+      pagination: { offset: 0, page_size: 25 },
+    });
+
+    const url = new URL(captured?.url ?? 'https://example.com');
+    expect(url.pathname).toBe('/api/v1/person');
+    expect(url.searchParams.get('team_id')).toBe('team_1');
+    expect(url.searchParams.get('sorting')).toBe('name');
+    expect(url.searchParams.get('pagination[offset]')).toBe('0');
+    expect(url.searchParams.get('pagination[page_size]')).toBe('25');
+    expect(captured?.init?.method).toBe('GET');
+  });
+
+  test('person create wraps details without an idempotency key', async () => {
+    let captured: CapturedRequest | undefined;
+    globalThis.fetch = (async (input, init) => {
+      captured = { url: String(input), init };
+      return new Response(JSON.stringify({ details: { id: 'person_1' }, status: 'success' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }) as typeof fetch;
+
+    const apiClient = new ApiClient('https://example.com', 'test-token');
+    const client = new PersonClient(apiClient);
+
+    await client.create({
+      email: 'jane@example.com',
+      name: 'Jane Doe',
+      team_ids: ['team_1'],
+      title: 'Engineer',
+    });
+
+    expect(new URL(captured?.url ?? 'https://example.com').pathname).toBe('/api/v1/person');
+    expect(captured?.init?.method).toBe('POST');
+    expect(captured?.init?.body).toBe(
+      '{"details":{"email":"jane@example.com","name":"Jane Doe","team_ids":["team_1"],"title":"Engineer"}}'
+    );
+  });
+
+  test('person update can clear team_ids and title', async () => {
+    let captured: CapturedRequest | undefined;
+    globalThis.fetch = (async (input, init) => {
+      captured = { url: String(input), init };
+      return new Response(JSON.stringify({ details: { id: 'person_1' }, status: 'success' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }) as typeof fetch;
+
+    const apiClient = new ApiClient('https://example.com', 'test-token');
+    const client = new PersonClient(apiClient);
+
+    await client.update('person_1', { team_ids: [], title: null });
+
+    expect(new URL(captured?.url ?? 'https://example.com').pathname).toBe(
+      '/api/v1/person/person_1'
+    );
+    expect(captured?.init?.method).toBe('PUT');
+    expect(captured?.init?.body).toBe('{"details":{"team_ids":[],"title":null}}');
+  });
+
+  test('person delete sends DELETE and returns details', async () => {
+    let captured: CapturedRequest | undefined;
+    globalThis.fetch = (async (input, init) => {
+      captured = { url: String(input), init };
+      return new Response(JSON.stringify({ details: { id: 'person_1' }, status: 'success' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }) as typeof fetch;
+
+    const apiClient = new ApiClient('https://example.com', 'test-token');
+    const client = new PersonClient(apiClient);
+
+    const response = await client.delete('person_1');
+
+    expect(new URL(captured?.url ?? 'https://example.com').pathname).toBe(
+      '/api/v1/person/person_1'
+    );
+    expect(captured?.init?.method).toBe('DELETE');
+    expect(captured?.init?.body).toBeUndefined();
+    expect(response.details?.id).toBe('person_1');
+  });
+
+  test('team list serializes nested pagination query keys', async () => {
+    let captured: CapturedRequest | undefined;
+    globalThis.fetch = (async (input, init) => {
+      captured = { url: String(input), init };
+      return new Response(JSON.stringify({ summaries: [] }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }) as typeof fetch;
+
+    const apiClient = new ApiClient('https://example.com', 'test-token');
+    const client = new TeamClient(apiClient);
+
+    await client.list({
+      sorting: 'name',
+      pagination: { offset: 0, page_size: 25 },
+    });
+
+    const url = new URL(captured?.url ?? 'https://example.com');
+    expect(url.pathname).toBe('/api/v1/team');
+    expect(url.searchParams.get('sorting')).toBe('name');
+    expect(url.searchParams.get('pagination[offset]')).toBe('0');
+    expect(url.searchParams.get('pagination[page_size]')).toBe('25');
+    expect(captured?.init?.method).toBe('GET');
+  });
+
+  test('team create wraps details without an idempotency key', async () => {
+    let captured: CapturedRequest | undefined;
+    globalThis.fetch = (async (input, init) => {
+      captured = { url: String(input), init };
+      return new Response(JSON.stringify({ details: { id: 'team_1' }, status: 'success' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }) as typeof fetch;
+
+    const apiClient = new ApiClient('https://example.com', 'test-token');
+    const client = new TeamClient(apiClient);
+
+    await client.create({ name: 'Sales' });
+
+    expect(new URL(captured?.url ?? 'https://example.com').pathname).toBe('/api/v1/team');
+    expect(captured?.init?.method).toBe('POST');
+    expect(captured?.init?.body).toBe('{"details":{"name":"Sales"}}');
+  });
+
+  test('team update wraps name in details', async () => {
+    let captured: CapturedRequest | undefined;
+    globalThis.fetch = (async (input, init) => {
+      captured = { url: String(input), init };
+      return new Response(JSON.stringify({ details: { id: 'team_1' }, status: 'success' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }) as typeof fetch;
+
+    const apiClient = new ApiClient('https://example.com', 'test-token');
+    const client = new TeamClient(apiClient);
+
+    await client.update('team_1', { name: 'Engineering' });
+
+    expect(new URL(captured?.url ?? 'https://example.com').pathname).toBe('/api/v1/team/team_1');
+    expect(captured?.init?.method).toBe('PUT');
+    expect(captured?.init?.body).toBe('{"details":{"name":"Engineering"}}');
+  });
+
+  test('team delete sends DELETE and returns details', async () => {
+    let captured: CapturedRequest | undefined;
+    globalThis.fetch = (async (input, init) => {
+      captured = { url: String(input), init };
+      return new Response(JSON.stringify({ details: { id: 'team_1' }, status: 'success' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }) as typeof fetch;
+
+    const apiClient = new ApiClient('https://example.com', 'test-token');
+    const client = new TeamClient(apiClient);
+
+    const response = await client.delete('team_1');
+
+    expect(new URL(captured?.url ?? 'https://example.com').pathname).toBe('/api/v1/team/team_1');
+    expect(captured?.init?.method).toBe('DELETE');
+    expect(captured?.init?.body).toBeUndefined();
+    expect(response.details?.id).toBe('team_1');
+  });
+
+  test('risk profile list serializes nested pagination query keys', async () => {
+    let captured: CapturedRequest | undefined;
+    globalThis.fetch = (async (input, init) => {
+      captured = { url: String(input), init };
+      return new Response(JSON.stringify({ summaries: [] }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }) as typeof fetch;
+
+    const apiClient = new ApiClient('https://example.com', 'test-token');
+    const client = new RiskProfileClient(apiClient);
+
+    await client.list({
+      sorting: 'name',
+      pagination: { offset: 0, page_size: 25 },
+    });
+
+    const url = new URL(captured?.url ?? 'https://example.com');
+    expect(url.pathname).toBe('/api/v1/risk_profile');
+    expect(url.searchParams.get('sorting')).toBe('name');
+    expect(url.searchParams.get('pagination[offset]')).toBe('0');
+    expect(url.searchParams.get('pagination[page_size]')).toBe('25');
+    expect(captured?.init?.method).toBe('GET');
+  });
+
+  test('risk profile create wraps name and ruleset in details', async () => {
+    let captured: CapturedRequest | undefined;
+    globalThis.fetch = (async (input, init) => {
+      captured = { url: String(input), init };
+      return new Response(JSON.stringify({ details: { id: 'rp_1' }, status: 'success' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }) as typeof fetch;
+
+    const apiClient = new ApiClient('https://example.com', 'test-token');
+    const client = new RiskProfileClient(apiClient);
+    const ruleset: RiskProfileRuleset = {
+      action_multipliers: {
+        create_data: 1,
+        destroy_data: null,
+        external_communication: 1,
+        financial_transactions: null,
+        read_data: 1,
+        update_data: 1,
+      },
+      category_weights: {
+        authentication_and_secrets: 1,
+        behavioural_and_inferred: 0,
+        contact_information: 1,
+        criminal_justice: null,
+        financial_information: 1,
+        gdpr_biometric_for_identification: null,
+        gdpr_genetic_data: null,
+        gdpr_political_opinions: null,
+        gdpr_racial_or_ethnic_origin: null,
+        gdpr_religious_or_philosophical_beliefs: null,
+        gdpr_sex_life_or_sexual_orientation: null,
+        gdpr_trade_union_membership: null,
+        health_and_medical: 1,
+        location_and_tracking: 0,
+        minors_data: 1,
+        organisational_confidential: 1,
+        personal_identifiers: 1,
+      },
+      thresholds: { critical: 80, high: 50, medium: 20 },
+    };
+
+    await client.create({ name: 'Standard', ruleset });
+
+    expect(new URL(captured?.url ?? 'https://example.com').pathname).toBe('/api/v1/risk_profile');
+    expect(captured?.init?.method).toBe('POST');
+    expect(JSON.parse(String(captured?.init?.body))).toEqual({
+      details: { name: 'Standard', ruleset },
+    });
+  });
+
+  test('risk profile template sends template_name without a details wrapper', async () => {
+    let captured: CapturedRequest | undefined;
+    globalThis.fetch = (async (input, init) => {
+      captured = { url: String(input), init };
+      return new Response(
+        JSON.stringify({
+          ruleset: { thresholds: { critical: 80, high: 50, medium: 20 } },
+          status: 'success',
+        }),
+        {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }
+      );
+    }) as typeof fetch;
+
+    const apiClient = new ApiClient('https://example.com', 'test-token');
+    const client = new RiskProfileClient(apiClient);
+
+    const response = await client.getTemplate('Standard');
+
+    const url = new URL(captured?.url ?? 'https://example.com');
+    expect(url.pathname).toBe('/api/v1/risk_profile/template');
+    expect(url.searchParams.get('template_name')).toBe('Standard');
+    expect(captured?.init?.method).toBe('GET');
+    expect(response.ruleset?.thresholds?.critical).toBe(80);
+    expect(response.status).toBe('success');
+  });
+
+  test('playground client posts each operation path and required body', async () => {
+    const calls: CapturedRequest[] = [];
+    globalThis.fetch = (async (input, init) => {
+      calls.push({ url: String(input), init });
+      return new Response(JSON.stringify({ status: 'success' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }) as typeof fetch;
+
+    const apiClient = new ApiClient('https://example.com', 'test-token');
+    const client = new PlaygroundClient(apiClient);
+
+    await client.createCustomerSupportAgent();
+    await client.createLoanApplicationReviewAgent();
+    await client.createNorthstarSupportAgent();
+    await client.createOpenclawAgent();
+    await client.createQualityReviewAgent();
+    await client.createFirstAccountAgent({
+      environment_id: 'env_1',
+      seed_instances_and_spans: true,
+    });
+    await client.recordCustomerSupportSpans({ agent_instance_id: 'agent_instance_1' });
+    await client.recordLoanApplicationReviewSpans({ agent_instance_id: 'agent_instance_1' });
+    await client.recordNorthstarSupportSpans({ agent_instance_id: 'agent_instance_1' });
+    await client.recordOpenclawSpans({ agent_instance_id: 'agent_instance_1' });
+    await client.recordQualityReviewSpans({ agent_instance_id: 'agent_instance_1' });
+    await client.recordFirstAccountSpans({
+      agent_instance_id: 'agent_instance_1',
+      scenario: 'good',
+    });
+    await client.registerCustomerSupportAgentInstance({
+      agent_id: 'agent_1',
+      environment_id: 'env_1',
+    });
+    await client.registerLoanApplicationReviewAgentInstance({
+      agent_id: 'agent_1',
+      environment_id: 'env_1',
+    });
+    await client.registerNorthstarSupportAgentInstance({
+      agent_id: 'agent_1',
+      environment_id: 'env_1',
+    });
+    await client.registerOpenclawAgentInstance({
+      agent_id: 'agent_1',
+      environment_id: 'env_1',
+    });
+    await client.registerFirstAccountAgentInstance({
+      agent_id: 'agent_1',
+      environment_id: 'env_1',
+      scenario: 'mixed',
+    });
+    await client.registerQualityReviewAgentInstance({
+      agent_id: 'agent_1',
+      environment_id: 'env_1',
+      purpose: 'eval',
+    });
+
+    const expected: Array<{ path: string; body: string }> = [
+      { path: '/api/v1/playground/create_customer_support_agent', body: '{}' },
+      { path: '/api/v1/playground/create_loan_application_review_agent', body: '{}' },
+      { path: '/api/v1/playground/create_northstar_support_agent', body: '{}' },
+      { path: '/api/v1/playground/create_openclaw_agent', body: '{}' },
+      { path: '/api/v1/playground/create_quality_review_agent', body: '{}' },
+      {
+        path: '/api/v1/playground/create_first_account_agent',
+        body: '{"environment_id":"env_1","seed_instances_and_spans":true}',
+      },
+      {
+        path: '/api/v1/playground/record_customer_support_spans',
+        body: '{"agent_instance_id":"agent_instance_1"}',
+      },
+      {
+        path: '/api/v1/playground/record_loan_application_review_spans',
+        body: '{"agent_instance_id":"agent_instance_1"}',
+      },
+      {
+        path: '/api/v1/playground/record_northstar_support_spans',
+        body: '{"agent_instance_id":"agent_instance_1"}',
+      },
+      {
+        path: '/api/v1/playground/record_openclaw_spans',
+        body: '{"agent_instance_id":"agent_instance_1"}',
+      },
+      {
+        path: '/api/v1/playground/record_quality_review_spans',
+        body: '{"agent_instance_id":"agent_instance_1"}',
+      },
+      {
+        path: '/api/v1/playground/record_first_account_spans',
+        body: '{"agent_instance_id":"agent_instance_1","scenario":"good"}',
+      },
+      {
+        path: '/api/v1/playground/register_customer_support_agent_instance',
+        body: '{"agent_id":"agent_1","environment_id":"env_1"}',
+      },
+      {
+        path: '/api/v1/playground/register_loan_application_review_agent_instance',
+        body: '{"agent_id":"agent_1","environment_id":"env_1"}',
+      },
+      {
+        path: '/api/v1/playground/register_northstar_support_agent_instance',
+        body: '{"agent_id":"agent_1","environment_id":"env_1"}',
+      },
+      {
+        path: '/api/v1/playground/register_openclaw_agent_instance',
+        body: '{"agent_id":"agent_1","environment_id":"env_1"}',
+      },
+      {
+        path: '/api/v1/playground/register_first_account_agent_instance',
+        body: '{"agent_id":"agent_1","environment_id":"env_1","scenario":"mixed"}',
+      },
+      {
+        path: '/api/v1/playground/register_quality_review_agent_instance',
+        body: '{"agent_id":"agent_1","environment_id":"env_1","purpose":"eval"}',
+      },
+    ];
+
+    expect(calls).toHaveLength(expected.length);
+    for (const [index, check] of expected.entries()) {
+      const call = calls[index];
+      expect(new URL(call?.url ?? 'https://example.com').pathname).toBe(check.path);
+      expect(call?.init?.method).toBe('POST');
+      expect(call?.init?.body).toBe(check.body);
+    }
   });
 
   test('api token activate posts empty action body', async () => {
@@ -323,7 +1060,7 @@ describe('resource clients', () => {
     let captured: CapturedRequest | undefined;
     globalThis.fetch = (async (input, init) => {
       captured = { url: String(input), init };
-      return new Response(JSON.stringify({ details: { pfids: ['pfid_1'] } }), {
+      return new Response(JSON.stringify({ pfids: ['pfid_1'], status: 'success' }), {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
       });
@@ -332,31 +1069,50 @@ describe('resource clients', () => {
     const apiClient = new ApiClient('https://example.com', 'test-token');
     const client = new PfidClient(apiClient);
 
-    await client.generate(3, 'acct_123');
+    const result = await client.generate(3, 'acct_123');
 
     expect(new URL(captured?.url ?? 'https://example.com').pathname).toBe('/api/v1/pfid/generate');
     expect(captured?.init?.method).toBe('POST');
     expect(captured?.init?.body).toBe('{"count":3,"account_id":"acct_123"}');
+    expect(result).toEqual({ pfids: ['pfid_1'], status: 'success' });
   });
 
   test('bulk execute sends items as top-level body key', async () => {
     let captured: CapturedRequest | undefined;
     globalThis.fetch = (async (input, init) => {
       captured = { url: String(input), init };
-      return new Response(JSON.stringify({ details: { items: [] } }), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-      });
+      return new Response(
+        JSON.stringify({
+          status: 'success',
+          outputs: {
+            'list-agents-001': { status: 'success', summaries: [] },
+          },
+        }),
+        {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }
+      );
     }) as typeof fetch;
 
     const apiClient = new ApiClient('https://example.com', 'test-token');
     const client = new BulkClient(apiClient);
 
-    await client.execute([{ method: 'GET', path: '/account' }]);
+    const result = await client.execute([
+      { _type: 'agents/list', idempotency_key: 'list-agents-001' },
+    ]);
 
     expect(new URL(captured?.url ?? 'https://example.com').pathname).toBe('/api/v1/bulk');
     expect(captured?.init?.method).toBe('POST');
-    expect(captured?.init?.body).toBe('{"items":[{"method":"GET","path":"/account"}]}');
+    expect(captured?.init?.body).toBe(
+      '{"items":[{"_type":"agents/list","idempotency_key":"list-agents-001"}]}'
+    );
+    expect(result).toEqual({
+      status: 'success',
+      outputs: {
+        'list-agents-001': { status: 'success', summaries: [] },
+      },
+    });
   });
 
   test('agent instance register/start/finish contract remains unchanged', async () => {
@@ -382,7 +1138,7 @@ describe('resource clients', () => {
     });
     await client.finish('agent_instance_1', {
       timestamp: '2026-02-24T12:05:00.000Z',
-      status: 'finished',
+      status: 'complete',
     });
 
     const expected: Array<{ path: string; method: string; body: string }> = [
@@ -399,7 +1155,7 @@ describe('resource clients', () => {
       {
         path: '/api/v1/agent_instance/agent_instance_1/finish',
         method: 'POST',
-        body: '{"timestamp":"2026-02-24T12:05:00.000Z","status":"finished"}',
+        body: '{"timestamp":"2026-02-24T12:05:00.000Z","status":"complete"}',
       },
     ];
 
@@ -412,6 +1168,62 @@ describe('resource clients', () => {
       const { idempotency_key: _key, ...rest } = body;
       expect(JSON.stringify(rest)).toBe(check.body);
     }
+  });
+
+  test('agent instance terminate posts reason and timestamp', async () => {
+    let captured: CapturedRequest | undefined;
+    globalThis.fetch = (async (input, init) => {
+      captured = { url: String(input), init };
+      return new Response(JSON.stringify({ details: { id: 'agent_instance_1' } }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }) as typeof fetch;
+
+    const apiClient = new ApiClient('https://example.com', 'test-token');
+    const client = new AgentInstanceClient(apiClient);
+
+    await client.terminate('agent_instance_1', {
+      reason: 'operator requested stop',
+      timestamp: '2026-02-24T12:10:00.000Z',
+    });
+
+    const url = new URL(captured?.url ?? 'https://example.com');
+    expect(url.pathname).toBe('/api/v1/agent_instance/agent_instance_1/terminate');
+    expect(captured?.init?.method).toBe('POST');
+    const body = JSON.parse(String(captured?.init?.body)) as Record<string, unknown>;
+    const { idempotency_key: _key, ...rest } = body;
+    expect(rest).toEqual({
+      reason: 'operator requested stop',
+      timestamp: '2026-02-24T12:10:00.000Z',
+    });
+  });
+
+  test('admin user update sends details', async () => {
+    let captured: CapturedRequest | undefined;
+    globalThis.fetch = (async (input, init) => {
+      captured = { url: String(input), init };
+      return new Response(JSON.stringify({ details: { id: 'admin_user_1' } }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }) as typeof fetch;
+
+    const apiClient = new ApiClient('https://example.com', 'test-token');
+    const client = new AdminUserClient(apiClient);
+
+    await client.update('admin_user_1', {
+      name: 'Ada Lovelace',
+      job_title: 'Engineer',
+      profile_completed_at: null,
+    });
+
+    const url = new URL(captured?.url ?? 'https://example.com');
+    expect(url.pathname).toBe('/api/v1/admin_user/admin_user_1');
+    expect(captured?.init?.method).toBe('PUT');
+    expect(captured?.init?.body).toBe(
+      '{"details":{"name":"Ada Lovelace","job_title":"Engineer","profile_completed_at":null}}'
+    );
   });
 
   test('covers additional wrapper request shapes', async () => {

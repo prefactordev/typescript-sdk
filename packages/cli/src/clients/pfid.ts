@@ -1,18 +1,15 @@
 import type { ApiClient } from '../api-client.js';
 
-export interface PfidDetails {
-  pfids: string[];
-}
-
 export interface PfidResponse {
-  details: PfidDetails;
+  account_id: string;
+  pfids: string[];
+  status: 'success';
 }
 
 export class PfidClient {
   constructor(private readonly client: ApiClient) {}
 
   generate(count = 1, accountId?: string): Promise<PfidResponse> {
-    // PFID generate endpoint accepts non-details top-level arguments.
     return this.client.request('/pfid/generate', {
       method: 'POST',
       body: {

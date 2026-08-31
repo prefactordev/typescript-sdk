@@ -1,4 +1,5 @@
 import type { ApiClient } from '../api-client.js';
+import type { ListResponse } from './list-response.js';
 
 export interface AgentDeployment {
   id: string;
@@ -8,6 +9,17 @@ export interface AgentDeployment {
   environment_id: string;
   current_version_id: string | null;
   inserted_at: string;
+  updated_at: string;
+}
+
+export interface AgentDeploymentSummary {
+  account_id: string;
+  agent_id: string;
+  current_version_id: string | null;
+  environment_id: string;
+  id: string;
+  inserted_at: string;
+  type: 'agent_deployment';
   updated_at: string;
 }
 
@@ -26,9 +38,7 @@ export interface AgentDeploymentResponse {
   details: AgentDeployment;
 }
 
-export interface AgentDeploymentListResponse {
-  details: AgentDeployment[];
-}
+export type AgentDeploymentListResponse = ListResponse<AgentDeploymentSummary>;
 
 export class AgentDeploymentClient {
   constructor(private readonly client: ApiClient) {}

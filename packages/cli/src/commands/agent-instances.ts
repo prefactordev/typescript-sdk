@@ -1,5 +1,6 @@
 import { writeFile } from 'node:fs/promises';
-import type { Command } from 'commander';
+import type { SpanTypeSchema } from '@prefactor/core';
+import { type Command, Option } from 'commander';
 import { AgentInstanceClient } from '../clients/agent-instance.js';
 import {
   executeAuthed,
@@ -32,6 +33,45 @@ export function registerAgentInstancesCommands(program: Command): void {
     .action(function (this: Command, id: string) {
       return executeAuthed(this, async (apiClient) => {
         const result = await apiClient.request(`/agent_instance/${id}`, { method: 'GET' });
+        printJson(result);
+      });
+    });
+
+  agentInstances
+    .command('show')
+    .description('Show agent instance by id or external identifier')
+    .option('--agent_instance_id <agent_instance_id>', 'Agent instance ID')
+    .option('--external_identifier <external_identifier>', 'External identifier')
+    .option('--include_counts', 'Include span counts')
+    .option('--include_costs', 'Include cost breakdown')
+    .option('--include_risk_score', 'Include risk score')
+    .option('--include_alert_count', 'Include raised alert count')
+    .action(function (
+      this: Command,
+      options: {
+        agent_instance_id?: string;
+        external_identifier?: string;
+        include_counts?: boolean;
+        include_costs?: boolean;
+        include_risk_score?: boolean;
+        include_alert_count?: boolean;
+      }
+    ) {
+      return executeAuthed(this, async (apiClient) => {
+        if (!options.agent_instance_id && !options.external_identifier) {
+          throw new Error('Specify --agent_instance_id or --external_identifier.');
+        }
+
+        const result = await new AgentInstanceClient(apiClient).show({
+          ...(options.agent_instance_id ? { agent_instance_id: options.agent_instance_id } : {}),
+          ...(options.external_identifier
+            ? { external_identifier: options.external_identifier }
+            : {}),
+          ...(options.include_counts ? { include_counts: true } : {}),
+          ...(options.include_costs ? { include_costs: true } : {}),
+          ...(options.include_risk_score ? { include_risk_score: true } : {}),
+          ...(options.include_alert_count ? { include_alert_count: true } : {}),
+        });
         printJson(result);
       });
     });
@@ -117,7 +157,7 @@ export function registerAgentInstancesCommands(program: Command): void {
               : {}),
             ...(options.span_type_schemas
               ? {
-                  span_type_schemas: await parseJsonOption<unknown[]>(
+                  span_type_schemas: await parseJsonOption<SpanTypeSchema[]>(
                     options.span_type_schemas,
                     '--span_type_schemas',
                     'array'
@@ -136,7 +176,7 @@ export function registerAgentInstancesCommands(program: Command): void {
           },
           ...(options.id ? { id: options.id } : {}),
           ...(options.update_current_version ? { update_current_version: true } : {}),
-        } as Parameters<AgentInstanceClient['register']>[0]);
+        });
         printJson(result);
       });
     });
@@ -158,13 +198,34 @@ export function registerAgentInstancesCommands(program: Command): void {
     .command('finish <id>')
     .description('Finish agent instance')
     .option('--timestamp <timestamp>', 'Timestamp')
-    .option('--status <status>', 'Status')
-    .action(function (this: Command, id: string, options: { timestamp?: string; status?: string }) {
+    .addOption(
+      new Option('--status <status>', 'Status').choices(['complete', 'failed', 'cancelled'])
+    )
+    .action(function (
+      this: Command,
+      id: string,
+      options: { timestamp?: string; status?: 'complete' | 'failed' | 'cancelled' }
+    ) {
       return executeAuthed(this, async (apiClient) => {
         const result = await new AgentInstanceClient(apiClient).finish(id, {
           ...(options.timestamp ? { timestamp: options.timestamp } : {}),
           ...(options.status ? { status: options.status } : {}),
-        } as Parameters<AgentInstanceClient['finish']>[1]);
+        });
+        printJson(result);
+      });
+    });
+
+  agentInstances
+    .command('terminate <id>')
+    .description('Terminate agent instance')
+    .requiredOption('--reason <reason>', 'Termination reason')
+    .option('--timestamp <timestamp>', 'Timestamp')
+    .action(function (this: Command, id: string, options: { reason: string; timestamp?: string }) {
+      return executeAuthed(this, async (apiClient) => {
+        const result = await new AgentInstanceClient(apiClient).terminate(id, {
+          reason: options.reason,
+          ...(options.timestamp ? { timestamp: options.timestamp } : {}),
+        });
         printJson(result);
       });
     });

@@ -1,7 +1,7 @@
-import { HttpClientError, type HttpRequester } from './http-client.js';
+import { type ApiError, HttpClientError, type HttpRequester } from './http-client.js';
 import { ensureIdempotencyKey } from './idempotency.js';
 
-export type AgentSpanStatus = 'active' | 'complete' | 'failed';
+export type AgentSpanStatus = 'active' | 'complete' | 'failed' | 'cancelled';
 
 export type AgentSpanFinishStatus = 'complete' | 'failed' | 'cancelled';
 
@@ -14,7 +14,7 @@ export type AgentSpanFinishOptions = {
 
 export type AgentSpanCreatePayload = {
   details: {
-    agent_instance_id: string | null;
+    agent_instance_id: string;
     schema_name: string;
     status: AgentSpanStatus;
     payload: Record<string, unknown>;
@@ -28,17 +28,23 @@ export type AgentSpanCreatePayload = {
 };
 
 export type AgentSpanControlSignal = {
-  terminate?: boolean;
-  reason?: string | null;
+  terminate: boolean;
+  reason: string;
 };
 
 export type AgentSpanResponse = {
-  details?: {
-    id?: string;
+  details: {
+    id: string;
     started_at?: string;
   };
   control?: AgentSpanControlSignal;
 };
+
+export type AgentSpanAlreadyFinished = {
+  alreadyFinished: true;
+};
+
+export type AgentSpanFinishResult = AgentSpanResponse | AgentSpanAlreadyFinished;
 
 export class AgentSpanClient {
   constructor(private readonly httpClient: HttpRequester) {}
@@ -54,7 +60,7 @@ export class AgentSpanClient {
     spanId: string,
     timestamp: string,
     options: AgentSpanFinishOptions = {}
-  ): Promise<AgentSpanResponse> {
+  ): Promise<AgentSpanFinishResult> {
     try {
       return await this.httpClient.request<AgentSpanResponse>(
         `/api/v1/agent_spans/${spanId}/finish`,
@@ -73,7 +79,7 @@ export class AgentSpanClient {
         error.status === 409 &&
         isAlreadyFinishedError(error.responseBody)
       ) {
-        return {};
+        return { alreadyFinished: true };
       }
 
       throw error;
@@ -86,6 +92,5 @@ function isAlreadyFinishedError(responseBody: unknown): boolean {
     return false;
   }
 
-  const payload = responseBody as Record<string, unknown>;
-  return payload.code === 'invalid_action';
+  return (responseBody as { code?: ApiError['code'] }).code === 'invalid_action';
 }

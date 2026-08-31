@@ -137,20 +137,26 @@ Environment fallback is supported when no default profile is configured:
 - `login`: authenticate and save credentials to the default profile
 - `profiles`: add, list, remove
 - `accounts`: list, retrieve, update
-- `environments`: list, retrieve, create, update, delete
-- `agents`: list, retrieve, create, update, delete, retire, reinstate
-- `agent_deployments`: list, retrieve, create, update, delete
+- `agents`: list, retrieve, show, create, update, delete, retire, reinstate
+- `environments`: list, retrieve, show, create, update, delete
 - `agent_versions`: list, retrieve, create
 - `agent_schema_versions`: list, retrieve, create
-- `agent_instances`: list, retrieve, agent_context, register, start, finish
-- `agent_spans`: list, create, finish, create_test_spans
+- `agent_instances`: list, retrieve, show, agent_context, register, start, finish, terminate
+- `agent_deployments`: list, retrieve, create, update, delete
+- `agent_spans`: list, retrieve, create, finish, discard_sensitive
+- `alerts`: list, retrieve, count, raise, clear
+- `people`: list, retrieve, create, update, delete
+- `teams`: list, retrieve, create, update, delete
+- `risk_profiles`: list, retrieve, template, create, update, delete
+- `playground`: create, record, and register demo agents, instances, and spans
+- `admin_users`: list, retrieve, update
+- `admin_user_invites`: list, retrieve, create, revoke
 - `api_tokens`: list, retrieve, create, suspend, activate, revoke, delete
 - `setup`: create an agent (optional), mint a validated deployment token, and print setup values for instrumentation
-- `admin_users`: list, retrieve
-- `admin_user_invites`: list, retrieve, create, revoke
 - `pfid`: generate
 - `bulk`: execute
 - `ping`: verify the selected or supplied API token
+- `version`: print CLI version
 
 Run `prefactor <command> --help` for command-specific options.
 
@@ -160,7 +166,21 @@ Some options accept JSON directly or from a file using `@path` syntax:
 
 ```bash
 prefactor bulk execute --items @./bulk-items.json
-prefactor agent_spans create --payload @./span.json
+prefactor agent_spans create --agent_instance_id <id> --schema_name llm --status complete --payload @./span.json
+prefactor risk_profiles create --name Standard --ruleset @./ruleset.json
+```
+
+Bulk `--items` is an array of objects with `_type`, `idempotency_key` (8–128 characters, unique in the request), and any extra fields the operation needs:
+
+```json
+[
+  { "_type": "agents/list", "idempotency_key": "list-agents-001" },
+  {
+    "_type": "agents/create",
+    "idempotency_key": "create-agent-001",
+    "details": { "name": "Support bot" }
+  }
+]
 ```
 
 ## Programmatic Usage
@@ -170,23 +190,20 @@ prefactor agent_spans create --payload @./span.json
 ```typescript
 import {
   ApiClient,
-  AccountClient,
   AgentClient,
   AgentDeploymentClient,
 } from '@prefactor/cli';
 
 const api = new ApiClient('https://app.prefactorai.com', process.env.PREFACTOR_API_TOKEN!);
-const accounts = new AccountClient(api);
 const agents = new AgentClient(api);
 const deployments = new AgentDeploymentClient(api);
 
-const accountList = await accounts.list();
 const agentList = await agents.list();
-const agentId = agentList.details[0]?.id;
+const agentId = agentList.summaries?.[0]?.id;
 
-if (accountList.details[0]?.id && agentId) {
+if (agentId) {
   const deploymentList = await deployments.list(agentId);
-  console.log(deploymentList.details);
+  console.log(deploymentList.summaries);
 }
 ```
 
@@ -212,10 +229,15 @@ if (accountList.details[0]?.id && agentId) {
 - `AgentSchemaVersionClient`
 - `AgentInstanceClient`
 - `AgentSpanClient`
+- `AlertClient`
 - `ApiTokenClient`
 - `AdminUserClient`
 - `AdminUserInviteClient`
+- `PersonClient`
 - `PfidClient`
+- `PlaygroundClient`
+- `RiskProfileClient`
+- `TeamClient`
 - `BulkClient`
 
 Each client exposes typed request/response interfaces for its resource operations.

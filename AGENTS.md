@@ -1,6 +1,7 @@
 # AGENTS.md
 
-This file provides repository-wide instructions for coding agents working in this repo.
+This repo is the set of TypeScript packages that form the Prefactor SDK.  It is a public repo, and should not
+include references to internal Prefactor code or repos.
 
 ## Scope and precedence
 This file applies across the repository unless a more specific `AGENTS.md` exists in a subdirectory.
@@ -189,6 +190,7 @@ Follow this process for all non-trivial changes:
 - Typecheck: `mise run typecheck` or `bun run typecheck`
 - Tests (all): `mise run test` or `bun test`
 - Tests (watch): `mise run test-watch` or `bun test --watch`
+- Quick check (preflight + tests): `bin/qc`
 
 ### Targeted and filtered commands
 - Build with filter: `bun run scripts/build.ts --filter <package-name>`
