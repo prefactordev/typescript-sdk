@@ -1,7 +1,7 @@
 import { writeFile } from 'node:fs/promises';
 import type { SpanTypeSchema } from '@prefactor/core';
 import { type Command, Option } from 'commander';
-import { AgentInstanceClient, showAgentInstance } from '../clients/agent-instance.js';
+import { AgentInstanceClient } from '../clients/agent-instance.js';
 import {
   executeAuthed,
   parseJsonOption,
@@ -62,7 +62,7 @@ export function registerAgentInstancesCommands(program: Command): void {
           throw new Error('Specify --agent_instance_id or --external_identifier.');
         }
 
-        const result = await showAgentInstance(apiClient, {
+        const result = await new AgentInstanceClient(apiClient).show({
           ...(options.agent_instance_id ? { agent_instance_id: options.agent_instance_id } : {}),
           ...(options.external_identifier
             ? { external_identifier: options.external_identifier }

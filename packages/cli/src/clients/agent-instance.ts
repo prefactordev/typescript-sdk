@@ -1,12 +1,12 @@
+import { AgentInstanceClient as CoreAgentInstanceClient } from '@prefactor/core';
 import type { ApiClient } from '../api-client.js';
 import type { ListResponse } from './list-response.js';
 
-export {
-  AgentInstanceClient,
-  type AgentInstanceFinishOptions,
-  type AgentInstanceRegisterPayload as AgentInstanceRegistrationPayload,
-  type AgentInstanceResponse,
-  type AgentInstanceTerminateOptions,
+export type {
+  AgentInstanceFinishOptions,
+  AgentInstanceRegisterPayload as AgentInstanceRegistrationPayload,
+  AgentInstanceResponse,
+  AgentInstanceTerminateOptions,
 } from '@prefactor/core';
 
 export interface AgentInstance {
@@ -178,23 +178,26 @@ export interface AgentInstanceShowResponse {
   status: 'success';
 }
 
-export function showAgentInstance(
-  client: ApiClient,
-  params: AgentInstanceShowParams
-): Promise<AgentInstanceShowResponse> {
-  return client.request('/agent_instance/show', {
-    method: 'GET',
-    query: {
-      ...(params.agent_instance_id ? { agent_instance_id: params.agent_instance_id } : {}),
-      ...(params.external_identifier ? { external_identifier: params.external_identifier } : {}),
-      ...(params.include_counts !== undefined ? { include_counts: params.include_counts } : {}),
-      ...(params.include_costs !== undefined ? { include_costs: params.include_costs } : {}),
-      ...(params.include_risk_score !== undefined
-        ? { include_risk_score: params.include_risk_score }
-        : {}),
-      ...(params.include_alert_count !== undefined
-        ? { include_alert_count: params.include_alert_count }
-        : {}),
-    },
-  });
+export class AgentInstanceClient extends CoreAgentInstanceClient {
+  constructor(private readonly client: ApiClient) {
+    super(client);
+  }
+
+  show(params: AgentInstanceShowParams): Promise<AgentInstanceShowResponse> {
+    return this.client.request('/agent_instance/show', {
+      method: 'GET',
+      query: {
+        ...(params.agent_instance_id ? { agent_instance_id: params.agent_instance_id } : {}),
+        ...(params.external_identifier ? { external_identifier: params.external_identifier } : {}),
+        ...(params.include_counts !== undefined ? { include_counts: params.include_counts } : {}),
+        ...(params.include_costs !== undefined ? { include_costs: params.include_costs } : {}),
+        ...(params.include_risk_score !== undefined
+          ? { include_risk_score: params.include_risk_score }
+          : {}),
+        ...(params.include_alert_count !== undefined
+          ? { include_alert_count: params.include_alert_count }
+          : {}),
+      },
+    });
+  }
 }

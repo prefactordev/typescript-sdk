@@ -76,7 +76,6 @@ export {
   type AgentInstanceTerminateOptions,
   type AgentSpanCounts,
   type AgentSpanSchemaCounts,
-  showAgentInstance,
 } from './clients/agent-instance.js';
 export {
   type AgentSchemaVersion,

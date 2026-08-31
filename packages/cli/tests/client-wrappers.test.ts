@@ -1,12 +1,11 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { AgentInstanceClient as CoreAgentInstanceClient } from '@prefactor/core';
 import { ApiClient } from '../src/api-client.js';
 import { AccountClient } from '../src/clients/account.js';
 import { AdminUserClient } from '../src/clients/admin-user.js';
 import { AdminUserInviteClient } from '../src/clients/admin-user-invite.js';
 import { AgentClient } from '../src/clients/agent.js';
 import { AgentDeploymentClient } from '../src/clients/agent-deployment.js';
-import { AgentInstanceClient, showAgentInstance } from '../src/clients/agent-instance.js';
+import { AgentInstanceClient } from '../src/clients/agent-instance.js';
 import { AgentSchemaVersionClient } from '../src/clients/agent-schema-version.js';
 import { AgentSpanClient } from '../src/clients/agent-span.js';
 import { AgentVersionClient } from '../src/clients/agent-version.js';
@@ -56,7 +55,6 @@ describe('resource clients', () => {
     expect(typeof cliExports.ApiTokenClient).toBe('function');
     expect(typeof cliExports.PfidClient).toBe('function');
     expect(typeof cliExports.BulkClient).toBe('function');
-    expect(cliExports.AgentInstanceClient).toBe(CoreAgentInstanceClient);
   });
 
   test('agent list sends GET without filters', async () => {
@@ -324,8 +322,9 @@ describe('resource clients', () => {
     }) as typeof fetch;
 
     const apiClient = new ApiClient('https://example.com', 'test-token');
+    const client = new AgentInstanceClient(apiClient);
 
-    await showAgentInstance(apiClient, {
+    await client.show({
       agent_instance_id: 'agent_instance_1',
       include_counts: true,
       include_costs: true,
