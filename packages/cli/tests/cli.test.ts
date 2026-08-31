@@ -1947,6 +1947,22 @@ describe('CLI command validation', () => {
     ).rejects.toThrow('--items must be a JSON array.');
   });
 
+  test('requires bulk execute --items to contain at least one item', async () => {
+    const cwd = join(tempRoot, 'cwd');
+    mkdirSync(cwd, { recursive: true });
+    process.chdir(cwd);
+    writeFileSync(
+      join(cwd, 'prefactor.json'),
+      JSON.stringify({ default: { api_key: 'token', base_url: 'https://example.com' } })
+    );
+
+    const cli = createCli('1.0.0');
+
+    await expect(
+      cli.parseAsync(['node', 'prefactor', 'bulk', 'execute', '--items', '[]'])
+    ).rejects.toThrow('--items must contain at least one item.');
+  });
+
   test('requires bulk items to include _type and an 8–128 character idempotency_key', async () => {
     const cwd = join(tempRoot, 'cwd');
     mkdirSync(cwd, { recursive: true });
