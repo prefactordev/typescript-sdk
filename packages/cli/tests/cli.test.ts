@@ -1324,6 +1324,20 @@ describe('CLI command validation', () => {
     expect(url.searchParams.get('pagination[page_size]')).toBe('25');
   });
 
+  test('rejects pagination_offset values with trailing characters or a decimal portion', async () => {
+    const cli = createCli('1.0.0');
+
+    for (const command of ['alerts', 'people', 'risk_profiles'] as const) {
+      await expect(
+        cli.parseAsync(['node', 'prefactor', command, 'list', '--pagination_offset', '10abc'])
+      ).rejects.toThrow('--pagination_offset must be a non-negative integer.');
+
+      await expect(
+        cli.parseAsync(['node', 'prefactor', command, 'list', '--pagination_offset', '1.5'])
+      ).rejects.toThrow('--pagination_offset must be a non-negative integer.');
+    }
+  });
+
   test('alerts raise posts top-level fields without a details wrapper', async () => {
     const cwd = join(tempRoot, 'cwd');
     mkdirSync(cwd, { recursive: true });

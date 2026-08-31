@@ -7,18 +7,16 @@ import {
   type AlertSeverity,
   type AlertStatus,
 } from '../clients/alert.js';
-import { executeAuthed, parseJsonOption, parsePositiveInt, printJson } from './shared.js';
+import {
+  executeAuthed,
+  parseJsonOption,
+  parsePaginationOffset,
+  parsePositiveInt,
+  printJson,
+} from './shared.js';
 
 const SEVERITY_CHOICES = ['critical', 'error', 'warning', 'info'] as const;
 const STATUS_CHOICES = ['raised', 'cleared'] as const;
-
-function parsePaginationOffset(value: string): number {
-  const parsed = Number.parseInt(value, 10);
-  if (!Number.isInteger(parsed) || parsed < 0) {
-    throw new Error('--pagination_offset must be a non-negative integer.');
-  }
-  return parsed;
-}
 
 export function registerAlertsCommands(program: Command): void {
   const alerts = program.command('alerts').description('Manage alerts');

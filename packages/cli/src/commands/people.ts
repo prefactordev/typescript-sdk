@@ -8,18 +8,11 @@ import {
 import {
   executeAuthed,
   parseJsonOption,
+  parsePaginationOffset,
   parsePositiveInt,
   printJson,
   validateOptionalPfid,
 } from './shared.js';
-
-function parsePaginationOffset(value: string): number {
-  const parsed = Number.parseInt(value, 10);
-  if (!Number.isInteger(parsed) || parsed < 0) {
-    throw new Error('--pagination_offset must be a non-negative integer.');
-  }
-  return parsed;
-}
 
 async function parseTeamIds(value: string): Promise<string[]> {
   const parsed = await parseJsonOption<unknown[]>(value, '--team_ids', 'array');

@@ -208,6 +208,19 @@ export function parsePositiveInt(value: string): number {
   return parsed;
 }
 
+export function parsePaginationOffset(value: string): number {
+  if (!/^\d+$/.test(value)) {
+    throw new Error('--pagination_offset must be a non-negative integer.');
+  }
+
+  const parsed = Number.parseInt(value, 10);
+  if (!Number.isInteger(parsed) || parsed < 0) {
+    throw new Error('--pagination_offset must be a non-negative integer.');
+  }
+
+  return parsed;
+}
+
 export async function parseBulkItems(value: string): Promise<BulkItem[]> {
   const parsed = await parseJsonOption<unknown[]>(value, '--items', 'array');
 

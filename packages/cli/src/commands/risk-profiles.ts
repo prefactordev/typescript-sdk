@@ -9,18 +9,11 @@ import {
 import {
   executeAuthed,
   parseJsonOption,
+  parsePaginationOffset,
   parsePositiveInt,
   printJson,
   validateOptionalPfid,
 } from './shared.js';
-
-function parsePaginationOffset(value: string): number {
-  const parsed = Number.parseInt(value, 10);
-  if (!Number.isInteger(parsed) || parsed < 0) {
-    throw new Error('--pagination_offset must be a non-negative integer.');
-  }
-  return parsed;
-}
 
 export function registerRiskProfilesCommands(program: Command): void {
   const riskProfiles = program.command('risk_profiles').description('Manage risk profiles');

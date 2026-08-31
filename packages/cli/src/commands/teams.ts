@@ -1,14 +1,12 @@
 import type { Command } from 'commander';
 import { TeamClient, type TeamForCreate, type TeamListParams } from '../clients/team.js';
-import { executeAuthed, parsePositiveInt, printJson, validateOptionalPfid } from './shared.js';
-
-function parsePaginationOffset(value: string): number {
-  const parsed = Number.parseInt(value, 10);
-  if (!Number.isInteger(parsed) || parsed < 0) {
-    throw new Error('--pagination_offset must be a non-negative integer.');
-  }
-  return parsed;
-}
+import {
+  executeAuthed,
+  parsePaginationOffset,
+  parsePositiveInt,
+  printJson,
+  validateOptionalPfid,
+} from './shared.js';
 
 export function registerTeamsCommands(program: Command): void {
   const teams = program.command('teams').description('Manage teams');
