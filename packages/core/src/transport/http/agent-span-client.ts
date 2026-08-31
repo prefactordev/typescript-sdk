@@ -40,6 +40,12 @@ export type AgentSpanResponse = {
   control?: AgentSpanControlSignal;
 };
 
+export type AgentSpanAlreadyFinished = {
+  alreadyFinished: true;
+};
+
+export type AgentSpanFinishResult = AgentSpanResponse | AgentSpanAlreadyFinished;
+
 export class AgentSpanClient {
   constructor(private readonly httpClient: HttpRequester) {}
 
@@ -54,7 +60,7 @@ export class AgentSpanClient {
     spanId: string,
     timestamp: string,
     options: AgentSpanFinishOptions = {}
-  ): Promise<AgentSpanResponse> {
+  ): Promise<AgentSpanFinishResult> {
     try {
       return await this.httpClient.request<AgentSpanResponse>(
         `/api/v1/agent_spans/${spanId}/finish`,
@@ -73,8 +79,7 @@ export class AgentSpanClient {
         error.status === 409 &&
         isAlreadyFinishedError(error.responseBody)
       ) {
-        // 409 invalid_action has no success envelope; callers only read optional control.
-        return {} as AgentSpanResponse;
+        return { alreadyFinished: true };
       }
 
       throw error;

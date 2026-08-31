@@ -126,9 +126,11 @@ export {
   type AgentInstanceTerminateOptions,
 } from './transport/http/agent-instance-client.js';
 export {
+  type AgentSpanAlreadyFinished,
   AgentSpanClient,
   type AgentSpanCreatePayload,
   type AgentSpanFinishOptions,
+  type AgentSpanFinishResult,
   type AgentSpanResponse,
   type AgentSpanStatus,
 } from './transport/http/agent-span-client.js';

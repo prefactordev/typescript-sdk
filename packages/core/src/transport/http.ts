@@ -1097,7 +1097,9 @@ export class HttpTransport implements Transport {
       }
     );
 
-    this.checkControlSignal(finishResponse.control);
+    if (!('alreadyFinished' in finishResponse)) {
+      this.checkControlSignal(finishResponse.control);
+    }
     this.recordActionSuccess(action);
   }
 
