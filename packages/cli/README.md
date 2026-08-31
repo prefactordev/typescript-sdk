@@ -190,21 +190,18 @@ Bulk `--items` is an array of objects with `_type`, `idempotency_key` (8–128 c
 ```typescript
 import {
   ApiClient,
-  AccountClient,
   AgentClient,
   AgentDeploymentClient,
 } from '@prefactor/cli';
 
 const api = new ApiClient('https://app.prefactorai.com', process.env.PREFACTOR_API_TOKEN!);
-const accounts = new AccountClient(api);
 const agents = new AgentClient(api);
 const deployments = new AgentDeploymentClient(api);
 
-const accountList = await accounts.list();
 const agentList = await agents.list();
 const agentId = agentList.summaries?.[0]?.id;
 
-if (accountList.summaries?.[0]?.id && agentId) {
+if (agentId) {
   const deploymentList = await deployments.list(agentId);
   console.log(deploymentList.summaries);
 }
