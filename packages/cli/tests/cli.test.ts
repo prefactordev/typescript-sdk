@@ -1274,6 +1274,15 @@ describe('CLI command validation', () => {
     expect(capturedBody).toBe('{}');
   });
 
+  test('agent_spans finish --status only allows complete, failed, or cancelled', () => {
+    const cli = createCli('1.0.0');
+    const agentSpans = cli.commands.find((command) => command.name() === 'agent_spans');
+    const finish = agentSpans?.commands.find((command) => command.name() === 'finish');
+    const status = finish?.options.find((option) => option.long === '--status');
+
+    expect(status?.argChoices).toEqual(['complete', 'failed', 'cancelled']);
+  });
+
   test('alerts list sends nested active_during and pagination query keys', async () => {
     const cwd = join(tempRoot, 'cwd');
     mkdirSync(cwd, { recursive: true });

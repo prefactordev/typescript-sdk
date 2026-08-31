@@ -352,13 +352,13 @@ describe('resource clients', () => {
     const apiClient = new ApiClient('https://example.com', 'test-token');
     const client = new AgentSpanClient(apiClient);
 
-    const response = await client.finish('span_123', { status: 'finished' });
+    const response = await client.finish('span_123', { status: 'complete' });
 
     expect(new URL(captured?.url ?? 'https://example.com').pathname).toBe(
       '/api/v1/agent_spans/span_123/finish'
     );
     expect(captured?.init?.method).toBe('POST');
-    expect(captured?.init?.body).toBe('{"status":"finished"}');
+    expect(captured?.init?.body).toBe('{"status":"complete"}');
     expect(response).toEqual({ details: { id: 'span_123' } });
   });
 

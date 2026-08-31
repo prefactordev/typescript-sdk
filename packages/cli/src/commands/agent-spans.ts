@@ -110,12 +110,18 @@ export function registerAgentSpansCommands(program: Command): void {
     .command('finish <id>')
     .description('Finish agent span')
     .option('--timestamp <timestamp>', 'Timestamp')
-    .option('--status <status>', 'Status')
+    .addOption(
+      new Option('--status <status>', 'Status').choices(['complete', 'failed', 'cancelled'])
+    )
     .option('--result_payload <result_payload>', 'JSON object or @file')
     .action(function (
       this: Command,
       id: string,
-      options: { timestamp?: string; status?: string; result_payload?: string }
+      options: {
+        timestamp?: string;
+        status?: 'complete' | 'failed' | 'cancelled';
+        result_payload?: string;
+      }
     ) {
       return executeAuthed(this, async (apiClient) => {
         const result = await new AgentSpanClient(apiClient).finish(id, {

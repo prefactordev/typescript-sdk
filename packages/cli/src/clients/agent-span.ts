@@ -66,7 +66,7 @@ export interface AgentSpanCreateDetails {
 
 export interface AgentSpanFinishOptions {
   timestamp?: string;
-  status?: string;
+  status?: 'complete' | 'failed' | 'cancelled';
   result_payload?: Record<string, unknown>;
 }
 
