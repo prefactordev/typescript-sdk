@@ -5,7 +5,7 @@ export interface AgentSpan {
   id: string;
   agent_instance_id: string;
   schema_name: string;
-  status: string;
+  status: 'active' | 'complete' | 'failed' | 'cancelled';
   account_id: string;
   agent_id: string;
   data_risk: Record<string, unknown> | null;
