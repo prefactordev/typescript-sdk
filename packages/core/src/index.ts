@@ -128,6 +128,7 @@ export {
 export {
   type AgentSpanAlreadyFinished,
   AgentSpanClient,
+  type AgentSpanControlSignal,
   type AgentSpanCreatePayload,
   type AgentSpanFinishOptions,
   type AgentSpanFinishResult,
