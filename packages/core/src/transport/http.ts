@@ -1105,7 +1105,7 @@ export class HttpTransport implements Transport {
 
   private checkControlSignal(control: AgentSpanControlSignal | undefined): void {
     if (control?.terminate && this.controlSignalCallback) {
-      this.controlSignalCallback(control.reason ?? null);
+      this.controlSignalCallback(control.reason);
     }
   }
 
