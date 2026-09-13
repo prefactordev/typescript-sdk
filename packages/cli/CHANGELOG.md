@@ -1,5 +1,68 @@
 # @prefactor/cli
 
+## 0.3.0
+
+### Minor Changes
+
+- [#70](https://github.com/prefactordev/typescript-sdk/pull/70) [`666f24c`](https://github.com/prefactordev/typescript-sdk/commit/666f24ca9347bc12e8957eb1bed56977659d6c4a) Thanks [@simonrussell](https://github.com/simonrussell)! - Add agent instance terminate (`POST /api/v1/agent_instance/{id}/terminate`) to the core client and CLI.
+
+- [#70](https://github.com/prefactordev/typescript-sdk/pull/70) [`666f24c`](https://github.com/prefactordev/typescript-sdk/commit/666f24ca9347bc12e8957eb1bed56977659d6c4a) Thanks [@simonrussell](https://github.com/simonrussell)! - Add CLI admin user update for PUT /api/v1/admin_user/{id}.
+
+- [#70](https://github.com/prefactordev/typescript-sdk/pull/70) [`666f24c`](https://github.com/prefactordev/typescript-sdk/commit/666f24ca9347bc12e8957eb1bed56977659d6c4a) Thanks [@simonrussell](https://github.com/simonrussell)! - Add CLI retrieve for GET /api/v1/agent_spans/{id}.
+
+- [#70](https://github.com/prefactordev/typescript-sdk/pull/70) [`666f24c`](https://github.com/prefactordev/typescript-sdk/commit/666f24ca9347bc12e8957eb1bed56977659d6c4a) Thanks [@simonrussell](https://github.com/simonrussell)! - Add CLI alerts client and commands for list, retrieve, count, raise, and clear.
+
+- [#70](https://github.com/prefactordev/typescript-sdk/pull/70) [`666f24c`](https://github.com/prefactordev/typescript-sdk/commit/666f24ca9347bc12e8957eb1bed56977659d6c4a) Thanks [@simonrussell](https://github.com/simonrussell)! - Add CLI discard_sensitive for POST /api/v1/agent_spans/{id}/discard_sensitive.
+
+- [#70](https://github.com/prefactordev/typescript-sdk/pull/70) [`666f24c`](https://github.com/prefactordev/typescript-sdk/commit/666f24ca9347bc12e8957eb1bed56977659d6c4a) Thanks [@simonrussell](https://github.com/simonrussell)! - Add CLI person client and commands for list, create, retrieve, update, and delete.
+
+- [#70](https://github.com/prefactordev/typescript-sdk/pull/70) [`666f24c`](https://github.com/prefactordev/typescript-sdk/commit/666f24ca9347bc12e8957eb1bed56977659d6c4a) Thanks [@simonrussell](https://github.com/simonrussell)! - Add CLI playground client and commands for all playground create, record, and register operations.
+
+- [#70](https://github.com/prefactordev/typescript-sdk/pull/70) [`666f24c`](https://github.com/prefactordev/typescript-sdk/commit/666f24ca9347bc12e8957eb1bed56977659d6c4a) Thanks [@simonrussell](https://github.com/simonrussell)! - Add CLI risk_profile client and commands including template lookup.
+
+- [#70](https://github.com/prefactordev/typescript-sdk/pull/70) [`666f24c`](https://github.com/prefactordev/typescript-sdk/commit/666f24ca9347bc12e8957eb1bed56977659d6c4a) Thanks [@simonrussell](https://github.com/simonrussell)! - Add CLI show lookups for agent, agent instance, and environment.
+
+- [#70](https://github.com/prefactordev/typescript-sdk/pull/70) [`666f24c`](https://github.com/prefactordev/typescript-sdk/commit/666f24ca9347bc12e8957eb1bed56977659d6c4a) Thanks [@simonrussell](https://github.com/simonrussell)! - Add CLI team client and commands for list, create, retrieve, update, and delete.
+
+- [#70](https://github.com/prefactordev/typescript-sdk/pull/70) [`666f24c`](https://github.com/prefactordev/typescript-sdk/commit/666f24ca9347bc12e8957eb1bed56977659d6c4a) Thanks [@simonrussell](https://github.com/simonrussell)! - Align CLI list responses with the spec `summaries` / pagination / sorting envelope, and type PFID generate as a top-level `{ account_id, pfids, status }` payload.
+
+- [#70](https://github.com/prefactordev/typescript-sdk/pull/70) [`666f24c`](https://github.com/prefactordev/typescript-sdk/commit/666f24ca9347bc12e8957eb1bed56977659d6c4a) Thanks [@simonrussell](https://github.com/simonrussell)! - Require spec-mandated CLI output fields (still nullable where the spec uses `| null`). This is a TypeScript break for mock or partial constructors of those response types.
+
+  Bump is minor, not major: `@prefactor/cli` is 0.x (a major changeset would publish 1.0.0), and this is a compile-time type tightening.
+
+- [#70](https://github.com/prefactordev/typescript-sdk/pull/70) [`666f24c`](https://github.com/prefactordev/typescript-sdk/commit/666f24ca9347bc12e8957eb1bed56977659d6c4a) Thanks [@simonrussell](https://github.com/simonrussell)! - Require span-create schema_name and status, stop sending current_version_id on agent update, and restrict agent instance finish status to complete, failed, or cancelled.
+
+  Bump is minor, not major: `@prefactor/cli` is 0.x (a major changeset would publish 1.0.0). This is a CLI request-contract break, same level as the bulk rewrite.
+
+- [#70](https://github.com/prefactordev/typescript-sdk/pull/70) [`666f24c`](https://github.com/prefactordev/typescript-sdk/commit/666f24ca9347bc12e8957eb1bed56977659d6c4a) Thanks [@simonrussell](https://github.com/simonrussell)! - Remove the `agent_spans create_test_spans` command. That path is not in the OpenAPI spec.
+
+  Bump is minor, not major: `@prefactor/cli` is 0.x (a major changeset would publish 1.0.0). Command removal is a 0.x contract break, same level as the bulk rewrite.
+
+- [#70](https://github.com/prefactordev/typescript-sdk/pull/70) [`666f24c`](https://github.com/prefactordev/typescript-sdk/commit/666f24ca9347bc12e8957eb1bed56977659d6c4a) Thanks [@simonrussell](https://github.com/simonrussell)! - Point CLI bulk execute at the spec `_type` / `idempotency_key` request items and `outputs` response. Method/path bulk items are no longer accepted.
+
+  Bump is minor, not major: `@prefactor/cli` is 0.x (a major changeset would publish 1.0.0). This is the intended level for CLI contract breaks on this branch.
+
+- [#70](https://github.com/prefactordev/typescript-sdk/pull/70) [`666f24c`](https://github.com/prefactordev/typescript-sdk/commit/666f24ca9347bc12e8957eb1bed56977659d6c4a) Thanks [@simonrussell](https://github.com/simonrussell)! - Type agent schema version retrieve details with SchemaDetails, SchemaValidationResult, and SpanTypeSchemaDetails nested output schemas.
+
+### Patch Changes
+
+- [#70](https://github.com/prefactordev/typescript-sdk/pull/70) [`666f24c`](https://github.com/prefactordev/typescript-sdk/commit/666f24ca9347bc12e8957eb1bed56977659d6c4a) Thanks [@simonrussell](https://github.com/simonrussell)! - Move agent instance show onto AgentInstanceClient.show and stop exporting the standalone showAgentInstance helper.
+
+- [#70](https://github.com/prefactordev/typescript-sdk/pull/70) [`666f24c`](https://github.com/prefactordev/typescript-sdk/commit/666f24ca9347bc12e8957eb1bed56977659d6c4a) Thanks [@simonrussell](https://github.com/simonrussell)! - Align agent instance register and span create client types with the OpenAPI contract. Register now types optional `id`, `update_current_version`, and instance-level `external_identifier`; span create requires a string `agent_instance_id` and accepts `cancelled` status.
+
+- [#70](https://github.com/prefactordev/typescript-sdk/pull/70) [`666f24c`](https://github.com/prefactordev/typescript-sdk/commit/666f24ca9347bc12e8957eb1bed56977659d6c4a) Thanks [@simonrussell](https://github.com/simonrussell)! - Accept `null` on admin_users update `--job_title` and `--profile_completed_at` so those nullable fields can be cleared.
+
+- [#70](https://github.com/prefactordev/typescript-sdk/pull/70) [`666f24c`](https://github.com/prefactordev/typescript-sdk/commit/666f24ca9347bc12e8957eb1bed56977659d6c4a) Thanks [@simonrussell](https://github.com/simonrussell)! - Type playground register-instance responses with AgentSchemaVersionDetails and AgentVersionDetails, matching the production spec.
+
+- [#70](https://github.com/prefactordev/typescript-sdk/pull/70) [`666f24c`](https://github.com/prefactordev/typescript-sdk/commit/666f24ca9347bc12e8957eb1bed56977659d6c4a) Thanks [@simonrussell](https://github.com/simonrussell)! - Reject pagination offsets that contain trailing characters or decimal portions instead of truncating them with parseInt.
+
+- [#70](https://github.com/prefactordev/typescript-sdk/pull/70) [`666f24c`](https://github.com/prefactordev/typescript-sdk/commit/666f24ca9347bc12e8957eb1bed56977659d6c4a) Thanks [@simonrussell](https://github.com/simonrussell)! - Tighten AgentSpan retrieve status to the same active | complete | failed | cancelled union used by AgentSpanSummary.
+
+- [#70](https://github.com/prefactordev/typescript-sdk/pull/70) [`666f24c`](https://github.com/prefactordev/typescript-sdk/commit/666f24ca9347bc12e8957eb1bed56977659d6c4a) Thanks [@simonrussell](https://github.com/simonrussell)! - Validate `agent_spans finish --status` against complete, failed, and cancelled so invalid values like `finished` fail at the CLI instead of reaching the API.
+
+- Updated dependencies [[`666f24c`](https://github.com/prefactordev/typescript-sdk/commit/666f24ca9347bc12e8957eb1bed56977659d6c4a), [`666f24c`](https://github.com/prefactordev/typescript-sdk/commit/666f24ca9347bc12e8957eb1bed56977659d6c4a), [`666f24c`](https://github.com/prefactordev/typescript-sdk/commit/666f24ca9347bc12e8957eb1bed56977659d6c4a), [`666f24c`](https://github.com/prefactordev/typescript-sdk/commit/666f24ca9347bc12e8957eb1bed56977659d6c4a), [`666f24c`](https://github.com/prefactordev/typescript-sdk/commit/666f24ca9347bc12e8957eb1bed56977659d6c4a), [`666f24c`](https://github.com/prefactordev/typescript-sdk/commit/666f24ca9347bc12e8957eb1bed56977659d6c4a), [`666f24c`](https://github.com/prefactordev/typescript-sdk/commit/666f24ca9347bc12e8957eb1bed56977659d6c4a)]:
+  - @prefactor/core@1.2.0
+
 ## 0.2.2
 
 ### Patch Changes

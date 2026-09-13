@@ -1,5 +1,13 @@
 # @prefactor/openclaw-prefactor-plugin
 
+## 2.0.1
+
+### Patch Changes
+
+- [#70](https://github.com/prefactordev/typescript-sdk/pull/70) [`666f24c`](https://github.com/prefactordev/typescript-sdk/commit/666f24ca9347bc12e8957eb1bed56977659d6c4a) Thanks [@simonrussell](https://github.com/simonrussell)! - Stop sending `result_template` on span type schemas. The OpenAPI contract only has `template`.
+
+- [#70](https://github.com/prefactordev/typescript-sdk/pull/70) [`666f24c`](https://github.com/prefactordev/typescript-sdk/commit/666f24ca9347bc12e8957eb1bed56977659d6c4a) Thanks [@simonrussell](https://github.com/simonrussell)! - Fold finish-time tool summary fields (output size, exit code, result count, success/error) into the single span `template` so finished tool spans still have outcome text after `result_template` was removed. The plugin package has no test framework configured; this change is untested beyond typecheck/lint.
+
 ## 2.0.0
 
 ### Patch Changes
