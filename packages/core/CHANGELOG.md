@@ -1,5 +1,27 @@
 # @prefactor/core
 
+## 1.2.0
+
+### Minor Changes
+
+- [#70](https://github.com/prefactordev/typescript-sdk/pull/70) [`666f24c`](https://github.com/prefactordev/typescript-sdk/commit/666f24ca9347bc12e8957eb1bed56977659d6c4a) Thanks [@simonrussell](https://github.com/simonrussell)! - Add agent instance terminate (`POST /api/v1/agent_instance/{id}/terminate`) to the core client and CLI.
+
+- [#70](https://github.com/prefactordev/typescript-sdk/pull/70) [`666f24c`](https://github.com/prefactordev/typescript-sdk/commit/666f24ca9347bc12e8957eb1bed56977659d6c4a) Thanks [@simonrussell](https://github.com/simonrussell)! - Add an ApiError union matching the OpenAPI error envelope so callers can type HTTP error bodies without changing retry or classification behavior.
+
+- [#70](https://github.com/prefactordev/typescript-sdk/pull/70) [`666f24c`](https://github.com/prefactordev/typescript-sdk/commit/666f24ca9347bc12e8957eb1bed56977659d6c4a) Thanks [@simonrussell](https://github.com/simonrussell)! - Require spec-mandated fields on core span and instance HTTP response types (`details.id`, control `terminate`/`reason`, instance `status`/`termination_reason`). This is a TypeScript break for mock or partial constructors of those types.
+
+  Bump is minor, not major: this is a compile-time type tightening with no runtime contract change, and it matches the other spec-alignment type changesets on this branch.
+
+- [#70](https://github.com/prefactordev/typescript-sdk/pull/70) [`666f24c`](https://github.com/prefactordev/typescript-sdk/commit/666f24ca9347bc12e8957eb1bed56977659d6c4a) Thanks [@simonrussell](https://github.com/simonrussell)! - Align agent instance register and span create client types with the OpenAPI contract. Register now types optional `id`, `update_current_version`, and instance-level `external_identifier`; span create requires a string `agent_instance_id` and accepts `cancelled` status.
+
+- [#70](https://github.com/prefactordev/typescript-sdk/pull/70) [`666f24c`](https://github.com/prefactordev/typescript-sdk/commit/666f24ca9347bc12e8957eb1bed56977659d6c4a) Thanks [@simonrussell](https://github.com/simonrussell)! - Stop sending `result_template` on span type schemas. The OpenAPI contract only has `template`.
+
+### Patch Changes
+
+- [#70](https://github.com/prefactordev/typescript-sdk/pull/70) [`666f24c`](https://github.com/prefactordev/typescript-sdk/commit/666f24ca9347bc12e8957eb1bed56977659d6c4a) Thanks [@simonrussell](https://github.com/simonrussell)! - Return a distinct already-finished result from agent span finish on 409 invalid_action instead of an empty object cast as AgentSpanResponse.
+
+- [#70](https://github.com/prefactordev/typescript-sdk/pull/70) [`666f24c`](https://github.com/prefactordev/typescript-sdk/commit/666f24ca9347bc12e8957eb1bed56977659d6c4a) Thanks [@simonrussell](https://github.com/simonrussell)! - Re-export AgentSpanControlSignal from the package entry so callers can name the control field on AgentSpanResponse.
+
 ## 1.1.0
 
 ### Minor Changes
