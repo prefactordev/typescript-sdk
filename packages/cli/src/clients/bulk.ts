@@ -1,29 +1,20 @@
-import type { ApiClient, ApiClientMethod } from '../api-client.js';
+import type { ApiClient } from '../api-client.js';
 
 export interface BulkItem {
-  method: ApiClientMethod;
-  path: string;
-  body?: Record<string, unknown>;
-}
-
-export interface BulkResponseItem {
-  status: number;
-  body: unknown;
-}
-
-export interface BulkDetails {
-  items: BulkResponseItem[];
+  _type: string;
+  idempotency_key: string;
+  [key: string]: unknown;
 }
 
 export interface BulkResponse {
-  details: BulkDetails;
+  outputs: Record<string, Record<string, unknown>>;
+  status: 'success';
 }
 
 export class BulkClient {
   constructor(private readonly client: ApiClient) {}
 
   execute(items: BulkItem[]): Promise<BulkResponse> {
-    // Bulk endpoint expects top-level `items`, not a `details` wrapper.
     return this.client.request('/bulk', {
       method: 'POST',
       body: { items },

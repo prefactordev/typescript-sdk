@@ -1,8 +1,15 @@
 import type { ApiClient } from '../api-client.js';
+import type { ListResponse } from './list-response.js';
 
 export interface Account {
   id: string;
   name: string;
+}
+
+export interface AccountSummary {
+  id: string;
+  name: string;
+  type: 'account';
 }
 
 export interface AccountDetails {
@@ -13,9 +20,7 @@ export interface AccountResponse {
   details: Account;
 }
 
-export interface AccountListResponse {
-  details: Account[];
-}
+export type AccountListResponse = ListResponse<AccountSummary>;
 
 export class AccountClient {
   constructor(private readonly client: ApiClient) {}

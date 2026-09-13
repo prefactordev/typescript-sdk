@@ -1,4 +1,5 @@
 import type { ApiClient } from '../api-client.js';
+import type { ListResponse } from './list-response.js';
 
 export interface AdminUserInvite {
   id: string;
@@ -7,13 +8,22 @@ export interface AdminUserInvite {
   status: string;
 }
 
+export interface AdminUserInviteSummary {
+  account_id: string;
+  email: string;
+  id: string;
+  inserted_at: string;
+  invite_url: string;
+  status: 'pending' | 'used' | 'revoked';
+  type: 'admin_user_invite';
+  updated_at: string;
+}
+
 export interface AdminUserInviteResponse {
   details: AdminUserInvite;
 }
 
-export interface AdminUserInviteListResponse {
-  details: AdminUserInvite[];
-}
+export type AdminUserInviteListResponse = ListResponse<AdminUserInviteSummary>;
 
 export class AdminUserInviteClient {
   constructor(private readonly client: ApiClient) {}

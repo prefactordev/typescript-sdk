@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+# Preflight checks for agent workflows: changeset status, generated versions, lint, typecheck, build.
+
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+# shellcheck source=lib/interrupt.sh
+source "$ROOT/bin/lib/interrupt.sh"
+# shellcheck source=lib/quiet-run.sh
+source "$ROOT/bin/lib/quiet-run.sh"
+cd "$ROOT"
+
+# Load mise environment so bun and other tools are available
+eval "$(mise activate bash)"
+
+# Merge stderr into stdout so IDE/agent terminals capture full output without appending 2>&1.
+exec 2>&1
+
+usage() {
+  cat <<'EOF'
+Usage: bin/preflight
+
+Run preflight checks: changeset status, generated version check, lint, typecheck, build.
+Mirrors the static checks in .github/workflows/ci.yml.
+EOF
+}
+
+case "${1:-}" in
+  "" )
+  ;;
+  help|--help|-h)
+    usage
+    exit 0
+  ;;
+  *)
+    usage >&2
+    exit 1
+  ;;
+esac
+
+quiet_run "changeset status" bun run changeset status --since=origin/main
+quiet_run "generated versions" bun run versions:check
+quiet_run "lint" bun run lint
+quiet_run "typecheck" bun run typecheck
+quiet_run "build" bun run build

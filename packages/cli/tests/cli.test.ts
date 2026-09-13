@@ -64,6 +64,11 @@ describe('CLI profiles command', () => {
       'agent_instances',
       'agent_deployments',
       'agent_spans',
+      'alerts',
+      'people',
+      'teams',
+      'risk_profiles',
+      'playground',
       'admin_users',
       'admin_user_invites',
       'api_tokens',
@@ -368,7 +373,7 @@ describe('CLI command validation', () => {
     let requestUrl = '';
     globalThis.fetch = (async (input) => {
       requestUrl = String(input);
-      return new Response(JSON.stringify({ details: [] }), {
+      return new Response(JSON.stringify({ summaries: [] }), {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
       });
@@ -389,7 +394,7 @@ describe('CLI command validation', () => {
     let requestUrl = '';
     globalThis.fetch = (async (input) => {
       requestUrl = String(input);
-      return new Response(JSON.stringify({ details: [] }), {
+      return new Response(JSON.stringify({ summaries: [] }), {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
       });
@@ -417,7 +422,7 @@ describe('CLI command validation', () => {
     let requestUrl = '';
     globalThis.fetch = (async (input) => {
       requestUrl = String(input);
-      return new Response(JSON.stringify({ details: [] }), {
+      return new Response(JSON.stringify({ summaries: [] }), {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
       });
@@ -818,6 +823,44 @@ describe('CLI command validation', () => {
     ]);
   });
 
+  test('agents update sends name and description without current_version_id', async () => {
+    const cwd = join(tempRoot, 'cwd');
+    mkdirSync(cwd, { recursive: true });
+    process.chdir(cwd);
+    writeFileSync(
+      join(cwd, 'prefactor.json'),
+      JSON.stringify({ default: { api_key: 'token', base_url: 'https://example.com' } })
+    );
+
+    let capturedBody: Record<string, unknown> = {};
+    globalThis.fetch = (async (_input, init) => {
+      capturedBody = JSON.parse(String(init?.body ?? '{}')) as Record<string, unknown>;
+      return new Response(JSON.stringify({ details: { id: 'agent_123' } }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }) as typeof fetch;
+
+    await createCli('1.0.0').parseAsync([
+      'node',
+      'prefactor',
+      'agents',
+      'update',
+      'agent_123',
+      '--name',
+      'Renamed',
+      '--description',
+      'Updated description',
+    ]);
+
+    expect(capturedBody).toEqual({
+      details: {
+        name: 'Renamed',
+        description: 'Updated description',
+      },
+    });
+  });
+
   test('supports @file JSON parsing for --payload', async () => {
     const cwd = join(tempRoot, 'cwd');
     mkdirSync(cwd, { recursive: true });
@@ -848,11 +891,17 @@ describe('CLI command validation', () => {
       'create',
       '--agent_instance_id',
       'agent_instance_1',
+      '--schema_name',
+      'llm',
+      '--status',
+      'complete',
       '--payload',
       `@${payloadPath}`,
     ]);
 
     expect(capturedBody).toContain('"payload":{"message":"hello","count":2}');
+    expect(capturedBody).toContain('"schema_name":"llm"');
+    expect(capturedBody).toContain('"status":"complete"');
   });
 
   test('includes option context when @file JSON path cannot be read', async () => {
@@ -874,6 +923,10 @@ describe('CLI command validation', () => {
         'create',
         '--agent_instance_id',
         'agent_instance_1',
+        '--schema_name',
+        'llm',
+        '--status',
+        'complete',
         '--payload',
         '@/definitely/missing/file.json',
       ])
@@ -922,6 +975,902 @@ describe('CLI command validation', () => {
 
     expect(capturedPath).toBe('/api/v1/agent_instance/agent_instance_1/agent_context');
     expect(log.mock.calls.flat().join('\n')).toContain('"agent_context"');
+  });
+
+  test('agent_instances register sends id and update_current_version when provided', async () => {
+    const cwd = join(tempRoot, 'cwd');
+    mkdirSync(cwd, { recursive: true });
+    process.chdir(cwd);
+    writeFileSync(
+      join(cwd, 'prefactor.json'),
+      JSON.stringify({ default: { api_key: 'token', base_url: 'https://example.com' } })
+    );
+
+    let capturedBody: Record<string, unknown> = {};
+    globalThis.fetch = (async (_input, init) => {
+      capturedBody = JSON.parse(String(init?.body ?? '{}')) as Record<string, unknown>;
+      return new Response(JSON.stringify({ details: { id: 'agent_instance_1' } }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }) as typeof fetch;
+
+    await createCli('1.0.0').parseAsync([
+      'node',
+      'prefactor',
+      'agent_instances',
+      'register',
+      '--agent_id',
+      'agent_1',
+      '--agent_version_external_identifier',
+      'v1',
+      '--agent_version_name',
+      'Agent',
+      '--agent_schema_version_external_identifier',
+      'schema_v1',
+      '--id',
+      '013xrzp12g3nqk8n5pj6qzmkvdr8mw1v',
+      '--update_current_version',
+    ]);
+
+    expect(capturedBody).toMatchObject({
+      agent_id: 'agent_1',
+      id: '013xrzp12g3nqk8n5pj6qzmkvdr8mw1v',
+      update_current_version: true,
+    });
+  });
+
+  test('agent_instances terminate sends reason and timestamp', async () => {
+    const cwd = join(tempRoot, 'cwd');
+    mkdirSync(cwd, { recursive: true });
+    process.chdir(cwd);
+    writeFileSync(
+      join(cwd, 'prefactor.json'),
+      JSON.stringify({ default: { api_key: 'token', base_url: 'https://example.com' } })
+    );
+
+    let capturedPath = '';
+    let capturedBody: Record<string, unknown> = {};
+    globalThis.fetch = (async (input, init) => {
+      capturedPath = new URL(String(input)).pathname;
+      capturedBody = JSON.parse(String(init?.body ?? '{}')) as Record<string, unknown>;
+      return new Response(JSON.stringify({ details: { id: 'agent_instance_1' } }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }) as typeof fetch;
+
+    await createCli('1.0.0').parseAsync([
+      'node',
+      'prefactor',
+      'agent_instances',
+      'terminate',
+      'agent_instance_1',
+      '--reason',
+      'operator requested stop',
+      '--timestamp',
+      '2026-02-24T12:10:00.000Z',
+    ]);
+
+    expect(capturedPath).toBe('/api/v1/agent_instance/agent_instance_1/terminate');
+    expect(capturedBody).toMatchObject({
+      reason: 'operator requested stop',
+      timestamp: '2026-02-24T12:10:00.000Z',
+    });
+  });
+
+  test('admin_users update sends details', async () => {
+    const cwd = join(tempRoot, 'cwd');
+    mkdirSync(cwd, { recursive: true });
+    process.chdir(cwd);
+    writeFileSync(
+      join(cwd, 'prefactor.json'),
+      JSON.stringify({ default: { api_key: 'token', base_url: 'https://example.com' } })
+    );
+
+    let capturedPath = '';
+    let capturedBody: Record<string, unknown> = {};
+    globalThis.fetch = (async (input, init) => {
+      capturedPath = new URL(String(input)).pathname;
+      capturedBody = JSON.parse(String(init?.body ?? '{}')) as Record<string, unknown>;
+      return new Response(JSON.stringify({ details: { id: 'admin_user_1' } }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }) as typeof fetch;
+
+    await createCli('1.0.0').parseAsync([
+      'node',
+      'prefactor',
+      'admin_users',
+      'update',
+      'admin_user_1',
+      '--name',
+      'Ada Lovelace',
+      '--job_title',
+      'Engineer',
+      '--profile_completed_at',
+      '2026-02-24T12:00:00.000Z',
+    ]);
+
+    expect(capturedPath).toBe('/api/v1/admin_user/admin_user_1');
+    expect(capturedBody).toEqual({
+      details: {
+        name: 'Ada Lovelace',
+        job_title: 'Engineer',
+        profile_completed_at: '2026-02-24T12:00:00.000Z',
+      },
+    });
+  });
+
+  test('admin_users update accepts null sentinel to clear nullable fields', async () => {
+    const cwd = join(tempRoot, 'cwd');
+    mkdirSync(cwd, { recursive: true });
+    process.chdir(cwd);
+    writeFileSync(
+      join(cwd, 'prefactor.json'),
+      JSON.stringify({ default: { api_key: 'token', base_url: 'https://example.com' } })
+    );
+
+    let capturedBody: Record<string, unknown> = {};
+    globalThis.fetch = (async (_input, init) => {
+      capturedBody = JSON.parse(String(init?.body ?? '{}')) as Record<string, unknown>;
+      return new Response(JSON.stringify({ details: { id: 'admin_user_1' } }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }) as typeof fetch;
+
+    await createCli('1.0.0').parseAsync([
+      'node',
+      'prefactor',
+      'admin_users',
+      'update',
+      'admin_user_1',
+      '--job_title',
+      'null',
+      '--profile_completed_at',
+      'null',
+    ]);
+
+    expect(capturedBody).toEqual({
+      details: {
+        job_title: null,
+        profile_completed_at: null,
+      },
+    });
+  });
+
+  test('agents show sends lookup query params', async () => {
+    const cwd = join(tempRoot, 'cwd');
+    mkdirSync(cwd, { recursive: true });
+    process.chdir(cwd);
+    writeFileSync(
+      join(cwd, 'prefactor.json'),
+      JSON.stringify({ default: { api_key: 'token', base_url: 'https://example.com' } })
+    );
+
+    let capturedUrl = '';
+    globalThis.fetch = (async (input) => {
+      capturedUrl = String(input);
+      return new Response(JSON.stringify({ details: { id: 'agent_1' }, status: 'success' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }) as typeof fetch;
+
+    await createCli('1.0.0').parseAsync([
+      'node',
+      'prefactor',
+      'agents',
+      'show',
+      '--agent_id',
+      'agent_1',
+      '--include_counts',
+      '--include_risk_rollup',
+    ]);
+
+    const url = new URL(capturedUrl);
+    expect(url.pathname).toBe('/api/v1/agent/show');
+    expect(url.searchParams.get('agent_id')).toBe('agent_1');
+    expect(url.searchParams.get('include_counts')).toBe('true');
+    expect(url.searchParams.get('include_risk_rollup')).toBe('true');
+  });
+
+  test('agent_instances show sends lookup query params', async () => {
+    const cwd = join(tempRoot, 'cwd');
+    mkdirSync(cwd, { recursive: true });
+    process.chdir(cwd);
+    writeFileSync(
+      join(cwd, 'prefactor.json'),
+      JSON.stringify({ default: { api_key: 'token', base_url: 'https://example.com' } })
+    );
+
+    let capturedUrl = '';
+    globalThis.fetch = (async (input) => {
+      capturedUrl = String(input);
+      return new Response(
+        JSON.stringify({ details: { id: 'agent_instance_1' }, status: 'success' }),
+        {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }
+      );
+    }) as typeof fetch;
+
+    await createCli('1.0.0').parseAsync([
+      'node',
+      'prefactor',
+      'agent_instances',
+      'show',
+      '--agent_instance_id',
+      'agent_instance_1',
+      '--include_counts',
+      '--include_costs',
+    ]);
+
+    const url = new URL(capturedUrl);
+    expect(url.pathname).toBe('/api/v1/agent_instance/show');
+    expect(url.searchParams.get('agent_instance_id')).toBe('agent_instance_1');
+    expect(url.searchParams.get('include_counts')).toBe('true');
+    expect(url.searchParams.get('include_costs')).toBe('true');
+  });
+
+  test('environments show sends lookup query params', async () => {
+    const cwd = join(tempRoot, 'cwd');
+    mkdirSync(cwd, { recursive: true });
+    process.chdir(cwd);
+    writeFileSync(
+      join(cwd, 'prefactor.json'),
+      JSON.stringify({ default: { api_key: 'token', base_url: 'https://example.com' } })
+    );
+
+    let capturedUrl = '';
+    globalThis.fetch = (async (input) => {
+      capturedUrl = String(input);
+      return new Response(JSON.stringify({ details: { id: 'env_1' }, status: 'success' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }) as typeof fetch;
+
+    await createCli('1.0.0').parseAsync([
+      'node',
+      'prefactor',
+      'environments',
+      'show',
+      '--environment_id',
+      'env_1',
+    ]);
+
+    const url = new URL(capturedUrl);
+    expect(url.pathname).toBe('/api/v1/environment/show');
+    expect(url.searchParams.get('environment_id')).toBe('env_1');
+  });
+
+  test('agent_spans retrieve sends GET with redacted query', async () => {
+    const cwd = join(tempRoot, 'cwd');
+    mkdirSync(cwd, { recursive: true });
+    process.chdir(cwd);
+    writeFileSync(
+      join(cwd, 'prefactor.json'),
+      JSON.stringify({ default: { api_key: 'token', base_url: 'https://example.com' } })
+    );
+
+    let capturedUrl = '';
+    globalThis.fetch = (async (input) => {
+      capturedUrl = String(input);
+      return new Response(JSON.stringify({ details: { id: 'span_1' }, status: 'success' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }) as typeof fetch;
+
+    await createCli('1.0.0').parseAsync([
+      'node',
+      'prefactor',
+      'agent_spans',
+      'retrieve',
+      'span_1',
+      '--redacted',
+    ]);
+
+    const url = new URL(capturedUrl);
+    expect(url.pathname).toBe('/api/v1/agent_spans/span_1');
+    expect(url.searchParams.get('redacted')).toBe('true');
+  });
+
+  test('agent_spans discard_sensitive posts empty body', async () => {
+    const cwd = join(tempRoot, 'cwd');
+    mkdirSync(cwd, { recursive: true });
+    process.chdir(cwd);
+    writeFileSync(
+      join(cwd, 'prefactor.json'),
+      JSON.stringify({ default: { api_key: 'token', base_url: 'https://example.com' } })
+    );
+
+    let capturedPath = '';
+    let capturedBody = '';
+    globalThis.fetch = (async (input, init) => {
+      capturedPath = new URL(String(input)).pathname;
+      capturedBody = String(init?.body ?? '');
+      return new Response(JSON.stringify({ details: { id: 'span_1' }, status: 'success' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }) as typeof fetch;
+
+    await createCli('1.0.0').parseAsync([
+      'node',
+      'prefactor',
+      'agent_spans',
+      'discard_sensitive',
+      'span_1',
+    ]);
+
+    expect(capturedPath).toBe('/api/v1/agent_spans/span_1/discard_sensitive');
+    expect(capturedBody).toBe('{}');
+  });
+
+  test('agent_spans finish --status only allows complete, failed, or cancelled', () => {
+    const cli = createCli('1.0.0');
+    const agentSpans = cli.commands.find((command) => command.name() === 'agent_spans');
+    const finish = agentSpans?.commands.find((command) => command.name() === 'finish');
+    const status = finish?.options.find((option) => option.long === '--status');
+
+    expect(status?.argChoices).toEqual(['complete', 'failed', 'cancelled']);
+  });
+
+  test('alerts list sends nested active_during and pagination query keys', async () => {
+    const cwd = join(tempRoot, 'cwd');
+    mkdirSync(cwd, { recursive: true });
+    process.chdir(cwd);
+    writeFileSync(
+      join(cwd, 'prefactor.json'),
+      JSON.stringify({ default: { api_key: 'token', base_url: 'https://example.com' } })
+    );
+
+    let capturedUrl = '';
+    globalThis.fetch = (async (input) => {
+      capturedUrl = String(input);
+      return new Response(JSON.stringify({ summaries: [] }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }) as typeof fetch;
+
+    await createCli('1.0.0').parseAsync([
+      'node',
+      'prefactor',
+      'alerts',
+      'list',
+      '--agent_instance_id',
+      'agent_instance_1',
+      '--status',
+      'raised',
+      '--severity',
+      'warning',
+      '--active_during_start_at',
+      '2024-01-01T00:00:00Z',
+      '--active_during_finish_at',
+      '2024-01-02T00:00:00Z',
+      '--pagination_offset',
+      '0',
+      '--pagination_page_size',
+      '25',
+    ]);
+
+    const url = new URL(capturedUrl);
+    expect(url.pathname).toBe('/api/v1/alerts');
+    expect(url.searchParams.get('agent_instance_id')).toBe('agent_instance_1');
+    expect(url.searchParams.get('status')).toBe('raised');
+    expect(url.searchParams.get('severity')).toBe('warning');
+    expect(url.searchParams.get('active_during[start_at]')).toBe('2024-01-01T00:00:00Z');
+    expect(url.searchParams.get('active_during[finish_at]')).toBe('2024-01-02T00:00:00Z');
+    expect(url.searchParams.get('pagination[offset]')).toBe('0');
+    expect(url.searchParams.get('pagination[page_size]')).toBe('25');
+  });
+
+  test('rejects pagination_offset values with trailing characters or a decimal portion', async () => {
+    const cli = createCli('1.0.0');
+
+    for (const command of ['alerts', 'people', 'risk_profiles', 'teams'] as const) {
+      await expect(
+        cli.parseAsync(['node', 'prefactor', command, 'list', '--pagination_offset', '10abc'])
+      ).rejects.toThrow('--pagination_offset must be a non-negative integer.');
+
+      await expect(
+        cli.parseAsync(['node', 'prefactor', command, 'list', '--pagination_offset', '1.5'])
+      ).rejects.toThrow('--pagination_offset must be a non-negative integer.');
+    }
+  });
+
+  test('alerts raise posts top-level fields without a details wrapper', async () => {
+    const cwd = join(tempRoot, 'cwd');
+    mkdirSync(cwd, { recursive: true });
+    process.chdir(cwd);
+    writeFileSync(
+      join(cwd, 'prefactor.json'),
+      JSON.stringify({ default: { api_key: 'token', base_url: 'https://example.com' } })
+    );
+
+    let capturedPath = '';
+    let capturedBody = '';
+    globalThis.fetch = (async (input, init) => {
+      capturedPath = new URL(String(input)).pathname;
+      capturedBody = String(init?.body ?? '');
+      return new Response(JSON.stringify({ details: { id: 'alert_1' }, status: 'success' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }) as typeof fetch;
+
+    await createCli('1.0.0').parseAsync([
+      'node',
+      'prefactor',
+      'alerts',
+      'raise',
+      '--agent_instance_id',
+      'agent_instance_1',
+      '--name',
+      'high_error_rate',
+      '--severity',
+      'warning',
+      '--payload',
+      '{"count":12}',
+      '--payload_sensitive_encoding',
+    ]);
+
+    expect(capturedPath).toBe('/api/v1/alerts/raise');
+    expect(capturedBody).toBe(
+      '{"agent_instance_id":"agent_instance_1","name":"high_error_rate","severity":"warning","payload":{"count":12},"payload_sensitive_encoding":true}'
+    );
+  });
+
+  test('alerts clear posts required top-level fields without a details wrapper', async () => {
+    const cwd = join(tempRoot, 'cwd');
+    mkdirSync(cwd, { recursive: true });
+    process.chdir(cwd);
+    writeFileSync(
+      join(cwd, 'prefactor.json'),
+      JSON.stringify({ default: { api_key: 'token', base_url: 'https://example.com' } })
+    );
+
+    let capturedPath = '';
+    let capturedBody = '';
+    globalThis.fetch = (async (input, init) => {
+      capturedPath = new URL(String(input)).pathname;
+      capturedBody = String(init?.body ?? '');
+      return new Response(JSON.stringify({ details: { id: 'alert_1' }, status: 'success' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }) as typeof fetch;
+
+    await createCli('1.0.0').parseAsync([
+      'node',
+      'prefactor',
+      'alerts',
+      'clear',
+      '--agent_instance_id',
+      'agent_instance_1',
+      '--name',
+      'high_error_rate',
+    ]);
+
+    expect(capturedPath).toBe('/api/v1/alerts/clear');
+    expect(capturedBody).toBe('{"agent_instance_id":"agent_instance_1","name":"high_error_rate"}');
+  });
+
+  test('people list sends team_id and nested pagination query keys', async () => {
+    const cwd = join(tempRoot, 'cwd');
+    mkdirSync(cwd, { recursive: true });
+    process.chdir(cwd);
+    writeFileSync(
+      join(cwd, 'prefactor.json'),
+      JSON.stringify({ default: { api_key: 'token', base_url: 'https://example.com' } })
+    );
+
+    let capturedUrl = '';
+    globalThis.fetch = (async (input) => {
+      capturedUrl = String(input);
+      return new Response(JSON.stringify({ summaries: [] }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }) as typeof fetch;
+
+    await createCli('1.0.0').parseAsync([
+      'node',
+      'prefactor',
+      'people',
+      'list',
+      '--team_id',
+      'team_1',
+      '--sorting',
+      'name',
+      '--pagination_offset',
+      '0',
+      '--pagination_page_size',
+      '25',
+    ]);
+
+    const url = new URL(capturedUrl);
+    expect(url.pathname).toBe('/api/v1/person');
+    expect(url.searchParams.get('team_id')).toBe('team_1');
+    expect(url.searchParams.get('sorting')).toBe('name');
+    expect(url.searchParams.get('pagination[offset]')).toBe('0');
+    expect(url.searchParams.get('pagination[page_size]')).toBe('25');
+  });
+
+  test('people create wraps details without an idempotency key', async () => {
+    const cwd = join(tempRoot, 'cwd');
+    mkdirSync(cwd, { recursive: true });
+    process.chdir(cwd);
+    writeFileSync(
+      join(cwd, 'prefactor.json'),
+      JSON.stringify({ default: { api_key: 'token', base_url: 'https://example.com' } })
+    );
+
+    let capturedPath = '';
+    let capturedBody = '';
+    globalThis.fetch = (async (input, init) => {
+      capturedPath = new URL(String(input)).pathname;
+      capturedBody = String(init?.body ?? '');
+      return new Response(JSON.stringify({ details: { id: 'person_1' }, status: 'success' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }) as typeof fetch;
+
+    await createCli('1.0.0').parseAsync([
+      'node',
+      'prefactor',
+      'people',
+      'create',
+      '--email',
+      'jane@example.com',
+      '--name',
+      'Jane Doe',
+      '--team_ids',
+      '["team_1"]',
+      '--title',
+      'Engineer',
+    ]);
+
+    expect(capturedPath).toBe('/api/v1/person');
+    expect(capturedBody).toBe(
+      '{"details":{"email":"jane@example.com","name":"Jane Doe","team_ids":["team_1"],"title":"Engineer"}}'
+    );
+  });
+
+  test('people update can send an empty team_ids array', async () => {
+    const cwd = join(tempRoot, 'cwd');
+    mkdirSync(cwd, { recursive: true });
+    process.chdir(cwd);
+    writeFileSync(
+      join(cwd, 'prefactor.json'),
+      JSON.stringify({ default: { api_key: 'token', base_url: 'https://example.com' } })
+    );
+
+    let capturedPath = '';
+    let capturedBody = '';
+    globalThis.fetch = (async (input, init) => {
+      capturedPath = new URL(String(input)).pathname;
+      capturedBody = String(init?.body ?? '');
+      return new Response(JSON.stringify({ details: { id: 'person_1' }, status: 'success' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }) as typeof fetch;
+
+    await createCli('1.0.0').parseAsync([
+      'node',
+      'prefactor',
+      'people',
+      'update',
+      'person_1',
+      '--team_ids',
+      '[]',
+    ]);
+
+    expect(capturedPath).toBe('/api/v1/person/person_1');
+    expect(capturedBody).toBe('{"details":{"team_ids":[]}}');
+  });
+
+  test('people delete sends DELETE and prints the details envelope', async () => {
+    const cwd = join(tempRoot, 'cwd');
+    mkdirSync(cwd, { recursive: true });
+    process.chdir(cwd);
+    writeFileSync(
+      join(cwd, 'prefactor.json'),
+      JSON.stringify({ default: { api_key: 'token', base_url: 'https://example.com' } })
+    );
+
+    let capturedPath = '';
+    let capturedMethod = '';
+    globalThis.fetch = (async (input, init) => {
+      capturedPath = new URL(String(input)).pathname;
+      capturedMethod = String(init?.method ?? '');
+      return new Response(JSON.stringify({ details: { id: 'person_1' }, status: 'success' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }) as typeof fetch;
+
+    await createCli('1.0.0').parseAsync(['node', 'prefactor', 'people', 'delete', 'person_1']);
+
+    expect(capturedPath).toBe('/api/v1/person/person_1');
+    expect(capturedMethod).toBe('DELETE');
+  });
+
+  test('teams list sends nested pagination query keys', async () => {
+    const cwd = join(tempRoot, 'cwd');
+    mkdirSync(cwd, { recursive: true });
+    process.chdir(cwd);
+    writeFileSync(
+      join(cwd, 'prefactor.json'),
+      JSON.stringify({ default: { api_key: 'token', base_url: 'https://example.com' } })
+    );
+
+    let capturedUrl = '';
+    globalThis.fetch = (async (input) => {
+      capturedUrl = String(input);
+      return new Response(JSON.stringify({ summaries: [] }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }) as typeof fetch;
+
+    await createCli('1.0.0').parseAsync([
+      'node',
+      'prefactor',
+      'teams',
+      'list',
+      '--sorting',
+      'name',
+      '--pagination_offset',
+      '0',
+      '--pagination_page_size',
+      '25',
+    ]);
+
+    const url = new URL(capturedUrl);
+    expect(url.pathname).toBe('/api/v1/team');
+    expect(url.searchParams.get('sorting')).toBe('name');
+    expect(url.searchParams.get('pagination[offset]')).toBe('0');
+    expect(url.searchParams.get('pagination[page_size]')).toBe('25');
+  });
+
+  test('teams create wraps details without an idempotency key', async () => {
+    const cwd = join(tempRoot, 'cwd');
+    mkdirSync(cwd, { recursive: true });
+    process.chdir(cwd);
+    writeFileSync(
+      join(cwd, 'prefactor.json'),
+      JSON.stringify({ default: { api_key: 'token', base_url: 'https://example.com' } })
+    );
+
+    let capturedPath = '';
+    let capturedBody = '';
+    globalThis.fetch = (async (input, init) => {
+      capturedPath = new URL(String(input)).pathname;
+      capturedBody = String(init?.body ?? '');
+      return new Response(JSON.stringify({ details: { id: 'team_1' }, status: 'success' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }) as typeof fetch;
+
+    await createCli('1.0.0').parseAsync([
+      'node',
+      'prefactor',
+      'teams',
+      'create',
+      '--name',
+      'Sales',
+    ]);
+
+    expect(capturedPath).toBe('/api/v1/team');
+    expect(capturedBody).toBe('{"details":{"name":"Sales"}}');
+  });
+
+  test('teams delete sends DELETE and prints the details envelope', async () => {
+    const cwd = join(tempRoot, 'cwd');
+    mkdirSync(cwd, { recursive: true });
+    process.chdir(cwd);
+    writeFileSync(
+      join(cwd, 'prefactor.json'),
+      JSON.stringify({ default: { api_key: 'token', base_url: 'https://example.com' } })
+    );
+
+    let capturedPath = '';
+    let capturedMethod = '';
+    globalThis.fetch = (async (input, init) => {
+      capturedPath = new URL(String(input)).pathname;
+      capturedMethod = String(init?.method ?? '');
+      return new Response(JSON.stringify({ details: { id: 'team_1' }, status: 'success' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }) as typeof fetch;
+
+    await createCli('1.0.0').parseAsync(['node', 'prefactor', 'teams', 'delete', 'team_1']);
+
+    expect(capturedPath).toBe('/api/v1/team/team_1');
+    expect(capturedMethod).toBe('DELETE');
+  });
+
+  test('risk_profiles template sends template_name without a details wrapper', async () => {
+    const cwd = join(tempRoot, 'cwd');
+    mkdirSync(cwd, { recursive: true });
+    process.chdir(cwd);
+    writeFileSync(
+      join(cwd, 'prefactor.json'),
+      JSON.stringify({ default: { api_key: 'token', base_url: 'https://example.com' } })
+    );
+
+    let capturedUrl = '';
+    globalThis.fetch = (async (input) => {
+      capturedUrl = String(input);
+      return new Response(JSON.stringify({ ruleset: {}, status: 'success' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }) as typeof fetch;
+
+    await createCli('1.0.0').parseAsync([
+      'node',
+      'prefactor',
+      'risk_profiles',
+      'template',
+      '--template_name',
+      'Standard',
+    ]);
+
+    const url = new URL(capturedUrl);
+    expect(url.pathname).toBe('/api/v1/risk_profile/template');
+    expect(url.searchParams.get('template_name')).toBe('Standard');
+  });
+
+  test('risk_profiles create wraps name and ruleset in details', async () => {
+    const cwd = join(tempRoot, 'cwd');
+    mkdirSync(cwd, { recursive: true });
+    process.chdir(cwd);
+    writeFileSync(
+      join(cwd, 'prefactor.json'),
+      JSON.stringify({ default: { api_key: 'token', base_url: 'https://example.com' } })
+    );
+
+    let capturedPath = '';
+    let capturedBody = '';
+    globalThis.fetch = (async (input, init) => {
+      capturedPath = new URL(String(input)).pathname;
+      capturedBody = String(init?.body ?? '');
+      return new Response(JSON.stringify({ details: { id: 'rp_1' }, status: 'success' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }) as typeof fetch;
+
+    await createCli('1.0.0').parseAsync([
+      'node',
+      'prefactor',
+      'risk_profiles',
+      'create',
+      '--name',
+      'Standard',
+      '--ruleset',
+      '{"thresholds":{"critical":80,"high":50,"medium":20},"action_multipliers":{},"category_weights":{}}',
+    ]);
+
+    expect(capturedPath).toBe('/api/v1/risk_profile');
+    expect(capturedBody).toBe(
+      '{"details":{"name":"Standard","ruleset":{"thresholds":{"critical":80,"high":50,"medium":20},"action_multipliers":{},"category_weights":{}}}}'
+    );
+  });
+
+  test('playground create_openclaw_agent posts an empty body', async () => {
+    const cwd = join(tempRoot, 'cwd');
+    mkdirSync(cwd, { recursive: true });
+    process.chdir(cwd);
+    writeFileSync(
+      join(cwd, 'prefactor.json'),
+      JSON.stringify({ default: { api_key: 'token', base_url: 'https://example.com' } })
+    );
+
+    let capturedPath = '';
+    let capturedBody = '';
+    globalThis.fetch = (async (input, init) => {
+      capturedPath = new URL(String(input)).pathname;
+      capturedBody = String(init?.body ?? '');
+      return new Response(JSON.stringify({ status: 'success' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }) as typeof fetch;
+
+    await createCli('1.0.0').parseAsync([
+      'node',
+      'prefactor',
+      'playground',
+      'create_openclaw_agent',
+    ]);
+
+    expect(capturedPath).toBe('/api/v1/playground/create_openclaw_agent');
+    expect(capturedBody).toBe('{}');
+  });
+
+  test('playground record_first_account_spans posts required instance and scenario', async () => {
+    const cwd = join(tempRoot, 'cwd');
+    mkdirSync(cwd, { recursive: true });
+    process.chdir(cwd);
+    writeFileSync(
+      join(cwd, 'prefactor.json'),
+      JSON.stringify({ default: { api_key: 'token', base_url: 'https://example.com' } })
+    );
+
+    let capturedPath = '';
+    let capturedBody = '';
+    globalThis.fetch = (async (input, init) => {
+      capturedPath = new URL(String(input)).pathname;
+      capturedBody = String(init?.body ?? '');
+      return new Response(JSON.stringify({ ids: ['span_1'], status: 'success' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }) as typeof fetch;
+
+    await createCli('1.0.0').parseAsync([
+      'node',
+      'prefactor',
+      'playground',
+      'record_first_account_spans',
+      '--agent_instance_id',
+      'agent_instance_1',
+      '--scenario',
+      'good',
+    ]);
+
+    expect(capturedPath).toBe('/api/v1/playground/record_first_account_spans');
+    expect(capturedBody).toBe('{"agent_instance_id":"agent_instance_1","scenario":"good"}');
+  });
+
+  test('playground register_quality_review_agent_instance posts required ids and purpose', async () => {
+    const cwd = join(tempRoot, 'cwd');
+    mkdirSync(cwd, { recursive: true });
+    process.chdir(cwd);
+    writeFileSync(
+      join(cwd, 'prefactor.json'),
+      JSON.stringify({ default: { api_key: 'token', base_url: 'https://example.com' } })
+    );
+
+    let capturedPath = '';
+    let capturedBody = '';
+    globalThis.fetch = (async (input, init) => {
+      capturedPath = new URL(String(input)).pathname;
+      capturedBody = String(init?.body ?? '');
+      return new Response(JSON.stringify({ status: 'success' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }) as typeof fetch;
+
+    await createCli('1.0.0').parseAsync([
+      'node',
+      'prefactor',
+      'playground',
+      'register_quality_review_agent_instance',
+      '--agent_id',
+      'agent_1',
+      '--environment_id',
+      'env_1',
+      '--purpose',
+      'eval',
+    ]);
+
+    expect(capturedPath).toBe('/api/v1/playground/register_quality_review_agent_instance');
+    expect(capturedBody).toBe('{"agent_id":"agent_1","environment_id":"env_1","purpose":"eval"}');
   });
 
   test('agent_instances agent_context writes context body to output file', async () => {
@@ -1034,5 +1983,125 @@ describe('CLI command validation', () => {
     await expect(
       cli.parseAsync(['node', 'prefactor', 'bulk', 'execute', '--items', '{}'])
     ).rejects.toThrow('--items must be a JSON array.');
+  });
+
+  test('requires bulk execute --items to contain at least one item', async () => {
+    const cwd = join(tempRoot, 'cwd');
+    mkdirSync(cwd, { recursive: true });
+    process.chdir(cwd);
+    writeFileSync(
+      join(cwd, 'prefactor.json'),
+      JSON.stringify({ default: { api_key: 'token', base_url: 'https://example.com' } })
+    );
+
+    const cli = createCli('1.0.0');
+
+    await expect(
+      cli.parseAsync(['node', 'prefactor', 'bulk', 'execute', '--items', '[]'])
+    ).rejects.toThrow('--items must contain at least one item.');
+  });
+
+  test('requires bulk items to include _type and an 8–128 character idempotency_key', async () => {
+    const cwd = join(tempRoot, 'cwd');
+    mkdirSync(cwd, { recursive: true });
+    process.chdir(cwd);
+    writeFileSync(
+      join(cwd, 'prefactor.json'),
+      JSON.stringify({ default: { api_key: 'token', base_url: 'https://example.com' } })
+    );
+
+    const cli = createCli('1.0.0');
+
+    await expect(
+      cli.parseAsync([
+        'node',
+        'prefactor',
+        'bulk',
+        'execute',
+        '--items',
+        '[{"idempotency_key":"list-agents-001"}]',
+      ])
+    ).rejects.toThrow('--items[0]._type must be a string.');
+
+    await expect(
+      cli.parseAsync([
+        'node',
+        'prefactor',
+        'bulk',
+        'execute',
+        '--items',
+        '[{"_type":"agents/list","idempotency_key":"short"}]',
+      ])
+    ).rejects.toThrow('--items[0].idempotency_key must be 8–128 characters.');
+  });
+
+  test('rejects bulk execute items that share an idempotency_key', async () => {
+    const cwd = join(tempRoot, 'cwd');
+    mkdirSync(cwd, { recursive: true });
+    process.chdir(cwd);
+    writeFileSync(
+      join(cwd, 'prefactor.json'),
+      JSON.stringify({ default: { api_key: 'token', base_url: 'https://example.com' } })
+    );
+
+    const cli = createCli('1.0.0');
+
+    await expect(
+      cli.parseAsync([
+        'node',
+        'prefactor',
+        'bulk',
+        'execute',
+        '--items',
+        JSON.stringify([
+          { _type: 'agents/list', idempotency_key: 'list-agents-001' },
+          { _type: 'agents/list', idempotency_key: 'list-agents-001' },
+        ]),
+      ])
+    ).rejects.toThrow('--items[1].idempotency_key must be unique within the request.');
+  });
+
+  test('bulk execute sends _type and idempotency_key items', async () => {
+    const cwd = join(tempRoot, 'cwd');
+    mkdirSync(cwd, { recursive: true });
+    process.chdir(cwd);
+    writeFileSync(
+      join(cwd, 'prefactor.json'),
+      JSON.stringify({ default: { api_key: 'token', base_url: 'https://example.com' } })
+    );
+
+    let capturedBody: Record<string, unknown> = {};
+    globalThis.fetch = (async (_input, init) => {
+      capturedBody = JSON.parse(String(init?.body ?? '{}')) as Record<string, unknown>;
+      return new Response(JSON.stringify({ status: 'success', outputs: {} }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }) as typeof fetch;
+
+    await createCli('1.0.0').parseAsync([
+      'node',
+      'prefactor',
+      'bulk',
+      'execute',
+      '--items',
+      JSON.stringify([
+        {
+          _type: 'agents/create',
+          idempotency_key: 'create-agent-001',
+          details: { name: 'Support bot' },
+        },
+      ]),
+    ]);
+
+    expect(capturedBody).toEqual({
+      items: [
+        {
+          _type: 'agents/create',
+          idempotency_key: 'create-agent-001',
+          details: { name: 'Support bot' },
+        },
+      ],
+    });
   });
 });

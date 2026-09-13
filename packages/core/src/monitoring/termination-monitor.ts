@@ -4,7 +4,7 @@ import { getLogger } from '../utils/logging.js';
 export type TerminationCallback = (reason: string | null) => void;
 
 type AgentInstanceDetail = {
-  details?: { status?: string; termination_reason?: string | null };
+  details: { status: string; termination_reason: string | null };
 };
 
 const logger = getLogger('termination-monitor');

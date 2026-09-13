@@ -293,7 +293,7 @@ Before shipping schema or template changes:
 
 ## Common Pitfalls
 
-- `result_template` is not rendered by the backend today. Put both start and finish fields in the single `template`.
+- There is no `result_template`. Put both start and finish fields in the single `template`.
 - Invalid Liquid fails silently: the span just gets no summary. Recheck syntax if a summary is missing.
 - Active (unfinished) spans will not have finish fields yet, so the summary shows only what is available so far.
 - Do not patch a missing field with literal template text. If the template needs a value, send that value from instrumentation.

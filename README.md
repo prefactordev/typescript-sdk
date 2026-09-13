@@ -472,6 +472,11 @@ mise run check
 mise run clean
 ```
 
+Day-to-day verification commands:
+
+- `bin/preflight` runs the static checks: changeset status, generated version check, lint, typecheck, and build.
+- `bin/qc` runs preflight and then the test suite (`bun test`); pass test paths or bun test options to narrow the run.
+
 ### Per-Package Commands
 
 ```bash

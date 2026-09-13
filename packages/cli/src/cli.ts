@@ -8,12 +8,17 @@ import { registerAgentSchemaVersionsCommands } from './commands/agent-schema-ver
 import { registerAgentSpansCommands } from './commands/agent-spans.js';
 import { registerAgentVersionsCommands } from './commands/agent-versions.js';
 import { registerAgentsCommands } from './commands/agents.js';
+import { registerAlertsCommands } from './commands/alerts.js';
 import { registerApiTokensCommands } from './commands/api-tokens.js';
 import { registerEnvironmentsCommands } from './commands/environments.js';
 import { registerLifecycleCommands } from './commands/lifecycle.js';
 import { registerLoginCommand } from './commands/login.js';
+import { registerPeopleCommands } from './commands/people.js';
+import { registerPlaygroundCommands } from './commands/playground.js';
 import { registerProfilesCommands } from './commands/profiles.js';
+import { registerRiskProfilesCommands } from './commands/risk-profiles.js';
 import { registerSetupCommand } from './commands/setup.js';
+import { registerTeamsCommands } from './commands/teams.js';
 import { registerUtilitiesCommands } from './commands/utilities.js';
 
 const CLI_VERSION = typeof packageJson.version === 'string' ? packageJson.version : '0.0.0';
@@ -50,7 +55,7 @@ export function createCli(version: string): Command {
       '  prefactor accounts list',
       '  prefactor agents list',
       '  prefactor agent_deployments create --agent_id <agent_id> --environment_id <environment_id>',
-      '  prefactor agent_spans create --agent_instance_id <id> --payload \'{"step":"tool"}\'',
+      '  prefactor agent_spans create --agent_instance_id <id> --schema_name <schema> --status active --payload \'{"step":"tool"}\'',
     ].join('\n')
   );
 
@@ -64,6 +69,11 @@ export function createCli(version: string): Command {
   registerAgentInstancesCommands(program);
   registerAgentDeploymentsCommands(program);
   registerAgentSpansCommands(program);
+  registerAlertsCommands(program);
+  registerPeopleCommands(program);
+  registerTeamsCommands(program);
+  registerRiskProfilesCommands(program);
+  registerPlaygroundCommands(program);
   registerAdminCommands(program);
   registerApiTokensCommands(program);
   registerSetupCommand(program);

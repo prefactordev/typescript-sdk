@@ -1,12 +1,6 @@
-import type { Command } from 'commander';
+import { type Command, Option } from 'commander';
 import { AgentSpanClient } from '../clients/agent-span.js';
-import {
-  executeAuthed,
-  parseJsonOption,
-  parsePositiveInt,
-  printJson,
-  validateOptionalPfid,
-} from './shared.js';
+import { executeAuthed, parseJsonOption, printJson, validateOptionalPfid } from './shared.js';
 
 export function registerAgentSpansCommands(program: Command): void {
   const agentSpans = program.command('agent_spans').description('Manage agent spans');
@@ -39,12 +33,29 @@ export function registerAgentSpansCommands(program: Command): void {
     });
 
   agentSpans
+    .command('retrieve <id>')
+    .description('Retrieve agent span')
+    .option('--redacted', 'Return redacted payloads')
+    .action(function (this: Command, id: string, options: { redacted?: boolean }) {
+      return executeAuthed(this, async (apiClient) => {
+        const result = await new AgentSpanClient(apiClient).retrieve(id, {
+          ...(options.redacted ? { redacted: true } : {}),
+        });
+        printJson(result);
+      });
+    });
+
+  agentSpans
     .command('create')
     .description('Create agent span')
     .requiredOption('--agent_instance_id <agent_instance_id>', 'Agent instance ID')
     .requiredOption('--payload <payload>', 'JSON object or @file')
-    .option('--schema_name <schema_name>', 'Schema name')
-    .option('--status <status>', 'Status')
+    .requiredOption('--schema_name <schema_name>', 'Schema name')
+    .addOption(
+      new Option('--status <status>', 'Status')
+        .choices(['active', 'complete', 'failed', 'cancelled'])
+        .makeOptionMandatory()
+    )
     .option('--id <id>', 'Span ID')
     .option('--parent_span_id <parent_span_id>', 'Parent span ID')
     .option('--started_at <started_at>', 'Started at')
@@ -55,8 +66,8 @@ export function registerAgentSpansCommands(program: Command): void {
       options: {
         agent_instance_id: string;
         payload: string;
-        schema_name?: string;
-        status?: string;
+        schema_name: string;
+        status: 'active' | 'complete' | 'failed' | 'cancelled';
         id?: string;
         parent_span_id?: string;
         started_at?: string;
@@ -70,13 +81,13 @@ export function registerAgentSpansCommands(program: Command): void {
 
         const result = await new AgentSpanClient(apiClient).create({
           agent_instance_id: options.agent_instance_id,
+          schema_name: options.schema_name,
+          status: options.status,
           payload: await parseJsonOption<Record<string, unknown>>(
             options.payload,
             '--payload',
             'object'
           ),
-          ...(options.schema_name ? { schema_name: options.schema_name } : {}),
-          ...(options.status ? { status: options.status } : {}),
           ...(options.id ? { id: options.id } : {}),
           ...(options.parent_span_id ? { parent_span_id: options.parent_span_id } : {}),
           ...(options.started_at ? { started_at: options.started_at } : {}),
@@ -99,12 +110,18 @@ export function registerAgentSpansCommands(program: Command): void {
     .command('finish <id>')
     .description('Finish agent span')
     .option('--timestamp <timestamp>', 'Timestamp')
-    .option('--status <status>', 'Status')
+    .addOption(
+      new Option('--status <status>', 'Status').choices(['complete', 'failed', 'cancelled'])
+    )
     .option('--result_payload <result_payload>', 'JSON object or @file')
     .action(function (
       this: Command,
       id: string,
-      options: { timestamp?: string; status?: string; result_payload?: string }
+      options: {
+        timestamp?: string;
+        status?: 'complete' | 'failed' | 'cancelled';
+        result_payload?: string;
+      }
     ) {
       return executeAuthed(this, async (apiClient) => {
         const result = await new AgentSpanClient(apiClient).finish(id, {
@@ -125,26 +142,11 @@ export function registerAgentSpansCommands(program: Command): void {
     });
 
   agentSpans
-    .command('create_test_spans')
-    .description('Create test spans')
-    .requiredOption('--agent_instance_id <agent_instance_id>', 'Agent instance ID')
-    .option('--count <count>', 'Count', parsePositiveInt)
-    .option('--parent_span_id <parent_span_id>', 'Parent span ID')
-    .action(function (
-      this: Command,
-      options: { agent_instance_id: string; count?: number; parent_span_id?: string }
-    ) {
+    .command('discard_sensitive <id>')
+    .description('Discard sensitive payload data from an agent span')
+    .action(function (this: Command, id: string) {
       return executeAuthed(this, async (apiClient) => {
-        validateOptionalPfid(options.parent_span_id, '--parent_span_id');
-
-        const result = await apiClient.request('/agent_spans/create_test_spans', {
-          method: 'POST',
-          body: {
-            agent_instance_id: options.agent_instance_id,
-            ...(options.count ? { count: options.count } : {}),
-            ...(options.parent_span_id ? { parent_span_id: options.parent_span_id } : {}),
-          },
-        });
+        const result = await new AgentSpanClient(apiClient).discardSensitive(id);
         printJson(result);
       });
     });

@@ -6,21 +6,28 @@ import { ensureIdempotencyKey } from './idempotency.js';
 export type AgentInstanceRegisterPayload = {
   agent_id?: string;
   environment_id?: string;
+  id?: string;
+  /** Optional external identifier for this agent instance in an external system (unique per agent). */
+  external_identifier?: string;
   /** Why this instance ran: 'live' for an actual agent run, 'smoke_test' for a pipeline check, or 'eval' for an evaluation run. Omit to let the API default to 'live'. */
   purpose?: 'live' | 'smoke_test' | 'eval';
   agent_version?: {
     external_identifier: string;
-    name: string;
-    description: string;
+    name?: string;
+    description?: string;
     runtime_environment?: RuntimeEnvironment;
   };
-  agent_schema_version?: AgentSchemaVersion;
+  agent_schema_version?: Partial<AgentSchemaVersion> & {
+    span_schemas?: Record<string, unknown>;
+    span_result_schemas?: Record<string, unknown>;
+  };
+  update_current_version?: boolean;
   idempotency_key?: string;
 };
 
 export type AgentInstanceResponse = {
-  details?: {
-    id?: string;
+  details: {
+    id: string;
   };
 };
 
@@ -31,6 +38,12 @@ export type AgentInstanceStartOptions = {
 
 export type AgentInstanceFinishOptions = {
   status?: 'complete' | 'failed' | 'cancelled';
+  timestamp?: string;
+  idempotency_key?: string;
+};
+
+export type AgentInstanceTerminateOptions = {
+  reason: string;
   timestamp?: string;
   idempotency_key?: string;
 };
@@ -72,6 +85,16 @@ export class AgentInstanceClient {
     return this.httpClient.request(`/api/v1/agent_instance/${agentInstanceId}/finish`, {
       method: 'POST',
       body: { ...opts, idempotency_key: ensureIdempotencyKey(opts.idempotency_key) },
+    });
+  }
+
+  terminate(
+    agentInstanceId: string,
+    options: AgentInstanceTerminateOptions
+  ): Promise<AgentInstanceResponse> {
+    return this.httpClient.request(`/api/v1/agent_instance/${agentInstanceId}/terminate`, {
+      method: 'POST',
+      body: { ...options, idempotency_key: ensureIdempotencyKey(options.idempotency_key) },
     });
   }
 

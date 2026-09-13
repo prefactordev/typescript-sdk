@@ -23,7 +23,7 @@ export function registerUtilitiesCommands(program: Command, version: string): vo
       });
     });
 
-  const bulk = program.command('bulk').description('Execute bulk API requests');
+  const bulk = program.command('bulk').description('Execute bulk query and action operations');
 
   bulk
     .command('execute')

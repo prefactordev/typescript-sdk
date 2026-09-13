@@ -59,6 +59,33 @@ describe('HTTP endpoint clients', () => {
     );
   });
 
+  test('agent instance client posts terminate to expected endpoint', async () => {
+    const calls: RequestCall[] = [];
+    const httpClient = {
+      request: async <TResponse>(path: string, options: HttpRequestOptions = {}) => {
+        calls.push({ path, options });
+        return { details: { id: 'agent-instance-1' } } as TResponse;
+      },
+    };
+
+    const client = new AgentInstanceClient(httpClient);
+
+    await client.terminate('agent-instance-1', {
+      reason: 'operator requested stop',
+      timestamp: '2026-02-24T12:10:00.000Z',
+    });
+
+    expect(calls[0].path).toBe('/api/v1/agent_instance/agent-instance-1/terminate');
+    expect(calls[0].options.method).toBe('POST');
+    expect(calls[0].options.body).toMatchObject({
+      reason: 'operator requested stop',
+      timestamp: '2026-02-24T12:10:00.000Z',
+    });
+    expect((calls[0].options.body as Record<string, unknown>).idempotency_key).toMatch(
+      UUID_V4_REGEX
+    );
+  });
+
   test('agent instance client includes purpose in register payload when provided', async () => {
     const calls: RequestCall[] = [];
     const httpClient = {
@@ -90,6 +117,30 @@ describe('HTTP endpoint clients', () => {
     await client.register({});
 
     expect((calls[0].options.body as Record<string, unknown>).purpose).toBeUndefined();
+  });
+
+  test('agent instance client includes id, update_current_version, and external_identifier in register payload when provided', async () => {
+    const calls: RequestCall[] = [];
+    const httpClient = {
+      request: async <TResponse>(path: string, options: HttpRequestOptions = {}) => {
+        calls.push({ path, options });
+        return { details: { id: 'agent-instance-1' } } as TResponse;
+      },
+    };
+
+    const client = new AgentInstanceClient(httpClient);
+
+    await client.register({
+      id: '013xrzp12g3nqk8n5pj6qzmkvdr8mw1v',
+      update_current_version: true,
+      external_identifier: 'run-abc123',
+    });
+
+    expect(calls[0].options.body).toMatchObject({
+      id: '013xrzp12g3nqk8n5pj6qzmkvdr8mw1v',
+      update_current_version: true,
+      external_identifier: 'run-abc123',
+    });
   });
 
   test('agent instance client posts record_quality to expected endpoint', async () => {
@@ -226,7 +277,7 @@ describe('HTTP endpoint clients', () => {
       client.finish('backend-span-1', '2026-02-09T00:00:01.000Z', {
         status: 'complete',
       })
-    ).resolves.toEqual({});
+    ).resolves.toEqual({ alreadyFinished: true });
   });
 });
 
@@ -314,6 +365,29 @@ describe('Idempotency key validation', () => {
       expect(() => client.finish('inst-1', { idempotency_key: tooLongKey })).toThrow(
         /idempotency_key must be ≤64 characters/
       );
+    });
+
+    test('terminate: auto-generates UUID when no idempotency_key provided', async () => {
+      const { calls, httpClient } = makeHttpClient();
+      const client = new AgentInstanceClient(httpClient);
+      await client.terminate('inst-1', { reason: 'stop' });
+      const key = (calls[0].options.body as Record<string, unknown>).idempotency_key;
+      expect(key).toMatch(UUID_V4_REGEX);
+    });
+
+    test('terminate: passes through valid key unchanged', async () => {
+      const { calls, httpClient } = makeHttpClient();
+      const client = new AgentInstanceClient(httpClient);
+      await client.terminate('inst-1', { reason: 'stop', idempotency_key: validKey });
+      expect((calls[0].options.body as Record<string, unknown>).idempotency_key).toBe(validKey);
+    });
+
+    test('terminate: throws for key > 64 chars', async () => {
+      const { httpClient } = makeHttpClient();
+      const client = new AgentInstanceClient(httpClient);
+      expect(() =>
+        client.terminate('inst-1', { reason: 'stop', idempotency_key: tooLongKey })
+      ).toThrow(/idempotency_key must be ≤64 characters/);
     });
   });
 

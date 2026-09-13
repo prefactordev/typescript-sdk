@@ -84,3 +84,4 @@ When working with packages that depend on core, refer to the relevant AGENTS.md 
 - Do not duplicate core logic in adapter packages.
 - Do not change span type semantics without migration path.
 - Never use `additionalProperties: false` to block additional data - allow unknown fields to pass through.
+- Do not implement `POST /api/v1/account/{id}/implode`. That endpoint is a destructive account wipe and is not an observability primitive.

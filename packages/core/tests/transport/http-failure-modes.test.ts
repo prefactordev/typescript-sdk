@@ -160,6 +160,51 @@ describe('HttpTransport failure modes', () => {
     await transport.close();
   });
 
+  test('enters fatal contract state when span create has no registered agent instance id', async () => {
+    const fatalErrors: PrefactorFatalError[] = [];
+    const fetchCalls: string[] = [];
+
+    globalThis.fetch = (async (url) => {
+      fetchCalls.push(String(url));
+      return new Response(JSON.stringify({ details: { id: 'agent-instance-1' } }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }) as unknown as typeof fetch;
+
+    const transport = new HttpTransport(createConfig(), {
+      failureHandling: {
+        onFatalError: (error) => {
+          fatalErrors.push(error);
+        },
+      },
+    });
+
+    (transport as unknown as { ensureAgentRegistered: () => Promise<void> }).ensureAgentRegistered =
+      async () => undefined;
+
+    expect(() => transport.emit(createSpan('span-1'))).not.toThrow();
+    await waitForQueue();
+
+    expect(fatalErrors).toHaveLength(1);
+    expect(fatalErrors[0]?.kind).toBe('contract');
+    expect(fatalErrors[0]?.operation).toBe('span_create');
+    expect(fatalErrors[0]?.message).toBe(
+      'Prefactor span create requires a registered agent instance id.'
+    );
+    expect(fetchCalls).toEqual([]);
+
+    let thrownError: unknown;
+    try {
+      transport.emit(createSpan('span-2'));
+    } catch (error) {
+      thrownError = error;
+    }
+
+    expect(thrownError).toBe(fatalErrors[0]);
+    await transport.close();
+  });
+
   test('retries agent-not-found registration with the same idempotency key', async () => {
     const registerBodies: Array<Record<string, unknown>> = [];
     let registerAttempts = 0;

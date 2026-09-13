@@ -123,17 +123,22 @@ export {
   type AgentInstanceRegisterPayload,
   type AgentInstanceResponse,
   type AgentInstanceStartOptions,
+  type AgentInstanceTerminateOptions,
 } from './transport/http/agent-instance-client.js';
 export {
+  type AgentSpanAlreadyFinished,
   AgentSpanClient,
+  type AgentSpanControlSignal,
   type AgentSpanCreatePayload,
   type AgentSpanFinishOptions,
+  type AgentSpanFinishResult,
   type AgentSpanResponse,
   type AgentSpanStatus,
 } from './transport/http/agent-span-client.js';
 
 // HTTP Client & API Clients
 export {
+  type ApiError,
   HttpClient,
   HttpClientError,
   type HttpRequester,

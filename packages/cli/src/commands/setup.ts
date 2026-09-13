@@ -164,15 +164,15 @@ async function resolveEnvironmentId(apiClient: ApiClient, agentId: string): Prom
   }
 
   if (deployments.length === 1) {
-    return deployments[0].environment_id;
+    return requireEnvironmentId(deployments[0].environment_id, agentId);
   }
 
   const deploymentsWithCurrentVersion = deployments.filter(
-    (deployment) => deployment.current_version_id !== null
+    (deployment) => deployment.current_version_id != null
   );
 
   if (deploymentsWithCurrentVersion.length === 1) {
-    return deploymentsWithCurrentVersion[0].environment_id;
+    return requireEnvironmentId(deploymentsWithCurrentVersion[0].environment_id, agentId);
   }
 
   throw new Error(
@@ -189,6 +189,10 @@ async function resolveEnvironmentIdFromAccount(apiClient: ApiClient): Promise<st
   }
 
   const account = accounts[0];
+  if (!account.id) {
+    throw new Error('Account list response is missing id.');
+  }
+
   const environmentResponse = await new EnvironmentClient(apiClient).list(account.id);
   const environments = getListItems(environmentResponse);
 
@@ -196,9 +200,22 @@ async function resolveEnvironmentIdFromAccount(apiClient: ApiClient): Promise<st
     throw new Error(`No environments found for account ${account.id}; create one first.`);
   }
 
-  return environments[0].id;
+  const environmentId = environments[0].id;
+  if (!environmentId) {
+    throw new Error(`Environment list response is missing id for account ${account.id}.`);
+  }
+
+  return environmentId;
 }
 
 function getListItems<T>(response: { details?: T[]; summaries?: T[] }): T[] {
-  return response.details ?? response.summaries ?? [];
+  return response.summaries ?? response.details ?? [];
+}
+
+function requireEnvironmentId(environmentId: string | undefined, agentId: string): string {
+  if (!environmentId) {
+    throw new Error(`Agent deployment for '${agentId}' is missing environment_id.`);
+  }
+
+  return environmentId;
 }

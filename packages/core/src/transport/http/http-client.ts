@@ -30,6 +30,44 @@ type HttpClientErrorOptions = {
   cause?: unknown;
 };
 
+/**
+ * Prefactor HTTP API error envelope (`ApiError` in the OpenAPI spec).
+ */
+export type ApiError =
+  | {
+      code:
+        | 'bad_request'
+        | 'bad_authtoken'
+        | 'not_authenticated'
+        | 'not_permitted'
+        | 'not_implemented'
+        | 'unknown'
+        | 'not_found'
+        | 'unexpected_ref_type'
+        | 'unexpected'
+        | 'invalid_action'
+        | 'alert_unknown'
+        | 'alert_already_cleared'
+        | 'invalid_value'
+        | 'required_value'
+        | 'idempotency_key_already_used'
+        | 'temporarily_unavailable';
+      message: string;
+      status: 'error';
+    }
+  | {
+      code: 'validation_errors';
+      errors: Record<string, unknown>;
+      message: string;
+      status: 'error';
+    }
+  | {
+      code: 'rate_limited';
+      message: string;
+      retry_after_ms: number;
+      status: 'error';
+    };
+
 export class HttpClientError extends Error {
   readonly url: string;
   readonly method: string;
