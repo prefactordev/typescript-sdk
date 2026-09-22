@@ -30,7 +30,11 @@ export function registerIntegrationsCommands(program: Command): void {
             (summary) => summary.integration_type === type
           );
           if (!integration) throw new Error(`Integration '${type}' is not configured.`);
-          printJson(await client[operation](integration.id));
+          const result = await client[operation](integration.id);
+          if (operation === 'test' && 'delivered' in result && !result.delivered) {
+            throw new Error(`Integration '${type}' test notification was not delivered.`);
+          }
+          printJson(result);
         });
       });
   }

@@ -163,3 +163,14 @@ test('test delivery errors propagate without a success result', async () => {
   await expect(run('test', 'slack')).rejects.toThrow('Slack webhook returned status 400');
   expect(log.mock.calls).toEqual([]);
 });
+
+test('test delivery false results fail without printing success', async () => {
+  replies = [
+    { summaries: [summary], status: 'success' },
+    { delivered: false, status: 'success' },
+  ];
+  await expect(run('test', 'slack')).rejects.toThrow(
+    "Integration 'slack' test notification was not delivered."
+  );
+  expect(log.mock.calls).toEqual([]);
+});
