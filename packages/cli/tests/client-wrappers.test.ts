@@ -38,6 +38,7 @@ describe('resource clients', () => {
 
   test('root index exports all clients', () => {
     expect(typeof cliExports.AccountClient).toBe('function');
+    expect(typeof cliExports.IntegrationClient).toBe('function');
     expect(typeof cliExports.AgentClient).toBe('function');
     expect(typeof cliExports.AgentDeploymentClient).toBe('function');
     expect(typeof cliExports.EnvironmentClient).toBe('function');
