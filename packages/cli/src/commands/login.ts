@@ -1,6 +1,11 @@
 import { spawn } from 'node:child_process';
 import type { Command } from 'commander';
+import packageJson from '../../package.json';
 import { DEFAULT_BASE_URL, DEFAULT_PROFILE_NAME, ProfileManager } from '../profile-manager.js';
+import { clientHostname, clientPlatform } from './client-info.js';
+
+const PACKAGE_VERSION = typeof packageJson.version === 'string' ? packageJson.version : '0.0.0';
+const SLOW_DOWN_EXTRA_MS = 5_000;
 
 function stripTrailingSlashes(baseUrl: string): string {
   let end = baseUrl.length;
@@ -88,9 +93,19 @@ export function validateToken(token: string): void {
   }
 }
 
+export interface LoginClientInfo {
+  client_version?: string;
+  platform?: string;
+  hostname?: string;
+}
+
 export interface LoginDeps {
   openBrowser: (url: string) => void;
   promptForToken: (prompt: string) => Promise<string>;
+  fetch?: typeof fetch;
+  sleep?: (ms: number) => Promise<void>;
+  now?: () => number;
+  clientInfo?: LoginClientInfo;
 }
 
 const defaultDeps: LoginDeps = {
@@ -98,7 +113,24 @@ const defaultDeps: LoginDeps = {
   promptForToken: promptForTokenImpl,
 };
 
-export function registerLoginCommand(program: Command, deps: LoginDeps = defaultDeps): void {
+interface DeviceLoginStart {
+  device_code: string;
+  user_code: string;
+  verification_uri_complete: string;
+  expires_in: number;
+  interval: number;
+}
+
+interface DeviceLoginGrant {
+  access_token: string;
+  account_name?: string;
+}
+
+export function registerLoginCommand(
+  program: Command,
+  deps: LoginDeps = defaultDeps,
+  version: string = PACKAGE_VERSION
+): void {
   program
     .command('login')
     .description('Authenticate the CLI with your Prefactor account')
@@ -106,20 +138,284 @@ export function registerLoginCommand(program: Command, deps: LoginDeps = default
       const manager = await ProfileManager.create();
       const existing = manager.getProfile(DEFAULT_PROFILE_NAME);
       const baseUrl = existing?.base_url ?? DEFAULT_BASE_URL;
-      const loginUrl = buildLoginUrl(baseUrl);
+      const started = await startDeviceLogin(baseUrl, deps, version);
 
-      console.log(`Opening your browser to: ${loginUrl}`);
-      console.log('If the browser does not open automatically, visit the URL above.');
-      deps.openBrowser(loginUrl);
-      console.log('');
-      console.log('After authenticating, copy your API token from the browser.');
+      if (started === 'unsupported') {
+        await loginByPastingToken(manager, baseUrl, deps);
+        return;
+      }
 
-      const token = await deps.promptForToken('Paste your API token here: ');
-      validateToken(token);
-
-      await manager.addProfile(DEFAULT_PROFILE_NAME, token, baseUrl);
-      console.log(
-        `Authentication successful. Credentials saved to the '${DEFAULT_PROFILE_NAME}' profile.`
-      );
+      await loginWithDeviceCode(manager, baseUrl, started, deps);
     });
+}
+
+async function loginByPastingToken(
+  manager: ProfileManager,
+  baseUrl: string,
+  deps: LoginDeps
+): Promise<void> {
+  const loginUrl = buildLoginUrl(baseUrl);
+
+  console.log(`Opening your browser to: ${loginUrl}`);
+  console.log('If the browser does not open automatically, visit the URL above.');
+  deps.openBrowser(loginUrl);
+  console.log('');
+  console.log('After authenticating, copy your API token from the browser.');
+
+  const token = await deps.promptForToken('Paste your API token here: ');
+  validateToken(token);
+
+  await manager.addProfile(DEFAULT_PROFILE_NAME, token, baseUrl);
+  console.log(
+    `Authentication successful. Credentials saved to the '${DEFAULT_PROFILE_NAME}' profile.`
+  );
+}
+
+async function loginWithDeviceCode(
+  manager: ProfileManager,
+  baseUrl: string,
+  started: DeviceLoginStart,
+  deps: LoginDeps
+): Promise<void> {
+  console.log(`Opening your browser to approve this login: ${started.verification_uri_complete}`);
+  console.log('If the browser does not open automatically, visit the URL above.');
+  deps.openBrowser(started.verification_uri_complete);
+  console.log('');
+  console.log(`Confirm this code in the browser: ${started.user_code}`);
+  console.log('Waiting for approval.');
+
+  const grant = await pollForDeviceGrant(baseUrl, started, deps);
+  await manager.addProfile(DEFAULT_PROFILE_NAME, grant.access_token, baseUrl);
+
+  if (grant.account_name) {
+    console.log(
+      `Authentication successful. Signed in to ${grant.account_name}. Credentials saved to the '${DEFAULT_PROFILE_NAME}' profile.`
+    );
+    return;
+  }
+
+  console.log(
+    `Authentication successful. Credentials saved to the '${DEFAULT_PROFILE_NAME}' profile.`
+  );
+}
+
+async function startDeviceLogin(
+  baseUrl: string,
+  deps: LoginDeps,
+  version: string
+): Promise<DeviceLoginStart | 'unsupported'> {
+  const origin = stripTrailingSlashes(baseUrl);
+  const fetchImpl = deps.fetch ?? globalThis.fetch;
+  const clientInfo = resolveClientInfo(deps, version);
+  let response: Response;
+
+  try {
+    response = await fetchImpl(`${origin}/cli/login/start`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', accept: 'application/json' },
+      body: JSON.stringify(clientInfo),
+    });
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    throw new Error(`Could not reach ${origin} to start login. ${reason}`);
+  }
+
+  if (response.status === 404) {
+    return 'unsupported';
+  }
+
+  if (!response.ok) {
+    const code = await readErrorCode(response);
+    throw new Error(startFailureMessage(code, response.status));
+  }
+
+  let body: unknown;
+  try {
+    body = await response.json();
+  } catch {
+    throw new Error('Login start returned an unexpected response.');
+  }
+
+  if (!isDeviceLoginStart(body)) {
+    throw new Error('Login start returned an unexpected response.');
+  }
+
+  return body;
+}
+
+async function pollForDeviceGrant(
+  baseUrl: string,
+  started: DeviceLoginStart,
+  deps: LoginDeps
+): Promise<DeviceLoginGrant> {
+  const origin = stripTrailingSlashes(baseUrl);
+  const fetchImpl = deps.fetch ?? globalThis.fetch;
+  const sleep = deps.sleep ?? defaultSleep;
+  const now = deps.now ?? Date.now;
+  const deadline = now() + started.expires_in * 1000;
+  let intervalMs = Math.max(1, started.interval) * 1000;
+
+  while (now() < deadline) {
+    await sleep(intervalMs);
+    if (now() >= deadline) {
+      break;
+    }
+
+    let response: Response;
+    try {
+      response = await fetchImpl(`${origin}/cli/login/token`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', accept: 'application/json' },
+        body: JSON.stringify({ device_code: started.device_code }),
+      });
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error);
+      throw new Error(`Could not reach ${origin} while waiting for approval. ${reason}`);
+    }
+
+    if (response.ok) {
+      return await readDeviceGrant(response);
+    }
+
+    const code = await readErrorCode(response);
+    if (response.status === 400 && code === 'authorization_pending') {
+      continue;
+    }
+
+    if (response.status === 400 && code === 'slow_down') {
+      intervalMs += SLOW_DOWN_EXTRA_MS;
+      continue;
+    }
+
+    if (response.status === 400 && code === 'access_denied') {
+      throw new Error('The login was cancelled in the browser.');
+    }
+
+    if (response.status === 400 && code === 'expired_token') {
+      throw new Error('Login expired. Run prefactor login again.');
+    }
+
+    if (response.status === 429 || code === 'rate_limited') {
+      await sleep(retryAfterMs(response, intervalMs));
+      continue;
+    }
+
+    throw new Error(tokenFailureMessage(code, response.status));
+  }
+
+  throw new Error('Login expired. Run prefactor login again.');
+}
+
+function resolveClientInfo(deps: LoginDeps, version: string): LoginClientInfo {
+  const override = deps.clientInfo;
+  const info: LoginClientInfo = {
+    client_version: override?.client_version ?? version,
+  };
+  const platform = override && 'platform' in override ? override.platform : clientPlatform();
+  const host = override && 'hostname' in override ? override.hostname : clientHostname();
+
+  if (platform) {
+    info.platform = platform;
+  }
+  if (host) {
+    info.hostname = host;
+  }
+
+  return info;
+}
+
+function isDeviceLoginStart(value: unknown): value is DeviceLoginStart {
+  if (!isRecord(value)) {
+    return false;
+  }
+
+  return (
+    typeof value.device_code === 'string' &&
+    value.device_code.length > 0 &&
+    typeof value.user_code === 'string' &&
+    value.user_code.length > 0 &&
+    typeof value.verification_uri_complete === 'string' &&
+    value.verification_uri_complete.length > 0 &&
+    typeof value.expires_in === 'number' &&
+    Number.isFinite(value.expires_in) &&
+    typeof value.interval === 'number' &&
+    Number.isFinite(value.interval)
+  );
+}
+
+async function readDeviceGrant(response: Response): Promise<DeviceLoginGrant> {
+  let body: unknown;
+  try {
+    body = await response.json();
+  } catch {
+    throw new Error('Login approval returned an unexpected response.');
+  }
+
+  if (!isRecord(body) || typeof body.access_token !== 'string' || body.access_token.length === 0) {
+    throw new Error('Login approval returned an unexpected response.');
+  }
+
+  return {
+    access_token: body.access_token,
+    ...(typeof body.account_name === 'string' && body.account_name.length > 0
+      ? { account_name: body.account_name }
+      : {}),
+  };
+}
+
+async function readErrorCode(response: Response): Promise<string | undefined> {
+  try {
+    const body = (await response.json()) as unknown;
+    if (isRecord(body) && typeof body.error === 'string') {
+      return body.error;
+    }
+  } catch {
+    return undefined;
+  }
+
+  return undefined;
+}
+
+function startFailureMessage(code: string | undefined, status: number): string {
+  if (code === 'rate_limited' || status === 429) {
+    return 'Login is rate limited. Wait and run prefactor login again.';
+  }
+
+  if (code) {
+    return `Login could not start (${code}).`;
+  }
+
+  return `Login could not start (HTTP ${status}).`;
+}
+
+function tokenFailureMessage(code: string | undefined, status: number): string {
+  if (code) {
+    return `Login failed (${code}).`;
+  }
+
+  return `Login failed (HTTP ${status}).`;
+}
+
+function retryAfterMs(response: Response, fallbackMs: number): number {
+  const header = response.headers.get('retry-after');
+  if (!header) {
+    return fallbackMs;
+  }
+
+  const seconds = Number(header);
+  if (!Number.isFinite(seconds) || seconds < 0) {
+    return fallbackMs;
+  }
+
+  return Math.max(fallbackMs, seconds * 1000);
+}
+
+function defaultSleep(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
 }
