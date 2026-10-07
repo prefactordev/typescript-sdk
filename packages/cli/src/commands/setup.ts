@@ -1,3 +1,4 @@
+import { HttpClientError } from '@prefactor/core';
 import type { Command } from 'commander';
 import { ApiClient } from '../api-client.js';
 import { AccountClient } from '../clients/account.js';
@@ -5,6 +6,8 @@ import { AgentClient } from '../clients/agent.js';
 import { AgentDeploymentClient } from '../clients/agent-deployment.js';
 import { ApiTokenClient } from '../clients/api-token.js';
 import { EnvironmentClient } from '../clients/environment.js';
+import { clientPlatform } from './client-info.js';
+import { reportCliConnection } from './connection-report.js';
 import { getAuthedContext } from './shared.js';
 
 const DEFAULT_AGENT_IDENTIFIER = '1.0.0';
@@ -34,7 +37,7 @@ type PingResponse = {
   details?: PingDetails;
 };
 
-export function registerSetupCommand(program: Command): void {
+export function registerSetupCommand(program: Command, version: string): void {
   program
     .command('setup [agent_id]')
     .description('Create setup values for an agent (optionally create the agent first)')
@@ -45,7 +48,7 @@ export function registerSetupCommand(program: Command): void {
     .action(async function (this: Command, agentIdArg: string | undefined, options: SetupOptions) {
       const { apiClient, baseUrl } = await getAuthedContext(this);
       const agentId = await resolveAgentId(apiClient, agentIdArg, options);
-      await new AgentClient(apiClient).retrieve(agentId);
+      const agent = await new AgentClient(apiClient).retrieve(agentId);
 
       const environmentId = await resolveEnvironmentId(apiClient, agentId);
       const tokenResponse = await new ApiTokenClient(apiClient).create({
@@ -56,6 +59,7 @@ export function registerSetupCommand(program: Command): void {
       const apiToken = tokenResponse.details.token;
 
       await validateSetupToken(baseUrl, apiToken, agentId);
+      await reportSetupConnection(apiClient, version, agentId, agent.details.name);
 
       const values: SetupValues = {
         api_url: baseUrl,
@@ -72,6 +76,34 @@ export function registerSetupCommand(program: Command): void {
  * Prints setup values for capture by a human or coding tool.
  * The deployment token is intentional CLI output, not application logging.
  */
+async function reportSetupConnection(
+  apiClient: ApiClient,
+  version: string,
+  agentId: string,
+  agentName: string | undefined
+): Promise<void> {
+  const name = agentName?.trim();
+  if (!name) {
+    return;
+  }
+
+  try {
+    await reportCliConnection(apiClient, {
+      cli_version: version,
+      platform: clientPlatform(),
+      agent: { id: agentId, name },
+      tools: [],
+    });
+  } catch (error) {
+    if (error instanceof HttpClientError && error.status === 404) {
+      return;
+    }
+
+    const message = error instanceof Error ? error.message : String(error);
+    console.error(`Could not report this connection: ${message}`);
+  }
+}
+
 function printSetupValues(values: SetupValues, asJson: boolean): void {
   if (asJson) {
     // codeql[js/clear-text-logging] Intentional: setup prints the deployment token for the caller to capture.

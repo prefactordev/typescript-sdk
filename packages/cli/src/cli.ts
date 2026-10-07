@@ -10,6 +10,7 @@ import { registerAgentVersionsCommands } from './commands/agent-versions.js';
 import { registerAgentsCommands } from './commands/agents.js';
 import { registerAlertsCommands } from './commands/alerts.js';
 import { registerApiTokensCommands } from './commands/api-tokens.js';
+import { registerConnectCommand } from './commands/connect.js';
 import { registerEnvironmentsCommands } from './commands/environments.js';
 import { registerIntegrationsCommands } from './commands/integrations.js';
 import { registerKnowledgebaseDocumentRevisionsCommands } from './commands/knowledgebase-document-revisions.js';
@@ -57,6 +58,7 @@ export function createCli(version: string): Command {
       '  prefactor setup <agent_id>',
       '  prefactor setup --create --name "<agent-name>" --description "<description>"',
       '  prefactor setup <agent_id> --json',
+      '  prefactor connect --agent-name "<agent-name>" --tool "<tool-name>"',
       '  prefactor accounts list',
       '  prefactor agents list',
       '  prefactor agent_deployments create --agent_id <agent_id> --environment_id <environment_id>',
@@ -64,7 +66,7 @@ export function createCli(version: string): Command {
     ].join('\n')
   );
 
-  registerLoginCommand(program);
+  registerLoginCommand(program, undefined, version);
   registerProfilesCommands(program);
   registerAccountsCommands(program);
   registerIntegrationsCommands(program);
@@ -86,7 +88,8 @@ export function createCli(version: string): Command {
   registerPlaygroundCommands(program);
   registerAdminCommands(program);
   registerApiTokensCommands(program);
-  registerSetupCommand(program);
+  registerSetupCommand(program, version);
+  registerConnectCommand(program, version);
   registerUtilitiesCommands(program, version);
   registerLifecycleCommands(program, version);
 
