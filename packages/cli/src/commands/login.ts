@@ -19,22 +19,42 @@ export function buildLoginUrl(baseUrl: string): string {
   return `${stripTrailingSlashes(baseUrl)}/cli/connect`;
 }
 
-function openBrowserImpl(url: string): void {
-  let cmd: string;
-  let args: string[];
-
-  if (process.platform === 'darwin') {
-    cmd = 'open';
-    args = [url];
-  } else if (process.platform === 'win32') {
-    cmd = 'cmd';
-    args = ['/c', 'start', '', url];
-  } else {
-    cmd = 'xdg-open';
-    args = [url];
+export function browserOpenCommand(
+  platform: NodeJS.Platform,
+  url: string
+): { command: string; args: string[] } | undefined {
+  if (!isBrowserUrl(url)) {
+    return undefined;
   }
 
-  const child = spawn(cmd, args, { detached: true, stdio: 'ignore' });
+  if (platform === 'darwin') {
+    return { command: 'open', args: [url] };
+  }
+
+  // rundll32 takes the URL as an argument. cmd.exe would interpret it as a shell command.
+  if (platform === 'win32') {
+    return { command: 'rundll32', args: ['url.dll,FileProtocolHandler', url] };
+  }
+
+  return { command: 'xdg-open', args: [url] };
+}
+
+function isBrowserUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return url.protocol === 'http:' || url.protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
+function openBrowserImpl(url: string): void {
+  const open = browserOpenCommand(process.platform, url);
+  if (!open) {
+    return;
+  }
+
+  const child = spawn(open.command, open.args, { detached: true, stdio: 'ignore' });
   child.on('error', () => {}); // fire-and-forget; ignore spawn errors
   child.unref();
 }
