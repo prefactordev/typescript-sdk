@@ -1,5 +1,11 @@
 # @prefactor/cli
 
+## 0.4.0
+
+### Minor Changes
+
+- [#72](https://github.com/prefactordev/typescript-sdk/pull/72) [`b70b4bf`](https://github.com/prefactordev/typescript-sdk/commit/b70b4bf0f6f3bbdab3a24e9ca63770d99639f2c2) Thanks [@Siutan](https://github.com/Siutan)! - Add integration commands to configure Slack webhooks, select notification events, retrieve redacted settings, remove integrations and send test notifications. Export a typed integration API client for scripts.
+
 ## 0.3.0
 
 ### Minor Changes
