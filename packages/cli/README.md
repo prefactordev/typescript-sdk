@@ -137,6 +137,7 @@ Environment fallback is supported when no default profile is configured:
 - `login`: authenticate and save credentials to the default profile
 - `profiles`: add, list, remove
 - `accounts`: list, retrieve, update
+- `integrations`: list, retrieve, update, delete, test
 - `agents`: list, retrieve, show, create, update, delete, retire, reinstate
 - `environments`: list, retrieve, show, create, update, delete
 - `agent_versions`: list, retrieve, create
@@ -159,6 +160,24 @@ Environment fallback is supported when no default profile is configured:
 - `version`: print CLI version
 
 Run `prefactor <command> --help` for command-specific options.
+
+## Slack integrations
+
+Manage the integration for the account selected by your authentication profile:
+
+```bash
+prefactor integrations list
+prefactor integrations update slack --webhook_url "$SLACK_WEBHOOK_URL" --enabled_events "agent_created,alert_raised,alert_cleared"
+prefactor integrations retrieve slack
+prefactor integrations test slack
+prefactor integrations delete slack
+```
+
+`update` creates the integration if it is not configured, or replaces its configuration if it exists. Both options are required. Event names are comma-separated; pass `--enabled_events ""` to disable all notifications. Updating an existing integration preserves its active or paused status. A new integration is active.
+
+Commands print the API response as JSON. Retrieval returns a redacted webhook value. Test sends a real notification and prints the delivery result; API and delivery errors cause the command to fail. Delete removes the configuration immediately.
+
+Keep the webhook URL secret. Avoid pasting it into shell history or sharing command output containing credentials. See the [integration command guide](./integrations.md) for event names and programmatic usage.
 
 ## JSON File Input
 
@@ -222,6 +241,7 @@ if (agentId) {
 ### Resource Clients
 
 - `AccountClient`
+- `IntegrationClient`: list, retrieve, create, update, delete and test account integrations by ID.
 - `EnvironmentClient`
 - `AgentClient`
 - `AgentDeploymentClient`

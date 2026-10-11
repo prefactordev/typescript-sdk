@@ -11,6 +11,7 @@ import { registerAgentsCommands } from './commands/agents.js';
 import { registerAlertsCommands } from './commands/alerts.js';
 import { registerApiTokensCommands } from './commands/api-tokens.js';
 import { registerEnvironmentsCommands } from './commands/environments.js';
+import { registerIntegrationsCommands } from './commands/integrations.js';
 import { registerLifecycleCommands } from './commands/lifecycle.js';
 import { registerLoginCommand } from './commands/login.js';
 import { registerPeopleCommands } from './commands/people.js';
@@ -62,6 +63,7 @@ export function createCli(version: string): Command {
   registerLoginCommand(program);
   registerProfilesCommands(program);
   registerAccountsCommands(program);
+  registerIntegrationsCommands(program);
   registerAgentsCommands(program);
   registerEnvironmentsCommands(program);
   registerAgentVersionsCommands(program);

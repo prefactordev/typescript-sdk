@@ -146,6 +146,16 @@ export {
   type EnvironmentShowResponse,
   type EnvironmentSummary,
 } from './clients/environment.js';
+export {
+  IntegrationClient,
+  type IntegrationDetails,
+  type IntegrationForCreate,
+  type IntegrationForUpdate,
+  type IntegrationListResponse,
+  type IntegrationResponse,
+  type IntegrationSummary,
+  type IntegrationTestResponse,
+} from './clients/integration.js';
 export type {
   ListResponse,
   PaginationOutput,

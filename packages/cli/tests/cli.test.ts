@@ -57,6 +57,7 @@ describe('CLI profiles command', () => {
       'login',
       'profiles',
       'accounts',
+      'integrations',
       'agents',
       'environments',
       'agent_versions',
