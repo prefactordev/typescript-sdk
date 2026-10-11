@@ -4,7 +4,12 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Command } from 'commander';
 import { createCli } from '../src/cli.js';
-import { buildLoginUrl, registerLoginCommand, validateToken } from '../src/commands/login.js';
+import {
+  browserOpenCommand,
+  buildLoginUrl,
+  registerLoginCommand,
+  validateToken,
+} from '../src/commands/login.js';
 import { DEFAULT_BASE_URL, DEFAULT_PROFILE_NAME, ProfileManager } from '../src/profile-manager.js';
 
 const pasteFallbackFetch = (async () => new Response('', { status: 404 })) as typeof fetch;
@@ -33,6 +38,27 @@ describe('buildLoginUrl', () => {
     expect(buildLoginUrl('https://app.prefactorai.com///')).toBe(
       'https://app.prefactorai.com/cli/connect'
     );
+  });
+});
+
+describe('browserOpenCommand', () => {
+  const approvalUrl = 'https://app.prefactorai.com/cli/connect?code=ABCD-EFGH';
+
+  test('opens an https URL without a shell on Windows', () => {
+    expect(browserOpenCommand('win32', approvalUrl)).toEqual({
+      command: 'rundll32',
+      args: ['url.dll,FileProtocolHandler', approvalUrl],
+    });
+  });
+
+  test('opens an https URL with the platform browser command', () => {
+    expect(browserOpenCommand('darwin', approvalUrl)?.command).toBe('open');
+    expect(browserOpenCommand('linux', approvalUrl)?.command).toBe('xdg-open');
+  });
+
+  test('refuses URLs that are not http or https', () => {
+    expect(browserOpenCommand('win32', 'file:///C:/Windows/System32/calc.exe')).toBeUndefined();
+    expect(browserOpenCommand('darwin', 'calc.exe & whoami')).toBeUndefined();
   });
 });
 
