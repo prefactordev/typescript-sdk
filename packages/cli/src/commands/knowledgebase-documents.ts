@@ -84,7 +84,10 @@ export function registerKnowledgebaseDocumentsCommands(program: Command): void {
     .description('Create a document')
     .requiredOption('--knowledgebase_id <knowledgebase_id>', 'Knowledgebase ID')
     .requiredOption('--path <path>', 'Document path')
-    .requiredOption('--content <content>', 'Document content, or @path to read a text file')
+    .requiredOption(
+      '--content <content>',
+      'Document content, or @path to read a text file. @file content is limited to 1 MiB.'
+    )
     .option('--content_type <content_type>', 'MIME content type')
     .action(function (
       this: Command,
@@ -110,7 +113,10 @@ export function registerKnowledgebaseDocumentsCommands(program: Command): void {
     .command('update <id>')
     .description('Update document content')
     .requiredOption('--base_revision_id <id>', 'Document revision this change is based on')
-    .option('--content <content>', 'Document content, or @path to read a text file')
+    .option(
+      '--content <content>',
+      'Document content, or @path to read a text file. @file content is limited to 1 MiB.'
+    )
     .option('--content_type <content_type>', 'MIME content type')
     .action(function (
       this: Command,

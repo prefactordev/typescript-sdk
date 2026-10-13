@@ -34,15 +34,18 @@ export interface ListQueryParams {
   };
 }
 
-/** Query keys for list sorting and pagination, using the API's bracket form. */
+/** Pagination uses bracket keys. Sorting is the field name, or `-${field}` when desc. */
 export function listQuery(params: ListQueryParams): Record<string, string | number> {
+  const sorting = params.sorting;
+  const sortingValue =
+    sorting === undefined
+      ? undefined
+      : sorting.direction === 'desc'
+        ? `-${sorting.field}`
+        : sorting.field;
+
   return {
-    ...(params.sorting
-      ? {
-          'sorting[field]': params.sorting.field,
-          'sorting[direction]': params.sorting.direction ?? 'asc',
-        }
-      : {}),
+    ...(sortingValue !== undefined ? { sorting: sortingValue } : {}),
     ...(params.pagination?.offset !== undefined
       ? { 'pagination[offset]': params.pagination.offset }
       : {}),

@@ -67,8 +67,7 @@ test('knowledgebases list sends filters, sorting, and pagination', async () => {
         query: {
           account_id: 'acct_1',
           status: 'archived',
-          'sorting[field]': 'name',
-          'sorting[direction]': 'desc',
+          sorting: '-name',
           'pagination[offset]': 10,
           'pagination[page_size]': 5,
         },
@@ -85,8 +84,7 @@ test('knowledgebases list defaults sort direction to asc', async () => {
     options: {
       method: 'GET',
       query: {
-        'sorting[field]': 'name',
-        'sorting[direction]': 'asc',
+        sorting: 'name',
       },
     },
   });

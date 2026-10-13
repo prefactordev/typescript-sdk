@@ -193,7 +193,7 @@ prefactor knowledgebase_documents retrieve <document_id> --content_only
 prefactor knowledgebase_documents update <document_id> --base_revision_id <revision_id> --content @./guide.md
 ```
 
-`--content` is document text. `@path` reads that file as text and does not parse it as JSON. `--content_only` prints `details.content` with no JSON envelope. Updating, renaming, archiving, or unarchiving a document requires `--base_revision_id`. `--clear_description` clears a knowledgebase description and cannot be combined with `--description`.
+`--content` is document text. `@path` reads that file as text and does not parse it as JSON. `@file` content is limited to 1 MiB. `--content_only` prints `details.content` with no JSON envelope. Updating, renaming, archiving, or unarchiving a document requires `--base_revision_id`. `--clear_description` clears a knowledgebase description and cannot be combined with `--description`.
 
 ## JSON File Input
 
