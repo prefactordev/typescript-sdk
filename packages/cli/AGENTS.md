@@ -20,7 +20,7 @@ This is a consumption tool, NOT shared infrastructure.
 - Other packages should NOT depend on this package.
 
 ## Command groups
-23 command groups:
+24 command groups:
 - `login`: Authenticate and save credentials to the default profile
 - `profiles`: Manage CLI authentication profiles
 - `accounts`: Manage accounts
@@ -40,6 +40,7 @@ This is a consumption tool, NOT shared infrastructure.
 - `admin_user_invites`: Manage admin user invites
 - `api_tokens`: Manage API tokens
 - `setup`: Create an agent (optional), mint a validated deployment token, and print setup values
+- `connect`: Report the agent and tools in use without creating or changing an agent
 - `pfid`: Generate Prefactor IDs
 - `bulk`: Execute bulk query/action operations (`_type` + `idempotency_key` items)
 - `ping`: Verify the selected or supplied API token
