@@ -139,6 +139,9 @@ Environment fallback is supported when no default profile is configured:
 - `accounts`: list, retrieve, update
 - `integrations`: list, retrieve, update, delete, test
 - `agents`: list, retrieve, show, create, update, delete, retire, reinstate
+- `judges`: list, retrieve, show, create, update, delete, retire, reinstate, create_version, templates, score
+- `agent_associations`: list_from, list_to, retrieve, create, update, delete
+- `agent_instance_associations`: list_from, list_to, retrieve
 - `environments`: list, retrieve, show, create, update, delete
 - `agent_versions`: list, retrieve, create
 - `agent_schema_versions`: list, retrieve, create
@@ -164,6 +167,18 @@ Environment fallback is supported when no default profile is configured:
 - `version`: print CLI version
 
 Run `prefactor <command> --help` for command-specific options.
+
+## Judges
+
+A judge is an agent with the judge role. `judges create` sets that role. `create_version` stores a criterion and model, and can take a system prompt template. `--criterion` and `--system_prompt_template` accept text or `@path`, and `@path` is read as text rather than JSON.
+
+```bash
+prefactor judges create --name "Completion judge"
+prefactor judges create_version --agent_id <judge_id> --hosted_llm_provider_model_id <model_id> --criterion @./criterion.md
+prefactor judges templates
+prefactor judges score <agent_instance_id> --judge_agent_id <judge_id>
+prefactor agent_associations create --from_agent_id <judge_id> --to_agent_id <agent_id> --association_type judge --trigger on_completion
+```
 
 ## Slack integrations
 
@@ -260,6 +275,8 @@ if (agentId) {
 - `IntegrationClient`: list, retrieve, create, update, delete and test account integrations by ID.
 - `EnvironmentClient`
 - `AgentClient`
+- `AgentAssociationClient`
+- `AgentInstanceAssociationClient`
 - `AgentDeploymentClient`
 - `AgentVersionClient`
 - `AgentSchemaVersionClient`
