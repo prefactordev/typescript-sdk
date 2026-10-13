@@ -109,8 +109,8 @@ export function registerJudgesCommands(program: Command): void {
         }
         printJson(
           await new AgentClient(apiClient).update(id, {
-            ...(options.name ? { name: options.name } : {}),
-            ...(options.description ? { description: options.description } : {}),
+            ...(options.name !== undefined ? { name: options.name } : {}),
+            ...(options.description !== undefined ? { description: options.description } : {}),
           })
         );
       });

@@ -166,6 +166,52 @@ test('agent association create sends the trigger and endpoints', async () => {
   ]);
 });
 
+test('judges update sends an empty description', async () => {
+  replies = [response];
+  await run('judges', 'update', 'judge_1', '--description', '');
+  expect(requests).toEqual([
+    {
+      path: '/agent/judge_1',
+      options: {
+        method: 'PUT',
+        body: { details: { description: '' } },
+      },
+    },
+  ]);
+});
+
+test('agent association list sends desc sorting as -field and bracketed pagination', async () => {
+  replies = [{ summaries: [], status: 'success' }];
+  await run(
+    'agent_associations',
+    'list_from',
+    '--agent_id',
+    'judge_1',
+    '--sort_field',
+    'id',
+    '--sort_direction',
+    'desc',
+    '--pagination_offset',
+    '0',
+    '--pagination_page_size',
+    '25'
+  );
+  expect(requests).toEqual([
+    {
+      path: '/agent_association/from',
+      options: {
+        method: 'GET',
+        query: {
+          agent_id: 'judge_1',
+          sorting: '-id',
+          'pagination[offset]': 0,
+          'pagination[page_size]': 25,
+        },
+      },
+    },
+  ]);
+});
+
 test('instance association list_from sends the instance ids', async () => {
   replies = [{ summaries: [], status: 'success' }];
   await run(
