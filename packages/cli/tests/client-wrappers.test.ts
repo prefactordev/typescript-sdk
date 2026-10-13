@@ -49,6 +49,10 @@ describe('resource clients', () => {
     expect(typeof cliExports.AlertClient).toBe('function');
     expect(typeof cliExports.PersonClient).toBe('function');
     expect(typeof cliExports.TeamClient).toBe('function');
+    expect(typeof cliExports.KnowledgebaseClient).toBe('function');
+    expect(typeof cliExports.KnowledgebaseDocumentClient).toBe('function');
+    expect(typeof cliExports.KnowledgebaseDocumentRevisionClient).toBe('function');
+    expect(typeof cliExports.KnowledgebaseRevisionClient).toBe('function');
     expect(typeof cliExports.RiskProfileClient).toBe('function');
     expect(typeof cliExports.PlaygroundClient).toBe('function');
     expect(typeof cliExports.AdminUserClient).toBe('function');
