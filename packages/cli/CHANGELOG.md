@@ -1,5 +1,11 @@
 # @prefactor/cli
 
+## 0.4.1
+
+### Patch Changes
+
+- [#76](https://github.com/prefactordev/typescript-sdk/pull/76) [`f3dd7b5`](https://github.com/prefactordev/typescript-sdk/commit/f3dd7b56c72efbac0dd4ea9271851c8e3222e4a1) Thanks [@Siutan](https://github.com/Siutan)! - Add knowledgebase, document, and revision commands so scripts can read and edit hosted knowledgebases from the CLI.
+
 ## 0.4.0
 
 ### Minor Changes
