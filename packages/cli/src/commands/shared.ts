@@ -3,6 +3,7 @@ import { isPfid } from '@prefactor/pfid';
 import type { Command } from 'commander';
 import { ApiClient } from '../api-client.js';
 import type { BulkItem } from '../clients/bulk.js';
+import type { ListQueryParams } from '../clients/list-response.js';
 import { DEFAULT_BASE_URL, ProfileManager, resolveCurrentProfileName } from '../profile-manager.js';
 
 const VALID_TOKEN_SCOPES = ['account', 'agent_deployment'] as const;
@@ -16,6 +17,16 @@ type ProfileSelectionSource = 'explicit' | 'environment' | 'default';
 
 export function printJson(value: unknown): void {
   console.log(JSON.stringify(value, null, 2));
+}
+
+/** Print document text from a retrieve response, without the JSON envelope. */
+export function printDocumentContent(result: { details?: { content?: unknown } }): void {
+  const content = result.details?.content;
+  if (typeof content !== 'string') {
+    throw new Error('Response is missing document content.');
+  }
+
+  process.stdout.write(content);
 }
 
 async function getApiClient(command: Command): Promise<ApiClient> {
@@ -105,6 +116,52 @@ export async function parseJsonOption<T>(
   }
 
   return parsed as T;
+}
+
+/** Read a text option value. `@path` reads the file as text and does not parse JSON. */
+export async function readTextOption(value: string, optionName: string): Promise<string> {
+  if (!value.startsWith('@')) {
+    return value;
+  }
+
+  return readJsonOptionFile(value.slice(1), optionName);
+}
+
+export interface ListCommandOptions {
+  sort_field?: string;
+  sort_direction?: 'asc' | 'desc';
+  pagination_offset?: number;
+  pagination_page_size?: number;
+}
+
+/** Build list sorting and pagination params from CLI flags. */
+export function listParamsFromOptions(options: ListCommandOptions): ListQueryParams {
+  if (options.sort_direction !== undefined && options.sort_field === undefined) {
+    throw new Error('--sort_direction requires --sort_field.');
+  }
+
+  return {
+    ...(options.sort_field !== undefined
+      ? {
+          sorting: {
+            field: options.sort_field,
+            direction: options.sort_direction ?? 'asc',
+          },
+        }
+      : {}),
+    ...(options.pagination_offset !== undefined || options.pagination_page_size !== undefined
+      ? {
+          pagination: {
+            ...(options.pagination_offset !== undefined
+              ? { offset: options.pagination_offset }
+              : {}),
+            ...(options.pagination_page_size !== undefined
+              ? { page_size: options.pagination_page_size }
+              : {}),
+          },
+        }
+      : {}),
+  };
 }
 
 async function readJsonOptionFile(filePath: string, optionName: string): Promise<string> {

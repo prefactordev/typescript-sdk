@@ -156,6 +156,49 @@ export {
   type IntegrationSummary,
   type IntegrationTestResponse,
 } from './clients/integration.js';
+export {
+  KnowledgebaseClient,
+  type KnowledgebaseDetails,
+  type KnowledgebaseForCreate,
+  type KnowledgebaseForUpdate,
+  type KnowledgebaseListParams,
+  type KnowledgebaseListResponse,
+  type KnowledgebaseResponse,
+  type KnowledgebaseStatus,
+  type KnowledgebaseSummary,
+} from './clients/knowledgebase.js';
+export {
+  KnowledgebaseDocumentClient,
+  type KnowledgebaseDocumentDetails,
+  type KnowledgebaseDocumentForCreate,
+  type KnowledgebaseDocumentForUpdate,
+  type KnowledgebaseDocumentListParams,
+  type KnowledgebaseDocumentListResponse,
+  type KnowledgebaseDocumentResponse,
+  type KnowledgebaseDocumentRevisionInput,
+  type KnowledgebaseDocumentSummary,
+  type KnowledgebaseDocumentUpdateInput,
+} from './clients/knowledgebase-document.js';
+export {
+  type KnowledgebaseDocumentChangeKind,
+  KnowledgebaseDocumentRevisionClient,
+  type KnowledgebaseDocumentRevisionDetails,
+  type KnowledgebaseDocumentRevisionListParams,
+  type KnowledgebaseDocumentRevisionListResponse,
+  type KnowledgebaseDocumentRevisionResponse,
+  type KnowledgebaseDocumentRevisionSummary,
+} from './clients/knowledgebase-document-revision.js';
+export {
+  KnowledgebaseRevisionClient,
+  type KnowledgebaseRevisionDetails,
+  type KnowledgebaseRevisionDocument,
+  type KnowledgebaseRevisionDocumentListParams,
+  type KnowledgebaseRevisionDocumentListResponse,
+  type KnowledgebaseRevisionListParams,
+  type KnowledgebaseRevisionListResponse,
+  type KnowledgebaseRevisionResponse,
+  type KnowledgebaseRevisionSummary,
+} from './clients/knowledgebase-revision.js';
 export type {
   ListResponse,
   PaginationOutput,

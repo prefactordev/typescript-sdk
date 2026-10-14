@@ -20,7 +20,7 @@ This is a consumption tool, NOT shared infrastructure.
 - Other packages should NOT depend on this package.
 
 ## Command groups
-23 command groups:
+27 command groups:
 - `login`: Authenticate and save credentials to the default profile
 - `profiles`: Manage CLI authentication profiles
 - `accounts`: Manage accounts
@@ -34,6 +34,10 @@ This is a consumption tool, NOT shared infrastructure.
 - `alerts`: Manage alerts (list, retrieve, count, raise, clear)
 - `people`: Manage people (list, retrieve, create, update, delete)
 - `teams`: Manage teams (list, retrieve, create, update, delete)
+- `knowledgebases`: Manage knowledgebases (list, retrieve, create, update, archive, unarchive, delete)
+- `knowledgebase_documents`: Manage knowledgebase documents (list, retrieve, create, update, rename, archive, unarchive, delete)
+- `knowledgebase_document_revisions`: Read knowledgebase document revisions (list, retrieve)
+- `knowledgebase_revisions`: Read knowledgebase revisions (list, retrieve, list_documents)
 - `risk_profiles`: Manage risk profiles (list, retrieve, template, create, update, delete)
 - `playground`: Run playground demo create, record, and register operations
 - `admin_users`: Manage admin users (list, retrieve, update)

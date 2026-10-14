@@ -148,6 +148,10 @@ Environment fallback is supported when no default profile is configured:
 - `alerts`: list, retrieve, count, raise, clear
 - `people`: list, retrieve, create, update, delete
 - `teams`: list, retrieve, create, update, delete
+- `knowledgebases`: list, retrieve, create, update, archive, unarchive, delete
+- `knowledgebase_documents`: list, retrieve, create, update, rename, archive, unarchive, delete
+- `knowledgebase_document_revisions`: list, retrieve
+- `knowledgebase_revisions`: list, retrieve, list_documents
 - `risk_profiles`: list, retrieve, template, create, update, delete
 - `playground`: create, record, and register demo agents, instances, and spans
 - `admin_users`: list, retrieve, update
@@ -178,6 +182,18 @@ prefactor integrations delete slack
 Commands print the API response as JSON. Retrieval returns a redacted webhook value. Test sends a real notification and prints the delivery result; API and delivery errors cause the command to fail. Delete removes the configuration immediately.
 
 Keep the webhook URL secret. Avoid pasting it into shell history or sharing command output containing credentials. See the [integration command guide](./integrations.md) for event names and programmatic usage.
+
+## Knowledgebases
+
+```bash
+prefactor knowledgebases create --name "Support docs" --description "Customer-facing guides"
+prefactor knowledgebases list --status active --sort_field name
+prefactor knowledgebase_documents create --knowledgebase_id <id> --path guide.md --content @./guide.md
+prefactor knowledgebase_documents retrieve <document_id> --content_only
+prefactor knowledgebase_documents update <document_id> --base_revision_id <revision_id> --content @./guide.md
+```
+
+`--content` is document text. `@path` reads that file as text and does not parse it as JSON. `@file` content is limited to 1 MiB. `--content_only` prints `details.content` with no JSON envelope. Updating, renaming, archiving, or unarchiving a document requires `--base_revision_id`. `--clear_description` clears a knowledgebase description and cannot be combined with `--description`.
 
 ## JSON File Input
 
@@ -258,6 +274,10 @@ if (agentId) {
 - `PlaygroundClient`
 - `RiskProfileClient`
 - `TeamClient`
+- `KnowledgebaseClient`
+- `KnowledgebaseDocumentClient`
+- `KnowledgebaseDocumentRevisionClient`
+- `KnowledgebaseRevisionClient`
 - `BulkClient`
 
 Each client exposes typed request/response interfaces for its resource operations.
