@@ -45,6 +45,16 @@ export {
   type AgentSummary,
 } from './clients/agent.js';
 export {
+  AgentAssociationClient,
+  type AgentAssociationDetails,
+  type AgentAssociationForCreate,
+  type AgentAssociationListParams,
+  type AgentAssociationListResponse,
+  type AgentAssociationResponse,
+  type AgentAssociationSummary,
+  type AgentAssociationTrigger,
+} from './clients/agent-association.js';
+export {
   type AgentDeployment,
   AgentDeploymentClient,
   type AgentDeploymentCreateDetails,
@@ -78,6 +88,15 @@ export {
   type AgentSpanSchemaCounts,
 } from './clients/agent-instance.js';
 export {
+  AgentInstanceAssociationClient,
+  type AgentInstanceAssociationDetails,
+  type AgentInstanceAssociationListFromParams,
+  type AgentInstanceAssociationListResponse,
+  type AgentInstanceAssociationListToParams,
+  type AgentInstanceAssociationResponse,
+  type AgentInstanceAssociationSummary,
+} from './clients/agent-instance-association.js';
+export {
   type AgentSchemaVersion,
   AgentSchemaVersionClient,
   type AgentSchemaVersionCreateOptions,
@@ -108,6 +127,9 @@ export {
   type AgentVersionListResponse,
   type AgentVersionResponse,
   type AgentVersionSummary,
+  type HostedJudgeVersionForCreate,
+  type JudgeTemplate,
+  type JudgeTemplateListResponse,
 } from './clients/agent-version.js';
 export {
   type AlertClearParams,

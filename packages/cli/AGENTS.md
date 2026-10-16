@@ -20,11 +20,14 @@ This is a consumption tool, NOT shared infrastructure.
 - Other packages should NOT depend on this package.
 
 ## Command groups
-27 command groups:
+30 command groups:
 - `login`: Authenticate and save credentials to the default profile
 - `profiles`: Manage CLI authentication profiles
 - `accounts`: Manage accounts
 - `agents`: Manage agents
+- `judges`: Manage judge agents (list, retrieve, show, create, update, delete, retire, reinstate, create_version, templates, score)
+- `agent_associations`: Link a judge to an agent (list_from, list_to, retrieve, create, update, delete)
+- `agent_instance_associations`: Read instance associations (list_from, list_to, retrieve)
 - `environments`: Manage environments
 - `agent_versions`: Manage agent versions
 - `agent_schema_versions`: Manage agent schema versions

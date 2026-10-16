@@ -183,6 +183,13 @@ export class AgentInstanceClient extends CoreAgentInstanceClient {
     super(client);
   }
 
+  judge(agentInstanceId: string, judgeAgentId: string): Promise<AgentInstanceShowResponse> {
+    return this.client.request(`/agent_instance/${encodeURIComponent(agentInstanceId)}/judge`, {
+      method: 'POST',
+      body: { judge_agent_id: judgeAgentId },
+    });
+  }
+
   show(params: AgentInstanceShowParams): Promise<AgentInstanceShowResponse> {
     return this.client.request('/agent_instance/show', {
       method: 'GET',

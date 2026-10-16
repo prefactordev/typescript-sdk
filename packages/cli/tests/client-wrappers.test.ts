@@ -40,6 +40,8 @@ describe('resource clients', () => {
     expect(typeof cliExports.AccountClient).toBe('function');
     expect(typeof cliExports.IntegrationClient).toBe('function');
     expect(typeof cliExports.AgentClient).toBe('function');
+    expect(typeof cliExports.AgentAssociationClient).toBe('function');
+    expect(typeof cliExports.AgentInstanceAssociationClient).toBe('function');
     expect(typeof cliExports.AgentDeploymentClient).toBe('function');
     expect(typeof cliExports.EnvironmentClient).toBe('function');
     expect(typeof cliExports.AgentVersionClient).toBe('function');
