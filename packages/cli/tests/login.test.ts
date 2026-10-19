@@ -313,6 +313,50 @@ describe('device login', () => {
     };
   }
 
+  test('waits for retry-after once when a poll is rate limited, then the interval', async () => {
+    useTempDir();
+    writeCustomProfile();
+
+    let polls = 0;
+    const fetchImpl = (async (input: RequestInfo | URL) => {
+      if (String(input).endsWith('/cli/login/start')) {
+        return jsonResponse(startPayload());
+      }
+      polls += 1;
+      if (polls === 1) {
+        return jsonResponse({ error: 'rate_limited' }, 429, { 'retry-after': '12' });
+      }
+      if (polls === 2) {
+        return jsonResponse({ error: 'authorization_pending' }, 400);
+      }
+      return jsonResponse({ access_token: 'approved-token', token_type: 'Bearer' });
+    }) as typeof fetch;
+
+    const sleeps: number[] = [];
+    const originalLog = console.log;
+    console.log = () => {};
+
+    try {
+      const program = new Command();
+      program.exitOverride();
+      registerLoginCommand(program, {
+        openBrowser: mock(() => {}),
+        promptForToken: mock(async () => 'pasted-token'),
+        fetch: fetchImpl,
+        sleep: async (ms) => {
+          sleeps.push(ms);
+        },
+        clientInfo,
+        terminalColumns: () => 80,
+      });
+      await program.parseAsync(['node', 'prefactor', 'login']);
+    } finally {
+      console.log = originalLog;
+    }
+
+    expect(sleeps).toEqual([5000, 12000, 5000]);
+  });
+
   test('prints the link without the QR code when the terminal is too narrow', async () => {
     useTempDir();
     writeCustomProfile();

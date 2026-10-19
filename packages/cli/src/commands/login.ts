@@ -303,9 +303,12 @@ async function pollForDeviceGrant(
   const now = deps.now ?? Date.now;
   const deadline = now() + started.expires_in * 1000;
   let intervalMs = Math.max(1, started.interval) * 1000;
+  // A rate-limited poll waits for retry-after instead of the interval, once.
+  let waitMs = intervalMs;
 
   while (now() < deadline) {
-    await sleep(intervalMs);
+    await sleep(waitMs);
+    waitMs = intervalMs;
     if (now() >= deadline) {
       break;
     }
@@ -336,6 +339,7 @@ async function pollForDeviceGrant(
 
     if (response.status === 400 && code === 'slow_down') {
       intervalMs += SLOW_DOWN_EXTRA_MS;
+      waitMs = intervalMs;
       continue;
     }
 
@@ -348,7 +352,7 @@ async function pollForDeviceGrant(
     }
 
     if (response.status === 429 || code === 'rate_limited') {
-      await sleep(retryAfterMs(response, intervalMs));
+      waitMs = retryAfterMs(response, intervalMs);
       continue;
     }
 
