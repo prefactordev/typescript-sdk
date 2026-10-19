@@ -120,7 +120,11 @@ describe('login command action', () => {
 
     const program = new Command();
     program.exitOverride();
-    registerLoginCommand(program, { openBrowser, promptForToken, fetch: pasteFallbackFetch });
+    registerLoginCommand(
+      program,
+      { openBrowser, promptForToken, fetch: pasteFallbackFetch },
+      '9.9.9'
+    );
 
     await program.parseAsync(['node', 'prefactor', 'login']);
 
@@ -145,7 +149,11 @@ describe('login command action', () => {
     try {
       const program = new Command();
       program.exitOverride();
-      registerLoginCommand(program, { openBrowser, promptForToken, fetch: pasteFallbackFetch });
+      registerLoginCommand(
+        program,
+        { openBrowser, promptForToken, fetch: pasteFallbackFetch },
+        '9.9.9'
+      );
       await program.parseAsync(['node', 'prefactor', 'login']);
     } finally {
       console.log = originalLog;
@@ -177,7 +185,11 @@ describe('login command action', () => {
     try {
       const program = new Command();
       program.exitOverride();
-      registerLoginCommand(program, { openBrowser, promptForToken, fetch: pasteFallbackFetch });
+      registerLoginCommand(
+        program,
+        { openBrowser, promptForToken, fetch: pasteFallbackFetch },
+        '9.9.9'
+      );
       await program.parseAsync(['node', 'prefactor', 'login']);
     } finally {
       console.log = originalLog;
@@ -202,7 +214,11 @@ describe('login command action', () => {
 
     const program = new Command();
     program.exitOverride();
-    registerLoginCommand(program, { openBrowser, promptForToken, fetch: pasteFallbackFetch });
+    registerLoginCommand(
+      program,
+      { openBrowser, promptForToken, fetch: pasteFallbackFetch },
+      '9.9.9'
+    );
     await program.parseAsync(['node', 'prefactor', 'login']);
 
     expect(openBrowser).toHaveBeenCalledTimes(1);
@@ -219,7 +235,11 @@ describe('login command action', () => {
 
     const program = new Command();
     program.exitOverride();
-    registerLoginCommand(program, { openBrowser, promptForToken, fetch: pasteFallbackFetch });
+    registerLoginCommand(
+      program,
+      { openBrowser, promptForToken, fetch: pasteFallbackFetch },
+      '9.9.9'
+    );
 
     await expect(program.parseAsync(['node', 'prefactor', 'login'])).rejects.toThrow(
       'No API token provided.'
@@ -241,7 +261,11 @@ describe('login command action', () => {
     try {
       const program = new Command();
       program.exitOverride();
-      registerLoginCommand(program, { openBrowser, promptForToken, fetch: pasteFallbackFetch });
+      registerLoginCommand(
+        program,
+        { openBrowser, promptForToken, fetch: pasteFallbackFetch },
+        '9.9.9'
+      );
       await program.parseAsync(['node', 'prefactor', 'login']);
     } finally {
       console.log = originalLog;
@@ -339,22 +363,115 @@ describe('device login', () => {
     try {
       const program = new Command();
       program.exitOverride();
-      registerLoginCommand(program, {
-        openBrowser: mock(() => {}),
-        promptForToken: mock(async () => 'pasted-token'),
-        fetch: fetchImpl,
-        sleep: async (ms) => {
-          sleeps.push(ms);
+      registerLoginCommand(
+        program,
+        {
+          openBrowser: mock(() => {}),
+          promptForToken: mock(async () => 'pasted-token'),
+          fetch: fetchImpl,
+          sleep: async (ms) => {
+            sleeps.push(ms);
+          },
+          clientInfo,
+          terminalColumns: () => 80,
         },
-        clientInfo,
-        terminalColumns: () => 80,
-      });
+        '9.9.9'
+      );
       await program.parseAsync(['node', 'prefactor', 'login']);
     } finally {
       console.log = originalLog;
     }
 
     expect(sleeps).toEqual([5000, 12000, 5000]);
+  });
+
+  test('reads an HTTP-date retry-after', async () => {
+    useTempDir();
+    writeCustomProfile();
+
+    let clock = Date.parse('2026-10-20T00:00:00Z');
+    let polls = 0;
+    const fetchImpl = (async (input: RequestInfo | URL) => {
+      if (String(input).endsWith('/cli/login/start')) {
+        return jsonResponse(startPayload());
+      }
+      polls += 1;
+      if (polls === 1) {
+        return jsonResponse({ error: 'rate_limited' }, 429, {
+          'retry-after': new Date(clock + 12_000).toUTCString(),
+        });
+      }
+      return jsonResponse({ access_token: 'approved-token', token_type: 'Bearer' });
+    }) as typeof fetch;
+
+    const sleeps: number[] = [];
+    const originalLog = console.log;
+    console.log = () => {};
+
+    try {
+      const program = new Command();
+      program.exitOverride();
+      registerLoginCommand(
+        program,
+        {
+          openBrowser: mock(() => {}),
+          promptForToken: mock(async () => 'pasted-token'),
+          fetch: fetchImpl,
+          now: () => clock,
+          sleep: async (ms) => {
+            sleeps.push(ms);
+            clock += ms;
+          },
+          clientInfo,
+          terminalColumns: () => 80,
+        },
+        '9.9.9'
+      );
+      await program.parseAsync(['node', 'prefactor', 'login']);
+    } finally {
+      console.log = originalLog;
+    }
+
+    expect(sleeps).toEqual([5000, 12000]);
+  });
+
+  test('does not wait for retry-after past the login expiry', async () => {
+    useTempDir();
+
+    let clock = 0;
+    let polls = 0;
+    const fetchImpl = (async (input: RequestInfo | URL) => {
+      if (String(input).endsWith('/cli/login/start')) {
+        return jsonResponse({ ...startPayload(), expires_in: 30 });
+      }
+      polls += 1;
+      return jsonResponse({ error: 'rate_limited' }, 429, { 'retry-after': '3600' });
+    }) as typeof fetch;
+
+    const sleeps: number[] = [];
+    const program = new Command();
+    program.exitOverride();
+    registerLoginCommand(
+      program,
+      {
+        openBrowser: () => {},
+        promptForToken: async () => 'unused',
+        fetch: fetchImpl,
+        now: () => clock,
+        sleep: async (ms) => {
+          sleeps.push(ms);
+          clock += ms;
+        },
+        clientInfo,
+        terminalColumns: () => 80,
+      },
+      '9.9.9'
+    );
+
+    await expect(program.parseAsync(['node', 'prefactor', 'login'])).rejects.toThrow(
+      'Login expired. Run prefactor login again.'
+    );
+    expect({ polls, sleeps }).toEqual({ polls: 1, sleeps: [5000, 25000] });
   });
 
   test('prints the link without the QR code when the terminal is too narrow', async () => {
@@ -375,14 +492,18 @@ describe('device login', () => {
     try {
       const program = new Command();
       program.exitOverride();
-      registerLoginCommand(program, {
-        openBrowser: mock(() => {}),
-        promptForToken: mock(async () => 'pasted-token'),
-        fetch: fetchImpl,
-        sleep: async () => {},
-        clientInfo,
-        terminalColumns: () => 3,
-      });
+      registerLoginCommand(
+        program,
+        {
+          openBrowser: mock(() => {}),
+          promptForToken: mock(async () => 'pasted-token'),
+          fetch: fetchImpl,
+          sleep: async () => {},
+          clientInfo,
+          terminalColumns: () => 3,
+        },
+        '9.9.9'
+      );
       await program.parseAsync(['node', 'prefactor', 'login']);
     } finally {
       console.log = originalLog;
@@ -428,16 +549,20 @@ describe('device login', () => {
     try {
       const program = new Command();
       program.exitOverride();
-      registerLoginCommand(program, {
-        openBrowser,
-        promptForToken,
-        fetch: fetchImpl,
-        sleep: async (ms) => {
-          sleeps.push(ms);
+      registerLoginCommand(
+        program,
+        {
+          openBrowser,
+          promptForToken,
+          fetch: fetchImpl,
+          sleep: async (ms) => {
+            sleeps.push(ms);
+          },
+          clientInfo,
+          terminalColumns: () => 80,
         },
-        clientInfo,
-        terminalColumns: () => 80,
-      });
+        '9.9.9'
+      );
       await program.parseAsync(['node', 'prefactor', 'login']);
     } finally {
       console.log = originalLog;
@@ -488,15 +613,19 @@ describe('device login', () => {
     const sleeps: number[] = [];
     const program = new Command();
     program.exitOverride();
-    registerLoginCommand(program, {
-      openBrowser: () => {},
-      promptForToken: async () => 'unused',
-      fetch: fetchImpl,
-      sleep: async (ms) => {
-        sleeps.push(ms);
+    registerLoginCommand(
+      program,
+      {
+        openBrowser: () => {},
+        promptForToken: async () => 'unused',
+        fetch: fetchImpl,
+        sleep: async (ms) => {
+          sleeps.push(ms);
+        },
+        clientInfo,
       },
-      clientInfo,
-    });
+      '9.9.9'
+    );
     await program.parseAsync(['node', 'prefactor', 'login']);
 
     expect(sleeps).toEqual([5000, 10000]);
@@ -515,13 +644,17 @@ describe('device login', () => {
 
     const program = new Command();
     program.exitOverride();
-    registerLoginCommand(program, {
-      openBrowser: () => {},
-      promptForToken: async () => 'unused',
-      fetch: fetchImpl,
-      sleep: async () => {},
-      clientInfo,
-    });
+    registerLoginCommand(
+      program,
+      {
+        openBrowser: () => {},
+        promptForToken: async () => 'unused',
+        fetch: fetchImpl,
+        sleep: async () => {},
+        clientInfo,
+      },
+      '9.9.9'
+    );
 
     await expect(program.parseAsync(['node', 'prefactor', 'login'])).rejects.toThrow(
       'The login was cancelled in the browser.'
@@ -543,13 +676,17 @@ describe('device login', () => {
 
     const program = new Command();
     program.exitOverride();
-    registerLoginCommand(program, {
-      openBrowser: () => {},
-      promptForToken: async () => 'unused',
-      fetch: fetchImpl,
-      sleep: async () => {},
-      clientInfo,
-    });
+    registerLoginCommand(
+      program,
+      {
+        openBrowser: () => {},
+        promptForToken: async () => 'unused',
+        fetch: fetchImpl,
+        sleep: async () => {},
+        clientInfo,
+      },
+      '9.9.9'
+    );
 
     await expect(program.parseAsync(['node', 'prefactor', 'login'])).rejects.toThrow(
       'Login expired or was already used. Run prefactor login again.'
@@ -570,17 +707,21 @@ describe('device login', () => {
 
     const program = new Command();
     program.exitOverride();
-    registerLoginCommand(program, {
-      openBrowser: () => {},
-      promptForToken: async () => 'unused',
-      fetch: fetchImpl,
-      sleep: async () => {},
-      clientInfo: {
-        client_version: 'v'.repeat(70),
-        platform: 'p'.repeat(70),
-        hostname: 'h'.repeat(70),
+    registerLoginCommand(
+      program,
+      {
+        openBrowser: () => {},
+        promptForToken: async () => 'unused',
+        fetch: fetchImpl,
+        sleep: async () => {},
+        clientInfo: {
+          client_version: 'v'.repeat(70),
+          platform: 'p'.repeat(70),
+          hostname: 'h'.repeat(70),
+        },
       },
-    });
+      '9.9.9'
+    );
     await program.parseAsync(['node', 'prefactor', 'login']);
 
     expect(JSON.parse(bodies[0] ?? '{}')).toEqual({
@@ -598,13 +739,17 @@ describe('device login', () => {
 
     const program = new Command();
     program.exitOverride();
-    registerLoginCommand(program, {
-      openBrowser: () => {},
-      promptForToken: async () => 'unused',
-      fetch: fetchImpl,
-      sleep: async () => {},
-      clientInfo,
-    });
+    registerLoginCommand(
+      program,
+      {
+        openBrowser: () => {},
+        promptForToken: async () => 'unused',
+        fetch: fetchImpl,
+        sleep: async () => {},
+        clientInfo,
+      },
+      '9.9.9'
+    );
 
     await expect(program.parseAsync(['node', 'prefactor', 'login'])).rejects.toThrow(
       'Login start returned an unexpected response.'
@@ -623,16 +768,20 @@ describe('device login', () => {
 
     const program = new Command();
     program.exitOverride();
-    registerLoginCommand(program, {
-      openBrowser: () => {},
-      promptForToken: async () => 'unused',
-      fetch: fetchImpl,
-      now: () => clock,
-      sleep: async (ms) => {
-        clock += ms;
+    registerLoginCommand(
+      program,
+      {
+        openBrowser: () => {},
+        promptForToken: async () => 'unused',
+        fetch: fetchImpl,
+        now: () => clock,
+        sleep: async (ms) => {
+          clock += ms;
+        },
+        clientInfo,
       },
-      clientInfo,
-    });
+      '9.9.9'
+    );
 
     await expect(program.parseAsync(['node', 'prefactor', 'login'])).rejects.toThrow(
       'Login expired. Run prefactor login again.'

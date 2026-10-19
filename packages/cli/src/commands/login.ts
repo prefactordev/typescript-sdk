@@ -1,10 +1,8 @@
 import { spawn } from 'node:child_process';
 import type { Command } from 'commander';
-import packageJson from '../../package.json';
 import { DEFAULT_BASE_URL, DEFAULT_PROFILE_NAME, ProfileManager } from '../profile-manager.js';
 import { clientHostname, clientPlatform } from './client-info.js';
 
-const PACKAGE_VERSION = typeof packageJson.version === 'string' ? packageJson.version : '0.0.0';
 const SLOW_DOWN_EXTRA_MS = 5_000;
 // The server rejects longer client details with invalid_request.
 const MAX_CLIENT_INFO_LENGTH = 64;
@@ -154,7 +152,7 @@ interface DeviceLoginGrant {
 export function registerLoginCommand(
   program: Command,
   deps: LoginDeps = defaultDeps,
-  version: string = PACKAGE_VERSION
+  version: string
 ): void {
   program
     .command('login')
@@ -352,7 +350,11 @@ async function pollForDeviceGrant(
     }
 
     if (response.status === 429 || code === 'rate_limited') {
-      waitMs = retryAfterMs(response, intervalMs);
+      const current = now();
+      waitMs = Math.min(
+        retryAfterMs(response, intervalMs, current),
+        Math.max(0, deadline - current)
+      );
       continue;
     }
 
@@ -459,18 +461,24 @@ function tokenFailureMessage(code: string | undefined, status: number): string {
   return `Login failed (HTTP ${status}).`;
 }
 
-function retryAfterMs(response: Response, fallbackMs: number): number {
+// Retry-After is either a number of seconds or an HTTP date.
+function retryAfterMs(response: Response, fallbackMs: number, nowMs: number): number {
   const header = response.headers.get('retry-after');
   if (!header) {
     return fallbackMs;
   }
 
   const seconds = Number(header);
-  if (!Number.isFinite(seconds) || seconds < 0) {
+  if (Number.isFinite(seconds) && seconds >= 0) {
+    return Math.max(fallbackMs, seconds * 1000);
+  }
+
+  const dateMs = Date.parse(header);
+  if (Number.isNaN(dateMs)) {
     return fallbackMs;
   }
 
-  return Math.max(fallbackMs, seconds * 1000);
+  return Math.max(fallbackMs, dateMs - nowMs);
 }
 
 function defaultSleep(ms: number): Promise<void> {
