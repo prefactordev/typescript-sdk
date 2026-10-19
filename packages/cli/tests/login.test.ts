@@ -7,6 +7,7 @@ import { createCli } from '../src/cli.js';
 import {
   browserOpenCommand,
   buildLoginUrl,
+  qrCodeFits,
   registerLoginCommand,
   validateToken,
 } from '../src/commands/login.js';
@@ -42,7 +43,7 @@ describe('buildLoginUrl', () => {
 });
 
 describe('browserOpenCommand', () => {
-  const approvalUrl = 'https://app.prefactorai.com/cli/connect?code=ABCD-EFGH';
+  const approvalUrl = 'https://app.prefactorai.com/cli/authorize?code=signed.login.token';
 
   test('opens an https URL without a shell on Windows', () => {
     expect(browserOpenCommand('win32', approvalUrl)).toEqual({
@@ -59,6 +60,19 @@ describe('browserOpenCommand', () => {
   test('refuses URLs that are not http or https', () => {
     expect(browserOpenCommand('win32', 'file:///C:/Windows/System32/calc.exe')).toBeUndefined();
     expect(browserOpenCommand('darwin', 'calc.exe & whoami')).toBeUndefined();
+  });
+});
+
+describe('qrCodeFits', () => {
+  const qrCode = '█▀▀▀█\n█▄▄▄█';
+
+  test('fits only when the terminal is at least as wide as the code', () => {
+    expect(qrCodeFits(qrCode, 5)).toBe(true);
+    expect(qrCodeFits(qrCode, 4)).toBe(false);
+  });
+
+  test('does not fit when the terminal width is unknown', () => {
+    expect(qrCodeFits(qrCode, undefined)).toBe(false);
   });
 });
 
@@ -284,16 +298,57 @@ describe('device login', () => {
     );
   }
 
+  const approvalUrl = 'https://custom.example.com/cli/authorize?code=signed.login.token';
+  const qrCode = '█▀▀█\n█▄▄█';
+
   function startPayload() {
     return {
+      login_token: 'signed.login.token',
       device_code: 'device-secret',
       user_code: 'ABCD-EFGH',
-      verification_uri: 'https://custom.example.com/cli/connect',
-      verification_uri_complete: 'https://custom.example.com/cli/connect?code=ABCD-EFGH',
+      verification_uri_complete: approvalUrl,
+      verification_qr_code: qrCode,
       expires_in: 600,
       interval: 5,
     };
   }
+
+  test('prints the link without the QR code when the terminal is too narrow', async () => {
+    useTempDir();
+    writeCustomProfile();
+
+    const fetchImpl = (async (input: RequestInfo | URL) => {
+      if (String(input).endsWith('/cli/login/start')) {
+        return jsonResponse(startPayload());
+      }
+      return jsonResponse({ access_token: 'approved-token', token_type: 'Bearer' });
+    }) as typeof fetch;
+
+    const logs: string[] = [];
+    const originalLog = console.log;
+    console.log = (...args: unknown[]) => logs.push(args.join(' '));
+
+    try {
+      const program = new Command();
+      program.exitOverride();
+      registerLoginCommand(program, {
+        openBrowser: mock(() => {}),
+        promptForToken: mock(async () => 'pasted-token'),
+        fetch: fetchImpl,
+        sleep: async () => {},
+        clientInfo,
+        terminalColumns: () => 3,
+      });
+      await program.parseAsync(['node', 'prefactor', 'login']);
+    } finally {
+      console.log = originalLog;
+    }
+
+    const output = logs.join('\n');
+    expect(output).not.toContain(qrCode);
+    expect(output).not.toContain('scan the QR code');
+    expect(output).toContain(`Opening your browser to approve this login: ${approvalUrl}`);
+  });
 
   test('saves the approved access token and does not ask for a pasted token', async () => {
     useTempDir();
@@ -337,6 +392,7 @@ describe('device login', () => {
           sleeps.push(ms);
         },
         clientInfo,
+        terminalColumns: () => 80,
       });
       await program.parseAsync(['node', 'prefactor', 'login']);
     } finally {
@@ -344,16 +400,19 @@ describe('device login', () => {
     }
 
     expect(promptForToken).not.toHaveBeenCalled();
-    expect(openBrowser).toHaveBeenCalledWith(
-      'https://custom.example.com/cli/connect?code=ABCD-EFGH'
-    );
+    expect(openBrowser).toHaveBeenCalledWith(approvalUrl);
     expect(calls[0]?.url).toBe('https://custom.example.com/cli/login/start');
     expect(JSON.parse(calls[0]?.body ?? '{}')).toEqual(clientInfo);
     expect(calls[1]?.url).toBe('https://custom.example.com/cli/login/token');
-    expect(JSON.parse(calls[1]?.body ?? '{}')).toEqual({ device_code: 'device-secret' });
+    expect(JSON.parse(calls[1]?.body ?? '{}')).toEqual({
+      login_token: 'signed.login.token',
+      device_code: 'device-secret',
+    });
     expect(sleeps).toEqual([5000, 5000]);
 
     const output = logs.join('\n');
+    expect(output).toContain(qrCode);
+    expect(output).toContain(`Opening your browser to approve this login: ${approvalUrl}`);
     expect(output).toContain('Confirm this code in the browser: ABCD-EFGH');
     expect(output).toContain('Signed in to Example account.');
     expect(output).not.toContain('device-secret');
@@ -371,7 +430,8 @@ describe('device login', () => {
       if (String(input).endsWith('/cli/login/start')) {
         return jsonResponse({
           ...startPayload(),
-          verification_uri_complete: 'https://app.prefactorai.com/cli/connect?code=ABCD-EFGH',
+          verification_uri_complete:
+            'https://app.prefactorai.com/cli/authorize?code=signed.login.token',
         });
       }
       polls += 1;
@@ -425,6 +485,86 @@ describe('device login', () => {
 
     const manager = await ProfileManager.create();
     expect(manager.getProfile(DEFAULT_PROFILE_NAME)?.api_key).toBe('old-token');
+  });
+
+  test('stops when the login token was already used', async () => {
+    useTempDir();
+
+    const fetchImpl = (async (input: RequestInfo | URL) => {
+      if (String(input).endsWith('/cli/login/start')) {
+        return jsonResponse(startPayload());
+      }
+      return jsonResponse({ error: 'expired_token' }, 400);
+    }) as typeof fetch;
+
+    const program = new Command();
+    program.exitOverride();
+    registerLoginCommand(program, {
+      openBrowser: () => {},
+      promptForToken: async () => 'unused',
+      fetch: fetchImpl,
+      sleep: async () => {},
+      clientInfo,
+    });
+
+    await expect(program.parseAsync(['node', 'prefactor', 'login'])).rejects.toThrow(
+      'Login expired or was already used. Run prefactor login again.'
+    );
+  });
+
+  test('cuts client details to the 64 characters the server accepts', async () => {
+    useTempDir();
+
+    const bodies: string[] = [];
+    const fetchImpl = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input).endsWith('/cli/login/start')) {
+        bodies.push(String(init?.body ?? ''));
+        return jsonResponse(startPayload());
+      }
+      return jsonResponse({ access_token: 'approved-token' });
+    }) as typeof fetch;
+
+    const program = new Command();
+    program.exitOverride();
+    registerLoginCommand(program, {
+      openBrowser: () => {},
+      promptForToken: async () => 'unused',
+      fetch: fetchImpl,
+      sleep: async () => {},
+      clientInfo: {
+        client_version: 'v'.repeat(70),
+        platform: 'p'.repeat(70),
+        hostname: 'h'.repeat(70),
+      },
+    });
+    await program.parseAsync(['node', 'prefactor', 'login']);
+
+    expect(JSON.parse(bodies[0] ?? '{}')).toEqual({
+      client_version: 'v'.repeat(64),
+      platform: 'p'.repeat(64),
+      hostname: 'h'.repeat(64),
+    });
+  });
+
+  test('rejects a start response without a login token', async () => {
+    useTempDir();
+
+    const { login_token: _loginToken, ...withoutLoginToken } = startPayload();
+    const fetchImpl = (async () => jsonResponse(withoutLoginToken)) as typeof fetch;
+
+    const program = new Command();
+    program.exitOverride();
+    registerLoginCommand(program, {
+      openBrowser: () => {},
+      promptForToken: async () => 'unused',
+      fetch: fetchImpl,
+      sleep: async () => {},
+      clientInfo,
+    });
+
+    await expect(program.parseAsync(['node', 'prefactor', 'login'])).rejects.toThrow(
+      'Login start returned an unexpected response.'
+    );
   });
 
   test('stops when the login expires before approval', async () => {

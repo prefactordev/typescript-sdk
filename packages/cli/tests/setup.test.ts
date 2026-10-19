@@ -142,10 +142,6 @@ describe('CLI setup command', () => {
         return pingSuccess('agent_123');
       }
 
-      if (path === '/api/v1/cli_connection') {
-        return jsonResponse({ status: 'success', details: { id: 'connection_1' } });
-      }
-
       throw new Error(`Unexpected request: ${path}`);
     }) as typeof fetch;
 
@@ -153,7 +149,7 @@ describe('CLI setup command', () => {
       await createCli('1.0.0').parseAsync(['node', 'prefactor', 'setup', 'agent_123']);
     });
 
-    expect(calls).toHaveLength(5);
+    expect(calls).toHaveLength(4);
     expect(new URL(calls[0].url).pathname).toBe('/api/v1/agent/agent_123');
     expect(calls[0].init?.method).toBe('GET');
     expect(new URL(calls[1].url).pathname).toBe('/api/v1/agent_deployment');
@@ -166,13 +162,6 @@ describe('CLI setup command', () => {
     );
     expect(new URL(calls[3].url).pathname).toBe('/api/v1/ping');
     expect(calls[3].init?.method).toBe('GET');
-    expect(new URL(calls[4].url).pathname).toBe('/api/v1/cli_connection');
-    expect(calls[4].init?.method).toBe('POST');
-    expect(JSON.parse(String(calls[4].init?.body))).toMatchObject({
-      cli_version: '1.0.0',
-      agent: { id: 'agent_123', name: 'Support agent' },
-      tools: [],
-    });
 
     expect(output).toContain('PREFACTOR_API_URL=https://api.example.test');
     expect(output).toContain('PREFACTOR_API_TOKEN=runtime-token');
@@ -222,10 +211,6 @@ describe('CLI setup command', () => {
 
       if (path === '/api/v1/ping') {
         return pingSuccess('agent_456');
-      }
-
-      if (path === '/api/v1/cli_connection') {
-        return jsonResponse({ status: 'success', details: { id: 'connection_1' } });
       }
 
       throw new Error(`Unexpected request: ${path}`);
@@ -291,10 +276,6 @@ describe('CLI setup command', () => {
         return pingSuccess('agent_789');
       }
 
-      if (path === '/api/v1/cli_connection') {
-        return jsonResponse({ status: 'success', details: { id: 'connection_1' } });
-      }
-
       throw new Error(`Unexpected request: ${path}`);
     }) as typeof fetch;
 
@@ -347,10 +328,6 @@ describe('CLI setup command', () => {
         return pingSuccess('agent_no_account');
       }
 
-      if (path === '/api/v1/cli_connection') {
-        return jsonResponse({ status: 'success', details: { id: 'connection_1' } });
-      }
-
       throw new Error(`Unexpected request: ${path}`);
     }) as typeof fetch;
 
@@ -363,7 +340,6 @@ describe('CLI setup command', () => {
       '/api/v1/agent_deployment',
       '/api/v1/api_token',
       '/api/v1/ping',
-      '/api/v1/cli_connection',
     ]);
   });
 
@@ -416,10 +392,6 @@ describe('CLI setup command', () => {
         return pingSuccess('agent_new');
       }
 
-      if (path === '/api/v1/cli_connection') {
-        return jsonResponse({ status: 'success', details: { id: 'connection_1' } });
-      }
-
       throw new Error(`Unexpected request: ${method} ${path}`);
     }) as typeof fetch;
 
@@ -427,7 +399,7 @@ describe('CLI setup command', () => {
       await createCli('1.0.0').parseAsync(['node', 'prefactor', 'setup', 'agent_new']);
     });
 
-    expect(calls).toHaveLength(7);
+    expect(calls).toHaveLength(6);
     expect(new URL(calls[0].url).pathname).toBe('/api/v1/agent/agent_new');
     expect(new URL(calls[1].url).pathname).toBe('/api/v1/agent_deployment');
     expect(calls[1].init?.method).toBe('GET');
@@ -477,10 +449,6 @@ describe('CLI setup command', () => {
 
       if (path === '/api/v1/api_token') {
         throw new Error('setup must not create api token when there are no accounts');
-      }
-
-      if (path === '/api/v1/cli_connection') {
-        return jsonResponse({ status: 'success', details: { id: 'connection_1' } });
       }
 
       throw new Error(`Unexpected request: ${method} ${path}`);
@@ -534,10 +502,6 @@ describe('CLI setup command', () => {
 
       if (path === '/api/v1/api_token') {
         throw new Error('setup must not create api token when there are no environments');
-      }
-
-      if (path === '/api/v1/cli_connection') {
-        return jsonResponse({ status: 'success', details: { id: 'connection_1' } });
       }
 
       throw new Error(`Unexpected request: ${method} ${path}`);
@@ -608,10 +572,6 @@ describe('CLI setup command', () => {
         return pingSuccess('agent_created');
       }
 
-      if (path === '/api/v1/cli_connection') {
-        return jsonResponse({ status: 'success', details: { id: 'connection_1' } });
-      }
-
       throw new Error(`Unexpected request: ${method} ${path}`);
     }) as typeof fetch;
 
@@ -677,10 +637,6 @@ describe('CLI setup command', () => {
         });
       }
 
-      if (path === '/api/v1/cli_connection') {
-        return jsonResponse({ status: 'success', details: { id: 'connection_1' } });
-      }
-
       throw new Error(`Unexpected request: ${path}`);
     }) as typeof fetch;
 
@@ -724,10 +680,6 @@ describe('CLI setup command', () => {
 
       if (path === '/api/v1/ping') {
         return pingSuccess('agent_json');
-      }
-
-      if (path === '/api/v1/cli_connection') {
-        return jsonResponse({ status: 'success', details: { id: 'connection_1' } });
       }
 
       throw new Error(`Unexpected request: ${path}`);
@@ -791,54 +743,5 @@ describe('CLI setup command', () => {
         'Handles support chats',
       ])
     ).rejects.toThrow('--description is only valid with --create.');
-  });
-
-  test('still prints setup values when the server has no connection report endpoint', async () => {
-    const cwd = join(tempRoot, 'cwd');
-    mkdirSync(cwd, { recursive: true });
-    process.chdir(cwd);
-    writeProfile(cwd);
-
-    globalThis.fetch = (async (input) => {
-      const path = new URL(String(input)).pathname;
-
-      if (path === '/api/v1/agent/agent_123') {
-        return jsonResponse({ details: { id: 'agent_123', name: 'Support agent' } });
-      }
-
-      if (path === '/api/v1/agent_deployment') {
-        return jsonResponse({
-          summaries: [
-            {
-              id: 'deployment_123',
-              agent_id: 'agent_123',
-              environment_id: 'env_123',
-              current_version_id: null,
-            },
-          ],
-        });
-      }
-
-      if (path === '/api/v1/api_token') {
-        return jsonResponse({ details: { id: 'api_token_123' }, token: 'runtime-token' });
-      }
-
-      if (path === '/api/v1/ping') {
-        return pingSuccess('agent_123');
-      }
-
-      if (path === '/api/v1/cli_connection') {
-        return new Response('missing', { status: 404 });
-      }
-
-      throw new Error(`Unexpected request: ${path}`);
-    }) as typeof fetch;
-
-    const output = await captureStdout(async () => {
-      await createCli('1.0.0').parseAsync(['node', 'prefactor', 'setup', 'agent_123']);
-    });
-
-    expect(output).toContain('PREFACTOR_API_TOKEN=runtime-token');
-    expect(output).toContain('PREFACTOR_AGENT_ID=agent_123');
   });
 });

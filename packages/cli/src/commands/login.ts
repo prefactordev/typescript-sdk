@@ -6,6 +6,8 @@ import { clientHostname, clientPlatform } from './client-info.js';
 
 const PACKAGE_VERSION = typeof packageJson.version === 'string' ? packageJson.version : '0.0.0';
 const SLOW_DOWN_EXTRA_MS = 5_000;
+// The server rejects longer client details with invalid_request.
+const MAX_CLIENT_INFO_LENGTH = 64;
 
 function stripTrailingSlashes(baseUrl: string): string {
   let end = baseUrl.length;
@@ -126,6 +128,7 @@ export interface LoginDeps {
   sleep?: (ms: number) => Promise<void>;
   now?: () => number;
   clientInfo?: LoginClientInfo;
+  terminalColumns?: () => number | undefined;
 }
 
 const defaultDeps: LoginDeps = {
@@ -134,9 +137,11 @@ const defaultDeps: LoginDeps = {
 };
 
 interface DeviceLoginStart {
+  login_token: string;
   device_code: string;
   user_code: string;
   verification_uri_complete: string;
+  verification_qr_code: string;
   expires_in: number;
   interval: number;
 }
@@ -191,14 +196,38 @@ async function loginByPastingToken(
   );
 }
 
+function terminalColumnsImpl(): number | undefined {
+  return process.stdout.isTTY ? process.stdout.columns : undefined;
+}
+
+// A wrapped QR code cannot be scanned, so it is only printed when the terminal
+// is known to be at least as wide as the code.
+export function qrCodeFits(qrCode: string, columns: number | undefined): boolean {
+  if (columns === undefined) {
+    return false;
+  }
+  const width = Math.max(...qrCode.split('\n').map((line) => [...line].length));
+  return width <= columns;
+}
+
 async function loginWithDeviceCode(
   manager: ProfileManager,
   baseUrl: string,
   started: DeviceLoginStart,
   deps: LoginDeps
 ): Promise<void> {
+  const columns = (deps.terminalColumns ?? terminalColumnsImpl)();
+  const showQrCode = qrCodeFits(started.verification_qr_code, columns);
+  if (showQrCode) {
+    console.log(started.verification_qr_code);
+    console.log('');
+  }
   console.log(`Opening your browser to approve this login: ${started.verification_uri_complete}`);
-  console.log('If the browser does not open automatically, visit the URL above.');
+  console.log(
+    showQrCode
+      ? 'If the browser does not open automatically, visit the URL above or scan the QR code on another device.'
+      : 'If the browser does not open automatically, visit the URL above.'
+  );
   deps.openBrowser(started.verification_uri_complete);
   console.log('');
   console.log(`Confirm this code in the browser: ${started.user_code}`);
@@ -286,7 +315,10 @@ async function pollForDeviceGrant(
       response = await fetchImpl(`${origin}/cli/login/token`, {
         method: 'POST',
         headers: { 'content-type': 'application/json', accept: 'application/json' },
-        body: JSON.stringify({ device_code: started.device_code }),
+        body: JSON.stringify({
+          login_token: started.login_token,
+          device_code: started.device_code,
+        }),
       });
     } catch (error) {
       const reason = error instanceof Error ? error.message : String(error);
@@ -312,7 +344,7 @@ async function pollForDeviceGrant(
     }
 
     if (response.status === 400 && code === 'expired_token') {
-      throw new Error('Login expired. Run prefactor login again.');
+      throw new Error('Login expired or was already used. Run prefactor login again.');
     }
 
     if (response.status === 429 || code === 'rate_limited') {
@@ -329,19 +361,23 @@ async function pollForDeviceGrant(
 function resolveClientInfo(deps: LoginDeps, version: string): LoginClientInfo {
   const override = deps.clientInfo;
   const info: LoginClientInfo = {
-    client_version: override?.client_version ?? version,
+    client_version: truncateClientInfo(override?.client_version ?? version),
   };
   const platform = override && 'platform' in override ? override.platform : clientPlatform();
   const host = override && 'hostname' in override ? override.hostname : clientHostname();
 
   if (platform) {
-    info.platform = platform;
+    info.platform = truncateClientInfo(platform);
   }
   if (host) {
-    info.hostname = host;
+    info.hostname = truncateClientInfo(host);
   }
 
   return info;
+}
+
+function truncateClientInfo(value: string): string {
+  return value.slice(0, MAX_CLIENT_INFO_LENGTH);
 }
 
 function isDeviceLoginStart(value: unknown): value is DeviceLoginStart {
@@ -350,12 +386,15 @@ function isDeviceLoginStart(value: unknown): value is DeviceLoginStart {
   }
 
   return (
+    typeof value.login_token === 'string' &&
+    value.login_token.length > 0 &&
     typeof value.device_code === 'string' &&
     value.device_code.length > 0 &&
     typeof value.user_code === 'string' &&
     value.user_code.length > 0 &&
     typeof value.verification_uri_complete === 'string' &&
     value.verification_uri_complete.length > 0 &&
+    typeof value.verification_qr_code === 'string' &&
     typeof value.expires_in === 'number' &&
     Number.isFinite(value.expires_in) &&
     typeof value.interval === 'number' &&
