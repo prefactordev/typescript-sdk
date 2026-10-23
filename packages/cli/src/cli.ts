@@ -64,7 +64,7 @@ export function createCli(version: string): Command {
     ].join('\n')
   );
 
-  registerLoginCommand(program);
+  registerLoginCommand(program, undefined, version);
   registerProfilesCommands(program);
   registerAccountsCommands(program);
   registerIntegrationsCommands(program);
