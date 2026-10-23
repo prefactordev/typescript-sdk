@@ -1,5 +1,11 @@
 # @prefactor/cli
 
+## 0.5.0
+
+### Minor Changes
+
+- [#74](https://github.com/prefactordev/typescript-sdk/pull/74) [`40efcbf`](https://github.com/prefactordev/typescript-sdk/commit/40efcbf14bc95bd5517e309b4d11dc6798c57d53) Thanks [@Siutan](https://github.com/Siutan)! - Add browser approval to `prefactor login`. The CLI prints an approval link, and a QR code of it when the terminal is wide enough, opens the link, and saves the account token once the login is approved in the browser. Servers without browser approval still use the paste flow.
+
 ## 0.4.1
 
 ### Patch Changes
