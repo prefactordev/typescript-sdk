@@ -2,6 +2,7 @@ import { readFile, stat } from 'node:fs/promises';
 import { isPfid } from '@prefactor/pfid';
 import type { Command } from 'commander';
 import { ApiClient } from '../api-client.js';
+import type { InstancePayloadSchemaForCreate } from '../clients/agent-instance.js';
 import type { BulkItem } from '../clients/bulk.js';
 import type { ListQueryParams } from '../clients/list-response.js';
 import { DEFAULT_BASE_URL, ProfileManager, resolveCurrentProfileName } from '../profile-manager.js';
@@ -181,6 +182,42 @@ async function readJsonOptionFile(filePath: string, optionName: string): Promise
       `Unable to read file for ${optionName}: ${error instanceof Error ? error.message : 'Unknown file read error'}`
     );
   }
+}
+
+/** Parse the three instance payload schema options (JSON or @file) into register/create fields. */
+export async function payloadSchemaOptions(options: {
+  instance_params_payload_schema?: string;
+  instance_result_payload_schema?: string;
+  instance_metadata_schema?: string;
+}): Promise<Record<string, InstancePayloadSchemaForCreate>> {
+  const schemas: Record<string, InstancePayloadSchemaForCreate> = {};
+  for (const key of [
+    'instance_params_payload_schema',
+    'instance_result_payload_schema',
+    'instance_metadata_schema',
+  ] as const) {
+    const value = options[key];
+    if (value) {
+      schemas[key] = await parseJsonOption<InstancePayloadSchemaForCreate>(
+        value,
+        `--${key}`,
+        'object'
+      );
+    }
+  }
+  return schemas;
+}
+
+/** Split a comma-separated list of IDs, dropping blanks. Throws when none remain. */
+export function parseIdList(value: string, optionName: string): string[] {
+  const ids = value
+    .split(',')
+    .map((id) => id.trim())
+    .filter((id) => id.length > 0);
+  if (ids.length === 0) {
+    throw new Error(`${optionName} requires at least one ID.`);
+  }
+  return ids;
 }
 
 export function validateOptionalPfid(value: string | undefined, optionName: string): void {

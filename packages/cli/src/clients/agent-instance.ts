@@ -1,3 +1,7 @@
+import type {
+  AgentInstanceFinishOptions,
+  AgentInstanceRegisterPayload as AgentInstanceRegistrationPayload,
+} from '@prefactor/core';
 import { AgentInstanceClient as CoreAgentInstanceClient } from '@prefactor/core';
 import type { ApiClient } from '../api-client.js';
 import type { ListResponse } from './list-response.js';
@@ -8,6 +12,47 @@ export type {
   AgentInstanceResponse,
   AgentInstanceTerminateOptions,
 } from '@prefactor/core';
+
+export const AGENT_INSTANCE_STATUSES = [
+  'preparing',
+  'pending',
+  'active',
+  'complete',
+  'failed',
+  'cancelled',
+  'terminated',
+] as const;
+
+export type AgentInstanceStatus = (typeof AGENT_INSTANCE_STATUSES)[number];
+
+/** One instance payload schema: a JSON Schema plus display hints. */
+export interface InstancePayloadSchemaForCreate {
+  schema: Record<string, unknown>;
+  title?: string;
+  description?: string;
+  template?: string;
+}
+
+/** Registration with the instance's input, metadata, and their schemas. */
+export type AgentInstancePayloadRegistration = AgentInstanceRegistrationPayload & {
+  agent_schema_version?: AgentInstanceRegistrationPayload['agent_schema_version'] & {
+    instance_params_payload_schema?: InstancePayloadSchemaForCreate;
+    instance_result_payload_schema?: InstancePayloadSchemaForCreate;
+    instance_metadata_schema?: InstancePayloadSchemaForCreate;
+  };
+  params_payload?: Record<string, unknown>;
+  metadata?: Record<string, unknown>;
+};
+
+/** Finish options with the run's result. */
+export type AgentInstanceFinishWithResultOptions = AgentInstanceFinishOptions & {
+  result_payload?: Record<string, unknown>;
+};
+
+export interface AgentInstanceListParams {
+  agent_id: string;
+  statuses?: AgentInstanceStatus[];
+}
 
 export interface AgentInstance {
   id: string;
@@ -128,15 +173,18 @@ export interface AgentInstanceDetails {
   id: string;
   inserted_at: string;
   last_activity_span_at: string | null;
+  metadata: Record<string, unknown> | null;
+  params_payload: Record<string, unknown> | null;
   purpose: 'live' | 'smoke_test' | 'eval';
   quality_payloads: Record<string, Record<string, unknown>>;
+  result_payload: Record<string, unknown> | null;
   quality_summaries: Record<string, string>;
   raised_alert_count: number | null;
   risk_score: AgentInstanceRiskScore | null;
   span_counts: AgentSpanCounts;
   span_schema_counts: AgentSpanSchemaCounts | null;
   started_at: string | null;
-  status: 'pending' | 'active' | 'complete' | 'failed' | 'cancelled' | 'terminated';
+  status: AgentInstanceStatus;
   termination_reason: string | null;
   type: 'agent_instance';
   updated_at: string;
@@ -156,7 +204,7 @@ export interface AgentInstanceSummary {
   raised_alert_count: number | null;
   risk_score: AgentInstanceRiskScore | null;
   started_at: string | null;
-  status: 'pending' | 'active' | 'complete' | 'failed' | 'cancelled' | 'terminated';
+  status: AgentInstanceStatus;
   termination_reason: string | null;
   type: 'agent_instance';
   updated_at: string;
@@ -181,6 +229,35 @@ export interface AgentInstanceShowResponse {
 export class AgentInstanceClient extends CoreAgentInstanceClient {
   constructor(private readonly client: ApiClient) {
     super(client);
+  }
+
+  list(params: AgentInstanceListParams): Promise<AgentInstanceListResponse> {
+    return this.client.request('/agent_instance', {
+      method: 'GET',
+      query: {
+        agent_id: params.agent_id,
+        ...(params.statuses ? { statuses: params.statuses } : {}),
+      },
+    });
+  }
+
+  /** Sets the input of a preparing instance and moves it to pending. */
+  prepare(
+    agentInstanceId: string,
+    paramsPayload: Record<string, unknown>
+  ): Promise<AgentInstanceShowResponse> {
+    return this.client.request(`/agent_instance/${encodeURIComponent(agentInstanceId)}/prepare`, {
+      method: 'POST',
+      body: { params_payload: paramsPayload },
+    });
+  }
+
+  /** Permanently deletes the stored sensitive values in the instance's input, result, and metadata. */
+  discardSensitive(agentInstanceId: string): Promise<AgentInstanceShowResponse> {
+    return this.client.request(
+      `/agent_instance/${encodeURIComponent(agentInstanceId)}/discard_sensitive`,
+      { method: 'POST', body: {} }
+    );
   }
 
   judge(agentInstanceId: string, judgeAgentId: string): Promise<AgentInstanceShowResponse> {

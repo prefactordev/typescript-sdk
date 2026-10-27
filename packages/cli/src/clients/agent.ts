@@ -46,6 +46,8 @@ export interface AgentDetails {
   id?: string;
   name?: string;
   description?: string;
+  team_id?: string | null;
+  owner_person_id?: string | null;
 }
 
 export interface AgentResponse {

@@ -40,6 +40,19 @@ export interface AgentDeploymentResponse {
 
 export type AgentDeploymentListResponse = ListResponse<AgentDeploymentSummary>;
 
+export interface AgentDeploymentPromotion {
+  agent_version_id: string;
+  source_agent_deployment_id: string;
+  source_environment_id: string;
+  target_agent_deployment_id: string | null;
+  target_environment_id: string;
+}
+
+export interface AgentDeploymentPromotionListResponse {
+  promotions: AgentDeploymentPromotion[];
+  status: 'success';
+}
+
 export class AgentDeploymentClient {
   constructor(private readonly client: ApiClient) {}
 
@@ -70,5 +83,18 @@ export class AgentDeploymentClient {
 
   delete(id: string): Promise<AgentDeploymentResponse> {
     return this.client.request(`/agent_deployment/${id}`, { method: 'DELETE' });
+  }
+
+  /** Lists deployments of a hosted agent that can move to the next environment. */
+  listPromotions(agentId: string): Promise<AgentDeploymentPromotionListResponse> {
+    return this.client.request('/agent_deployment/promotions', {
+      method: 'GET',
+      query: { agent_id: agentId },
+    });
+  }
+
+  /** Pins this deployment's current version in the next environment. */
+  promote(id: string): Promise<AgentDeploymentResponse> {
+    return this.client.request(`/agent_deployment/${id}/promote`, { method: 'POST', body: {} });
   }
 }

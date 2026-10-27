@@ -29,6 +29,10 @@ export interface AgentAssociationListParams extends ListQueryParams {
   agent_id: string;
 }
 
+export interface AgentAssociationListFromParams extends ListQueryParams {
+  agent_ids: string[];
+}
+
 export interface AgentAssociationResponse {
   details: AgentAssociationDetails;
   status: 'success';
@@ -39,10 +43,10 @@ export type AgentAssociationListResponse = ListResponse<AgentAssociationSummary>
 export class AgentAssociationClient {
   constructor(private readonly client: ApiClient) {}
 
-  listFrom(params: AgentAssociationListParams): Promise<AgentAssociationListResponse> {
+  listFrom(params: AgentAssociationListFromParams): Promise<AgentAssociationListResponse> {
     return this.client.request('/agent_association/from', {
       method: 'GET',
-      query: { agent_id: params.agent_id, ...listQuery(params) },
+      query: { agent_ids: params.agent_ids, ...listQuery(params) },
     });
   }
 

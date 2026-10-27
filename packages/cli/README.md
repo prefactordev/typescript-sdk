@@ -142,11 +142,13 @@ Environment fallback is supported when no default profile is configured:
 - `judges`: list, retrieve, show, create, update, delete, retire, reinstate, create_version, templates, score
 - `agent_associations`: list_from, list_to, retrieve, create, update, delete
 - `agent_instance_associations`: list_from, list_to, retrieve
+- `llm_providers`: list, retrieve, create, update, delete
+- `llm_provider_models`: list, retrieve, create, update, delete
 - `environments`: list, retrieve, show, create, update, delete
 - `agent_versions`: list, retrieve, create
 - `agent_schema_versions`: list, retrieve, create
-- `agent_instances`: list, retrieve, show, agent_context, register, start, finish, terminate
-- `agent_deployments`: list, retrieve, create, update, delete
+- `agent_instances`: list, retrieve, show, agent_context, register, start, prepare, finish, record_quality, discard_sensitive, terminate
+- `agent_deployments`: list, retrieve, create, update, delete, list_promotions, promote
 - `agent_spans`: list, retrieve, create, finish, discard_sensitive
 - `alerts`: list, retrieve, count, raise, clear
 - `people`: list, retrieve, create, update, delete
@@ -172,13 +174,32 @@ Run `prefactor <command> --help` for command-specific options.
 
 A judge is an agent with the judge role. `judges create` sets that role. `create_version` stores a criterion and model, and can take a system prompt template. `--criterion` and `--system_prompt_template` accept text or `@path`, and `@path` is read as text rather than JSON.
 
+A hosted judge needs an LLM provider and a model first. `--api_key` accepts `@path` so the key stays out of your shell history.
+
 ```bash
+prefactor llm_providers create --name "Anthropic production" --provider anthropic --api_key @./anthropic-key.txt
+prefactor llm_provider_models create --llm_provider_id <provider_id> --api_name claude-haiku-4-5
 prefactor judges create --name "Completion judge"
 prefactor judges create_version --agent_id <judge_id> --hosted_llm_provider_model_id <model_id> --criterion @./criterion.md
 prefactor judges templates
-prefactor judges score <agent_instance_id> --judge_agent_id <judge_id>
 prefactor agent_associations create --from_agent_id <judge_id> --to_agent_id <agent_id> --association_type judge --trigger on_completion
+prefactor judges score <agent_instance_id> --judge_agent_id <judge_id>
+prefactor agent_deployments list_promotions --agent_id <judge_id>
+prefactor agent_deployments promote <agent_deployment_id>
 ```
+
+A remote judge runs in your own code. List its pending runs, read the run record from the input's `message` field, then start and finish each run with the verdict:
+
+```bash
+prefactor agent_instances list --agent_id <judge_id> --statuses pending
+prefactor agent_instances retrieve <judge_run_id>
+prefactor agent_instances start <judge_run_id>
+prefactor agent_instances finish <judge_run_id> --status complete --result_payload '{"verdict":"pass","explanation":"..."}'
+```
+
+## Run input, result, and metadata
+
+`agent_instances register` takes `--instance_params_payload_schema`, `--instance_result_payload_schema`, and `--instance_metadata_schema` for the schema version, and `--params_payload` and `--metadata` for the run. `agent_instances finish` takes `--result_payload`. Each accepts JSON or `@path`.
 
 ## Slack integrations
 

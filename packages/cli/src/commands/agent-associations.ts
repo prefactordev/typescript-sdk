@@ -7,11 +7,33 @@ import {
 import {
   executeAuthed,
   listParamsFromOptions,
+  parseIdList,
   parsePaginationOffset,
   parsePositiveInt,
   printJson,
   validateOptionalPfid,
 } from './shared.js';
+
+interface ListOptions {
+  sort_field?: 'id';
+  sort_direction?: 'asc' | 'desc';
+  pagination_offset?: number;
+  pagination_page_size?: number;
+}
+
+function addListOptions(command: Command): Command {
+  return command
+    .addOption(new Option('--sort_field <field>', 'Sort field').choices(['id']))
+    .addOption(
+      new Option('--sort_direction <direction>', 'Sort direction').choices(['asc', 'desc'])
+    )
+    .option('--pagination_offset <pagination_offset>', 'Pagination offset', parsePaginationOffset)
+    .option(
+      '--pagination_page_size <pagination_page_size>',
+      'Pagination page size',
+      parsePositiveInt
+    );
+}
 
 /** Register commands that link a judge to the agent it scores. */
 export function registerAgentAssociationsCommands(program: Command): void {
@@ -19,43 +41,37 @@ export function registerAgentAssociationsCommands(program: Command): void {
     .command('agent_associations')
     .description('Manage associations between a judge and an agent');
 
-  for (const [operation, description] of [
-    ['list_from', 'List associations from an agent'],
-    ['list_to', 'List associations to an agent'],
-  ] as const) {
+  addListOptions(
     associations
-      .command(operation)
-      .description(description)
+      .command('list_from')
+      .description('List associations from judges')
+      .requiredOption('--agent_ids <ids>', 'Comma-separated judge agent IDs')
+  ).action(function (this: Command, options: ListOptions & { agent_ids: string }) {
+    return executeAuthed(this, async (apiClient) => {
+      printJson(
+        await new AgentAssociationClient(apiClient).listFrom({
+          agent_ids: parseIdList(options.agent_ids, '--agent_ids'),
+          ...listParamsFromOptions(options),
+        })
+      );
+    });
+  });
+
+  addListOptions(
+    associations
+      .command('list_to')
+      .description('List associations to an agent')
       .requiredOption('--agent_id <agent_id>', 'Agent ID')
-      .addOption(new Option('--sort_field <field>', 'Sort field').choices(['id']))
-      .addOption(
-        new Option('--sort_direction <direction>', 'Sort direction').choices(['asc', 'desc'])
-      )
-      .option('--pagination_offset <pagination_offset>', 'Pagination offset', parsePaginationOffset)
-      .option(
-        '--pagination_page_size <pagination_page_size>',
-        'Pagination page size',
-        parsePositiveInt
-      )
-      .action(function (
-        this: Command,
-        options: {
-          agent_id: string;
-          sort_field?: 'id';
-          sort_direction?: 'asc' | 'desc';
-          pagination_offset?: number;
-          pagination_page_size?: number;
-        }
-      ) {
-        return executeAuthed(this, async (apiClient) => {
-          const client = new AgentAssociationClient(apiClient);
-          const params = { agent_id: options.agent_id, ...listParamsFromOptions(options) };
-          printJson(
-            await (operation === 'list_from' ? client.listFrom(params) : client.listTo(params))
-          );
-        });
-      });
-  }
+  ).action(function (this: Command, options: ListOptions & { agent_id: string }) {
+    return executeAuthed(this, async (apiClient) => {
+      printJson(
+        await new AgentAssociationClient(apiClient).listTo({
+          agent_id: options.agent_id,
+          ...listParamsFromOptions(options),
+        })
+      );
+    });
+  });
 
   associations
     .command('retrieve <id>')

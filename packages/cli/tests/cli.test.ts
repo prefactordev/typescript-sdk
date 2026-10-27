@@ -62,6 +62,8 @@ describe('CLI profiles command', () => {
       'judges',
       'agent_associations',
       'agent_instance_associations',
+      'llm_providers',
+      'llm_provider_models',
       'environments',
       'agent_versions',
       'agent_schema_versions',

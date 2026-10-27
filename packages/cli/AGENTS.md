@@ -20,7 +20,7 @@ This is a consumption tool, NOT shared infrastructure.
 - Other packages should NOT depend on this package.
 
 ## Command groups
-30 command groups:
+32 command groups:
 - `login`: Authenticate and save credentials to the default profile
 - `profiles`: Manage CLI authentication profiles
 - `accounts`: Manage accounts
@@ -28,11 +28,13 @@ This is a consumption tool, NOT shared infrastructure.
 - `judges`: Manage judge agents (list, retrieve, show, create, update, delete, retire, reinstate, create_version, templates, score)
 - `agent_associations`: Link a judge to an agent (list_from, list_to, retrieve, create, update, delete)
 - `agent_instance_associations`: Read instance associations (list_from, list_to, retrieve)
+- `llm_providers`: Manage language model providers for hosted judges (list, retrieve, create, update, delete)
+- `llm_provider_models`: Manage the models of an LLM provider (list, retrieve, create, update, delete)
 - `environments`: Manage environments
 - `agent_versions`: Manage agent versions
 - `agent_schema_versions`: Manage agent schema versions
-- `agent_instances`: Manage agent instances (list, retrieve, show, agent_context, register, start, finish, terminate)
-- `agent_deployments`: Manage agent deployments (list, retrieve, create, update, delete)
+- `agent_instances`: Manage agent instances (list, retrieve, show, agent_context, register, start, prepare, finish, record_quality, discard_sensitive, terminate)
+- `agent_deployments`: Manage agent deployments (list, retrieve, create, update, delete, list_promotions, promote)
 - `agent_spans`: Manage agent spans (list, retrieve, create, finish, discard_sensitive)
 - `alerts`: Manage alerts (list, retrieve, count, raise, clear)
 - `people`: Manage people (list, retrieve, create, update, delete)

@@ -1,6 +1,12 @@
 import type { Command } from 'commander';
 import { AgentSchemaVersionClient } from '../clients/agent-schema-version.js';
-import { executeAuthed, parseJsonOption, printJson, validateSpanSchemaOptions } from './shared.js';
+import {
+  executeAuthed,
+  parseJsonOption,
+  payloadSchemaOptions,
+  printJson,
+  validateSpanSchemaOptions,
+} from './shared.js';
 
 export function registerAgentSchemaVersionsCommands(program: Command): void {
   const agentSchemaVersions = program
@@ -36,6 +42,18 @@ export function registerAgentSchemaVersionsCommands(program: Command): void {
     .option('--span_schemas <span_schemas>', 'JSON object or @file')
     .option('--span_type_schemas <span_type_schemas>', 'JSON array or @file')
     .option('--span_result_schemas <span_result_schemas>', 'JSON object or @file')
+    .option(
+      '--instance_params_payload_schema <schema>',
+      'Schema for the run input: {"schema":{...},"title"?,"description"?,"template"?} or @file'
+    )
+    .option(
+      '--instance_result_payload_schema <schema>',
+      'Schema for the run result, same shape, or @file'
+    )
+    .option(
+      '--instance_metadata_schema <schema>',
+      'Schema for the run metadata, same shape, or @file'
+    )
     .action(function (
       this: Command,
       options: {
@@ -44,6 +62,9 @@ export function registerAgentSchemaVersionsCommands(program: Command): void {
         span_schemas?: string;
         span_type_schemas?: string;
         span_result_schemas?: string;
+        instance_params_payload_schema?: string;
+        instance_result_payload_schema?: string;
+        instance_metadata_schema?: string;
       }
     ) {
       return executeAuthed(this, async (apiClient) => {
@@ -80,6 +101,7 @@ export function registerAgentSchemaVersionsCommands(program: Command): void {
                   ),
                 }
               : {}),
+            ...(await payloadSchemaOptions(options)),
           }
         );
         printJson(result);

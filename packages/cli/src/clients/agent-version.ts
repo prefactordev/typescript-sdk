@@ -55,6 +55,11 @@ export interface AgentVersionResponse {
   details: AgentVersion;
 }
 
+export interface AgentVersionCreateOptions {
+  agent_schema_version_id?: string;
+  execution_mode?: 'hosted' | 'remote';
+}
+
 export interface HostedJudgeVersionForCreate {
   agent_id: string;
   hosted_llm_provider_model_id: string;
@@ -103,13 +108,18 @@ export class AgentVersionClient {
     return this.client.request('/agent_version/judge_templates', { method: 'GET' });
   }
 
-  create(agentId: string, externalIdentifier: string): Promise<AgentVersionResponse> {
+  create(
+    agentId: string,
+    externalIdentifier: string,
+    options: AgentVersionCreateOptions = {}
+  ): Promise<AgentVersionResponse> {
     return this.client.request('/agent_version', {
       method: 'POST',
       body: {
         details: {
           agent_id: agentId,
           external_identifier: externalIdentifier,
+          ...options,
         },
       },
     });

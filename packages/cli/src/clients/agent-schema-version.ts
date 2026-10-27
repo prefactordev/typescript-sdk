@@ -1,5 +1,6 @@
 import type { DataRisk } from '@prefactor/core';
 import type { ApiClient } from '../api-client.js';
+import type { InstancePayloadSchemaForCreate } from './agent-instance.js';
 import type { ListResponse } from './list-response.js';
 
 export interface SchemaValidationResult {
@@ -67,6 +68,9 @@ export interface AgentSchemaVersionCreateOptions {
   span_schemas?: Record<string, unknown>;
   span_type_schemas?: unknown[];
   span_result_schemas?: Record<string, unknown>;
+  instance_params_payload_schema?: InstancePayloadSchemaForCreate;
+  instance_result_payload_schema?: InstancePayloadSchemaForCreate;
+  instance_metadata_schema?: InstancePayloadSchemaForCreate;
 }
 
 export interface AgentSchemaVersionResponse {
