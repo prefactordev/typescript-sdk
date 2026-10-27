@@ -1,5 +1,11 @@
 # @prefactor/cli
 
+## 0.5.1
+
+### Patch Changes
+
+- [#77](https://github.com/prefactordev/typescript-sdk/pull/77) [`b22dad1`](https://github.com/prefactordev/typescript-sdk/commit/b22dad1b58d8085caa969a4103bf78a6718c100d) Thanks [@Siutan](https://github.com/Siutan)! - Add judge, agent association, and instance association commands so the CLI can register a judge, attach it to an agent, and ask it to score a run.
+
 ## 0.5.0
 
 ### Minor Changes
