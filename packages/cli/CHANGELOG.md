@@ -1,5 +1,11 @@
 # @prefactor/cli
 
+## 0.6.0
+
+### Minor Changes
+
+- [#81](https://github.com/prefactordev/typescript-sdk/pull/81) [`80080da`](https://github.com/prefactordev/typescript-sdk/commit/80080da39ae73fe23e7464ea9b0660b2c9105c59) Thanks [@Siutan](https://github.com/Siutan)! - Add the commands needed to run judges end to end from the CLI: `llm_providers` and `llm_provider_models`, `agent_deployments list_promotions` and `promote`, `agent_instances prepare`, `record_quality`, and `discard_sensitive`, a `--statuses` filter on `agent_instances list`, run input, result, and metadata options on `agent_instances register` and `finish`, instance payload schema options on `agent_schema_versions create`, `--agent_schema_version_id` and `--execution_mode` on `agent_versions create`, and `--team_id` and `--owner_person_id` on `judges create` and `update`. Fix `agent_associations list_from`, which sent `agent_id` where the API expects `agent_ids`; it now takes `--agent_ids`.
+
 ## 0.5.1
 
 ### Patch Changes
