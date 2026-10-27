@@ -118,9 +118,10 @@ export interface AgentGetDetailsOutput {
 export class AgentClient {
   constructor(private readonly client: ApiClient) {}
 
-  list(): Promise<AgentListResponse> {
+  list(params: { role?: 'standard' | 'judge' } = {}): Promise<AgentListResponse> {
     return this.client.request('/agent', {
       method: 'GET',
+      ...(params.role !== undefined ? { query: { role: params.role } } : {}),
     });
   }
 
@@ -143,7 +144,13 @@ export class AgentClient {
     });
   }
 
-  create(details: AgentDetails & { name: string }): Promise<AgentResponse> {
+  create(
+    details: AgentDetails & {
+      name: string;
+      role?: 'standard' | 'judge';
+      execution_mode?: 'hosted' | 'remote';
+    }
+  ): Promise<AgentResponse> {
     return this.client.request('/agent', {
       method: 'POST',
       body: { details },

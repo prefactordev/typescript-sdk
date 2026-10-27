@@ -55,6 +55,27 @@ export interface AgentVersionResponse {
   details: AgentVersion;
 }
 
+export interface HostedJudgeVersionForCreate {
+  agent_id: string;
+  hosted_llm_provider_model_id: string;
+  criterion: string;
+  external_identifier?: string;
+  system_prompt_template?: string;
+}
+
+export interface JudgeTemplate {
+  key: string;
+  name: string;
+  description: string;
+  criterion: string;
+}
+
+export interface JudgeTemplateListResponse {
+  status: 'success';
+  templates: JudgeTemplate[];
+  default_system_prompt_template: string;
+}
+
 export type AgentVersionListResponse = ListResponse<AgentVersionSummary>;
 
 export class AgentVersionClient {
@@ -69,6 +90,17 @@ export class AgentVersionClient {
 
   retrieve(id: string): Promise<AgentVersionResponse> {
     return this.client.request(`/agent_version/${id}`, { method: 'GET' });
+  }
+
+  createHostedJudge(details: HostedJudgeVersionForCreate): Promise<AgentVersionResponse> {
+    return this.client.request('/agent_version/hosted_judge', {
+      method: 'POST',
+      body: { details },
+    });
+  }
+
+  judgeTemplates(): Promise<JudgeTemplateListResponse> {
+    return this.client.request('/agent_version/judge_templates', { method: 'GET' });
   }
 
   create(agentId: string, externalIdentifier: string): Promise<AgentVersionResponse> {
