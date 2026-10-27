@@ -69,6 +69,8 @@ export function registerJudgesCommands(program: Command): void {
     .requiredOption('--name <name>', 'Judge name')
     .option('--description <description>', 'Judge description')
     .option('--id <id>', 'Judge agent ID')
+    .option('--team_id <team_id>', 'Team ID')
+    .option('--owner_person_id <owner_person_id>', 'Owner person ID')
     .addOption(
       new Option('--execution_mode <mode>', 'Expected execution')
         .choices(['hosted', 'remote'])
@@ -80,6 +82,8 @@ export function registerJudgesCommands(program: Command): void {
         name: string;
         description?: string;
         id?: string;
+        team_id?: string;
+        owner_person_id?: string;
         execution_mode: 'hosted' | 'remote';
       }
     ) {
@@ -92,6 +96,8 @@ export function registerJudgesCommands(program: Command): void {
             execution_mode: options.execution_mode,
             ...(options.description ? { description: options.description } : {}),
             ...(options.id ? { id: options.id } : {}),
+            ...(options.team_id ? { team_id: options.team_id } : {}),
+            ...(options.owner_person_id ? { owner_person_id: options.owner_person_id } : {}),
           })
         );
       });
@@ -102,15 +108,32 @@ export function registerJudgesCommands(program: Command): void {
     .description('Update a judge')
     .option('--name <name>', 'Judge name')
     .option('--description <description>', 'Judge description')
-    .action(function (this: Command, id: string, options: { name?: string; description?: string }) {
+    .option('--team_id <team_id>', 'Team ID')
+    .option('--owner_person_id <owner_person_id>', 'Owner person ID')
+    .action(function (
+      this: Command,
+      id: string,
+      options: { name?: string; description?: string; team_id?: string; owner_person_id?: string }
+    ) {
       return executeAuthed(this, async (apiClient) => {
-        if (options.name === undefined && options.description === undefined) {
-          throw new Error('No fields provided to update. Specify --name or --description.');
+        if (
+          options.name === undefined &&
+          options.description === undefined &&
+          options.team_id === undefined &&
+          options.owner_person_id === undefined
+        ) {
+          throw new Error(
+            'No fields provided to update. Specify --name, --description, --team_id, or --owner_person_id.'
+          );
         }
         printJson(
           await new AgentClient(apiClient).update(id, {
             ...(options.name !== undefined ? { name: options.name } : {}),
             ...(options.description !== undefined ? { description: options.description } : {}),
+            ...(options.team_id !== undefined ? { team_id: options.team_id } : {}),
+            ...(options.owner_person_id !== undefined
+              ? { owner_person_id: options.owner_person_id }
+              : {}),
           })
         );
       });

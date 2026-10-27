@@ -3,21 +3,11 @@ import { AgentInstanceAssociationClient } from '../clients/agent-instance-associ
 import {
   executeAuthed,
   listParamsFromOptions,
+  parseIdList,
   parsePaginationOffset,
   parsePositiveInt,
   printJson,
 } from './shared.js';
-
-function instanceIds(value: string): string[] {
-  const ids = value
-    .split(',')
-    .map((id) => id.trim())
-    .filter((id) => id.length > 0);
-  if (ids.length === 0) {
-    throw new Error('--agent_instance_ids requires at least one agent instance ID.');
-  }
-  return ids;
-}
 
 /** Register commands that read associations between agent instances. */
 export function registerAgentInstanceAssociationsCommands(program: Command): void {
@@ -55,7 +45,7 @@ export function registerAgentInstanceAssociationsCommands(program: Command): voi
       return executeAuthed(this, async (apiClient) => {
         printJson(
           await new AgentInstanceAssociationClient(apiClient).listFrom({
-            agent_instance_ids: instanceIds(options.agent_instance_ids),
+            agent_instance_ids: parseIdList(options.agent_instance_ids, '--agent_instance_ids'),
             ...listParamsFromOptions(options),
           })
         );

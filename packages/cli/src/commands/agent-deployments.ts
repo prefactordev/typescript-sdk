@@ -91,4 +91,23 @@ export function registerAgentDeploymentsCommands(program: Command): void {
         printJson(result);
       });
     });
+
+  deployments
+    .command('list_promotions')
+    .description('List deployments of a hosted agent that can move to the next environment')
+    .requiredOption('--agent_id <agent_id>', 'Agent ID')
+    .action(function (this: Command, options: { agent_id: string }) {
+      return executeAuthed(this, async (apiClient) => {
+        printJson(await new AgentDeploymentClient(apiClient).listPromotions(options.agent_id));
+      });
+    });
+
+  deployments
+    .command('promote <id>')
+    .description("Pin this deployment's current version in the next environment")
+    .action(function (this: Command, id: string) {
+      return executeAuthed(this, async (apiClient) => {
+        printJson(await new AgentDeploymentClient(apiClient).promote(id));
+      });
+    });
 }

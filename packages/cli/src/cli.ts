@@ -20,6 +20,7 @@ import { registerKnowledgebaseDocumentsCommands } from './commands/knowledgebase
 import { registerKnowledgebaseRevisionsCommands } from './commands/knowledgebase-revisions.js';
 import { registerKnowledgebasesCommands } from './commands/knowledgebases.js';
 import { registerLifecycleCommands } from './commands/lifecycle.js';
+import { registerLlmProvidersCommands } from './commands/llm-providers.js';
 import { registerLoginCommand } from './commands/login.js';
 import { registerPeopleCommands } from './commands/people.js';
 import { registerPlaygroundCommands } from './commands/playground.js';
@@ -75,6 +76,7 @@ export function createCli(version: string): Command {
   registerJudgesCommands(program);
   registerAgentAssociationsCommands(program);
   registerAgentInstanceAssociationsCommands(program);
+  registerLlmProvidersCommands(program);
   registerEnvironmentsCommands(program);
   registerAgentVersionsCommands(program);
   registerAgentSchemaVersionsCommands(program);

@@ -48,6 +48,7 @@ export {
   AgentAssociationClient,
   type AgentAssociationDetails,
   type AgentAssociationForCreate,
+  type AgentAssociationListFromParams,
   type AgentAssociationListParams,
   type AgentAssociationListResponse,
   type AgentAssociationResponse,
@@ -59,6 +60,8 @@ export {
   AgentDeploymentClient,
   type AgentDeploymentCreateDetails,
   type AgentDeploymentListResponse,
+  type AgentDeploymentPromotion,
+  type AgentDeploymentPromotionListResponse,
   type AgentDeploymentResponse,
   type AgentDeploymentSummary,
   type AgentDeploymentUpdateDetails,
@@ -74,7 +77,10 @@ export {
   type AgentInstanceDataCategory,
   type AgentInstanceDetails,
   type AgentInstanceFinishOptions,
+  type AgentInstanceFinishWithResultOptions,
+  type AgentInstanceListParams,
   type AgentInstanceListResponse,
+  type AgentInstancePayloadRegistration,
   type AgentInstanceRegistrationPayload,
   type AgentInstanceResponse,
   type AgentInstanceRiskLevel,
@@ -82,10 +88,12 @@ export {
   type AgentInstanceRiskScorePerType,
   type AgentInstanceShowParams,
   type AgentInstanceShowResponse,
+  type AgentInstanceStatus,
   type AgentInstanceSummary,
   type AgentInstanceTerminateOptions,
   type AgentSpanCounts,
   type AgentSpanSchemaCounts,
+  type InstancePayloadSchemaForCreate,
 } from './clients/agent-instance.js';
 export {
   AgentInstanceAssociationClient,
@@ -123,6 +131,7 @@ export {
 export {
   type AgentVersion,
   AgentVersionClient,
+  type AgentVersionCreateOptions,
   type AgentVersionDetails,
   type AgentVersionListResponse,
   type AgentVersionResponse,
@@ -226,6 +235,25 @@ export type {
   PaginationOutput,
   Sorting,
 } from './clients/list-response.js';
+export {
+  LlmProviderClient,
+  type LlmProviderDetails,
+  type LlmProviderForCreate,
+  type LlmProviderForUpdate,
+  type LlmProviderKind,
+  type LlmProviderListResponse,
+  type LlmProviderResponse,
+  type LlmProviderSummary,
+} from './clients/llm-provider.js';
+export {
+  LlmProviderModelClient,
+  type LlmProviderModelDetails,
+  type LlmProviderModelForCreate,
+  type LlmProviderModelForUpdate,
+  type LlmProviderModelListResponse,
+  type LlmProviderModelResponse,
+  type LlmProviderModelSummary,
+} from './clients/llm-provider-model.js';
 export {
   PersonClient,
   type PersonDetails,

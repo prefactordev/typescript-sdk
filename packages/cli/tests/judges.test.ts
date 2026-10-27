@@ -185,8 +185,8 @@ test('agent association list sends desc sorting as -field and bracketed paginati
   await run(
     'agent_associations',
     'list_from',
-    '--agent_id',
-    'judge_1',
+    '--agent_ids',
+    'judge_1, judge_2',
     '--sort_field',
     'id',
     '--sort_direction',
@@ -202,7 +202,7 @@ test('agent association list sends desc sorting as -field and bracketed paginati
       options: {
         method: 'GET',
         query: {
-          agent_id: 'judge_1',
+          agent_ids: ['judge_1', 'judge_2'],
           sorting: '-id',
           'pagination[offset]': 0,
           'pagination[page_size]': 25,
@@ -226,6 +226,285 @@ test('instance association list_from sends the instance ids', async () => {
       options: {
         method: 'GET',
         query: { agent_instance_ids: ['instance_1', 'instance_2'] },
+      },
+    },
+  ]);
+});
+
+test('judges create sends the team and owner', async () => {
+  replies = [response];
+  await run(
+    'judges',
+    'create',
+    '--name',
+    'Tone judge',
+    '--team_id',
+    'team_1',
+    '--owner_person_id',
+    'person_1'
+  );
+  expect(requests).toEqual([
+    {
+      path: '/agent',
+      options: {
+        method: 'POST',
+        body: {
+          details: {
+            name: 'Tone judge',
+            role: 'judge',
+            execution_mode: 'hosted',
+            team_id: 'team_1',
+            owner_person_id: 'person_1',
+          },
+        },
+      },
+    },
+  ]);
+});
+
+test('judges update sends the team and owner', async () => {
+  replies = [response];
+  await run('judges', 'update', 'judge_1', '--team_id', 'team_1', '--owner_person_id', 'person_1');
+  expect(requests).toEqual([
+    {
+      path: '/agent/judge_1',
+      options: {
+        method: 'PUT',
+        body: { details: { team_id: 'team_1', owner_person_id: 'person_1' } },
+      },
+    },
+  ]);
+});
+
+test('agent_deployments list_promotions asks for the agent', async () => {
+  replies = [{ promotions: [], status: 'success' }];
+  await run('agent_deployments', 'list_promotions', '--agent_id', 'judge_1');
+  expect(requests).toEqual([
+    {
+      path: '/agent_deployment/promotions',
+      options: { method: 'GET', query: { agent_id: 'judge_1' } },
+    },
+  ]);
+});
+
+test('agent_deployments promote posts to the deployment', async () => {
+  replies = [response];
+  await run('agent_deployments', 'promote', 'deployment_1');
+  expect(requests).toEqual([
+    {
+      path: '/agent_deployment/deployment_1/promote',
+      options: { method: 'POST', body: {} },
+    },
+  ]);
+});
+
+test('agent_instances list filters by status', async () => {
+  replies = [{ summaries: [], status: 'success' }];
+  await run('agent_instances', 'list', '--agent_id', 'judge_1', '--statuses', 'pending, active');
+  expect(requests).toEqual([
+    {
+      path: '/agent_instance',
+      options: {
+        method: 'GET',
+        query: { agent_id: 'judge_1', statuses: ['pending', 'active'] },
+      },
+    },
+  ]);
+});
+
+test('agent_instances list rejects an unknown status', async () => {
+  await expect(
+    run('agent_instances', 'list', '--agent_id', 'judge_1', '--statuses', 'done')
+  ).rejects.toThrow('--statuses');
+  expect(requests).toEqual([]);
+});
+
+test('agent_instances prepare sends the input', async () => {
+  replies = [response];
+  await run('agent_instances', 'prepare', 'instance_1', '--params_payload', '{"message":"Run"}');
+  expect(requests).toEqual([
+    {
+      path: '/agent_instance/instance_1/prepare',
+      options: { method: 'POST', body: { params_payload: { message: 'Run' } } },
+    },
+  ]);
+});
+
+test('agent_instances discard_sensitive posts to the instance', async () => {
+  replies = [response];
+  await run('agent_instances', 'discard_sensitive', 'instance_1');
+  expect(requests).toEqual([
+    {
+      path: '/agent_instance/instance_1/discard_sensitive',
+      options: { method: 'POST', body: {} },
+    },
+  ]);
+});
+
+test('agent_instances record_quality sends the name and payload', async () => {
+  replies = [response];
+  await run(
+    'agent_instances',
+    'record_quality',
+    'instance_1',
+    '--name',
+    'summary_quality',
+    '--payload',
+    '{"score":88}'
+  );
+  expect(requests).toEqual([
+    {
+      path: '/api/v1/agent_instance/instance_1/record_quality',
+      options: {
+        method: 'POST',
+        body: {
+          name: 'summary_quality',
+          payload: { score: 88 },
+          idempotency_key: expect.any(String),
+        },
+      },
+    },
+  ]);
+});
+
+test('agent_instances finish sends the result payload', async () => {
+  replies = [response];
+  await run(
+    'agent_instances',
+    'finish',
+    'instance_1',
+    '--status',
+    'complete',
+    '--result_payload',
+    '{"verdict":"pass","explanation":"Answered."}'
+  );
+  expect(requests).toEqual([
+    {
+      path: '/api/v1/agent_instance/instance_1/finish',
+      options: {
+        method: 'POST',
+        body: {
+          status: 'complete',
+          result_payload: { verdict: 'pass', explanation: 'Answered.' },
+          idempotency_key: expect.any(String),
+        },
+      },
+    },
+  ]);
+});
+
+test('agent_instances register sends instance schemas, input, and metadata', async () => {
+  replies = [response];
+  await run(
+    'agent_instances',
+    'register',
+    '--agent_id',
+    'agent_1',
+    '--environment_id',
+    'env_1',
+    '--purpose',
+    'eval',
+    '--agent_version_external_identifier',
+    'v1',
+    '--agent_version_name',
+    'v1',
+    '--agent_schema_version_external_identifier',
+    'schema-1',
+    '--instance_params_payload_schema',
+    '{"schema":{"type":"object"}}',
+    '--instance_result_payload_schema',
+    '{"title":"Outcome","schema":{"type":"object"}}',
+    '--instance_metadata_schema',
+    '{"schema":{"type":"object"},"template":"{{trigger}}"}',
+    '--params_payload',
+    '{"ticket_id":"T-1"}',
+    '--metadata',
+    '{"trigger":"inbox"}'
+  );
+  expect(requests).toEqual([
+    {
+      path: '/api/v1/agent_instance/register',
+      options: {
+        method: 'POST',
+        body: {
+          agent_id: 'agent_1',
+          environment_id: 'env_1',
+          purpose: 'eval',
+          agent_version: { external_identifier: 'v1', name: 'v1' },
+          agent_schema_version: {
+            external_identifier: 'schema-1',
+            instance_params_payload_schema: { schema: { type: 'object' } },
+            instance_result_payload_schema: { title: 'Outcome', schema: { type: 'object' } },
+            instance_metadata_schema: { schema: { type: 'object' }, template: '{{trigger}}' },
+          },
+          params_payload: { ticket_id: 'T-1' },
+          metadata: { trigger: 'inbox' },
+          idempotency_key: expect.any(String),
+        },
+      },
+    },
+  ]);
+});
+
+test('agent_schema_versions create sends instance payload schemas', async () => {
+  replies = [response];
+  await run(
+    'agent_schema_versions',
+    'create',
+    '--agent_id',
+    'judge_1',
+    '--external_identifier',
+    'remote-judge-1',
+    '--instance_params_payload_schema',
+    '{"schema":{"type":"object"}}',
+    '--instance_result_payload_schema',
+    '{"title":"Judgement","schema":{"type":"object"}}'
+  );
+  expect(requests).toEqual([
+    {
+      path: '/agent_schema_version',
+      options: {
+        method: 'POST',
+        body: {
+          details: {
+            agent_id: 'judge_1',
+            external_identifier: 'remote-judge-1',
+            instance_params_payload_schema: { schema: { type: 'object' } },
+            instance_result_payload_schema: { title: 'Judgement', schema: { type: 'object' } },
+          },
+        },
+      },
+    },
+  ]);
+});
+
+test('agent_versions create links a schema version and execution mode', async () => {
+  replies = [response];
+  await run(
+    'agent_versions',
+    'create',
+    '--agent_id',
+    'judge_1',
+    '--external_identifier',
+    'remote-judge-1',
+    '--agent_schema_version_id',
+    'schema_1',
+    '--execution_mode',
+    'remote'
+  );
+  expect(requests).toEqual([
+    {
+      path: '/agent_version',
+      options: {
+        method: 'POST',
+        body: {
+          details: {
+            agent_id: 'judge_1',
+            external_identifier: 'remote-judge-1',
+            agent_schema_version_id: 'schema_1',
+            execution_mode: 'remote',
+          },
+        },
       },
     },
   ]);
