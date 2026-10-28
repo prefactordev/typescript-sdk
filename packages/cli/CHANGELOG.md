@@ -1,5 +1,13 @@
 # @prefactor/cli
 
+## 0.6.1
+
+### Patch Changes
+
+- [#83](https://github.com/prefactordev/typescript-sdk/pull/83) [`cfee24d`](https://github.com/prefactordev/typescript-sdk/commit/cfee24dd44329a1117472d5b3fb6805bc1ffab2e) Thanks [@Siutan](https://github.com/Siutan)! - The shell installer adds `$HOME/.prefactor/bin` to the shell startup file and links `prefactor` into a directory already on PATH, so the command works in the current terminal. It never replaces another `prefactor` command already on PATH. On macOS, bash users get the export in the login file bash actually reads. If the startup file cannot be written, the installer prints the manual PATH line instead of failing.
+
+- [#83](https://github.com/prefactordev/typescript-sdk/pull/83) [`cfee24d`](https://github.com/prefactordev/typescript-sdk/commit/cfee24dd44329a1117472d5b3fb6805bc1ffab2e) Thanks [@Siutan](https://github.com/Siutan)! - `prefactor update` now reports the installed release tag (for example `Updated Prefactor CLI to v0.6.0.`) instead of an empty tag when updating on the stable channel. `prefactor uninstall` also removes the `prefactor` symlink that the shell installer created on PATH, so no broken command is left behind. Symlinks that point at another install are left alone.
+
 ## 0.6.0
 
 ### Minor Changes
