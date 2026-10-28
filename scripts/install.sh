@@ -209,7 +209,7 @@ add_prefactor_to_path() {
       fi
       ;;
   esac
-  if [ ! -f "$rc" ] || ! grep -q '^[^#]*\.prefactor/bin' "$rc"; then
+  if [ ! -f "$rc" ] || ! grep -Eq "^[^#]*\\.prefactor/bin/?([:\"')[:space:]]|\$)" "$rc"; then
     if printf '\n%s\n' "$line" >> "$rc"; then
       log "Added $bin_dir to PATH in $rc"
     else

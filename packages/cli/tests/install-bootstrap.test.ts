@@ -335,6 +335,14 @@ printf '%s\n' prefactor-ok
       expect(readFileSync(zshrc, 'utf8')).toContain(`\n${exportLine}\n`);
     });
 
+    test('adds the export when the startup file only references a different directory', async () => {
+      const zshrc = join(tempRoot, '.zshrc');
+      writeFileSync(zshrc, 'export PATH="$HOME/.prefactor/bin-backup:$PATH"\n');
+
+      expect((await runInstall({ shell: '/bin/zsh' })).code).toBe(0);
+      expect(readFileSync(zshrc, 'utf8')).toContain(`\n${exportLine}\n`);
+    });
+
     test('writes the export but skips the symlink when the bin dir is already on PATH', async () => {
       pathValue = `${join(tempRoot, '.prefactor', 'bin')}:${pathValue}`;
 
