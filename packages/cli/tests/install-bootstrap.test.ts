@@ -1,6 +1,15 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { spawn, spawnSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  chmodSync,
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  readlinkSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { mkdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -191,15 +200,31 @@ describe('install.sh', () => {
     }
   });
 
-  test('prefactor runs after install.sh without a new terminal', async () => {
-    const localBin = join(tempRoot, '.local', 'bin');
-    await mkdir(localBin, { recursive: true });
-    const assetName = 'prefactor-linux-x64.tar.gz';
-    const archiveDir = join(tempRoot, 'archive');
-    await mkdir(archiveDir, { recursive: true });
-    writeFileSync(
-      join(archiveDir, 'prefactor'),
-      `#!/bin/bash
+  describe('PATH setup', () => {
+    const exportLine = 'export PATH="$HOME/.prefactor/bin:$PATH"';
+    let localBin = '';
+    let pathValue = '';
+
+    beforeEach(async () => {
+      localBin = join(tempRoot, '.local', 'bin');
+      await mkdir(localBin, { recursive: true });
+      pathValue = `${localBin}:/usr/bin:/bin`;
+    });
+
+    // Serves a release whose binary copies itself into ~/.prefactor/bin on
+    // `install`, like the real installer, and prints prefactor-ok otherwise.
+    async function runInstall(options: {
+      shell: string;
+      unameS?: 'Linux' | 'Darwin';
+    }): Promise<{ code: number | null; stdout: string; stderr: string }> {
+      const unameS = options.unameS ?? 'Linux';
+      const assetName =
+        unameS === 'Darwin' ? 'prefactor-darwin-arm64.tar.gz' : 'prefactor-linux-x64.tar.gz';
+      const archiveDir = join(tempRoot, 'archive');
+      await mkdir(archiveDir, { recursive: true });
+      writeFileSync(
+        join(archiveDir, 'prefactor'),
+        `#!/bin/bash
 if [ "\${1:-}" = "install" ]; then
   mkdir -p "$HOME/.prefactor/bin"
   cp "$0" "$HOME/.prefactor/bin/prefactor"
@@ -208,43 +233,51 @@ if [ "\${1:-}" = "install" ]; then
 fi
 printf '%s\n' prefactor-ok
 `,
-      { mode: 0o755 }
-    );
-    const archivePath = join(tempRoot, assetName);
-    spawnSync('tar', ['-czf', archivePath, '-C', archiveDir, 'prefactor']);
-    const archiveBuffer = Buffer.from(readFileSync(archivePath));
-    const checksum = `${sha256Hex(archiveBuffer)}  ${assetName}\n`;
-    const server = await withServer((req, res) => {
-      if (req.url?.endsWith(assetName)) {
-        res.writeHead(200, { 'Content-Type': 'application/gzip' });
-        res.end(archiveBuffer);
-        return;
-      }
-      if (req.url?.endsWith('/SHA256SUMS')) {
-        res.writeHead(200, { 'Content-Type': 'text/plain' });
-        res.end(checksum);
-        return;
-      }
-      res.writeHead(404);
-      res.end();
-    });
-
-    try {
-      const pathValue = `${localBin}:/usr/bin:/bin`;
-      const result = await runCommand('bash', [scriptPath], {
-        HOME: tempRoot,
-        PATH: pathValue,
-        SHELL: '/bin/zsh',
-        PREFACTOR_INSTALL_TEST_UNAME_S: 'Linux',
-        PREFACTOR_INSTALL_TEST_UNAME_M: 'x86_64',
-        PREFACTOR_INSTALL_TEST_LIBC: 'glibc',
-        PREFACTOR_RELEASE_BASE_URL: `${server.url}/releases/download`,
-        PREFACTOR_RELEASE_LATEST_BASE_URL: `${server.url}/releases/latest/download`,
-      });
-      expect(result.code).toBe(0);
-      expect(readFileSync(join(tempRoot, '.zshrc'), 'utf8')).toContain(
-        'export PATH="$HOME/.prefactor/bin:$PATH"'
+        { mode: 0o755 }
       );
+      const archivePath = join(tempRoot, assetName);
+      spawnSync('tar', ['-czf', archivePath, '-C', archiveDir, 'prefactor']);
+      const archiveBuffer = Buffer.from(readFileSync(archivePath));
+      const checksum = `${sha256Hex(archiveBuffer)}  ${assetName}\n`;
+      const server = await withServer((req, res) => {
+        if (req.url?.endsWith(assetName)) {
+          res.writeHead(200, { 'Content-Type': 'application/gzip' });
+          res.end(archiveBuffer);
+          return;
+        }
+        if (req.url?.endsWith('/SHA256SUMS')) {
+          res.writeHead(200, { 'Content-Type': 'text/plain' });
+          res.end(checksum);
+          return;
+        }
+        res.writeHead(404);
+        res.end();
+      });
+
+      try {
+        return await runCommand('bash', [scriptPath], {
+          HOME: tempRoot,
+          PATH: pathValue,
+          SHELL: options.shell,
+          PREFACTOR_INSTALL_TEST_UNAME_S: unameS,
+          PREFACTOR_INSTALL_TEST_UNAME_M: unameS === 'Darwin' ? 'arm64' : 'x86_64',
+          PREFACTOR_INSTALL_TEST_LIBC: 'glibc',
+          PREFACTOR_RELEASE_BASE_URL: `${server.url}/releases/download`,
+          PREFACTOR_RELEASE_LATEST_BASE_URL: `${server.url}/releases/latest/download`,
+        });
+      } finally {
+        await server.close();
+      }
+    }
+
+    test('prefactor runs after install.sh without a new terminal', async () => {
+      const result = await runInstall({ shell: '/bin/zsh' });
+      expect(result.code).toBe(0);
+      expect(readFileSync(join(tempRoot, '.zshrc'), 'utf8')).toContain(exportLine);
+      expect(result.stdout).toContain(
+        `Added ${tempRoot}/.prefactor/bin to PATH in ${tempRoot}/.zshrc`
+      );
+      expect(result.stdout).toContain(`Linked ${localBin}/prefactor`);
 
       const ran = spawnSync(join(localBin, 'prefactor'), [], {
         encoding: 'utf8',
@@ -252,8 +285,85 @@ printf '%s\n' prefactor-ok
       });
       expect(ran.status).toBe(0);
       expect(ran.stdout.trim()).toBe('prefactor-ok');
-    } finally {
-      await server.close();
-    }
+    });
+
+    test.each([
+      { unameS: 'Linux', shell: '/bin/bash', existing: [], expected: '.bashrc' },
+      { unameS: 'Linux', shell: '/bin/sh', existing: [], expected: '.profile' },
+      { unameS: 'Darwin', shell: '/bin/bash', existing: [], expected: '.bash_profile' },
+      { unameS: 'Darwin', shell: '/bin/bash', existing: ['.profile'], expected: '.profile' },
+      {
+        unameS: 'Darwin',
+        shell: '/bin/bash',
+        existing: ['.bash_login', '.profile'],
+        expected: '.bash_login',
+      },
+    ] as const)('$unameS $shell with $existing writes the export to $expected', async ({
+      unameS,
+      shell,
+      existing,
+      expected,
+    }) => {
+      for (const name of existing) {
+        writeFileSync(join(tempRoot, name), '# existing\n');
+      }
+
+      const result = await runInstall({ shell, unameS });
+      expect(result.code).toBe(0);
+      expect(readFileSync(join(tempRoot, expected), 'utf8')).toContain(exportLine);
+      for (const name of ['.bashrc', '.bash_profile', '.bash_login', '.profile']) {
+        if (name !== expected && !(existing as readonly string[]).includes(name)) {
+          expect(existsSync(join(tempRoot, name))).toBe(false);
+        }
+      }
+    });
+
+    test('does not add a second export when the startup file already references the bin dir', async () => {
+      const zshrc = join(tempRoot, '.zshrc');
+      writeFileSync(zshrc, 'export PATH=~/.prefactor/bin:$PATH\n');
+
+      expect((await runInstall({ shell: '/bin/zsh' })).code).toBe(0);
+      expect((await runInstall({ shell: '/bin/zsh' })).code).toBe(0);
+      expect(readFileSync(zshrc, 'utf8')).toBe('export PATH=~/.prefactor/bin:$PATH\n');
+    });
+
+    test('leaves an existing prefactor symlink to another install untouched', async () => {
+      const otherPrefactor = join(tempRoot, 'other', 'prefactor');
+      await mkdir(join(tempRoot, 'other'), { recursive: true });
+      writeFileSync(otherPrefactor, '#!/bin/sh\n', { mode: 0o755 });
+      symlinkSync(otherPrefactor, join(localBin, 'prefactor'));
+
+      const result = await runInstall({ shell: '/bin/zsh' });
+      expect(result.code).toBe(0);
+      expect(readlinkSync(join(localBin, 'prefactor'))).toBe(otherPrefactor);
+    });
+
+    test('leaves an existing prefactor file untouched', async () => {
+      writeFileSync(join(localBin, 'prefactor'), 'existing\n', { mode: 0o755 });
+
+      const result = await runInstall({ shell: '/bin/zsh' });
+      expect(result.code).toBe(0);
+      expect(readFileSync(join(localBin, 'prefactor'), 'utf8')).toBe('existing\n');
+    });
+
+    test('re-links a symlink that already points at the managed binary', async () => {
+      expect((await runInstall({ shell: '/bin/zsh' })).code).toBe(0);
+      const result = await runInstall({ shell: '/bin/zsh' });
+      expect(result.code).toBe(0);
+      expect(readlinkSync(join(localBin, 'prefactor'))).toBe(
+        join(tempRoot, '.prefactor', 'bin', 'prefactor')
+      );
+    });
+
+    test('warns and still succeeds when the startup file is not writable', async () => {
+      const zshrc = join(tempRoot, '.zshrc');
+      writeFileSync(zshrc, '# managed elsewhere\n');
+      chmodSync(zshrc, 0o444);
+
+      const result = await runInstall({ shell: '/bin/zsh' });
+      expect(result.code).toBe(0);
+      expect(result.stdout).toContain(`Warning: could not update ${zshrc}`);
+      expect(readFileSync(zshrc, 'utf8')).toBe('# managed elsewhere\n');
+    });
   });
 });
