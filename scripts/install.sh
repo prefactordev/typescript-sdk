@@ -177,6 +177,76 @@ verify_checksum() {
   [ "$expected" = "$actual" ] || fail "Checksum mismatch for $asset_name."
 }
 
+prefactor_already_on_path() {
+  local bin_dir="$1"
+  local entry resolved
+  local path_entries
+
+  if command -v prefactor >/dev/null 2>&1; then
+    return 0
+  fi
+
+  path_entries=()
+  IFS=':' read -r -a path_entries <<< "${PATH-}"
+  if [ "${#path_entries[@]}" -eq 0 ]; then
+    return 1
+  fi
+
+  for entry in "${path_entries[@]}"; do
+    [ -n "$entry" ] || continue
+    entry="${entry%/}"
+    case "$entry" in
+      "$bin_dir"|"~/.prefactor/bin"|'$HOME/.prefactor/bin')
+        return 0
+        ;;
+    esac
+    if [ -d "$entry" ]; then
+      resolved="$(cd "$entry" && pwd)" || continue
+      if [ "$resolved" = "$bin_dir" ]; then
+        return 0
+      fi
+    fi
+  done
+  return 1
+}
+
+# The installer process cannot change the caller's PATH. Write the export for
+# later shells, and link prefactor into a directory already on PATH so this
+# terminal can run it immediately. Skip both when it is already reachable.
+add_prefactor_to_path() {
+  local bin_dir="${HOME}/.prefactor/bin"
+  local line rc dir
+  [ -x "$bin_dir/prefactor" ] || return 0
+  if prefactor_already_on_path "$bin_dir"; then
+    return 0
+  fi
+
+  line='export PATH="$HOME/.prefactor/bin:$PATH"'
+  rc="$HOME/.profile"
+  case "$(basename "${SHELL:-}")" in
+    zsh) rc="$HOME/.zshrc" ;;
+    bash) rc="$HOME/.bashrc" ;;
+  esac
+  if [ ! -f "$rc" ] || ! grep -q '\.prefactor/bin' "$rc"; then
+    printf '\n%s\n' "$line" >> "$rc"
+  fi
+
+  export PATH="${bin_dir}:${PATH-}"
+
+  for dir in "$HOME/.local/bin" /opt/homebrew/bin /usr/local/bin; do
+    case ":${PATH-}:" in
+      *":${dir}:"*) ;;
+      *) continue ;;
+    esac
+    [ -d "$dir" ] && [ -w "$dir" ] || continue
+    if [ -e "$dir/prefactor" ] && [ ! -L "$dir/prefactor" ]; then
+      continue
+    fi
+    ln -sfn "$bin_dir/prefactor" "$dir/prefactor"
+    return 0
+  done
+}
+
 selector="${1:-stable}"
 if [ "$selector" = "--help" ] || [ "$selector" = "-h" ]; then
   usage
@@ -254,3 +324,4 @@ install_args+=(--asset-name "$asset_name")
 
 log "Running installer"
 "$binary_path" "${install_args[@]}"
+add_prefactor_to_path

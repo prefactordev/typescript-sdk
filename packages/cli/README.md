@@ -47,7 +47,7 @@ The managed install location is:
 - macOS/Linux: `~/.prefactor/bin/prefactor`
 - Windows: `%USERPROFILE%\.prefactor\bin\prefactor.exe`
 
-The installer does not edit your shell profile. It prints the exact PATH change needed if the managed bin directory is not already available.
+On macOS and Linux, `scripts/install.sh` appends `export PATH="$HOME/.prefactor/bin:$PATH"` only when that directory is not already on `PATH` and the shell startup file does not already add it. It also links `prefactor` into a directory already on `PATH` so the current terminal can run it. `prefactor update` replaces the installed binary and does not change `PATH`. `./prefactor install` still prints the PATH line instead of editing your shell profile.
 
 ### Lifecycle commands
 

@@ -162,6 +162,7 @@ describe('install.sh', () => {
     try {
       const env = {
         ...process.env,
+        HOME: tempRoot,
         PREFACTOR_INSTALL_TEST_UNAME_S: 'Linux',
         PREFACTOR_INSTALL_TEST_UNAME_M: 'x86_64',
         PREFACTOR_INSTALL_TEST_LIBC: 'glibc',
@@ -189,4 +190,100 @@ describe('install.sh', () => {
       await server.close();
     }
   });
+
+  test('prefactor runs after install and a second install does not add another PATH export', async () => {
+    const localBin = join(tempRoot, '.local', 'bin');
+    await mkdir(localBin, { recursive: true });
+    const pathValue = `${localBin}:/usr/bin:/bin`;
+    const env = installEnv(tempRoot, pathValue);
+
+    const first = await installFakeBinary(tempRoot, env);
+    expect(first.code).toBe(0);
+    expect(readFileSync(join(tempRoot, '.zshrc'), 'utf8').match(/\.prefactor\/bin/g)?.length).toBe(1);
+    expect(runPrefactor(localBin, tempRoot, pathValue)).toBe('prefactor-ok');
+
+    const second = await installFakeBinary(tempRoot, env);
+    expect(second.code).toBe(0);
+    expect(readFileSync(join(tempRoot, '.zshrc'), 'utf8').match(/\.prefactor\/bin/g)?.length).toBe(1);
+    expect(runPrefactor(localBin, tempRoot, pathValue)).toBe('prefactor-ok');
+  });
+
+  test('install leaves an existing PATH export in another form untouched', async () => {
+    const binDir = join(tempRoot, '.prefactor', 'bin');
+    const pathValue = `${binDir}:/usr/bin:/bin`;
+    const zshrc = join(tempRoot, '.zshrc');
+    writeFileSync(zshrc, 'export PATH="${HOME}/.prefactor/bin:$PATH"\n');
+
+    const result = await installFakeBinary(tempRoot, installEnv(tempRoot, pathValue));
+    expect(result.code).toBe(0);
+    expect(readFileSync(zshrc, 'utf8')).toBe('export PATH="${HOME}/.prefactor/bin:$PATH"\n');
+    expect(runPrefactor(binDir, tempRoot, pathValue)).toBe('prefactor-ok');
+  });
 });
+
+function installEnv(home: string, pathValue: string): NodeJS.ProcessEnv {
+  return {
+    HOME: home,
+    PATH: pathValue,
+    SHELL: '/bin/zsh',
+    PREFACTOR_INSTALL_TEST_UNAME_S: 'Linux',
+    PREFACTOR_INSTALL_TEST_UNAME_M: 'x86_64',
+    PREFACTOR_INSTALL_TEST_LIBC: 'glibc',
+  };
+}
+
+function runPrefactor(bin: string, home: string, pathValue: string): string {
+  const ran = spawnSync(join(bin, 'prefactor'), [], {
+    encoding: 'utf8',
+    env: { HOME: home, PATH: pathValue },
+  });
+  expect(ran.status).toBe(0);
+  return ran.stdout.trim();
+}
+
+async function installFakeBinary(root: string, env: NodeJS.ProcessEnv) {
+  const assetName = 'prefactor-linux-x64.tar.gz';
+  const archiveDir = join(root, 'archive');
+  await mkdir(archiveDir, { recursive: true });
+  writeFileSync(
+    join(archiveDir, 'prefactor'),
+    `#!/bin/bash
+if [ "\${1:-}" = "install" ]; then
+  mkdir -p "\$HOME/.prefactor/bin"
+  cp "\$0" "\$HOME/.prefactor/bin/prefactor"
+  chmod +x "\$HOME/.prefactor/bin/prefactor"
+  exit 0
+fi
+printf '%s\\n' prefactor-ok
+`,
+    { mode: 0o755 }
+  );
+  const archivePath = join(root, assetName);
+  spawnSync('tar', ['-czf', archivePath, '-C', archiveDir, 'prefactor']);
+  const archiveBuffer = Buffer.from(readFileSync(archivePath));
+  const checksum = `${sha256Hex(archiveBuffer)}  ${assetName}\n`;
+  const server = await withServer((req, res) => {
+    if (req.url?.endsWith(assetName)) {
+      res.writeHead(200, { 'Content-Type': 'application/gzip' });
+      res.end(archiveBuffer);
+      return;
+    }
+    if (req.url?.endsWith('/SHA256SUMS')) {
+      res.writeHead(200, { 'Content-Type': 'text/plain' });
+      res.end(checksum);
+      return;
+    }
+    res.writeHead(404);
+    res.end();
+  });
+
+  try {
+    return await runCommand('bash', [scriptPath], {
+      ...env,
+      PREFACTOR_RELEASE_BASE_URL: `${server.url}/releases/download`,
+      PREFACTOR_RELEASE_LATEST_BASE_URL: `${server.url}/releases/latest/download`,
+    });
+  } finally {
+    await server.close();
+  }
+}
