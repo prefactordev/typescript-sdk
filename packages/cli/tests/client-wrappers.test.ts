@@ -18,6 +18,7 @@ import { PfidClient } from '../src/clients/pfid.js';
 import { PlaygroundClient } from '../src/clients/playground.js';
 import { RiskProfileClient, type RiskProfileRuleset } from '../src/clients/risk-profile.js';
 import { TeamClient } from '../src/clients/team.js';
+import { UtilsClient } from '../src/clients/utils.js';
 import * as cliExports from '../src/index.js';
 
 type CapturedRequest = {
@@ -62,6 +63,7 @@ describe('resource clients', () => {
     expect(typeof cliExports.ApiTokenClient).toBe('function');
     expect(typeof cliExports.PfidClient).toBe('function');
     expect(typeof cliExports.BulkClient).toBe('function');
+    expect(typeof cliExports.UtilsClient).toBe('function');
   });
 
   test('agent list sends GET without filters', async () => {
@@ -1120,6 +1122,102 @@ describe('resource clients', () => {
         'list-agents-001': { status: 'success', summaries: [] },
       },
     });
+  });
+
+  test('process sensitive payload sends the payload and optional schema', async () => {
+    let captured: CapturedRequest | undefined;
+    globalThis.fetch = (async (input, init) => {
+      captured = { url: String(input), init };
+      return new Response(
+        JSON.stringify({
+          markers_valid: true,
+          output: { email: 'a@example.com' },
+          payload_valid: null,
+          problems: [],
+          sensitive_encoding: false,
+          status: 'success',
+        }),
+        {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }
+      );
+    }) as typeof fetch;
+
+    const apiClient = new ApiClient('https://example.com', 'test-token');
+    const client = new UtilsClient(apiClient);
+    const payload = { email: { $sensitive: 'string', value: 'a@example.com' } };
+
+    const result = await client.processSensitivePayload(payload, null);
+
+    expect(new URL(captured?.url ?? 'https://example.com').pathname).toBe(
+      '/api/v1/utils/process_sensitive_payload'
+    );
+    expect(captured?.init?.method).toBe('POST');
+    expect(captured?.init?.body).toBe(JSON.stringify({ payload, schema: null }));
+    expect(result.status).toBe('success');
+    expect(result.payload_valid).toBeNull();
+  });
+
+  test('render liquid template sends the template and samples', async () => {
+    let captured: CapturedRequest | undefined;
+    globalThis.fetch = (async (input, init) => {
+      captured = { url: String(input), init };
+      return new Response(
+        JSON.stringify({
+          results: [{ errors: [], rendered: 'hello' }],
+          status: 'success',
+        }),
+        {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }
+      );
+    }) as typeof fetch;
+
+    const apiClient = new ApiClient('https://example.com', 'test-token');
+    const client = new UtilsClient(apiClient);
+    const samples = [{ payload: { name: 'Ada' }, result_payload: null }];
+
+    const result = await client.renderLiquidTemplate('Hello {{ name }}', samples);
+
+    expect(new URL(captured?.url ?? 'https://example.com').pathname).toBe(
+      '/api/v1/utils/render_liquid_template'
+    );
+    expect(captured?.init?.method).toBe('POST');
+    expect(captured?.init?.body).toBe(JSON.stringify({ template: 'Hello {{ name }}', samples }));
+    expect(result.results[0]?.rendered).toBe('hello');
+  });
+
+  test('validate schema sends the schema and optional payload', async () => {
+    let captured: CapturedRequest | undefined;
+    globalThis.fetch = (async (input, init) => {
+      captured = { url: String(input), init };
+      return new Response(
+        JSON.stringify({
+          problems: [],
+          status: 'success',
+          valid: true,
+        }),
+        {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }
+      );
+    }) as typeof fetch;
+
+    const apiClient = new ApiClient('https://example.com', 'test-token');
+    const client = new UtilsClient(apiClient);
+    const schema = { type: 'object' };
+
+    const result = await client.validateSchema(schema, null);
+
+    expect(new URL(captured?.url ?? 'https://example.com').pathname).toBe(
+      '/api/v1/utils/validate_schema'
+    );
+    expect(captured?.init?.method).toBe('POST');
+    expect(captured?.init?.body).toBe(JSON.stringify({ schema, payload: null }));
+    expect(result.valid).toBe(true);
   });
 
   test('agent instance register/start/finish contract remains unchanged', async () => {

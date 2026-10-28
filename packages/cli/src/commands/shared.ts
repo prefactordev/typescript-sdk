@@ -89,7 +89,7 @@ export async function executeAuthed(
 export async function parseJsonOption<T>(
   value: string,
   optionName: string,
-  expectedType: 'array' | 'object'
+  expectedType: 'array' | 'object' | 'object-or-null'
 ): Promise<T> {
   const contents = value.startsWith('@')
     ? await readJsonOptionFile(value.slice(1), optionName)
@@ -112,8 +112,16 @@ export async function parseJsonOption<T>(
     return parsed as T;
   }
 
+  if (expectedType === 'object-or-null' && parsed === null) {
+    return parsed as T;
+  }
+
   if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-    throw new Error(`${optionName} must be a JSON object.`);
+    throw new Error(
+      expectedType === 'object-or-null'
+        ? `${optionName} must be a JSON object or null.`
+        : `${optionName} must be a JSON object.`
+    );
   }
 
   return parsed as T;

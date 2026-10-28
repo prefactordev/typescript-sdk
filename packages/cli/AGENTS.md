@@ -20,7 +20,7 @@ This is a consumption tool, NOT shared infrastructure.
 - Other packages should NOT depend on this package.
 
 ## Command groups
-32 command groups:
+33 command groups:
 - `login`: Authenticate and save credentials to the default profile
 - `profiles`: Manage CLI authentication profiles
 - `accounts`: Manage accounts
@@ -51,6 +51,7 @@ This is a consumption tool, NOT shared infrastructure.
 - `setup`: Create an agent (optional), mint a validated deployment token, and print setup values
 - `pfid`: Generate Prefactor IDs
 - `bulk`: Execute bulk query/action operations (`_type` + `idempotency_key` items)
+- `utils`: Render a Liquid template, validate a JSON schema, and process a $sensitive payload
 - `ping`: Verify the selected or supplied API token
 - `version`: Print CLI version
 
