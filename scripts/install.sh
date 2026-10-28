@@ -177,6 +177,69 @@ verify_checksum() {
   [ "$expected" = "$actual" ] || fail "Checksum mismatch for $asset_name."
 }
 
+# The installer process cannot change the caller's PATH. Write the export for
+# later shells, and link prefactor into a directory already on PATH so this
+# terminal can run it immediately. The install has already succeeded, so
+# failures here are reported and do not fail the script.
+add_prefactor_to_path() {
+  local platform="$1"
+  local bin_dir="${HOME}/.prefactor/bin"
+  local line rc dir candidate on_path=0
+  [ -x "$bin_dir/prefactor" ] || return 0
+  case ":${PATH-}:" in
+    *":${bin_dir}:"*) on_path=1 ;;
+  esac
+
+  line='export PATH="$HOME/.prefactor/bin:$PATH"'
+  rc="$HOME/.profile"
+  case "$(basename "${SHELL:-}")" in
+    zsh) rc="$HOME/.zshrc" ;;
+    bash)
+      rc="$HOME/.bashrc"
+      # macOS terminals start bash as a login shell, which skips ~/.bashrc and
+      # reads only the first of these files that exists.
+      if [ "$platform" = "darwin" ]; then
+        rc="$HOME/.bash_profile"
+        for candidate in "$HOME/.bash_profile" "$HOME/.bash_login" "$HOME/.profile"; do
+          if [ -f "$candidate" ]; then
+            rc="$candidate"
+            break
+          fi
+        done
+      fi
+      ;;
+  esac
+  if [ ! -f "$rc" ] || ! grep -Eq "^[^#]*\\.prefactor/bin/?([:\"')[:space:]]|\$)" "$rc"; then
+    if printf '\n%s\n' "$line" >> "$rc"; then
+      log "Added $bin_dir to PATH in $rc"
+    else
+      log "Warning: could not update $rc. Add this line to your shell profile: $line"
+    fi
+  fi
+
+  # This terminal can already run prefactor, so no symlink is needed.
+  [ "$on_path" -eq 0 ] || return 0
+
+  # Keep in sync with INSTALLER_SYMLINK_DIRS in packages/cli/src/install/installer.ts.
+  for dir in "$HOME/.local/bin" /opt/homebrew/bin /usr/local/bin; do
+    case ":${PATH-}:" in
+      *":${dir}:"*) ;;
+      *) continue ;;
+    esac
+    [ -d "$dir" ] && [ -w "$dir" ] || continue
+    if [ -L "$dir/prefactor" ]; then
+      [ "$(readlink "$dir/prefactor")" = "$bin_dir/prefactor" ] || continue
+    elif [ -e "$dir/prefactor" ]; then
+      continue
+    fi
+    if ln -sfn "$bin_dir/prefactor" "$dir/prefactor"; then
+      log "Linked $dir/prefactor so this terminal can run prefactor now"
+      return 0
+    fi
+    log "Warning: could not link prefactor into $dir"
+  done
+}
+
 selector="${1:-stable}"
 if [ "$selector" = "--help" ] || [ "$selector" = "-h" ]; then
   usage
@@ -254,3 +317,4 @@ install_args+=(--asset-name "$asset_name")
 
 log "Running installer"
 "$binary_path" "${install_args[@]}"
+add_prefactor_to_path "$platform"
