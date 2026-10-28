@@ -33,7 +33,7 @@ async function parseTemplateSamples(value: string): Promise<UtilsRenderLiquidTem
       throw new Error(`--samples[${index}].result_payload must be a JSON object or null.`);
     }
 
-    return item as UtilsRenderLiquidTemplateSample;
+    return Object.assign({ payload: item.payload }, item);
   });
 }
 
