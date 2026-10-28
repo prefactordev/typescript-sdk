@@ -327,6 +327,23 @@ printf '%s\n' prefactor-ok
       expect(readFileSync(zshrc, 'utf8')).toBe('export PATH=~/.prefactor/bin:$PATH\n');
     });
 
+    test('adds the export when the startup file only has a commented-out reference', async () => {
+      const zshrc = join(tempRoot, '.zshrc');
+      writeFileSync(zshrc, '# export PATH="$HOME/.prefactor/bin:$PATH"\n');
+
+      expect((await runInstall({ shell: '/bin/zsh' })).code).toBe(0);
+      expect(readFileSync(zshrc, 'utf8')).toContain(`\n${exportLine}\n`);
+    });
+
+    test('writes the export but skips the symlink when the bin dir is already on PATH', async () => {
+      pathValue = `${join(tempRoot, '.prefactor', 'bin')}:${pathValue}`;
+
+      const result = await runInstall({ shell: '/bin/zsh' });
+      expect(result.code).toBe(0);
+      expect(readFileSync(join(tempRoot, '.zshrc'), 'utf8')).toContain(exportLine);
+      expect(existsSync(join(localBin, 'prefactor'))).toBe(false);
+    });
+
     test('leaves an existing prefactor symlink to another install untouched', async () => {
       const otherPrefactor = join(tempRoot, 'other', 'prefactor');
       await mkdir(join(tempRoot, 'other'), { recursive: true });

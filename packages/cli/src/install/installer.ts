@@ -608,12 +608,12 @@ async function removeInstallerSymlinks(
       target = await readlink(linkPath);
     } catch (error) {
       const code = (error as NodeJS.ErrnoException).code;
-      if (code === 'ENOENT' || code === 'EINVAL') {
+      if (code === 'ENOENT' || code === 'EINVAL' || code === 'ENOTDIR') {
         continue;
       }
       throw error;
     }
-    if (target !== managedBinaryPath) {
+    if (resolve(dir, target) !== managedBinaryPath) {
       continue;
     }
     await unlink(linkPath);

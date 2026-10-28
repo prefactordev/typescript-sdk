@@ -184,10 +184,10 @@ verify_checksum() {
 add_prefactor_to_path() {
   local platform="$1"
   local bin_dir="${HOME}/.prefactor/bin"
-  local line rc dir candidate
+  local line rc dir candidate on_path=0
   [ -x "$bin_dir/prefactor" ] || return 0
   case ":${PATH-}:" in
-    *":${bin_dir}:"*) return 0 ;;
+    *":${bin_dir}:"*) on_path=1 ;;
   esac
 
   line='export PATH="$HOME/.prefactor/bin:$PATH"'
@@ -209,13 +209,16 @@ add_prefactor_to_path() {
       fi
       ;;
   esac
-  if [ ! -f "$rc" ] || ! grep -q '\.prefactor/bin' "$rc"; then
+  if [ ! -f "$rc" ] || ! grep -q '^[^#]*\.prefactor/bin' "$rc"; then
     if printf '\n%s\n' "$line" >> "$rc"; then
       log "Added $bin_dir to PATH in $rc"
     else
       log "Warning: could not update $rc. Add this line to your shell profile: $line"
     fi
   fi
+
+  # This terminal can already run prefactor, so no symlink is needed.
+  [ "$on_path" -eq 0 ] || return 0
 
   # Keep in sync with INSTALLER_SYMLINK_DIRS in packages/cli/src/install/installer.ts.
   for dir in "$HOME/.local/bin" /opt/homebrew/bin /usr/local/bin; do

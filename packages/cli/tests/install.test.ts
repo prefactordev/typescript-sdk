@@ -230,6 +230,39 @@ describe('install helpers', () => {
     expect(readlinkSync(join(localBin, 'prefactor'))).toBe(otherPrefactor);
   });
 
+  test('uninstall removes an install.sh symlink whose target has redundant separators', async () => {
+    const fakeSource = join(tempRoot, 'prefactor');
+    writeFileSync(fakeSource, '#!/usr/bin/env bash\nexit 0\n', { mode: 0o755 });
+    const deps = createDeps(
+      { env: { HOME: `${tempRoot}/`, PATH: '' }, currentExecutablePath: () => fakeSource },
+      tempRoot
+    );
+    await installManagedBinary({}, '0.0.4', deps);
+    const localBin = join(tempRoot, '.local', 'bin');
+    await mkdir(localBin, { recursive: true });
+    // install.sh builds the target from "$HOME", so a trailing slash in HOME doubles it.
+    symlinkSync(`${tempRoot}//.prefactor/bin/prefactor`, join(localBin, 'prefactor'));
+
+    await uninstallManagedBinary(deps);
+
+    expect(() => lstatSync(join(localBin, 'prefactor'))).toThrow();
+  });
+
+  test('uninstall succeeds when ~/.local is a file', async () => {
+    const fakeSource = join(tempRoot, 'prefactor');
+    writeFileSync(fakeSource, '#!/usr/bin/env bash\nexit 0\n', { mode: 0o755 });
+    const deps = createDeps(
+      { env: { HOME: tempRoot, PATH: '' }, currentExecutablePath: () => fakeSource },
+      tempRoot
+    );
+    await installManagedBinary({}, '0.0.4', deps);
+    writeFileSync(join(tempRoot, '.local'), 'not a directory\n');
+
+    await uninstallManagedBinary(deps);
+
+    expect(existsSync(join(tempRoot, '.prefactor', 'bin', 'prefactor'))).toBe(false);
+  });
+
   test('doctor prints install metadata', async () => {
     const fakeSource = join(tempRoot, 'prefactor');
     writeFileSync(fakeSource, '#!/usr/bin/env bash\nexit 0\n', { mode: 0o755 });
