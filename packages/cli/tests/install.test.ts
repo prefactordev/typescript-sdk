@@ -1,6 +1,15 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
 import { spawn } from 'node:child_process';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  lstatSync,
+  mkdtempSync,
+  readFileSync,
+  readlinkSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { mkdir, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -173,6 +182,52 @@ describe('install helpers', () => {
     expect(() => readFileSync(configPath, 'utf8')).not.toThrow();
     const state = await readInstallState(join(tempRoot, '.prefactor'));
     expect(state.state).toBeNull();
+  });
+
+  test('uninstall removes the install.sh symlink to the managed binary', async () => {
+    const fakeSource = join(tempRoot, 'prefactor');
+    writeFileSync(fakeSource, '#!/usr/bin/env bash\nexit 0\n', { mode: 0o755 });
+    const logs: string[] = [];
+    const deps = createDeps(
+      {
+        env: { HOME: tempRoot, PATH: '' },
+        stdout: { log: (...args: unknown[]) => logs.push(args.join(' ')), error: () => {} },
+        currentExecutablePath: () => fakeSource,
+      },
+      tempRoot
+    );
+    await installManagedBinary({}, '0.0.4', deps);
+    const localBin = join(tempRoot, '.local', 'bin');
+    await mkdir(localBin, { recursive: true });
+    symlinkSync(join(tempRoot, '.prefactor', 'bin', 'prefactor'), join(localBin, 'prefactor'));
+
+    await uninstallManagedBinary(deps);
+
+    expect(existsSync(join(localBin, 'prefactor'))).toBe(false);
+    expect(() => lstatSync(join(localBin, 'prefactor'))).toThrow();
+    expect(logs).toContain(`Removed ${join(localBin, 'prefactor')}`);
+  });
+
+  test('uninstall leaves a prefactor symlink that points at another install', async () => {
+    const fakeSource = join(tempRoot, 'prefactor');
+    writeFileSync(fakeSource, '#!/usr/bin/env bash\nexit 0\n', { mode: 0o755 });
+    const deps = createDeps(
+      {
+        env: { HOME: tempRoot, PATH: '' },
+        currentExecutablePath: () => fakeSource,
+      },
+      tempRoot
+    );
+    await installManagedBinary({}, '0.0.4', deps);
+    const localBin = join(tempRoot, '.local', 'bin');
+    await mkdir(localBin, { recursive: true });
+    const otherPrefactor = join(tempRoot, 'other-prefactor');
+    writeFileSync(otherPrefactor, '#!/usr/bin/env bash\nexit 0\n', { mode: 0o755 });
+    symlinkSync(otherPrefactor, join(localBin, 'prefactor'));
+
+    await uninstallManagedBinary(deps);
+
+    expect(readlinkSync(join(localBin, 'prefactor'))).toBe(otherPrefactor);
   });
 
   test('doctor prints install metadata', async () => {
@@ -467,5 +522,80 @@ describe('install helpers', () => {
       'https://github.com/prefactordev/typescript-sdk/releases/latest/download/SHA256SUMS'
     );
     expect(readFileSync(childLog, 'utf8')).toContain(resolvedTag);
+  });
+
+  test('update reports the tag recorded by the child installer when the download URL has none', async () => {
+    const fakeSource = join(tempRoot, 'prefactor');
+    writeFileSync(fakeSource, '#!/usr/bin/env bash\nexit 0\n', { mode: 0o755 });
+    await installManagedBinary(
+      {},
+      '0.0.4',
+      createDeps(
+        { env: { HOME: tempRoot, PATH: '' }, currentExecutablePath: () => fakeSource },
+        tempRoot
+      )
+    );
+
+    const assetName = buildAssetName({ platform: 'linux', arch: 'x64', libc: 'glibc' });
+    const statePath = join(tempRoot, '.prefactor', INSTALL_STATE_FILENAME);
+    const childState = {
+      ...JSON.parse(readFileSync(statePath, 'utf8')),
+      resolvedTag: 'v0.0.5',
+    };
+    const archiveDir = join(tempRoot, 'archive-cdn');
+    await mkdir(archiveDir, { recursive: true });
+    writeFileSync(
+      join(archiveDir, 'prefactor'),
+      `#!/usr/bin/env bash\ncat > '${statePath}' <<'JSON'\n${JSON.stringify(childState)}\nJSON\n`,
+      { mode: 0o755 }
+    );
+    const archivePath = join(tempRoot, assetName);
+    Bun.spawnSync(['tar', '-czf', archivePath, '-C', archiveDir, 'prefactor']);
+    const archiveBuffer = await readFile(archivePath);
+    const checksum = `${new Bun.CryptoHasher('sha256').update(archiveBuffer).digest('hex')}  ${assetName}\n`;
+    // GitHub redirects /releases/latest/download/* to an asset CDN URL.
+    const cdnUrl =
+      'https://release-assets.githubusercontent.com/github-production-release-asset/1/abc';
+
+    const fetchMock = mock(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith('/SHA256SUMS')) {
+        return {
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          text: async () => checksum,
+          url: cdnUrl,
+        } as Response;
+      }
+      return {
+        ok: true,
+        status: 200,
+        statusText: 'OK',
+        arrayBuffer: async () =>
+          archiveBuffer.buffer.slice(
+            archiveBuffer.byteOffset,
+            archiveBuffer.byteOffset + archiveBuffer.byteLength
+          ),
+        url: cdnUrl,
+      } as Response;
+    });
+    const logs: string[] = [];
+
+    await updateManagedBinary(
+      {},
+      '0.0.4',
+      createDeps(
+        {
+          env: { HOME: tempRoot, PATH: '' },
+          stdout: { log: (...args: unknown[]) => logs.push(args.join(' ')), error: () => {} },
+          fetchImpl: fetchMock as unknown as typeof fetch,
+          currentExecutablePath: () => fakeSource,
+        },
+        tempRoot
+      )
+    );
+
+    expect(logs).toContain('Updated Prefactor CLI to v0.0.5.');
   });
 });

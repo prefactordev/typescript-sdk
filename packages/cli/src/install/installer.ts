@@ -7,6 +7,7 @@ import {
   mkdir,
   mkdtemp,
   readFile,
+  readlink,
   rename,
   rm,
   stat,
@@ -66,6 +67,8 @@ export const INSTALL_STATE_FILENAME = 'install.json';
 
 const WINDOWS_INSTALL_RETRY_ATTEMPTS = 100;
 const WINDOWS_INSTALL_RETRY_DELAY_MS = 250;
+// Symlink directories used by add_prefactor_to_path in scripts/install.sh, besides ~/.local/bin.
+const INSTALLER_SYMLINK_DIRS = ['/opt/homebrew/bin', '/usr/local/bin'];
 const VALID_INSTALL_CHANNELS = new Set<InstallChannel>(['stable', 'latest', 'pinned']);
 const VALID_INSTALL_PLATFORMS = new Set<PlatformInfo['platform']>(['darwin', 'linux', 'windows']);
 const VALID_INSTALL_ARCHS = new Set<PlatformInfo['arch']>(['x64', 'arm64']);
@@ -573,12 +576,48 @@ export async function updateManagedBinary(
     await runChildInstaller(childBinaryPath, spec, resolvedTag, deps, platform.platform);
 
     if (platform.platform !== 'windows') {
-      deps.stdout.log(`Updated Prefactor CLI to ${resolvedTag}.`);
+      // Stable downloads redirect to an asset CDN URL with no tag in it, so
+      // report the tag the child installer recorded.
+      const installed = await readInstallState(installRoot);
+      if (installed.state === null) {
+        throw new Error(installed.error ?? 'The downloaded installer did not record its state.');
+      }
+      deps.stdout.log(`Updated Prefactor CLI to ${installed.state.resolvedTag}.`);
     }
   } finally {
     if (platform.platform !== 'windows') {
       await rm(tempRoot, { recursive: true, force: true });
     }
+  }
+}
+
+/**
+ * Removes the `prefactor` symlinks that scripts/install.sh creates in these
+ * directories, leaving any link that points at another install.
+ */
+async function removeInstallerSymlinks(
+  installRoot: string,
+  managedBinaryPath: string,
+  deps: LifecycleCommandDeps
+): Promise<void> {
+  const dirs = [join(dirname(installRoot), '.local', 'bin'), ...INSTALLER_SYMLINK_DIRS];
+  for (const dir of dirs) {
+    const linkPath = join(dir, 'prefactor');
+    let target: string;
+    try {
+      target = await readlink(linkPath);
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code;
+      if (code === 'ENOENT' || code === 'EINVAL') {
+        continue;
+      }
+      throw error;
+    }
+    if (target !== managedBinaryPath) {
+      continue;
+    }
+    await unlink(linkPath);
+    deps.stdout.log(`Removed ${linkPath}`);
   }
 }
 
@@ -592,6 +631,9 @@ export async function uninstallManagedBinary(
 
   await rm(managedBinaryPath, { force: true });
   await rm(statePath, { force: true });
+  if (platform.platform !== 'windows') {
+    await removeInstallerSymlinks(installRoot, managedBinaryPath, deps);
+  }
 
   const binDir = dirname(managedBinaryPath);
   try {

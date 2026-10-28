@@ -217,6 +217,7 @@ add_prefactor_to_path() {
     fi
   fi
 
+  # Keep in sync with INSTALLER_SYMLINK_DIRS in packages/cli/src/install/installer.ts.
   for dir in "$HOME/.local/bin" /opt/homebrew/bin /usr/local/bin; do
     case ":${PATH-}:" in
       *":${dir}:"*) ;;
