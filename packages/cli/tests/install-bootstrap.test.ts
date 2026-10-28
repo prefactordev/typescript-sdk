@@ -162,6 +162,7 @@ describe('install.sh', () => {
     try {
       const env = {
         ...process.env,
+        HOME: tempRoot,
         PREFACTOR_INSTALL_TEST_UNAME_S: 'Linux',
         PREFACTOR_INSTALL_TEST_UNAME_M: 'x86_64',
         PREFACTOR_INSTALL_TEST_LIBC: 'glibc',
@@ -185,6 +186,72 @@ describe('install.sh', () => {
       expect(result.code).toBe(0);
       expect(requests).toContain('/releases/download/v0.0.4/prefactor-linux-x64.tar.gz');
       expect(readFileSync(childLog, 'utf8')).toContain('--version');
+    } finally {
+      await server.close();
+    }
+  });
+
+  test('prefactor runs after install.sh without a new terminal', async () => {
+    const localBin = join(tempRoot, '.local', 'bin');
+    await mkdir(localBin, { recursive: true });
+    const assetName = 'prefactor-linux-x64.tar.gz';
+    const archiveDir = join(tempRoot, 'archive');
+    await mkdir(archiveDir, { recursive: true });
+    writeFileSync(
+      join(archiveDir, 'prefactor'),
+      `#!/bin/bash
+if [ "\${1:-}" = "install" ]; then
+  mkdir -p "$HOME/.prefactor/bin"
+  cp "$0" "$HOME/.prefactor/bin/prefactor"
+  chmod +x "$HOME/.prefactor/bin/prefactor"
+  exit 0
+fi
+printf '%s\n' prefactor-ok
+`,
+      { mode: 0o755 }
+    );
+    const archivePath = join(tempRoot, assetName);
+    spawnSync('tar', ['-czf', archivePath, '-C', archiveDir, 'prefactor']);
+    const archiveBuffer = Buffer.from(readFileSync(archivePath));
+    const checksum = `${sha256Hex(archiveBuffer)}  ${assetName}\n`;
+    const server = await withServer((req, res) => {
+      if (req.url?.endsWith(assetName)) {
+        res.writeHead(200, { 'Content-Type': 'application/gzip' });
+        res.end(archiveBuffer);
+        return;
+      }
+      if (req.url?.endsWith('/SHA256SUMS')) {
+        res.writeHead(200, { 'Content-Type': 'text/plain' });
+        res.end(checksum);
+        return;
+      }
+      res.writeHead(404);
+      res.end();
+    });
+
+    try {
+      const pathValue = `${localBin}:/usr/bin:/bin`;
+      const result = await runCommand('bash', [scriptPath], {
+        HOME: tempRoot,
+        PATH: pathValue,
+        SHELL: '/bin/zsh',
+        PREFACTOR_INSTALL_TEST_UNAME_S: 'Linux',
+        PREFACTOR_INSTALL_TEST_UNAME_M: 'x86_64',
+        PREFACTOR_INSTALL_TEST_LIBC: 'glibc',
+        PREFACTOR_RELEASE_BASE_URL: `${server.url}/releases/download`,
+        PREFACTOR_RELEASE_LATEST_BASE_URL: `${server.url}/releases/latest/download`,
+      });
+      expect(result.code).toBe(0);
+      expect(readFileSync(join(tempRoot, '.zshrc'), 'utf8')).toContain(
+        'export PATH="$HOME/.prefactor/bin:$PATH"'
+      );
+
+      const ran = spawnSync(join(localBin, 'prefactor'), [], {
+        encoding: 'utf8',
+        env: { HOME: tempRoot, PATH: pathValue },
+      });
+      expect(ran.status).toBe(0);
+      expect(ran.stdout.trim()).toBe('prefactor-ok');
     } finally {
       await server.close();
     }

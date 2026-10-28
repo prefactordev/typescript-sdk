@@ -177,6 +177,43 @@ verify_checksum() {
   [ "$expected" = "$actual" ] || fail "Checksum mismatch for $asset_name."
 }
 
+# The installer process cannot change the caller's PATH. Write the export for
+# later shells, and link prefactor into a directory already on PATH so this
+# terminal can run it immediately.
+add_prefactor_to_path() {
+  local bin_dir="${HOME}/.prefactor/bin"
+  local line rc dir
+  [ -x "$bin_dir/prefactor" ] || return 0
+  case ":${PATH-}:" in
+    *":${bin_dir}:"*) return 0 ;;
+  esac
+
+  line='export PATH="$HOME/.prefactor/bin:$PATH"'
+  rc="$HOME/.profile"
+  case "$(basename "${SHELL:-}")" in
+    zsh) rc="$HOME/.zshrc" ;;
+    bash) rc="$HOME/.bashrc" ;;
+  esac
+  if [ ! -f "$rc" ] || ! grep -qxF "$line" "$rc"; then
+    printf '\n%s\n' "$line" >> "$rc"
+  fi
+
+  export PATH="${bin_dir}:${PATH-}"
+
+  for dir in "$HOME/.local/bin" /opt/homebrew/bin /usr/local/bin; do
+    case ":${PATH-}:" in
+      *":${dir}:"*) ;;
+      *) continue ;;
+    esac
+    [ -d "$dir" ] && [ -w "$dir" ] || continue
+    if [ -e "$dir/prefactor" ] && [ ! -L "$dir/prefactor" ]; then
+      continue
+    fi
+    ln -sfn "$bin_dir/prefactor" "$dir/prefactor"
+    return 0
+  done
+}
+
 selector="${1:-stable}"
 if [ "$selector" = "--help" ] || [ "$selector" = "-h" ]; then
   usage
@@ -254,3 +291,4 @@ install_args+=(--asset-name "$asset_name")
 
 log "Running installer"
 "$binary_path" "${install_args[@]}"
+add_prefactor_to_path
