@@ -85,6 +85,7 @@ describe('CLI profiles command', () => {
       'setup',
       'pfid',
       'bulk',
+      'utils',
       'ping',
       'version',
       'install',
