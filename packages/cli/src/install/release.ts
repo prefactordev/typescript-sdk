@@ -11,9 +11,9 @@ export interface ReleaseSpec {
   checksumUrl: string;
 }
 
-export const RELEASE_BASE_URL = 'https://github.com/prefactordev/typescript-sdk/releases/download';
+export const RELEASE_BASE_URL = 'https://github.com/prefactordev/cli/releases/download';
 export const RELEASE_LATEST_BASE_URL =
-  'https://github.com/prefactordev/typescript-sdk/releases/latest/download';
+  'https://github.com/prefactordev/cli/releases/latest/download';
 
 export function normalizePinnedVersion(version: string): string {
   const trimmed = version.trim();

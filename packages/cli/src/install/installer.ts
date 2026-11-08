@@ -273,8 +273,7 @@ function createReleaseBaseUrls(env: NodeJS.ProcessEnv): {
   latestBaseUrl: string;
 } {
   const baseUrl =
-    env.PREFACTOR_RELEASE_BASE_URL ??
-    'https://github.com/prefactordev/typescript-sdk/releases/download';
+    env.PREFACTOR_RELEASE_BASE_URL ?? 'https://github.com/prefactordev/cli/releases/download';
   return {
     baseUrl,
     latestBaseUrl:
