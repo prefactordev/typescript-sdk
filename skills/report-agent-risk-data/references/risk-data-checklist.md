@@ -51,11 +51,11 @@ Read the return values and result payload before completing this section — out
 ## Delivery
 
 - [ ] **OpenClaw**: pass completed profiles to `AgentConfig.spanTypeRiskConfigs` via `createRiskConfig()`.
-- [ ] **Other SDK**: build `span_type_schemas` JSON array and run `prefactor agent_schema_versions create --span_type_schemas`.
+- [ ] **Other SDK**: build `span_type_schemas` JSON array and run `prefactor agent-schema-versions create --span-type-schemas`.
 
 ## Verification
 
-- [ ] Run `prefactor agent_schema_versions list --agent_id <agent-id>` and retrieve the latest version.
+- [ ] Run `prefactor agent-schema-versions list --agent-id <agent-id>` and retrieve the latest version.
 - [ ] Confirm `data_risk` is present on every span type schema entry in the response.
 - [ ] Flag any span types where all fields are still `unknown` — these need a second pass or a comment explaining why.
 

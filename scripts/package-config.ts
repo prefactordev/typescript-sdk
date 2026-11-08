@@ -20,12 +20,6 @@ export const PACKAGE_CONFIGS: PackageConfig[] = [
     generateVersionModule: true,
   },
   {
-    name: '@prefactor/cli',
-    path: 'packages/cli',
-    entrypoints: ['./packages/cli/src/index.ts', './packages/cli/src/bin/cli.ts'],
-    external: ['@prefactor/core', 'commander'],
-  },
-  {
     name: '@prefactor/ai',
     path: 'packages/ai',
     entrypoint: './packages/ai/src/index.ts',
