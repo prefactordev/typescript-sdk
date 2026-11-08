@@ -165,6 +165,7 @@ Environment fallback is supported when no default profile is configured:
 - `setup`: create an agent (optional), mint a validated deployment token, and print setup values for instrumentation
 - `pfid`: generate
 - `bulk`: execute
+- `utils`: render_liquid_template, validate_schema, process_sensitive_payload
 - `ping`: verify the selected or supplied API token
 - `version`: print CLI version
 
@@ -230,6 +231,32 @@ prefactor knowledgebase_documents update <document_id> --base_revision_id <revis
 ```
 
 `--content` is document text. `@path` reads that file as text and does not parse it as JSON. `@file` content is limited to 1 MiB. `--content_only` prints `details.content` with no JSON envelope. Updating, renaming, archiving, or unarchiving a document requires `--base_revision_id`. `--clear_description` clears a knowledgebase description and cannot be combined with `--description`.
+
+## Template, schema, and sensitive payload checks
+
+Render a Liquid template against sample payloads:
+
+```bash
+prefactor utils render_liquid_template --template @./template.liquid --samples @./samples.json
+```
+
+`--template` is a Liquid template string. `--samples` is a JSON array of objects with `payload` and an optional `result_payload`. `@path` reads the template as text and the samples as JSON.
+
+Validate a JSON Schema, with an optional payload:
+
+```bash
+prefactor utils validate_schema --schema @./schema.json --payload @./payload.json
+```
+
+`--schema` is a JSON Schema object. `--payload` is optional. Omit it, or pass `null`, to check the schema alone. `@path` reads a JSON file.
+
+Check a payload in `$sensitive` wire form without creating a span:
+
+```bash
+prefactor utils process_sensitive_payload --payload @./payload.json --schema @./schema.json
+```
+
+`--payload` is a JSON object. `--schema` is an optional JSON Schema. Omit it, or pass `null`, to skip the schema check. `@path` reads a JSON file.
 
 ## JSON File Input
 
@@ -316,6 +343,7 @@ if (agentId) {
 - `KnowledgebaseDocumentClient`
 - `KnowledgebaseDocumentRevisionClient`
 - `KnowledgebaseRevisionClient`
+- `UtilsClient`
 - `BulkClient`
 
 Each client exposes typed request/response interfaces for its resource operations.

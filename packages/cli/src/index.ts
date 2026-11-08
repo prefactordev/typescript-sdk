@@ -305,3 +305,12 @@ export {
   type TeamResponse,
   type TeamSummary,
 } from './clients/team.js';
+export {
+  type ProcessSensitivePayloadResponse,
+  type RenderLiquidTemplateResponse,
+  UtilsClient,
+  type UtilsFieldProblem,
+  type UtilsRenderLiquidTemplateResult,
+  type UtilsRenderLiquidTemplateSample,
+  type ValidateSchemaResponse,
+} from './clients/utils.js';
