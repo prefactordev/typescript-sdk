@@ -326,7 +326,7 @@ describe('install helpers', () => {
           status: 200,
           statusText: 'OK',
           text: async () => checksum,
-          url: 'https://github.com/prefactordev/typescript-sdk/releases/download/v0.0.4/SHA256SUMS',
+          url: 'https://github.com/prefactordev/cli/releases/download/v0.0.4/SHA256SUMS',
         } as Response;
       }
 
@@ -339,7 +339,7 @@ describe('install helpers', () => {
             archiveBuffer.byteOffset,
             archiveBuffer.byteOffset + archiveBuffer.byteLength
           ),
-        url: `https://github.com/prefactordev/typescript-sdk/releases/download/v0.0.4/${assetName}`,
+        url: `https://github.com/prefactordev/cli/releases/download/v0.0.4/${assetName}`,
       } as Response;
     });
 
@@ -424,7 +424,7 @@ describe('install helpers', () => {
           status: 200,
           statusText: 'OK',
           text: async () => checksum,
-          url: 'https://github.com/prefactordev/typescript-sdk/releases/download/canary/SHA256SUMS',
+          url: 'https://github.com/prefactordev/cli/releases/download/canary/SHA256SUMS',
         } as Response;
       }
 
@@ -437,7 +437,7 @@ describe('install helpers', () => {
             archiveBuffer.byteOffset,
             archiveBuffer.byteOffset + archiveBuffer.byteLength
           ),
-        url: `https://github.com/prefactordev/typescript-sdk/releases/download/canary/${assetName}`,
+        url: `https://github.com/prefactordev/cli/releases/download/canary/${assetName}`,
       } as Response;
     });
 
@@ -455,7 +455,7 @@ describe('install helpers', () => {
     );
 
     expect(requests).toContain(
-      `https://github.com/prefactordev/typescript-sdk/releases/download/canary/${assetName}`
+      `https://github.com/prefactordev/cli/releases/download/canary/${assetName}`
     );
     expect(readFileSync(childLog, 'utf8')).toContain('--channel');
     expect(readFileSync(childLog, 'utf8')).toContain('latest');
@@ -498,10 +498,7 @@ describe('install helpers', () => {
       const url = String(input);
       requests.push(url);
 
-      if (
-        url ===
-        `https://github.com/prefactordev/typescript-sdk/releases/latest/download/${assetName}`
-      ) {
+      if (url === `https://github.com/prefactordev/cli/releases/latest/download/${assetName}`) {
         return {
           ok: true,
           status: 200,
@@ -511,13 +508,12 @@ describe('install helpers', () => {
               archiveBuffer.byteOffset,
               archiveBuffer.byteOffset + archiveBuffer.byteLength
             ),
-          url: `https://github.com/prefactordev/typescript-sdk/releases/download/${resolvedTag}/${assetName}`,
+          url: `https://github.com/prefactordev/cli/releases/download/${resolvedTag}/${assetName}`,
         } as Response;
       }
 
       if (
-        url ===
-        `https://github.com/prefactordev/typescript-sdk/releases/download/${resolvedTag}/SHA256SUMS`
+        url === `https://github.com/prefactordev/cli/releases/download/${resolvedTag}/SHA256SUMS`
       ) {
         return {
           ok: true,
@@ -549,10 +545,10 @@ describe('install helpers', () => {
     );
 
     expect(requests).toContain(
-      `https://github.com/prefactordev/typescript-sdk/releases/download/${resolvedTag}/SHA256SUMS`
+      `https://github.com/prefactordev/cli/releases/download/${resolvedTag}/SHA256SUMS`
     );
     expect(requests).not.toContain(
-      'https://github.com/prefactordev/typescript-sdk/releases/latest/download/SHA256SUMS'
+      'https://github.com/prefactordev/cli/releases/latest/download/SHA256SUMS'
     );
     expect(readFileSync(childLog, 'utf8')).toContain(resolvedTag);
   });

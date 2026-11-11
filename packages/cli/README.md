@@ -2,41 +2,31 @@
 
 Command-line interface and typed API clients for managing Prefactor resources.
 
+> **This package is deprecated.** The Prefactor CLI now lives at [prefactordev/cli](https://github.com/prefactordev/cli). Run `prefactor update` to move an existing installation to it, or install it with the commands below. Commands and options with more than one word now use kebab case, for example `agent-instances list --agent-id`.
+
 ## Installation
 
 ### macOS and Linux
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/prefactordev/typescript-sdk/main/scripts/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/prefactordev/cli/main/install.sh | bash
 ```
 
 Install the canary channel:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/prefactordev/typescript-sdk/main/scripts/install.sh | bash -s -- latest
-```
-
-Install a pinned version:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/prefactordev/typescript-sdk/v0.0.5/scripts/install.sh | bash -s -- v0.0.5
+curl -fsSL https://raw.githubusercontent.com/prefactordev/cli/main/install.sh | bash -s -- latest
 ```
 
 ### Windows (PowerShell)
 
 ```powershell
-irm https://raw.githubusercontent.com/prefactordev/typescript-sdk/main/scripts/install.ps1 | iex
-```
-
-Install a pinned version:
-
-```powershell
-& ([scriptblock]::Create((irm https://raw.githubusercontent.com/prefactordev/typescript-sdk/v0.0.5/scripts/install.ps1))) v0.0.5
+irm https://raw.githubusercontent.com/prefactordev/cli/main/install.ps1 | iex
 ```
 
 ### Manual downloads
 
-Standalone archives are published on GitHub Releases. Download the archive for your platform, extract it, and run:
+Standalone archives are published on [GitHub Releases](https://github.com/prefactordev/cli/releases). Download the archive for your platform, extract it, and run:
 
 ```bash
 ./prefactor install
@@ -47,7 +37,7 @@ The managed install location is:
 - macOS/Linux: `~/.prefactor/bin/prefactor`
 - Windows: `%USERPROFILE%\.prefactor\bin\prefactor.exe`
 
-On macOS and Linux, `scripts/install.sh` appends `export PATH="$HOME/.prefactor/bin:$PATH"` to your shell startup file and links `prefactor` into a directory already on `PATH`, so the command works in the current terminal. `./prefactor install` still prints the PATH line instead of editing your shell profile.
+On macOS and Linux, `install.sh` appends `export PATH="$HOME/.prefactor/bin:$PATH"` to your shell startup file and links `prefactor` into a directory already on `PATH`, so the command works in the current terminal. `./prefactor install` still prints the PATH line instead of editing your shell profile.
 
 ### Lifecycle commands
 
