@@ -9,7 +9,6 @@
     "changeset": "changeset",
     "docs:typedoc": "typedoc --options typedoc.json",
     "versions:check": "bun run scripts/generate-versions.ts --check",
-    "release:cli:stable": "bun run scripts/release-cli-stable.ts",
     "release:version": "bun run scripts/sync-release-metadata.ts",
     "release:npm": "bun run scripts/release-publish.ts",
     "test": "bun test",

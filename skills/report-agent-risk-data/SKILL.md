@@ -197,10 +197,10 @@ const agentSchemaVersion: AgentSchemaVersion = {
 Create or update a schema version via CLI when you cannot modify the instrumentation source:
 
 ```bash
-prefactor agent_schema_versions create \
-  --agent_id <agent-id> \
-  --external_identifier <version-identifier> \
-  --span_type_schemas '<json-array>'
+prefactor agent-schema-versions create \
+  --agent-id <agent-id> \
+  --external-identifier <version-identifier> \
+  --span-type-schemas '<json-array>'
 ```
 
 Each element of the array should follow this shape:
@@ -284,10 +284,10 @@ After delivering risk data, retrieve the schema version and confirm `data_risk` 
 
 ```bash
 # List schema versions for the agent
-prefactor agent_schema_versions list --agent_id <agent-id>
+prefactor agent-schema-versions list --agent-id <agent-id>
 
 # Retrieve and inspect a specific version
-prefactor agent_schema_versions retrieve <schema-version-id>
+prefactor agent-schema-versions retrieve <schema-version-id>
 ```
 
 Confirm the response includes `data_risk` on each span type schema entry.

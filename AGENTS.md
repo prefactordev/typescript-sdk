@@ -3,6 +3,8 @@
 This repo is the set of TypeScript packages that form the Prefactor SDK.  It is a public repo, and should not
 include references to internal Prefactor code or repos.
 
+The Prefactor CLI lives in [prefactordev/cli](https://github.com/prefactordev/cli), not in this repo.
+
 ## Scope and precedence
 This file applies across the repository unless a more specific `AGENTS.md` exists in a subdirectory.
 
@@ -241,7 +243,7 @@ After changing any package under `packages/*` that should ship in a release:
 
 ```md
 ---
-"@prefactor/cli": patch
+"@prefactor/core": patch
 ---
 
 Short summary of the user-facing change. Explain why it matters, not just which files changed.
@@ -255,7 +257,6 @@ Short summary of the user-facing change. Explain why it matters, not just which 
 5. Verify with `bunx @changesets/cli status --since=origin/main` (or `bun run changeset status --since=origin/main` after install). It must report the expected bumps and must not error about missing changesets.
 6. Use an empty changeset (`bunx @changesets/cli add --empty`) only when package files changed but the change must not trigger a release. Say so explicitly in the PR summary.
 7. Do not run `changeset version` or `changeset publish` unless explicitly asked; release automation owns those steps.
-8. Intentional `@prefactor/cli` changesets also gate CLI binary releases. Dependency-only CLI bumps are not enough for a binary release.
 
 Docs-only, test-only, CI-only, or root tooling changes that do not alter publishable package contents usually do not need a changeset. When unsure, add a patch changeset for the touched package(s).
 

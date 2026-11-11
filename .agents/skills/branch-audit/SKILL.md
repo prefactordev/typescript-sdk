@@ -62,7 +62,6 @@ Launch **parallel explore subagents** (read-only), one per package area that the
 |----------|-------|
 | Core infra | `packages/core` - tracing, span lifecycle, transport, queue, config, serialization, span schemas |
 | Adapters | `packages/ai`, `packages/langchain`, `packages/livekit`, `packages/claude`, `packages/openclaw-prefactor-plugin` - provider instrumentation, middleware, streaming handlers |
-| CLI | `packages/cli` - API clients, commands, output types, install scripts |
 
 Give each subagent the prompt below, filling in its area:
 
@@ -74,7 +73,7 @@ You are one of several parallel subagents auditing the current branch against `m
 - Read the changed files in your area thoroughly, plus anything they depend on that you need to understand the change.
 - Read the root `AGENTS.md` and the `AGENTS.md` of each package in your area. Ground findings in those rules.
 - Report issues with file paths and line numbers across these categories:
-  - **Security** (`S`): credential or token leakage, secrets in span payloads or logs, unsafe deserialization, unsanitized CLI input
+  - **Security** (`S`): credential or token leakage, secrets in span payloads or logs, unsafe deserialization
   - **Performance** (`P`): blocking the single-threaded queue, unbounded payloads without `serializeValue`/`truncateString`, heavy synchronous work in instrumentation hot paths
   - **Correctness** (`C`): logic bugs, broken `AsyncLocalStorage` context propagation, span lifecycle mismatches (start without finish, double finish), streaming spans not finished on completion or cancel, instrumentation throwing instead of logging and continuing, wrapped user code not rethrowing the original error
   - **Schemas/templates** (`SC`): span payload or result key changes without schema coordination, templates referencing fields the instrumentation does not populate, duplicate canonical schema entries for one span type, dropped default result schemas
@@ -87,12 +86,12 @@ You are one of several parallel subagents auditing the current branch against `m
 
 Add two specialist passes as **general-purpose subagents** (they need command and web access) when the branch touches their trigger files.
 
-**API contract** - trigger: contract types in `packages/core/src` or clients/commands/types in `packages/cli/src` changed on the branch.
+**API contract** - trigger: contract types in `packages/core/src` changed on the branch.
 
 ```text
 You are the API contract subagent auditing the current branch against `main`.
 
-- Run `git diff main...HEAD -- packages/core/src packages/cli/src` and identify every change to a type, client method, or command that sends fields to or reads fields from the Prefactor API.
+- Run `git diff main...HEAD -- packages/core/src` and identify every change to a type or client method that sends fields to or reads fields from the Prefactor API.
 - Read `.agents/skills/api-drift/SKILL.md` and the comparison rules in `.agents/skills/api-drift/reference.md`. Apply them, but scope yourself to the endpoints and schemas the branch touches - this is a branch audit, not a full drift run.
 - Fetch the production spec and digest it per the api-drift skill (`curl -s https://app.prefactorai.com/api/v1/openapi -o /tmp/prefactor-openapi.json`, then the digest script). If the fetch fails, say so and fall back to reviewing the branch's contract changes for internal consistency only.
 - Report each breaking or possibly breaking delta the branch introduces as a finding: category `API`, severity (breaking is High, possibly breaking is Medium unless clearly benign), the endpoint/schema, and why clients or the backend break.
@@ -120,7 +119,7 @@ After subagents return, **read specific lines** for the most important findings 
 
 Make the Design (`D`) pass yourself: judge the branch as a whole against the shared-first philosophy and package roles in the root `AGENTS.md` and the package-level architecture rules.
 
-Make the Release (`REL`) pass yourself: run `bunx @changesets/cli status --since=origin/main`. Every release-worthy package change needs a changeset at the right bump level (`patch` for fixes, `minor` for backward-compatible features, `major` for breaking changes). Missing changesets, wrong bump levels, and intentional `@prefactor/cli` changes without a changeset (which gate binary releases) are findings; docs-only or test-only changes are not.
+Make the Release (`REL`) pass yourself: run `bunx @changesets/cli status --since=origin/main`. Every release-worthy package change needs a changeset at the right bump level (`patch` for fixes, `minor` for backward-compatible features, `major` for breaking changes). Missing changesets and wrong bump levels are findings; docs-only or test-only changes are not.
 
 ### 7. Present findings as a plan
 

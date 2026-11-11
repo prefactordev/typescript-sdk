@@ -2,7 +2,7 @@
 
 ## Pre-Integration
 
-- Bootstrap Prefactor resources with CLI (`profile`, `environment`, `agent`, `agent_instance`).
+- Bootstrap Prefactor resources with CLI (`profile`, `environment`, `agent`, `agent-instance`).
 - Confirm which package to use first: `@prefactor/langchain`, `@prefactor/ai`, or `@prefactor/openclaw`.
 - Use `@prefactor/core` only if adapter hooks cannot cover required boundaries.
 - Identify top-level agent execution boundary and child LLM/tool boundaries.
@@ -11,21 +11,22 @@
 
 CLI setup notes:
 
-- `prefactor` comes from `@prefactor/cli`; if not globally installed, use launcher commands such as `bunx @prefactor/cli` or `npx @prefactor/cli`.
-- Run from a known config directory (recommended: repo root) because config resolution is directory-sensitive (`./prefactor.json` before `~/.prefactor/prefactor.json`).
+- Install `prefactor` from [prefactordev/cli](https://github.com/prefactordev/cli) (`curl -fsSL https://raw.githubusercontent.com/prefactordev/cli/main/install.sh | bash`, or `install.ps1` on Windows).
+- Config resolution is directory-sensitive: `prefactor.json` at the root of the current repository is used before `~/.prefactor/prefactor.json`.
 - Select profile with `--profile <name>` when needed.
 
 ```bash
 prefactor profiles add default [base-url] --api-token <api-token>
 prefactor accounts list
-prefactor environments create --name <env-name> --account_id <account-id>
-prefactor agents create --name <agent-name> --environment_id <environment-id>
-prefactor agent_instances register \
-  --agent_id <agent-id> \
-  --agent_version_external_identifier <agent-version-id> \
-  --agent_version_name <agent-version-name> \
-  --agent_schema_version_external_identifier <schema-version-id> \
-  --update_current_version
+prefactor environments create --name <env-name> --account-id <account-id> --purpose development
+prefactor agents create --name <agent-name>
+prefactor agent-instances register \
+  --agent-id <agent-id> \
+  --environment-id <environment-id> \
+  --agent-version-external-identifier <agent-version-id> \
+  --agent-version-name <agent-version-name> \
+  --agent-schema-version-external-identifier <schema-version-id> \
+  --update-current-version
 ```
 
 Security checks after profile creation:

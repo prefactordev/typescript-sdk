@@ -398,6 +398,8 @@ See the `examples/` directory for complete examples:
 
 This repo includes reusable skills for coding tools and AI agents.
 
+The Prefactor CLI, and the skills that teach coding agents to use it, live in [prefactordev/cli](https://github.com/prefactordev/cli). Install the CLI from there and run `prefactor skills install` to add its skills.
+
 ### Install via skills CLI (recommended)
 
 ```bash
