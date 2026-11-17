@@ -1,4 +1,5 @@
 import type { ExtensionAPI, ExtensionCommandContext } from '@earendil-works/pi-coding-agent';
+import { Container, Input, SelectList, Text } from '@earendil-works/pi-tui';
 import type { HttpRequester } from '@prefactor/core';
 import {
   type CredentialsFile,
@@ -117,7 +118,7 @@ async function setup(ctx: ExtensionCommandContext, host: PrefactorCommandHost): 
   const apiUrl = process.env.PREFACTOR_API_URL || file?.api_url || DEFAULT_API_URL;
 
   const method = await ctx.ui.select('Connect pi to Prefactor', [
-    'Sign in with the browser',
+    'Sign in with your browser',
     'Paste an agent-deployment token',
   ]);
   if (method === undefined) {
@@ -125,7 +126,7 @@ async function setup(ctx: ExtensionCommandContext, host: PrefactorCommandHost): 
   }
 
   const saved =
-    method === 'Sign in with the browser'
+    method === 'Sign in with your browser'
       ? await setupWithBrowser(ctx, host, apiUrl)
       : await setupWithPastedToken(ctx, host, apiUrl);
   if (!saved) {
@@ -174,8 +175,8 @@ async function setupWithBrowser(
 }
 
 /**
- * Shows the code, link and QR code in pi and polls until the sign-in is approved. The user can
- * cancel from a dialog while pi waits.
+ * Shows the code and link in pi and polls until the sign-in is approved. The user can cancel from
+ * a dialog while pi waits.
  */
 async function waitForApproval(
   ctx: ExtensionCommandContext,
@@ -183,19 +184,13 @@ async function waitForApproval(
   apiUrl: string,
   login: DeviceLogin
 ): Promise<DeviceGrant> {
-  ctx.ui.setWidget(LOGIN_WIDGET, [
-    'Sign in to Prefactor to connect pi.',
-    `Open ${login.verification_uri_complete}`,
-    'or scan this QR code on another device:',
-    ...login.verification_qr_code.split('\n'),
-    `Check that the browser shows the code ${login.user_code}.`,
-  ]);
+  ctx.ui.setWidget(LOGIN_WIDGET, (_tui, theme) => loginWidget(theme, login));
   (host.openBrowser ?? openBrowser)(login.verification_uri_complete);
 
   const polling = new AbortController();
   const dialog = new AbortController();
   void ctx.ui
-    .select(`Waiting for approval of code ${login.user_code}`, ['Cancel sign-in'], {
+    .select(`Approve code ${login.user_code} in your browser`, ['Cancel sign-in'], {
       signal: dialog.signal,
     })
     .then(() => {
@@ -210,6 +205,45 @@ async function waitForApproval(
     dialog.abort();
     ctx.ui.setWidget(LOGIN_WIDGET, undefined);
   }
+}
+
+/** The part of pi's theme the sign-in widget uses. */
+interface WidgetTheme {
+  fg(color: 'mdLink', text: string): string;
+}
+
+/**
+ * The sign-in widget: the full link, broken at the terminal width. Each line is its own complete
+ * OSC 8 hyperlink to the full link, so it is clickable wherever the terminal wraps it, and no line
+ * is wider than the terminal.
+ */
+function loginWidget(
+  theme: WidgetTheme,
+  login: DeviceLogin
+): { render(width: number): string[]; invalidate(): void } {
+  const url = login.verification_uri_complete;
+  return {
+    render(width: number): string[] {
+      return breakAtWidth(url, width).map((line) => theme.fg('mdLink', hyperlink(url, line)));
+    },
+    invalidate() {},
+  };
+}
+
+/** Wraps text in an OSC 8 hyperlink, which terminals that support it make clickable. */
+function hyperlink(url: string, text: string): string {
+  return `\x1b]8;;${url}\x1b\\${text}\x1b]8;;\x1b\\`;
+}
+
+/** Breaks plain single-width text, such as a URL, into lines of at most `width` columns. */
+function breakAtWidth(text: string, width: number): string[] {
+  const chars = [...text];
+  const step = Math.max(1, width);
+  const lines: string[] = [];
+  for (let start = 0; start < chars.length; start += step) {
+    lines.push(chars.slice(start, start + step).join(''));
+  }
+  return lines;
 }
 
 async function createDeploymentCredentials(
@@ -252,28 +286,128 @@ async function createDeploymentCredentials(
   return true;
 }
 
+const CREATE_AGENT = 'Create a new agent for pi';
+const USE_EXISTING_AGENT = 'Use an existing agent';
+
+/**
+ * Chooses the agent pi reports to: a new agent, named and described by the user, or an existing
+ * one. Returns undefined when the user cancels at any step.
+ */
 async function chooseAgent(
   ctx: ExtensionCommandContext,
   api: PrefactorApi
 ): Promise<AgentSummary | undefined> {
   const agents = await api.listAgents();
-  const createLabel = `Create an agent named ${DEFAULT_AGENT_NAME}`;
+  const choice = await ctx.ui.select(
+    'Which Prefactor agent should pi report to?',
+    agents.length > 0 ? [CREATE_AGENT, USE_EXISTING_AGENT] : [CREATE_AGENT]
+  );
+  if (choice === CREATE_AGENT) {
+    return createNamedAgent(ctx, api, agents);
+  }
+  if (choice === USE_EXISTING_AGENT) {
+    return chooseExistingAgent(ctx, agents);
+  }
+  return undefined;
+}
+
+async function createNamedAgent(
+  ctx: ExtensionCommandContext,
+  api: PrefactorApi,
+  agents: AgentSummary[]
+): Promise<AgentSummary | undefined> {
+  // pi's terminal UI does not show input placeholders, so the titles also name the defaults.
+  const name = await ctx.ui.input(
+    `Name for the new agent (default: ${DEFAULT_AGENT_NAME})`,
+    DEFAULT_AGENT_NAME
+  );
+  if (name === undefined) {
+    return undefined;
+  }
+  const agentName = name.trim() || DEFAULT_AGENT_NAME;
+  const existing = agents.find((agent) => agent.name === agentName);
+  if (existing) {
+    const useExisting = await ctx.ui.confirm(
+      `An agent named "${agentName}" already exists`,
+      'Use the existing agent instead?'
+    );
+    return useExisting ? existing : undefined;
+  }
+
+  const description = await ctx.ui.input(
+    `Description (optional, default: ${DEFAULT_AGENT_DESCRIPTION})`,
+    DEFAULT_AGENT_DESCRIPTION
+  );
+  if (description === undefined) {
+    return undefined;
+  }
+  return api.createAgent(agentName, description.trim() || DEFAULT_AGENT_DESCRIPTION);
+}
+
+/**
+ * Lets the user pick one of the account's agents: a type-to-filter list in pi's terminal UI, or a
+ * plain list where custom UI is not available, such as RPC mode.
+ */
+async function chooseExistingAgent(
+  ctx: ExtensionCommandContext,
+  agents: AgentSummary[]
+): Promise<AgentSummary | undefined> {
   const labels = agents.map((agent) =>
     agents.filter((other) => other.name === agent.name).length > 1
       ? `${agent.name} (${agent.id})`
       : agent.name
   );
-  const hasDefault = agents.some((agent) => agent.name === DEFAULT_AGENT_NAME);
-  const options = hasDefault ? labels : [createLabel, ...labels];
-
-  const choice = await ctx.ui.select('Which Prefactor agent should pi report to?', options);
-  if (choice === undefined) {
-    return undefined;
-  }
-  if (choice === createLabel) {
-    return api.createAgent(DEFAULT_AGENT_NAME, DEFAULT_AGENT_DESCRIPTION);
-  }
-  return agents[labels.indexOf(choice)];
+  const title = 'Choose the agent pi reports to';
+  const choice =
+    ctx.mode === 'tui'
+      ? await ctx.ui.custom<string | undefined>((tui, theme, keybindings, done) => {
+          const filter = new Input({ placeholder: 'Type to filter' });
+          filter.focused = true;
+          const list = new SelectList(
+            labels.map((label) => ({ value: label, label })),
+            Math.min(labels.length, 10),
+            {
+              selectedPrefix: (text) => theme.fg('accent', text),
+              selectedText: (text) => theme.fg('accent', text),
+              description: (text) => theme.fg('muted', text),
+              scrollInfo: (text) => theme.fg('dim', text),
+              // SelectList's own empty-filter text speaks of commands.
+              noMatch: () => theme.fg('warning', '  No matching agents'),
+            }
+          );
+          list.onSelect = (item) => done(item.value);
+          list.onCancel = () => done(undefined);
+          const container = new Container();
+          container.addChild(new Text(theme.fg('accent', title)));
+          container.addChild(filter);
+          container.addChild(list);
+          container.addChild(
+            new Text(theme.fg('dim', 'type to filter · ↑↓ navigate · enter select · esc cancel'))
+          );
+          const listKeys = [
+            'tui.select.up',
+            'tui.select.down',
+            'tui.select.pageUp',
+            'tui.select.pageDown',
+            'tui.select.confirm',
+            'tui.select.cancel',
+          ] as const;
+          return {
+            render: (width: number) => container.render(width),
+            invalidate: () => container.invalidate(),
+            handleInput(data: string) {
+              if (listKeys.some((key) => keybindings.matches(data, key))) {
+                list.handleInput(data);
+              } else {
+                filter.handleInput(data);
+                list.setFilter(filter.getValue());
+              }
+              tui.requestRender();
+            },
+          };
+        })
+      : await ctx.ui.select(title, labels);
+  return choice === undefined ? undefined : agents[labels.indexOf(choice)];
 }
 
 /**

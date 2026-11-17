@@ -24,7 +24,7 @@ Run this inside pi:
 /prefactor setup
 ```
 
-It signs you in through Prefactor in the browser. pi shows the sign-in code, the link and a QR code, so you can approve on another device when pi runs over SSH or in a container. You then choose the Prefactor agent pi reports to, or create one named "pi", and the environment when the agent has more than one deployment. Setup creates an agent-deployment token for that agent and environment, checks it, and saves it to `~/.pi/agent/prefactor.json` with file mode `0600`.
+It signs you in through Prefactor in the browser. pi opens the sign-in page and shows the link, which you can also open yourself, or on another device when pi runs over SSH or in a container, and the code to approve there. You then create an agent for pi, named "pi" unless you choose another name, or pick one of your account's existing agents, and choose the environment when the agent has more than one deployment. Setup creates an agent-deployment token for that agent and environment, checks it, and saves it to `~/.pi/agent/prefactor.json` with file mode `0600`.
 
 The account token from the sign-in is kept in memory only. Setup revokes it once the deployment token is saved, or when setup stops early. If revoking fails, setup keeps the deployment token and tells you to revoke the account token under Account settings in Prefactor.
 

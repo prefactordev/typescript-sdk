@@ -13,7 +13,6 @@ export interface DeviceLogin {
   device_code: string;
   user_code: string;
   verification_uri_complete: string;
-  verification_qr_code: string;
   expires_in: number;
   interval: number;
 }
@@ -201,7 +200,6 @@ function isDeviceLogin(value: unknown): value is DeviceLogin {
     typeof login.device_code === 'string' &&
     typeof login.user_code === 'string' &&
     typeof login.verification_uri_complete === 'string' &&
-    typeof login.verification_qr_code === 'string' &&
     typeof login.expires_in === 'number' &&
     typeof login.interval === 'number'
   );

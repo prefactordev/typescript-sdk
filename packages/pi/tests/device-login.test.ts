@@ -12,7 +12,6 @@ const LOGIN: DeviceLogin = {
   device_code: 'device',
   user_code: 'ABCD',
   verification_uri_complete: `${API_URL}/cli/connect`,
-  verification_qr_code: 'QR',
   expires_in: 600,
   interval: 2,
 };
