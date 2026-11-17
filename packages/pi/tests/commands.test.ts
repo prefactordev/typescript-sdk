@@ -252,6 +252,20 @@ describe('/prefactor', () => {
     expect(ctx.notifications.at(-1)).toContain('Revoke it under Account settings');
   });
 
+  test('setup sends the sign-in link to RPC clients as a plain widget line', async () => {
+    serveBrowserSignIn({ agents: [{ id: 'agent-pi', name: 'pi' }] });
+    const ctx = createContext({
+      hasUI: true,
+      mode: 'rpc',
+      answers: ['Sign in with your browser', leaveOpen, USE_EXISTING_AGENT, 'pi'],
+    });
+
+    await run('setup', ctx);
+
+    expect(ctx.widgets[0]).toEqual([`${API_URL}/cli/connect?code=ABCD-1234`]);
+    expect(ctx.widgets.at(-1)).toBeUndefined();
+  });
+
   test('setup saves nothing but still revokes the account token when the user cancels the agent choice', async () => {
     serveBrowserSignIn();
     const ctx = createContext({

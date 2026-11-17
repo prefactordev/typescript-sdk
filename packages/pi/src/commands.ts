@@ -176,7 +176,8 @@ async function setupWithBrowser(
 
 /**
  * Shows the code and link in pi and polls until the sign-in is approved. The user can cancel from
- * a dialog while pi waits.
+ * a dialog while pi waits. Interactive pi shows the link as a clickable widget; RPC clients
+ * receive it as a plain widget line.
  */
 async function waitForApproval(
   ctx: ExtensionCommandContext,
@@ -184,7 +185,12 @@ async function waitForApproval(
   apiUrl: string,
   login: DeviceLogin
 ): Promise<DeviceGrant> {
-  ctx.ui.setWidget(LOGIN_WIDGET, (_tui, theme) => loginWidget(theme, login));
+  // pi's RPC mode sends only string-array widgets to the client and drops component factories.
+  if (ctx.mode === 'tui') {
+    ctx.ui.setWidget(LOGIN_WIDGET, (_tui, theme) => loginWidget(theme, login));
+  } else {
+    ctx.ui.setWidget(LOGIN_WIDGET, [login.verification_uri_complete]);
+  }
   (host.openBrowser ?? openBrowser)(login.verification_uri_complete);
 
   const polling = new AbortController();
