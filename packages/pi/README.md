@@ -113,6 +113,13 @@ try {
 | `apiToken` | Agent-deployment token |
 | `agentId` | Prefactor agent id, read from the token when omitted |
 | `agentVersion` | Agent version recorded for each session. Defaults to the version of the pi framework. |
+| `agentVersionName` | Name of the agent version. Defaults to `pi`. |
+| `agentVersionDescription` | Description of the agent version. Defaults to a description of the pi coding agent. |
+| `spanTypeSchemas` | Span types for the agent's own spans, added to the schema version the extension registers. They cannot redefine `pi:session` or the `$agent:*` span types. |
+| `qualitySchemas` | Quality schemas for quality recorded on the session's agent instance |
+| `alertSchemas` | Alert schemas for alerts raised on the session's agent instance |
+| `toolSchemas` | Span type details by tool name: `title`, `description`, `template`, `params_schema` (the tool's arguments), `result_schema` (the tool's result) and `data_risk`. The tool keeps its `$agent:tool:<name>` span type, so Prefactor still shows it as a tool call, and a tool listed here gets that span type even when it is added after the session starts. |
+| `onSessionStart` | Called with the session's recorder when the extension starts recording a session. See [Adding to the record](#adding-to-the-record). |
 
 The session lifecycle depends on two calls:
 
@@ -120,6 +127,53 @@ The session lifecycle depends on two calls:
 - `AgentSessionRuntime.dispose()` emits `session_shutdown`, which finishes the agent instance after the remaining spans are sent. `AgentSession.dispose()` on its own does not emit `session_shutdown`, so with `createAgentSession()` the agent instance stays active in Prefactor. Use `AgentSessionRuntime` as above when the instance should be finished.
 
 The `pi` command always records pi's release version, because it loads the extension without options.
+
+### Adding to the record
+
+Agents that run their own steps around pi can add spans, quality and alerts to the session's agent instance through the recorder that `onSessionStart` receives. Declare the span types, quality schemas and alert schemas in the options first, because Prefactor accepts only those declared in the agent's schema version.
+
+```typescript
+import { type PrefactorRecorder, prefactorExtension } from '@prefactor/pi';
+
+let recorder: PrefactorRecorder | undefined;
+
+const extension = prefactorExtension({
+  agentVersion: '2.3.0',
+  agentVersionName: 'signal monitor',
+  agentVersionDescription: 'Polls sources and posts signals to Slack',
+  spanTypeSchemas: [
+    {
+      name: 'signal:poll_source',
+      template: 'Poll {{ source }}',
+      params_schema: { type: 'object', properties: { source: { type: 'string' } } },
+      result_schema: { type: 'object', properties: { items: { type: 'integer' } } },
+    },
+  ],
+  qualitySchemas: [
+    { name: 'signal:run_quality', schema: { type: 'object', properties: { sources_failed: { type: 'integer' } } } },
+  ],
+  alertSchemas: [
+    { name: 'signal:monitor_broken', schema: { type: 'object', properties: { reason: { type: 'string' } } } },
+  ],
+  onSessionStart: (sessionRecorder) => {
+    recorder = sessionRecorder;
+  },
+});
+
+// Later, while the session runs:
+const poll = recorder?.startSpan({ schemaName: 'signal:poll_source', payload: { source: 'reddit' } });
+poll?.complete({ items: 12 });
+recorder?.recordQuality('signal:run_quality', { sources_failed: 0 });
+recorder?.raiseAlert('signal:monitor_broken', 'error', { reason: 'every source failed' });
+```
+
+| Recorder method | Does |
+| --- | --- |
+| `startSpan({ schemaName, payload, parent })` | Starts a span and returns it; finish it with `complete(result)` or `fail(result)`. It nests under `parent`, which is another span from the recorder or `{ toolCallId }` for a running tool call (for example, from inside a custom tool's `execute`). Without a parent, it nests under the open assistant turn, or under `pi:session` between runs. Spans still open at shutdown are cancelled. |
+| `recordQuality(name, payload)` | Records quality on the agent instance. `null` removes the value recorded for that name. |
+| `raiseAlert(name, severity, payload)` | Raises an alert on the agent instance. Severity is `critical`, `error`, `warning` or `info`. The agent-deployment token can raise alerts, so no other token is needed. |
+
+The recorder's methods never throw and never wait for the network. Failures are logged. After the session shuts down, they record nothing. `onSessionStart` is not called when no Prefactor token is found.
 
 ## What gets recorded
 

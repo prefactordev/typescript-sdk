@@ -3,6 +3,7 @@ import {
   type AgentInstanceRegisterPayload,
   type AgentSchemaVersion,
   AgentSpanClient,
+  type AlertSeverity,
   buildRuntimeEnvironment,
   getLogger,
   HttpClient,
@@ -209,6 +210,37 @@ export class PrefactorSession {
         status,
         result_payload: resultPayload,
       });
+    });
+  }
+
+  /**
+   * Records a quality payload on the agent instance for a named quality schema. A null payload
+   * removes the recorded value for that name.
+   */
+  recordQuality(name: string, payload: Record<string, unknown> | null): void {
+    this.enqueue(async () => {
+      const instanceId = await this.instanceId;
+      if (instanceId) {
+        await this.instanceClient.recordQuality(instanceId, { name, payload });
+      }
+    });
+  }
+
+  /**
+   * Raises a named alert on the agent instance, timestamped now.
+   */
+  raiseAlert(name: string, severity: AlertSeverity, payload: Record<string, unknown>): void {
+    const raisedAt = new Date().toISOString();
+    this.enqueue(async () => {
+      const instanceId = await this.instanceId;
+      if (instanceId) {
+        await this.instanceClient.raiseAlert(instanceId, {
+          name,
+          severity,
+          payload,
+          raised_at: raisedAt,
+        });
+      }
     });
   }
 

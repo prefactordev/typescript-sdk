@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test';
 import { VERSION as PI_VERSION } from '@earendil-works/pi-coding-agent';
 import type { SpanTypeSchema } from '@prefactor/core';
 import { prefactorExtension, resetSetupNoticeForTests } from '../src/extension.js';
+import type { PrefactorRecorder } from '../src/recorder.js';
 import { createContext, createPi, isolateEnvironment } from './helpers.js';
 
 type SentRequest = { url: string; body: Record<string, unknown> | null };
@@ -499,6 +500,184 @@ describe('prefactorExtension', () => {
     expect(created[15]).toMatchObject({
       status: 'failed',
       result_payload: { error: 'The model call failed.' },
+    });
+  });
+
+  test('adds the developer schemas, tool span details and agent version details to the registration', async () => {
+    const { pi, emit } = createPi({ tools: [{ name: 'bash', description: 'Run a command' }] });
+    const qualitySchema = { name: 'app:run_quality', schema: { type: 'object' } };
+    const alertSchema = { name: 'app:broken', schema: { type: 'object' } };
+    prefactorExtension({
+      apiUrl: 'https://prefactor.example',
+      apiToken: 't',
+      agentId: 'a',
+      agentVersionName: 'signal monitor',
+      agentVersionDescription: 'Watches sources',
+      spanTypeSchemas: [{ name: 'app:poll', params_schema: { type: 'object' } }],
+      qualitySchemas: [qualitySchema],
+      alertSchemas: [alertSchema],
+      toolSchemas: {
+        bash: { template: 'shell' },
+        notify_slack: {
+          description: 'Send a Slack message',
+          params_schema: { type: 'object', properties: { channel: { type: 'string' } } },
+          result_schema: { type: 'object', properties: { ts: { type: 'string' } } },
+        },
+      },
+    })(pi as never);
+    const ctx = createContext({ hasUI: false });
+    await emit({ type: 'session_start', reason: 'startup' }, ctx);
+    await emit({ type: 'agent_start' }, ctx);
+    await emit(
+      {
+        type: 'tool_execution_start',
+        toolCallId: 'call-1',
+        toolName: 'notify_slack',
+        args: { channel: '#signals' },
+      },
+      ctx
+    );
+    await emit({ type: 'session_shutdown', reason: 'quit' }, ctx);
+
+    const registration = requests[0].body as {
+      agent_version: Record<string, unknown>;
+      agent_schema_version: {
+        span_type_schemas: SpanTypeSchema[];
+        quality_schemas: unknown[];
+        alert_schemas: unknown[];
+      };
+    };
+    expect(registration.agent_version).toMatchObject({
+      name: 'signal monitor',
+      description: 'Watches sources',
+    });
+    const schemas = registration.agent_schema_version.span_type_schemas;
+    const byName = (name: string) => schemas.find((schema) => schema.name === name);
+    expect(byName('$agent:tool:bash')?.template).toBe('shell');
+    expect(byName('$agent:tool:notify_slack')).toMatchObject({
+      description: 'Send a Slack message',
+      params_schema: { properties: { params: { properties: { channel: { type: 'string' } } } } },
+      result_schema: { properties: { result: { properties: { ts: { type: 'string' } } } } },
+    });
+    expect(schemas.at(-1)?.name).toBe('app:poll');
+    expect(registration.agent_schema_version.quality_schemas).toEqual([qualitySchema]);
+    expect(registration.agent_schema_version.alert_schemas).toEqual([alertSchema]);
+    expect(spans().at(-1)?.schema_name).toBe('$agent:tool:notify_slack');
+  });
+
+  test('registers no quality or alert schemas when none are given', async () => {
+    const { pi, emit } = createPi();
+    prefactorExtension({ apiUrl: 'https://prefactor.example', apiToken: 't', agentId: 'a' })(
+      pi as never
+    );
+    const ctx = createContext({ hasUI: false });
+    await emit({ type: 'session_start', reason: 'startup' }, ctx);
+    await emit({ type: 'session_shutdown', reason: 'quit' }, ctx);
+
+    const schemaVersion = (requests[0].body as { agent_schema_version: Record<string, unknown> })
+      .agent_schema_version;
+    expect(schemaVersion).not.toHaveProperty('quality_schemas');
+    expect(schemaVersion).not.toHaveProperty('alert_schemas');
+  });
+
+  test('rejects span types that redefine the extension span types', () => {
+    expect(() =>
+      prefactorExtension({
+        spanTypeSchemas: [{ name: '$agent:tool:bash', params_schema: { type: 'object' } }],
+      })
+    ).toThrow('spanTypeSchemas cannot redefine');
+  });
+
+  test('records custom spans, quality and alerts through the session recorder', async () => {
+    const { pi, emit } = createPi();
+    let recorder: PrefactorRecorder | undefined;
+    prefactorExtension({
+      apiUrl: 'https://prefactor.example',
+      apiToken: 't',
+      agentId: 'a',
+      onSessionStart: (sessionRecorder) => {
+        recorder = sessionRecorder;
+      },
+    })(pi as never);
+    const ctx = createContext({ hasUI: false });
+
+    await emit({ type: 'session_start', reason: 'startup' }, ctx);
+    if (!recorder) {
+      throw new Error('onSessionStart was not called');
+    }
+    const poll = recorder.startSpan({ schemaName: 'app:poll', payload: { source: 'reddit' } });
+    const nested = recorder.startSpan({ schemaName: 'app:fetch', parent: poll });
+    nested.fail({ error: 'timeout' });
+    poll.complete({ items: 3 });
+    poll.fail({ ignored: true });
+
+    await emit({ type: 'agent_start' }, ctx);
+    await emit(user('go'), ctx);
+    await emit(
+      {
+        type: 'message_end',
+        message: assistantMessage([{ type: 'toolCall', id: 'call-1', name: 'bash' }], 'toolUse'),
+      },
+      ctx
+    );
+    const inTurn = recorder.startSpan({ schemaName: 'app:step' });
+    await emit(
+      { type: 'tool_execution_start', toolCallId: 'call-1', toolName: 'bash', args: {} },
+      ctx
+    );
+    const inTool = recorder.startSpan({
+      schemaName: 'app:notify',
+      parent: { toolCallId: 'call-1' },
+    });
+    inTool.complete();
+    inTurn.complete();
+    recorder.recordQuality('app:run_quality', { score: 1 });
+    recorder.raiseAlert('app:broken', 'error', { reason: 'no sources' });
+    recorder.startSpan({ schemaName: 'app:left_open' });
+    await emit({ type: 'session_shutdown', reason: 'quit' }, ctx);
+
+    const requestCount = requests.length;
+    recorder.startSpan({ schemaName: 'app:late' }).complete();
+    recorder.recordQuality('app:run_quality', { score: 2 });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(requests).toHaveLength(requestCount);
+
+    const created = spans();
+    const indexOf = (schemaName: string) =>
+      created.findIndex((span) => span.schema_name === schemaName);
+    const idOf = (schemaName: string) => spanIdAt(indexOf(schemaName));
+    expect(created[indexOf('app:poll')]).toMatchObject({
+      parent_span_id: idOf('pi:session'),
+      payload: { source: 'reddit' },
+    });
+    expect(created[indexOf('app:fetch')].parent_span_id).toBe(idOf('app:poll'));
+    expect(created[indexOf('app:step')].parent_span_id).toBe(idOf('$agent:assistant_turn'));
+    expect(created[indexOf('app:notify')].parent_span_id).toBe(idOf('$agent:tool:bash'));
+
+    expect(finishOf(idOf('app:fetch'))).toMatchObject({
+      status: 'failed',
+      result_payload: { error: 'timeout' },
+    });
+    const pollFinishes = requests.filter((request) =>
+      request.url.endsWith(`/agent_spans/${idOf('app:poll')}/finish`)
+    );
+    expect(pollFinishes.map((request) => request.body)).toMatchObject([
+      { status: 'complete', result_payload: { items: 3 } },
+    ]);
+    expect(finishOf(idOf('app:left_open'))).toMatchObject({ status: 'cancelled' });
+
+    const quality = requests.find((request) => request.url.endsWith('/record_quality'));
+    expect(quality?.url).toBe(
+      'https://prefactor.example/api/v1/agent_instance/id-1/record_quality'
+    );
+    expect(quality?.body).toMatchObject({ name: 'app:run_quality', payload: { score: 1 } });
+    const alert = requests.find((request) => request.url.endsWith('/api/v1/alerts/raise'));
+    expect(alert?.body).toMatchObject({
+      agent_instance_id: 'id-1',
+      name: 'app:broken',
+      severity: 'error',
+      payload: { reason: 'no sources' },
+      raised_at: expect.any(String),
     });
   });
 

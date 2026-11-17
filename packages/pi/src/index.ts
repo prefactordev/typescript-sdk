@@ -19,6 +19,12 @@ export {
   type PrefactorCredentialOptions,
 } from './credentials.js';
 export { type PrefactorExtensionOptions, prefactorExtension } from './extension.js';
+export type {
+  PrefactorRecorder,
+  PrefactorSpan,
+  StartPrefactorSpanOptions,
+} from './recorder.js';
+export type { SchemaExtensions, ToolSchemaOptions } from './schema.js';
 
 /** The pi extension, reading credentials from the environment or the credentials file. */
 export default prefactorExtension();

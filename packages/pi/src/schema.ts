@@ -1,4 +1,11 @@
-import type { AgentSchemaVersion, JsonSchema, SpanTypeSchema } from '@prefactor/core';
+import type {
+  AgentSchemaVersion,
+  AlertSchema,
+  DataRisk,
+  JsonSchema,
+  QualitySchema,
+  SpanTypeSchema,
+} from '@prefactor/core';
 import { DEFAULT_SPAN_TYPE_RISK, UNKNOWN_TOOL_RISK } from './data-risk.js';
 import { SUPPORTED_TOOL_DEFINITIONS } from './tool-definitions.js';
 import { PACKAGE_VERSION } from './version.js';
@@ -19,6 +26,36 @@ export const FALLBACK_TOOL_SPAN_TYPE = `${TOOL_SPAN_PREFIX}pi:other`;
 export interface SessionTool {
   name: string;
   description?: string;
+}
+
+/**
+ * Span type details for one tool, replacing the defaults of its `$agent:tool:<name>` span type.
+ * The span type keeps its name, so Prefactor still shows the execution as a tool call.
+ */
+export interface ToolSchemaOptions {
+  title?: string;
+  description?: string;
+  /** Liquid template summarising the call. `params` holds the arguments; `result` or `error` the outcome. */
+  template?: string;
+  /** JSON Schema of the tool's arguments, recorded as `params`. */
+  params_schema?: JsonSchema;
+  /** JSON Schema of the tool's result, recorded as `result`. */
+  result_schema?: JsonSchema;
+  data_risk?: DataRisk;
+}
+
+/** What developers add to the agent schema version the extension registers. */
+export interface SchemaExtensions {
+  spanTypeSchemas?: SpanTypeSchema[];
+  qualitySchemas?: QualitySchema[];
+  alertSchemas?: AlertSchema[];
+  /** Span type details by tool name. */
+  toolSchemas?: Record<string, ToolSchemaOptions>;
+}
+
+/** Whether a span type name belongs to the span types the extension defines itself. */
+export function isReservedSpanType(name: string): boolean {
+  return name === 'pi:session' || name.startsWith('$agent:');
 }
 
 function versioned(
@@ -59,23 +96,25 @@ const COST_SCHEMA: JsonSchema = {
   },
 };
 
-function toolSchema(tool: SessionTool): SpanTypeSchema {
+function toolSchema(tool: SessionTool, options: ToolSchemaOptions = {}): SpanTypeSchema {
   const spanType = `${TOOL_SPAN_PREFIX}${tool.name}`;
   const definition = Object.hasOwn(SUPPORTED_TOOL_DEFINITIONS, tool.name)
     ? SUPPORTED_TOOL_DEFINITIONS[tool.name]
     : undefined;
   return {
     name: spanType,
-    title: tool.name,
-    description: definition?.description ?? tool.description ?? `The ${tool.name} tool`,
-    template: definition?.template ?? `${tool.name}{% if error %} (error){% endif %}`,
+    title: options.title ?? tool.name,
+    description:
+      options.description ?? definition?.description ?? tool.description ?? `The ${tool.name} tool`,
+    template:
+      options.template ?? definition?.template ?? `${tool.name}{% if error %} (error){% endif %}`,
     params_schema: versioned({
       tool_use_id: { type: 'string', description: 'Tool call id assigned by the model' },
-      params: definition?.inputSchema ?? { type: 'object' },
+      params: options.params_schema ?? definition?.inputSchema ?? { type: 'object' },
     }),
     result_schema: versioned(
       {
-        result: {
+        result: options.result_schema ?? {
           type: 'object',
           properties: {
             content: { type: 'array', description: 'Content returned to the model' },
@@ -86,19 +125,35 @@ function toolSchema(tool: SessionTool): SpanTypeSchema {
       },
       []
     ),
-    data_risk: DEFAULT_SPAN_TYPE_RISK[spanType] ?? UNKNOWN_TOOL_RISK,
+    data_risk: options.data_risk ?? DEFAULT_SPAN_TYPE_RISK[spanType] ?? UNKNOWN_TOOL_RISK,
   };
+}
+
+/**
+ * Names of the tools that get their own span type: the tools pi has at session start and the
+ * tools given span type details, in that order, without repeats.
+ */
+export function registeredToolNames(
+  tools: SessionTool[],
+  toolSchemas: Record<string, ToolSchemaOptions> = {}
+): string[] {
+  return [...new Set([...tools.map((tool) => tool.name), ...Object.keys(toolSchemas)])];
 }
 
 /**
  * Builds the agent schema version registered for each pi session. pi's own work is recorded with
  * the canonical `$agent:*` span types, so Prefactor shows the session as a conversation, inside
- * a `pi:session` root span. Each tool pi has at session start gets its own span type.
+ * a `pi:session` root span. Each tool pi has at session start, and each tool in
+ * `extensions.toolSchemas`, gets its own span type. The developer's span types, quality schemas
+ * and alert schemas follow.
  */
-export function buildAgentSchemaVersion(tools: SessionTool[]): AgentSchemaVersion {
-  const toolSchemas = tools
-    .filter((tool, index) => tools.findIndex((other) => other.name === tool.name) === index)
-    .map(toolSchema);
+export function buildAgentSchemaVersion(
+  tools: SessionTool[],
+  extensions: SchemaExtensions = {}
+): AgentSchemaVersion {
+  const toolSchemas = registeredToolNames(tools, extensions.toolSchemas).map((name) =>
+    toolSchema(tools.find((tool) => tool.name === name) ?? { name }, extensions.toolSchemas?.[name])
+  );
 
   return {
     external_identifier: `prefactor-pi-${PACKAGE_VERSION}`,
@@ -234,6 +289,9 @@ export function buildAgentSchemaVersion(tools: SessionTool[]): AgentSchemaVersio
           params: { type: 'object' },
         }),
       },
+      ...(extensions.spanTypeSchemas ?? []),
     ],
+    ...(extensions.qualitySchemas?.length ? { quality_schemas: extensions.qualitySchemas } : {}),
+    ...(extensions.alertSchemas?.length ? { alert_schemas: extensions.alertSchemas } : {}),
   };
 }

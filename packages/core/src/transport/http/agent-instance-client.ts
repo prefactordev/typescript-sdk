@@ -56,6 +56,25 @@ export type AgentInstanceRecordQualityPayload = {
   idempotency_key?: string;
 };
 
+export type AlertSeverity = 'critical' | 'error' | 'warning' | 'info';
+
+export type AgentInstanceRaiseAlertPayload = {
+  /** Alert name (key in the agent schema version alert_schemas). */
+  name: string;
+  severity: AlertSeverity;
+  /** Alert payload, validated against the alert's schema. */
+  payload: Record<string, unknown>;
+  /** When the alert was raised (ISO 8601). Defaults to the time the request is received. */
+  raised_at?: string;
+  idempotency_key?: string;
+};
+
+export type AlertResponse = {
+  details: {
+    id: string;
+  };
+};
+
 export class AgentInstanceClient {
   constructor(private readonly httpClient: HttpRequester) {}
 
@@ -117,6 +136,32 @@ export class AgentInstanceClient {
       body: {
         name: payload.name,
         payload: payload.payload,
+        idempotency_key: ensureIdempotencyKey(payload.idempotency_key),
+      },
+    });
+  }
+
+  /**
+   * Raises a named alert on an agent instance. Raising an alert that is
+   * already open does not open a second one. An idempotency key is
+   * auto-generated when omitted.
+   *
+   * @param agentInstanceId - Backend agent instance ID.
+   * @param payload - Alert name, severity and payload.
+   * @returns The API response containing the alert details.
+   */
+  raiseAlert(
+    agentInstanceId: string,
+    payload: AgentInstanceRaiseAlertPayload
+  ): Promise<AlertResponse> {
+    return this.httpClient.request('/api/v1/alerts/raise', {
+      method: 'POST',
+      body: {
+        agent_instance_id: agentInstanceId,
+        name: payload.name,
+        severity: payload.severity,
+        payload: payload.payload,
+        ...(payload.raised_at ? { raised_at: payload.raised_at } : {}),
         idempotency_key: ensureIdempotencyKey(payload.idempotency_key),
       },
     });
