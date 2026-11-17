@@ -13,6 +13,7 @@ import {
 const logger = getLogger('pi');
 
 const RETRY_ON_STATUS_CODES = [429, ...Array.from({ length: 100 }, (_, index) => 500 + index)];
+const DEFAULT_SHUTDOWN_TIMEOUT_MS = 10_000;
 
 /**
  * A span sent, or being sent, to Prefactor. `id` resolves to the backend span id, or `null` when
@@ -35,6 +36,8 @@ export interface PrefactorSessionOptions {
   sdkHeaderEntry: string;
   /** Called once for the first request that fails. */
   onError?: (error: unknown) => void;
+  /** How long {@link PrefactorSession.finish} waits for queued requests. Defaults to 10 seconds. */
+  shutdownTimeoutMs?: number;
 }
 
 export interface StartSpanOptions {
@@ -92,7 +95,8 @@ export async function fetchAgentId(client: HttpRequester): Promise<string> {
  * Every call returns at once and queues its request, so pi is never held up by the network. The
  * queue sends requests one at a time in call order, so a parent span is created before its
  * children and finished after them. Each span is sent as soon as it starts or finishes, so a
- * session ended without `session_shutdown` loses only the spans still open.
+ * session ended without `session_shutdown` loses only the spans still open. Shutdown waits for
+ * queued requests only up to a deadline, so an unreachable API cannot hold up pi's exit.
  */
 export class PrefactorSession {
   private readonly instanceClient: AgentInstanceClient;
@@ -100,16 +104,19 @@ export class PrefactorSession {
   private readonly instanceId: Promise<string | null>;
   private tail: Promise<unknown> = Promise.resolve();
   private readonly onError?: (error: unknown) => void;
+  private readonly shutdownTimeoutMs: number;
   private errorReported = false;
   private finished = false;
   private lastError: unknown = null;
 
   constructor(options: PrefactorSessionOptions, httpClient?: HttpRequester) {
-    const client =
-      httpClient ?? createHttpClient(options.apiUrl, options.apiToken, options.sdkHeaderEntry);
+    const client = this.trackRequests(
+      httpClient ?? createHttpClient(options.apiUrl, options.apiToken, options.sdkHeaderEntry)
+    );
     this.instanceClient = new AgentInstanceClient(client);
     this.spanClient = new AgentSpanClient(client);
     this.onError = options.onError;
+    this.shutdownTimeoutMs = options.shutdownTimeoutMs ?? DEFAULT_SHUTDOWN_TIMEOUT_MS;
 
     const startedAt = new Date().toISOString();
     this.instanceId = this.enqueue(async () => {
@@ -128,7 +135,10 @@ export class PrefactorSession {
     });
   }
 
-  /** Error from the most recent failed request, or `null` when the last request succeeded. */
+  /**
+   * Error from the most recent failed request or operation, or `null` when the last request sent
+   * succeeded. Operations skipped because an earlier one failed do not clear it.
+   */
   getLastError(): unknown {
     return this.lastError;
   }
@@ -176,8 +186,9 @@ export class PrefactorSession {
   }
 
   /**
-   * Finishes the agent instance after every queued request, and waits for it to be sent.
-   * Calling it more than once has no further effect.
+   * Finishes the agent instance after every queued request, and waits for it to be sent, but no
+   * longer than the shutdown timeout. Requests still queued after the timeout keep running in the
+   * background. Calling it more than once has no further effect.
    */
   async finish(): Promise<void> {
     if (this.finished) {
@@ -186,12 +197,28 @@ export class PrefactorSession {
     this.finished = true;
 
     const timestamp = new Date().toISOString();
-    await this.enqueue(async () => {
+    const sent = this.enqueue(async () => {
       const instanceId = await this.instanceId;
       if (instanceId) {
         await this.instanceClient.finish(instanceId, { status: 'complete', timestamp });
       }
+      return true;
     });
+
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const timedOut = new Promise<false>((resolve) => {
+      timer = setTimeout(() => resolve(false), this.shutdownTimeoutMs);
+      timer.unref?.();
+    });
+    try {
+      if ((await Promise.race([sent, timedOut])) === false) {
+        logger.debug(
+          `Stopped waiting for Prefactor requests after ${this.shutdownTimeoutMs} ms at shutdown`
+        );
+      }
+    } finally {
+      clearTimeout(timer);
+    }
   }
 
   /**
@@ -232,25 +259,47 @@ export class PrefactorSession {
 
   /**
    * Queues a request behind every earlier one. Failures are logged and resolve to `null`, because
-   * instrumentation must never break pi.
+   * instrumentation must never break pi. The returned promise never rejects, so the queue keeps
+   * running after any failure.
    */
   private enqueue<T>(operation: () => Promise<T>): Promise<T | null> {
     const promise = this.tail.then(operation).then(
-      (value) => {
-        this.lastError = null;
-        return value;
-      },
+      (value) => value,
       (error: unknown) => {
         this.lastError = error;
         logger.debug('Prefactor request failed', error);
         if (!this.errorReported) {
           this.errorReported = true;
-          this.onError?.(error);
+          try {
+            this.onError?.(error);
+          } catch (callbackError) {
+            logger.debug('Prefactor onError callback failed', callbackError);
+          }
         }
         return null;
       }
     );
     this.tail = promise;
     return promise;
+  }
+
+  /**
+   * Wraps a requester so that `lastError` reflects the outcome of the last request actually sent.
+   */
+  private trackRequests(client: HttpRequester): HttpRequester {
+    return {
+      request: async <TResponse>(
+        ...args: Parameters<HttpRequester['request']>
+      ): Promise<TResponse> => {
+        try {
+          const response = await client.request<TResponse>(...args);
+          this.lastError = null;
+          return response;
+        } catch (error) {
+          this.lastError = error;
+          throw error;
+        }
+      },
+    };
   }
 }

@@ -8,12 +8,18 @@ class FakeRequester implements HttpRequester {
   readonly requests: RecordedRequest[] = [];
   private nextId = 0;
 
-  constructor(private readonly failPaths: RegExp[] = []) {}
+  constructor(
+    private readonly failPaths: RegExp[] = [],
+    private readonly hangPaths: RegExp[] = []
+  ) {}
 
   async request<TResponse>(path: string, options: HttpRequestOptions = {}): Promise<TResponse> {
     // Yield so later calls can be queued before this one answers, as with real network requests.
     await new Promise((resolve) => setTimeout(resolve, 1));
     this.requests.push({ path, body: options.body as Record<string, unknown> | undefined });
+    if (this.hangPaths.some((pattern) => pattern.test(path))) {
+      return new Promise<TResponse>(() => undefined);
+    }
     if (this.failPaths.some((pattern) => pattern.test(path))) {
       throw new Error(`failed ${path}`);
     }
@@ -114,5 +120,63 @@ describe('PrefactorSession', () => {
       '/api/v1/agent_spans',
       '/api/v1/agent_instance/id-1/finish',
     ]);
+  });
+
+  test('keeps sending requests when the onError callback throws', async () => {
+    const requester = new FakeRequester([/^\/api\/v1\/agent_spans$/]);
+    const session = new PrefactorSession(
+      {
+        ...OPTIONS,
+        onError: () => {
+          throw new Error('stale context');
+        },
+      },
+      requester
+    );
+
+    session.startSpan({ schemaName: 'pi:session', payload: {} });
+    session.recordSpan({
+      schemaName: 'pi:llm',
+      payload: {},
+      status: 'complete',
+      resultPayload: {},
+      startedAt: 1,
+      finishedAt: 2,
+    });
+    await session.finish();
+
+    expect(requester.requests.map((request) => request.path)).toEqual([
+      '/api/v1/agent_instance/register',
+      '/api/v1/agent_instance/id-1/start',
+      '/api/v1/agent_spans',
+      '/api/v1/agent_spans',
+      '/api/v1/agent_instance/id-1/finish',
+    ]);
+  });
+
+  test('keeps the registration failure when later operations send no request', async () => {
+    const requester = new FakeRequester([/register$/]);
+    const session = new PrefactorSession(OPTIONS, requester);
+
+    const parent = session.startSpan({ schemaName: 'pi:session', payload: {} });
+    session.finishSpan(parent, 'complete', {});
+    await session.flush();
+
+    expect(session.getLastError()).toBeInstanceOf(Error);
+    expect(requester.requests).toHaveLength(1);
+  });
+
+  test('stops waiting at shutdown after the timeout', async () => {
+    const requester = new FakeRequester([], [/^\/api\/v1\/agent_spans$/]);
+    const session = new PrefactorSession({ ...OPTIONS, shutdownTimeoutMs: 50 }, requester);
+    session.startSpan({ schemaName: 'pi:session', payload: {} });
+
+    const started = Date.now();
+    await session.finish();
+
+    expect(Date.now() - started).toBeLessThan(1_000);
+    expect(requester.requests.map((request) => request.path)).not.toContain(
+      '/api/v1/agent_instance/id-1/finish'
+    );
   });
 });
