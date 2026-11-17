@@ -11,7 +11,7 @@ import {
   type ResolvedCredentials,
   resolveCredentials,
 } from './credentials.js';
-import { createHttpClient, PrefactorSession } from './prefactor-session.js';
+import { createHttpClient, PrefactorSession, type SpanStatus } from './prefactor-session.js';
 import { createRecorder, type PrefactorRecorder } from './recorder.js';
 import {
   buildAgentSchemaVersion,
@@ -46,6 +46,14 @@ export interface PrefactorExtensionOptions extends PrefactorCredentialOptions, S
    * rejection is logged.
    */
   onSessionStart?: (recorder: PrefactorRecorder, ctx: ExtensionContext) => void | Promise<void>;
+  /**
+   * External identifier of each session's agent instance, such as the id of the CI run that ran
+   * the session. Prefactor requires it to be unique per agent, and a session whose identifier was
+   * already used fails to register and records nothing. A string therefore suits one session per
+   * process; a function is called at each session start and can return a different identifier for
+   * each session, or `undefined` for none.
+   */
+  externalIdentifier?: string | ((ctx: ExtensionContext) => string | undefined);
 }
 
 let setupNoticeShown = false;
@@ -79,6 +87,7 @@ export function prefactorExtension(options: PrefactorExtensionOptions = {}): Ext
       session: PrefactorSession;
       tracer: SessionTracer;
       stopRecorder: () => void;
+      finishStatus: () => SpanStatus;
     } | null = null;
 
     const endRecording = (): typeof recording => {
@@ -113,6 +122,7 @@ export function prefactorExtension(options: PrefactorExtensionOptions = {}): Ext
         agentId: credentials.agentId,
         agentVersion: { external_identifier: options.agentVersion ?? PI_VERSION },
         agentSchemaVersion: buildAgentSchemaVersion(tools, options),
+        externalIdentifier: resolveExternalIdentifier(options.externalIdentifier, ctx),
         sdkHeaderEntry: SDK_HEADER_ENTRY,
         onError: (error) =>
           notify(ctx, `Prefactor could not record this session: ${describe(error)}`),
@@ -131,8 +141,8 @@ export function prefactorExtension(options: PrefactorExtensionOptions = {}): Ext
         model: ctx.model?.id,
         toolNames: registeredToolNames(tools, options.toolSchemas),
       });
-      const { recorder, stop } = createRecorder(session, tracer);
-      recording = { credentials, session, tracer, stopRecorder: stop };
+      const { recorder, stop, finishStatus } = createRecorder(session, tracer);
+      recording = { credentials, session, tracer, stopRecorder: stop, finishStatus };
       if (options.onSessionStart) {
         const reportFailure = (error: unknown) =>
           logger.warn('The onSessionStart callback failed', error);
@@ -231,10 +241,32 @@ export function prefactorExtension(options: PrefactorExtensionOptions = {}): Ext
       guard('session_shutdown', async (event) => {
         const current = endRecording();
         current?.tracer.sessionShutdown(event.reason);
-        await current?.session.finish();
+        await current?.session.finish(current.finishStatus());
       })
     );
   };
+}
+
+/**
+ * Returns the external identifier for a session's agent instance. A callback that throws is
+ * logged, and the session registers without one.
+ */
+function resolveExternalIdentifier(
+  option: PrefactorExtensionOptions['externalIdentifier'],
+  ctx: ExtensionContext
+): string | undefined {
+  if (typeof option !== 'function') {
+    return option;
+  }
+  try {
+    return option(ctx);
+  } catch (error) {
+    logger.warn(
+      'The externalIdentifier callback failed; the session has no external identifier',
+      error
+    );
+    return undefined;
+  }
 }
 
 async function loadCredentials(
