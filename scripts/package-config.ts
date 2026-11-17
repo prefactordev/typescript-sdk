@@ -57,7 +57,7 @@ export const PACKAGE_CONFIGS: PackageConfig[] = [
     name: '@prefactor/pi',
     path: 'packages/pi',
     entrypoint: './packages/pi/src/index.ts',
-    external: ['@prefactor/core', '@earendil-works/pi-coding-agent'],
+    external: ['@prefactor/core', '@earendil-works/pi-coding-agent', '@earendil-works/pi-tui'],
     generateVersionModule: true,
   },
   {

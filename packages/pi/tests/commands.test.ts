@@ -5,7 +5,13 @@ import { type PrefactorCommandHost, registerPrefactorCommand } from '../src/comm
 import { resolveCredentials } from '../src/credentials.js';
 import { prefactorExtension } from '../src/extension.js';
 import { createHttpClient } from '../src/prefactor-session.js';
-import { createContext, createPi, isolateEnvironment } from './helpers.js';
+import {
+  createContext,
+  createPi,
+  isolateEnvironment,
+  renderWidget,
+  visibleText,
+} from './helpers.js';
 
 const API_URL = 'https://prefactor.example';
 const ACCOUNT_TOKEN = 'account-token';
@@ -18,6 +24,13 @@ type Route = (request: Request) => Reply | Promise<Reply> | undefined;
 
 /** Never settles: stands in for the "waiting for approval" dialog the user leaves open. */
 const leaveOpen = () => new Promise(() => undefined);
+
+const CREATE_AGENT = 'Create a new agent for pi';
+const USE_EXISTING_AGENT = 'Use an existing agent';
+const OTHER_AND_PI = [
+  { id: 'agent-other', name: 'other' },
+  { id: 'agent-pi', name: 'pi' },
+];
 
 describe('/prefactor', () => {
   let dir: string;
@@ -118,8 +131,10 @@ describe('/prefactor', () => {
           return asAccount
             ? { body: { summaries: options.agents ?? [], pagination: null } }
             : undefined;
-        case 'POST /api/v1/agent':
-          return asAccount ? { body: { details: { id: 'agent-pi', name: 'pi' } } } : undefined;
+        case 'POST /api/v1/agent': {
+          const { name } = (request.body as { details: { name: string } }).details;
+          return asAccount ? { body: { details: { id: 'agent-pi', name } } } : undefined;
+        }
         case 'GET /api/v1/agent_deployment':
           return asAccount ? { body: { summaries: [] } } : undefined;
         case 'GET /api/v1/environment':
@@ -165,7 +180,7 @@ describe('/prefactor', () => {
     let recordingStarted = false;
     const ctx = createContext({
       hasUI: true,
-      answers: ['Sign in with the browser', leaveOpen, 'Create an agent named pi'],
+      answers: ['Sign in with your browser', leaveOpen, CREATE_AGENT, '', ''],
     });
 
     await run(
@@ -189,10 +204,28 @@ describe('/prefactor', () => {
     });
     expect(statSync(credentialsPath()).mode & 0o777).toBe(0o600);
     expect(JSON.stringify(readSaved())).not.toContain(ACCOUNT_TOKEN);
-    expect(ctx.dialogs[2].choices).toEqual(['Create an agent named pi', 'other']);
-    expect(ctx.widgets[0]).toEqual(
-      expect.arrayContaining(['██ QR ██', expect.stringContaining('ABCD-1234')])
-    );
+    expect(ctx.dialogs.slice(2)).toEqual([
+      {
+        kind: 'select',
+        title: 'Which Prefactor agent should pi report to?',
+        choices: [CREATE_AGENT, USE_EXISTING_AGENT],
+      },
+      { kind: 'input', title: 'Name for the new agent (default: pi)', placeholder: 'pi' },
+      {
+        kind: 'input',
+        title: 'Description (optional, default: pi coding agent sessions)',
+        placeholder: 'pi coding agent sessions',
+      },
+    ]);
+    expect(
+      requests.find((request) => request.path === '/api/v1/agent' && request.method === 'POST')
+        ?.body
+    ).toEqual({
+      details: { name: 'pi', description: 'pi coding agent sessions' },
+    });
+    expect(renderWidget(ctx.widgets[0], 80).map(visibleText)).toEqual([
+      `${API_URL}/cli/connect?code=ABCD-1234`,
+    ]);
     expect(ctx.widgets.at(-1)).toBeUndefined();
     expect(requests.find((request) => request.path === '/api/v1/api_token')?.body).toEqual({
       details: { token_scope: 'agent_deployment', agent_id: 'agent-pi', environment_id: 'env-dev' },
@@ -209,7 +242,8 @@ describe('/prefactor', () => {
     serveBrowserSignIn({ agents: [{ id: 'agent-pi', name: 'pi' }], revokeStatus: 403 });
     const ctx = createContext({
       hasUI: true,
-      answers: ['Sign in with the browser', leaveOpen, 'pi'],
+      mode: 'rpc',
+      answers: ['Sign in with your browser', leaveOpen, USE_EXISTING_AGENT, 'pi'],
     });
 
     await run('setup', ctx);
@@ -218,11 +252,25 @@ describe('/prefactor', () => {
     expect(ctx.notifications.at(-1)).toContain('Revoke it under Account settings');
   });
 
+  test('setup sends the sign-in link to RPC clients as a plain widget line', async () => {
+    serveBrowserSignIn({ agents: [{ id: 'agent-pi', name: 'pi' }] });
+    const ctx = createContext({
+      hasUI: true,
+      mode: 'rpc',
+      answers: ['Sign in with your browser', leaveOpen, USE_EXISTING_AGENT, 'pi'],
+    });
+
+    await run('setup', ctx);
+
+    expect(ctx.widgets[0]).toEqual([`${API_URL}/cli/connect?code=ABCD-1234`]);
+    expect(ctx.widgets.at(-1)).toBeUndefined();
+  });
+
   test('setup saves nothing but still revokes the account token when the user cancels the agent choice', async () => {
     serveBrowserSignIn();
     const ctx = createContext({
       hasUI: true,
-      answers: ['Sign in with the browser', leaveOpen, undefined],
+      answers: ['Sign in with your browser', leaveOpen, undefined],
     });
 
     await run('setup', ctx);
@@ -232,19 +280,173 @@ describe('/prefactor', () => {
     expect(paths()).not.toContain('POST /api/v1/api_token');
   });
 
-  test('setup stops polling when the user cancels the sign-in', async () => {
+  async function cancelledBrowserSignIn(): Promise<ReturnType<typeof createContext>> {
     serveBrowserSignIn();
     const ctx = createContext({
       hasUI: true,
-      answers: ['Sign in with the browser', 'Cancel sign-in'],
+      answers: ['Sign in with your browser', 'Cancel sign-in'],
     });
-
     await run('setup', ctx);
+    return ctx;
+  }
+
+  test('setup stops polling when the user cancels the sign-in', async () => {
+    const ctx = await cancelledBrowserSignIn();
 
     expect(existsSync(credentialsPath())).toBe(false);
     expect(ctx.notifications.at(-1)).toBe('Prefactor setup cancelled. Nothing was saved.');
     expect(paths()).not.toContain('GET /api/v1/agent');
   });
+
+  test('setup offers browser sign-in first and shows the code once, in the dialog, with a clickable link', async () => {
+    const ctx = await cancelledBrowserSignIn();
+    const url = `${API_URL}/cli/connect?code=ABCD-1234`;
+
+    const lines = renderWidget(ctx.widgets[0], 200);
+
+    expect(ctx.dialogs.slice(0, 2)).toEqual([
+      {
+        kind: 'select',
+        title: 'Connect pi to Prefactor',
+        choices: ['Sign in with your browser', 'Paste an agent-deployment token'],
+      },
+      {
+        kind: 'select',
+        title: 'Approve code ABCD-1234 in your browser',
+        choices: ['Cancel sign-in'],
+      },
+    ]);
+    expect(lines.map(visibleText)).toEqual([url]);
+    expect(lines[0]).toContain(`\x1b]8;;${url}\x1b\\${url}\x1b]8;;\x1b\\`);
+    expect(lines.join('')).not.toContain('QR');
+  });
+
+  test('setup breaks the link at the terminal width, each line its own hyperlink to the full link', async () => {
+    const ctx = await cancelledBrowserSignIn();
+    const url = `${API_URL}/cli/connect?code=ABCD-1234`;
+
+    const lines = renderWidget(ctx.widgets[0], 10);
+
+    expect(lines.length).toBeGreaterThan(1);
+    expect(lines.map(visibleText).join('')).toBe(url);
+    for (const line of lines) {
+      expect([...visibleText(line)].length).toBeLessThanOrEqual(10);
+      expect(line).toContain(`\x1b]8;;${url}\x1b\\${visibleText(line)}\x1b]8;;\x1b\\`);
+    }
+  });
+
+  test('setup creates an agent with the name and description the user enters', async () => {
+    serveBrowserSignIn();
+    const ctx = createContext({
+      hasUI: true,
+      answers: ['Sign in with your browser', leaveOpen, CREATE_AGENT, ' my-agent ', ' My agent '],
+    });
+
+    await run('setup', ctx);
+
+    expect(ctx.dialogs[2].choices).toEqual([CREATE_AGENT]);
+    expect(
+      requests.find((request) => request.path === '/api/v1/agent' && request.method === 'POST')
+        ?.body
+    ).toEqual({
+      details: { name: 'my-agent', description: 'My agent' },
+    });
+    expect(readSaved()).toMatchObject({ agent_id: 'agent-pi', agent_name: 'my-agent' });
+  });
+
+  test('setup uses the existing agent when the new name is taken and the user agrees', async () => {
+    serveBrowserSignIn({ agents: OTHER_AND_PI });
+    const ctx = createContext({
+      hasUI: true,
+      answers: ['Sign in with your browser', leaveOpen, CREATE_AGENT, 'pi', true],
+    });
+
+    await run('setup', ctx);
+
+    expect(ctx.dialogs.at(-1)).toEqual({
+      kind: 'confirm',
+      title: 'An agent named "pi" already exists',
+    });
+    expect(paths()).not.toContain('POST /api/v1/agent');
+    expect(readSaved()).toMatchObject({ agent_id: 'agent-pi', agent_name: 'pi' });
+  });
+
+  test('setup lists existing agents in a plain list where custom UI is not available', async () => {
+    serveBrowserSignIn({ agents: OTHER_AND_PI });
+    const ctx = createContext({
+      hasUI: true,
+      mode: 'rpc',
+      answers: ['Sign in with your browser', leaveOpen, USE_EXISTING_AGENT, 'pi'],
+    });
+
+    await run('setup', ctx);
+
+    expect(ctx.dialogs.at(-1)).toEqual({
+      kind: 'select',
+      title: 'Choose the agent pi reports to',
+      choices: ['other', 'pi'],
+    });
+    expect(readSaved()).toMatchObject({ agent_id: 'agent-pi', agent_name: 'pi' });
+  });
+
+  test('setup filters existing agents as the user types in the terminal UI', async () => {
+    serveBrowserSignIn({ agents: OTHER_AND_PI });
+    const ctx = createContext({
+      hasUI: true,
+      answers: ['Sign in with your browser', leaveOpen, USE_EXISTING_AGENT],
+      customKeys: ['p', '\r'],
+    });
+
+    await run('setup', ctx);
+
+    const afterTyping = ctx.customRenders[1].map(visibleText).join('\n');
+    expect(afterTyping).toContain('pi');
+    expect(afterTyping).not.toContain('other');
+    expect(readSaved()).toMatchObject({ agent_id: 'agent-pi', agent_name: 'pi' });
+  });
+
+  test('setup says no agents match when the filter matches none', async () => {
+    serveBrowserSignIn({ agents: OTHER_AND_PI });
+    const ctx = createContext({
+      hasUI: true,
+      answers: ['Sign in with your browser', leaveOpen, USE_EXISTING_AGENT],
+      customKeys: ['x', '\x1b'],
+    });
+
+    await run('setup', ctx);
+
+    expect(ctx.customRenders[1].map(visibleText)).toContain('  No matching agents');
+  });
+
+  const cancelledAgentSteps: Array<{
+    step: string;
+    mode?: 'tui' | 'rpc';
+    answers: unknown[];
+    customKeys?: string[];
+  }> = [
+    { step: 'the agent name', answers: [CREATE_AGENT, undefined] },
+    { step: 'the agent description', answers: [CREATE_AGENT, 'new-agent', undefined] },
+    { step: 'using the existing agent with that name', answers: [CREATE_AGENT, 'pi', false] },
+    { step: 'the plain agent list', mode: 'rpc', answers: [USE_EXISTING_AGENT, undefined] },
+    { step: 'the agent filter list', answers: [USE_EXISTING_AGENT], customKeys: ['\x1b'] },
+  ];
+  for (const { step, mode, answers, customKeys } of cancelledAgentSteps) {
+    test(`setup saves nothing and revokes the account token when the user cancels ${step}`, async () => {
+      serveBrowserSignIn({ agents: OTHER_AND_PI });
+      const ctx = createContext({
+        hasUI: true,
+        mode,
+        answers: ['Sign in with your browser', leaveOpen, ...answers],
+        customKeys,
+      });
+
+      await run('setup', ctx);
+
+      expect(existsSync(credentialsPath())).toBe(false);
+      expect(paths()).not.toContain('POST /api/v1/agent');
+      expect(paths()).toContain('POST /api/v1/api_token/account-token-id/revoke');
+    });
+  }
 
   test('setup asks for a pasted token when the server does not offer browser sign-in', async () => {
     process.env.PREFACTOR_API_URL = API_URL;
@@ -263,7 +465,7 @@ describe('/prefactor', () => {
     );
     const ctx = createContext({
       hasUI: true,
-      answers: ['Sign in with the browser', ` ${DEPLOYMENT_TOKEN} `],
+      answers: ['Sign in with your browser', ` ${DEPLOYMENT_TOKEN} `],
     });
 
     await run('setup', ctx);
