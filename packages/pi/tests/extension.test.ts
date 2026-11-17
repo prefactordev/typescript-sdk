@@ -40,12 +40,28 @@ describe('prefactorExtension', () => {
 
     requests = [];
     let nextId = 0;
+    // Prefactor rejects an agent instance whose external identifier the agent already used.
+    const usedExternalIdentifiers = new Set<unknown>();
     fetchSpy = spyOn(globalThis, 'fetch').mockImplementation((async (
       input: string | URL | Request,
       init?: RequestInit
     ) => {
       const body = init?.body ? (JSON.parse(String(init.body)) as Record<string, unknown>) : null;
       requests.push({ url: String(input), body });
+      const externalIdentifier = body?.external_identifier;
+      if (String(input).endsWith('/agent_instance/register') && externalIdentifier !== undefined) {
+        if (usedExternalIdentifiers.has(externalIdentifier)) {
+          return new Response(
+            JSON.stringify({
+              status: 'error',
+              code: 'invalid_request',
+              message: 'has already been taken',
+            }),
+            { status: 422, headers: { 'content-type': 'application/json' } }
+          );
+        }
+        usedExternalIdentifiers.add(externalIdentifier);
+      }
       nextId += 1;
       return new Response(JSON.stringify({ details: { id: `id-${nextId}` } }), {
         headers: { 'content-type': 'application/json' },
@@ -851,6 +867,124 @@ describe('prefactorExtension', () => {
     await emit({ type: 'session_shutdown', reason: 'quit' }, ctx);
 
     expect(requests[0].body).toMatchObject({ agent_version: { external_identifier: '2.3.0' } });
+  });
+
+  const instanceRequests = (suffix: string) =>
+    requests.filter((request) => request.url.endsWith(suffix)).map((request) => request.body);
+
+  test('registers no external identifier and finishes the instance as complete by default', async () => {
+    const { pi, emit } = createPi();
+    prefactorExtension({ apiUrl: 'https://prefactor.example', apiToken: 't', agentId: 'a' })(
+      pi as never
+    );
+    const ctx = createContext({ hasUI: false });
+    await emit({ type: 'session_start', reason: 'startup' }, ctx);
+    await emit({ type: 'session_shutdown', reason: 'quit' }, ctx);
+
+    expect(instanceRequests('/agent_instance/register')[0]).not.toHaveProperty(
+      'external_identifier'
+    );
+    expect(instanceRequests('/agent_instance/id-1/finish')).toMatchObject([{ status: 'complete' }]);
+  });
+
+  test('registers the external identifier given as a string and finishes with the status set', async () => {
+    const { pi, emit } = createPi();
+    prefactorExtension({
+      apiUrl: 'https://prefactor.example',
+      apiToken: 't',
+      agentId: 'a',
+      externalIdentifier: 'github:42:1',
+      onSessionStart: (recorder) => {
+        recorder.setFinishStatus('cancelled');
+        recorder.setFinishStatus('failed');
+      },
+    })(pi as never);
+    const ctx = createContext({ hasUI: false });
+    await emit({ type: 'session_start', reason: 'startup' }, ctx);
+    await emit({ type: 'session_shutdown', reason: 'quit' }, ctx);
+
+    expect(instanceRequests('/agent_instance/register')[0]).toMatchObject({
+      external_identifier: 'github:42:1',
+    });
+    expect(instanceRequests('/agent_instance/id-1/finish')).toMatchObject([{ status: 'failed' }]);
+  });
+
+  test('asks the externalIdentifier function at each session start', async () => {
+    const warn = spyOn(console, 'warn').mockImplementation(() => undefined);
+    try {
+      const ids = ['run-1', undefined];
+      const sessionIds: string[] = [];
+      let calls = 0;
+      const { pi, emit } = createPi();
+      prefactorExtension({
+        apiUrl: 'https://prefactor.example',
+        apiToken: 't',
+        agentId: 'a',
+        externalIdentifier: (ctx) => {
+          sessionIds.push(ctx.sessionManager.getSessionId());
+          calls += 1;
+          if (calls === 3) {
+            throw new Error('no run id');
+          }
+          return ids[calls - 1];
+        },
+      })(pi as never);
+      const ctx = createContext({ hasUI: false });
+      for (let index = 0; index < 3; index += 1) {
+        await emit({ type: 'session_start', reason: 'startup' }, ctx);
+        await emit({ type: 'session_shutdown', reason: 'quit' }, ctx);
+      }
+
+      expect(sessionIds).toEqual(['session-1', 'session-1', 'session-1']);
+      const registrations = instanceRequests('/agent_instance/register');
+      expect(registrations.map((body) => body?.external_identifier)).toEqual([
+        'run-1',
+        undefined,
+        undefined,
+      ]);
+      expect(String(warn.mock.calls.at(-1)?.[0])).toContain('externalIdentifier callback failed');
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  test('records nothing for a second session that reuses a string external identifier, without breaking pi', async () => {
+    const stderr = spyOn(process.stderr, 'write').mockImplementation(() => true);
+    try {
+      const { pi, emit } = createPi();
+      prefactorExtension({
+        apiUrl: 'https://prefactor.example',
+        apiToken: 't',
+        agentId: 'a',
+        externalIdentifier: 'github:42:1',
+      })(pi as never);
+      const ctx = createContext({ hasUI: false });
+      for (let index = 0; index < 2; index += 1) {
+        await emit({ type: 'session_start', reason: 'startup' }, ctx);
+        await emit({ type: 'agent_start' }, ctx);
+        await emit(user('hello'), ctx);
+        await emit({ type: 'agent_end', messages: [] }, ctx);
+        await emit({ type: 'session_shutdown', reason: 'quit' }, ctx);
+      }
+
+      const registrations = requests.filter((request) =>
+        request.url.endsWith('/agent_instance/register')
+      );
+      expect(registrations).toHaveLength(2);
+      const secondRegistration = requests.indexOf(registrations[1]);
+      expect(requests.slice(secondRegistration + 1)).toEqual([]);
+      expect(spans().map((span) => span.schema_name)).toEqual([
+        'pi:session',
+        '$agent:system_message',
+        '$agent:user_turn',
+        '$agent:user_message',
+      ]);
+      expect(String(stderr.mock.calls.at(-1)?.[0])).toContain(
+        'Prefactor could not record this session'
+      );
+    } finally {
+      stderr.mockRestore();
+    }
   });
 
   test('records nothing and shows the setup notice once when no token is found', async () => {

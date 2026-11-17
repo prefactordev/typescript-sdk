@@ -1,5 +1,5 @@
 import { type AlertSeverity, getLogger } from '@prefactor/core';
-import type { PrefactorSession, SpanHandle } from './prefactor-session.js';
+import type { PrefactorSession, SpanHandle, SpanStatus } from './prefactor-session.js';
 import type { SessionTracer } from './session-tracer.js';
 
 const logger = getLogger('pi');
@@ -39,17 +39,23 @@ export interface PrefactorRecorder {
   recordQuality(name: string, payload: Record<string, unknown> | null): void;
   /** Raises an alert on the session's agent instance, for a schema in `alertSchemas`. */
   raiseAlert(name: string, severity: AlertSeverity, payload: Record<string, unknown>): void;
+  /**
+   * Sets the status the agent instance finishes with when the session shuts down. The last call
+   * wins. Without a call, the instance finishes as complete.
+   */
+  setFinishStatus(status: SpanStatus): void;
 }
 
 /**
- * Creates the recorder for one session, and a function that stops it when the session shuts
- * down.
+ * Creates the recorder for one session, a function that stops it when the session shuts down,
+ * and a function that returns the status set for the agent instance's finish.
  */
 export function createRecorder(
   session: PrefactorSession,
   tracer: SessionTracer
-): { recorder: PrefactorRecorder; stop: () => void } {
+): { recorder: PrefactorRecorder; stop: () => void; finishStatus: () => SpanStatus } {
   let stopped = false;
+  let finishStatus: SpanStatus = 'complete';
   const handles = new WeakMap<PrefactorSpan, SpanHandle>();
 
   const run = (name: string, action: () => void): void => {
@@ -98,6 +104,11 @@ export function createRecorder(
     raiseAlert(name, severity, payload) {
       run('raiseAlert', () => session.raiseAlert(name, severity, payload));
     },
+    setFinishStatus(status) {
+      run('setFinishStatus', () => {
+        finishStatus = status;
+      });
+    },
   };
 
   return {
@@ -105,5 +116,6 @@ export function createRecorder(
     stop: () => {
       stopped = true;
     },
+    finishStatus: () => finishStatus,
   };
 }

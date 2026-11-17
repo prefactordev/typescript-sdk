@@ -40,6 +40,8 @@ export interface PrefactorSessionOptions {
   /** The agent version, identified by its external identifier. */
   agentVersion: { external_identifier: string };
   agentSchemaVersion: AgentSchemaVersion;
+  /** External identifier of the agent instance, unique per agent. Omitted when not set. */
+  externalIdentifier?: string;
   /** Space-separated `package@version` entries sent in the SDK header and runtime environment. */
   sdkHeaderEntry: string;
   /** Called once for the first request that fails. */
@@ -136,6 +138,9 @@ export class PrefactorSession {
           runtime_environment: buildRuntimeEnvironment(options.sdkHeaderEntry),
         },
         agent_schema_version: options.agentSchemaVersion,
+        ...(options.externalIdentifier !== undefined
+          ? { external_identifier: options.externalIdentifier }
+          : {}),
       };
       const response = await this.instanceClient.register(registerPayload);
       const id = response.details.id;
@@ -249,11 +254,11 @@ export class PrefactorSession {
   }
 
   /**
-   * Finishes the agent instance after every queued request, and waits for it to be sent, but no
-   * longer than the shutdown timeout. Requests still queued after the timeout keep running in the
-   * background. Calling it more than once has no further effect.
+   * Finishes the agent instance with `status` after every queued request, and waits for it to be
+   * sent, but no longer than the shutdown timeout. Requests still queued after the timeout keep
+   * running in the background. Calling it more than once has no further effect.
    */
-  async finish(): Promise<void> {
+  async finish(status: SpanStatus = 'complete'): Promise<void> {
     if (this.finished) {
       return;
     }
@@ -263,7 +268,7 @@ export class PrefactorSession {
     const sent = this.enqueue(async () => {
       const instanceId = await this.instanceId;
       if (instanceId) {
-        await this.instanceClient.finish(instanceId, { status: 'complete', timestamp });
+        await this.instanceClient.finish(instanceId, { status, timestamp });
       }
       return true;
     });

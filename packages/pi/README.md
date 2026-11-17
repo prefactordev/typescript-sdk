@@ -117,6 +117,7 @@ try {
 | `qualitySchemas` | Quality schemas for quality recorded on the session's agent instance |
 | `alertSchemas` | Alert schemas for alerts raised on the session's agent instance |
 | `toolSchemas` | Span type details by tool name: `title`, `description`, `template`, `params_schema` (the tool's arguments), `result_schema` (the structured `details` the tool returns, recorded as `result.details`) and `data_risk`. The tool keeps its `$agent:tool:<name>` span type, so Prefactor still shows it as a tool call, and a tool listed here gets that span type even when it is added after the session starts. |
+| `externalIdentifier` | External identifier of each session's agent instance, such as the id of the CI run that ran the session: a string, or a function `(ctx) => string \| undefined` called at each session start. See [External identifiers](#external-identifiers). |
 | `onSessionStart` | Called with the session's recorder when the extension starts recording a session. It may be async; pi does not wait for it, and a rejection is logged. See [Adding to the record](#adding-to-the-record). |
 
 The session lifecycle depends on two calls:
@@ -168,8 +169,23 @@ recorder?.raiseAlert('signal:monitor_broken', 'error', { reason: 'every source f
 | `startSpan({ schemaName, payload, parent })` | Starts a span and returns it; finish it with `complete(result)` or `fail(result)`. It nests under `parent`, which is another span from the recorder or `{ toolCallId }` for a running tool call (for example, from inside a custom tool's `execute`). Without a parent, it nests under the open assistant turn, or under `pi:session` between runs. Spans still open at shutdown are cancelled. |
 | `recordQuality(name, payload)` | Records quality on the agent instance. `null` removes the value recorded for that name. |
 | `raiseAlert(name, severity, payload)` | Raises an alert on the agent instance. Severity is `critical`, `error`, `warning` or `info`. The agent-deployment token can raise alerts, so no other token is needed. |
+| `setFinishStatus(status)` | Sets the status the agent instance finishes with at session shutdown: `complete`, `failed` or `cancelled`. The last call wins. Without a call, the instance finishes as `complete`. |
 
 The recorder's methods never throw and never wait for the network. Failures are logged. After the session shuts down, they record nothing. `onSessionStart` is not called when no Prefactor token is found.
+
+### External identifiers
+
+Prefactor requires an agent instance's external identifier to be unique per agent. A session whose identifier the agent has already used fails to register, and nothing is recorded for it; pi keeps running and shows that Prefactor could not record the session.
+
+A plain string therefore suits a process that runs one session, such as one CI job. When a process runs several sessions, pass a function, which is called at each session start with pi's extension context and can return a different identifier for each session, or `undefined` for none:
+
+```typescript
+prefactorExtension({
+  externalIdentifier: (ctx) => `${process.env.GITHUB_RUN_ID}:${ctx.sessionManager.getSessionId()}`,
+});
+```
+
+A function that throws is logged, and the session registers without an external identifier.
 
 ## What gets recorded
 
