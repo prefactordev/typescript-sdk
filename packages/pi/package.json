@@ -1,0 +1,53 @@
+{
+  "name": "@prefactor/pi",
+  "version": "0.0.0",
+  "description": "pi coding agent extension for Prefactor observability",
+  "type": "module",
+  "main": "dist/index.cjs",
+  "module": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "pi": {
+    "extensions": [
+      "./dist/index.js"
+    ]
+  },
+  "keywords": [
+    "prefactor",
+    "pi",
+    "pi-package",
+    "coding-agent",
+    "telemetry",
+    "tracing",
+    "observability"
+  ],
+  "author": "Prefactor",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/prefactordev/typescript-sdk.git",
+    "directory": "packages/pi"
+  },
+  "dependencies": {
+    "@prefactor/core": "workspace:*"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*"
+  },
+  "devDependencies": {
+    "@earendil-works/pi-coding-agent": "1.5.2",
+    "@types/bun": "1.3.14"
+  },
+  "engines": {
+    "node": ">=22.19.0"
+  }
+}
