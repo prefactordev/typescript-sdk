@@ -1,5 +1,11 @@
 # @prefactor/pi
 
+## 0.1.1
+
+### Patch Changes
+
+- [#101](https://github.com/prefactordev/typescript-sdk/pull/101) [`9f66a94`](https://github.com/prefactordev/typescript-sdk/commit/9f66a940a1d36f0e8542df885f41e5a044406662) Thanks [@joshgillies](https://github.com/joshgillies)! - Depend on `@prefactor/core@^1.3.0` instead of `workspace:*`. npm publishes `workspace:*` unchanged, so the published package could not be installed from npm.
+
 ## 0.1.0
 
 ### Minor Changes
