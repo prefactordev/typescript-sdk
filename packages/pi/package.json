@@ -38,11 +38,12 @@
     "directory": "packages/pi"
   },
   "dependencies": {
-    "@prefactor/core": "workspace:*"
+    "@prefactor/core": "workspace:*",
+    "zod": "^4.0.0"
   },
   "peerDependencies": {
-    "@earendil-works/pi-coding-agent": "*",
-    "@earendil-works/pi-tui": "*"
+    "@earendil-works/pi-coding-agent": ">=1.1.0",
+    "@earendil-works/pi-tui": ">=1.1.0"
   },
   "devDependencies": {
     "@earendil-works/pi-coding-agent": "1.5.2",

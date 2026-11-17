@@ -151,4 +151,6 @@ Pressing Ctrl+C in print, JSON or RPC mode ends pi without running `session_shut
 ## Requirements
 
 - Node.js >= 22.19.0
-- pi (`@earendil-works/pi-coding-agent`) 1.5.2 or later
+- pi (`@earendil-works/pi-coding-agent`) 1.1.0 or later. Earlier releases do not report tool call durations, and before 0.99.0 they do not say which tool made a nested tool call. The package declares this minimum in its peer dependencies on `@earendil-works/pi-coding-agent` and `@earendil-works/pi-tui`.
+
+pi supplies `@earendil-works/pi-coding-agent` and `@earendil-works/pi-tui` to the extension, and `pi install` does not install them, so the extension records the version of the pi that runs it. When the extension's own `node_modules` holds a copy of pi, for example when it is loaded with `pi -e` from a checkout of this repository, that copy is imported instead, and its version is recorded.
