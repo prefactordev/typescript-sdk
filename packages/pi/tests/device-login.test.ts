@@ -68,6 +68,17 @@ describe('pollForDeviceGrant', () => {
     expect(sleeps).toEqual([2_000, 2_000, 7_000]);
   });
 
+  test('waits longer after slow_down sent with HTTP 429', async () => {
+    const { sleeps, deps } = pollDeps([
+      reply(429, { error: 'slow_down' }),
+      reply(200, { access_token: 'account-token' }),
+    ]);
+
+    await pollForDeviceGrant(API_URL, LOGIN, new AbortController().signal, deps);
+
+    expect(sleeps).toEqual([2_000, 7_000]);
+  });
+
   test('fails when the sign-in is denied or expires', async () => {
     const denied = pollDeps([reply(400, { error: 'access_denied' })]);
     await expect(

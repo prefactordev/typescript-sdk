@@ -121,11 +121,12 @@ export async function pollForDeviceGrant(
     }
 
     const code = await readErrorCode(response);
-    if (code === 'authorization_pending' || response.status === 429 || code === 'rate_limited') {
-      continue;
-    }
+    // slow_down is checked first because it can arrive with HTTP 429.
     if (code === 'slow_down') {
       intervalMs += SLOW_DOWN_EXTRA_MS;
+      continue;
+    }
+    if (code === 'authorization_pending' || response.status === 429 || code === 'rate_limited') {
       continue;
     }
     if (code === 'access_denied') {
