@@ -1,5 +1,13 @@
 # @prefactor/core
 
+## 1.3.0
+
+### Minor Changes
+
+- [#99](https://github.com/prefactordev/typescript-sdk/pull/99) [`0777c39`](https://github.com/prefactordev/typescript-sdk/commit/0777c3943b3ba3006d4bd3d51881cc173c6673a1) Thanks [@joshgillies](https://github.com/joshgillies)! - Let agents built on pi's SDK add to what `@prefactor/pi` records. `prefactorExtension()` now takes extra span types, quality schemas and alert schemas, and per-tool span type details that keep each tool's `$agent:tool:<name>` type. Its `onSessionStart` option receives a recorder for the session, which opens custom spans in the session's span tree and records quality and raises alerts on the session's agent instance with the agent-deployment token. The agent version is identified by the `agentVersion` option, and the extension no longer sends a name or description for it, which Prefactor does not store.
+
+  `@prefactor/core` gains `alert_schemas` on `AgentSchemaVersion` (the `AlertSchema` type) and `AgentInstanceClient.raiseAlert()`, so alerts can be declared and raised on an agent instance without calling the API directly.
+
 ## 1.2.0
 
 ### Minor Changes
