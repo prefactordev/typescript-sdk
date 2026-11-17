@@ -65,7 +65,8 @@ export class SessionTracer {
   private runFinalMessage: AssistantMessageLike | null = null;
   private pendingPrompt: { prompt: string; images?: unknown[] } | null = null;
   private contextMessages: unknown[] = [];
-  private recordedContextLength = 0;
+  /** JSON of each message in the context last recorded on a `pi:llm` span. */
+  private recordedContext: string[] = [];
   private readonly toolSpans = new Map<string, SpanHandle>();
 
   constructor(
@@ -126,11 +127,17 @@ export class SessionTracer {
   assistantMessage(message: AssistantMessageLike): void {
     this.runFinalMessage = message;
 
-    const newMessages =
-      this.contextMessages.length >= this.recordedContextLength
-        ? this.contextMessages.slice(this.recordedContextLength)
-        : this.contextMessages;
-    this.recordedContextLength = this.contextMessages.length;
+    // Messages are compared by content because pi passes a fresh copy of the context each time.
+    // When the context no longer starts with what was recorded, for example after compaction or
+    // an extension replaced it, the whole context is recorded.
+    const current = this.contextMessages.map((entry) => JSON.stringify(entry));
+    const extendsRecorded =
+      current.length >= this.recordedContext.length &&
+      this.recordedContext.every((entry, index) => entry === current[index]);
+    const newMessages = extendsRecorded
+      ? this.contextMessages.slice(this.recordedContext.length)
+      : this.contextMessages;
+    this.recordedContext = current;
 
     const finishedAt = message.timestamp + (message.durationMs ?? 0);
     this.session.recordSpan({

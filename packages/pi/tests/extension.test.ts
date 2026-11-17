@@ -257,6 +257,46 @@ describe('prefactorExtension', () => {
     });
   });
 
+  test('records the whole context when it no longer extends the context already recorded', async () => {
+    const { pi, emit } = createPi();
+    prefactorExtension({ apiUrl: 'https://prefactor.example', apiToken: 't', agentId: 'a' })(
+      pi as never
+    );
+    const ctx = createContext({ hasUI: false });
+    const reply = assistantMessage([{ type: 'text', text: 'ok' }], 'stop');
+
+    await emit({ type: 'session_start', reason: 'startup' }, ctx);
+    await emit({ type: 'agent_start' }, ctx);
+    await emit({ type: 'context', messages: [{ role: 'user', content: 'one' }] }, ctx);
+    await emit({ type: 'message_end', message: reply }, ctx);
+    await emit(
+      {
+        type: 'context',
+        messages: [{ role: 'user', content: 'one' }, reply, { role: 'user', content: 'two' }],
+      },
+      ctx
+    );
+    await emit({ type: 'message_end', message: reply }, ctx);
+    await emit(
+      {
+        type: 'context',
+        messages: [{ role: 'user', content: 'three' }, reply, { role: 'user', content: 'four' }],
+      },
+      ctx
+    );
+    await emit({ type: 'message_end', message: reply }, ctx);
+    await emit({ type: 'session_shutdown', reason: 'quit' }, ctx);
+
+    const recorded = spans()
+      .filter((span) => span.schema_name === 'pi:llm')
+      .map((span) => (span.payload as { messages: Array<{ content: unknown }> }).messages);
+    expect(recorded.map((messages) => messages.map((message) => message.content))).toEqual([
+      ['one'],
+      [[{ type: 'text', text: 'ok' }], 'two'],
+      ['three', [{ type: 'text', text: 'ok' }], 'four'],
+    ]);
+  });
+
   test('records nothing and shows the setup notice once when no token is found', async () => {
     const ctx = createContext({ hasUI: true });
     for (let index = 0; index < 2; index += 1) {
