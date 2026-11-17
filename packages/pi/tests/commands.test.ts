@@ -319,6 +319,27 @@ describe('/prefactor', () => {
     );
   });
 
+  test('status shows the active recording separately when no credentials are saved', async () => {
+    const ctx = createContext({ hasUI: true });
+
+    await run(
+      'status',
+      ctx,
+      host({
+        getRecording: () => ({
+          credentials: { source: 'file', apiUrl: API_URL, apiToken: 't', agentId: 'agent-a' },
+          lastError: null,
+        }),
+      })
+    );
+
+    expect(ctx.notifications[0].split('\n')).toEqual([
+      `This session records to ${API_URL}, agent agent-a, with credentials from the credentials file.`,
+      'Last request to Prefactor succeeded.',
+      'Prefactor is not set up. Run /prefactor setup to connect pi to Prefactor.',
+    ]);
+  });
+
   test('logout deletes the credentials file and says environment credentials are unaffected', async () => {
     writeFileSync(credentialsPath(), JSON.stringify({ api_token: 't' }));
     process.env.PREFACTOR_API_TOKEN = 'env-token';
@@ -330,6 +351,55 @@ describe('/prefactor', () => {
     expect(ctx.notifications[0]).toContain(
       'Credentials from the PREFACTOR_* environment variables are unaffected.'
     );
+  });
+
+  test('setup replaces a recording whose agent instance failed to start', async () => {
+    process.env.PREFACTOR_API_URL = API_URL;
+    writeFileSync(
+      credentialsPath(),
+      JSON.stringify({ api_url: API_URL, api_token: 'expired', agent_id: 'agent-7' })
+    );
+    let nextId = 0;
+    routes.push((request) => {
+      if (request.auth === 'Bearer expired') {
+        return { status: 401, body: { code: 'bad_authtoken' } };
+      }
+      if (request.path === '/api/v1/ping') {
+        return { body: { details: { token_type: DEPLOYMENT_TOKEN_TYPE, agent_id: 'agent-7' } } };
+      }
+      nextId += 1;
+      return { body: { details: { id: `id-${nextId}` } } };
+    });
+    const { pi, emit, runCommand } = createPi();
+    prefactorExtension()(pi as never);
+    const ctx = createContext({
+      hasUI: true,
+      answers: [true, 'Paste an agent-deployment token', DEPLOYMENT_TOKEN],
+    });
+
+    await emit({ type: 'session_start', reason: 'startup' }, ctx);
+    for (let attempt = 0; attempt < 50 && requests.length === 0; attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 5));
+    }
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    await runCommand('prefactor', 'status', ctx);
+    expect(ctx.notifications.at(-1)).toContain('Last request to Prefactor failed');
+
+    await runCommand('prefactor', 'setup', ctx);
+    await emit({ type: 'session_shutdown', reason: 'quit' }, ctx);
+
+    const withNewToken = requests.filter(
+      (request) => request.auth === `Bearer ${DEPLOYMENT_TOKEN}`
+    );
+    expect(withNewToken.map((request) => `${request.method} ${request.path}`)).toEqual([
+      'GET /api/v1/ping',
+      'POST /api/v1/agent_instance/register',
+      'POST /api/v1/agent_instance/id-1/start',
+      'POST /api/v1/agent_spans',
+      'POST /api/v1/agent_spans/id-3/finish',
+      'POST /api/v1/agent_instance/id-1/finish',
+    ]);
+    expect(withNewToken[3].body).toMatchObject({ details: { payload: { reason: 'setup' } } });
   });
 
   test('a pasted token during an unrecorded session starts recording it', async () => {

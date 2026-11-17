@@ -106,6 +106,7 @@ export class PrefactorSession {
   private readonly onError?: (error: unknown) => void;
   private readonly shutdownTimeoutMs: number;
   private errorReported = false;
+  private startFailed = false;
   private finished = false;
   private lastError: unknown = null;
 
@@ -133,6 +134,14 @@ export class PrefactorSession {
       await this.instanceClient.start(id, { timestamp: startedAt });
       return id;
     });
+    void this.instanceId.then((id) => {
+      this.startFailed = id === null;
+    });
+  }
+
+  /** Whether starting the agent instance failed, so this session cannot record anything. */
+  hasFailedToStart(): boolean {
+    return this.startFailed;
   }
 
   /**

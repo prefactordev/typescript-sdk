@@ -38,7 +38,10 @@ export interface PrefactorCommandHost {
   resolveCredentials(): Promise<ResolvedCredentials | undefined>;
   /** The credentials and last request error of the session being recorded, if any. */
   getRecording(): { credentials: ResolvedCredentials; lastError: unknown } | null;
-  /** Starts recording the current session, when it is not recorded yet. */
+  /**
+   * Starts recording the current session, when it is not recorded yet or its agent instance
+   * failed to start.
+   */
   startRecording(ctx: ExtensionCommandContext): Promise<void>;
   /** Creates an HTTP requester for an API URL and token. */
   createClient(apiUrl: string, apiToken: string): HttpRequester;
@@ -354,29 +357,30 @@ async function setupWithPastedToken(
 }
 
 async function status(ctx: ExtensionCommandContext, host: PrefactorCommandHost): Promise<void> {
-  const credentials = await host.resolveCredentials();
-  if (!credentials) {
-    ctx.ui.notify(
-      'Prefactor is not set up. Run /prefactor setup to connect pi to Prefactor.',
-      'info'
-    );
-    return;
-  }
-
-  const file: CredentialsFile | undefined =
-    credentials.source === 'file' ? await readCredentialsFile() : undefined;
   const recording = host.getRecording();
-  const lines = [
-    `Credentials: ${SOURCE_LABELS[credentials.source]}${credentials.source === 'file' ? ` (${getCredentialsFilePath()})` : ''}`,
-    `API URL: ${credentials.apiUrl}`,
-    ...(file?.account_name ? [`Account: ${file.account_name}`] : []),
-    `Agent: ${file?.agent_name ?? credentials.agentId ?? '(read from the token)'}`,
-    recording
-      ? recording.lastError
-        ? `Last request to Prefactor failed: ${describe(recording.lastError)}`
-        : 'Last request to Prefactor succeeded.'
-      : 'This session is not being recorded.',
-  ];
+  const credentials = await host.resolveCredentials();
+  const file: CredentialsFile | undefined =
+    credentials?.source === 'file' ? await readCredentialsFile() : undefined;
+
+  const lines = recording
+    ? [
+        `This session records to ${recording.credentials.apiUrl}, agent ${recording.credentials.agentId ?? '(read from the token)'}, with credentials from the ${SOURCE_LABELS[recording.credentials.source]}.`,
+        recording.lastError
+          ? `Last request to Prefactor failed: ${describe(recording.lastError)}`
+          : 'Last request to Prefactor succeeded.',
+      ]
+    : ['This session is not being recorded.'];
+
+  if (credentials) {
+    lines.push(
+      `New sessions use credentials from the ${SOURCE_LABELS[credentials.source]}${credentials.source === 'file' ? ` (${getCredentialsFilePath()})` : ''}:`,
+      `  API URL: ${credentials.apiUrl}`,
+      ...(file?.account_name ? [`  Account: ${file.account_name}`] : []),
+      `  Agent: ${file?.agent_name ?? credentials.agentId ?? '(read from the token)'}`
+    );
+  } else {
+    lines.push('Prefactor is not set up. Run /prefactor setup to connect pi to Prefactor.');
+  }
   ctx.ui.notify(lines.join('\n'), 'info');
 }
 

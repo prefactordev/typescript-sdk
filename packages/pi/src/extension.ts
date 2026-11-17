@@ -60,6 +60,9 @@ export function prefactorExtension(options: PrefactorExtensionOptions = {}): Ext
       reason: string,
       credentials: ResolvedCredentials
     ): void => {
+      // Validate the configuration before the session queues its registration, so a bad setting
+      // cannot leave an agent instance that nothing finishes.
+      const config = createConfig();
       const session = new PrefactorSession({
         apiUrl: credentials.apiUrl,
         apiToken: credentials.apiToken,
@@ -75,7 +78,6 @@ export function prefactorExtension(options: PrefactorExtensionOptions = {}): Ext
           notify(ctx, `Prefactor could not record this session: ${describe(error)}`),
       });
 
-      const config = createConfig();
       const tracer = new SessionTracer(session, {
         maxInputLength: config.maxInputLength,
         maxOutputLength: config.maxOutputLength,
@@ -108,9 +110,12 @@ export function prefactorExtension(options: PrefactorExtensionOptions = {}): Ext
           ? { credentials: recording.credentials, lastError: recording.session.getLastError() }
           : null,
       startRecording: async (ctx) => {
-        if (recording) {
+        if (recording && !recording.session.hasFailedToStart()) {
           return;
         }
+        // A recording whose agent instance never started records nothing, so new credentials
+        // replace it.
+        recording = null;
         const credentials = await resolveCredentials(options);
         if (credentials) {
           startRecording(ctx, 'setup', credentials);
