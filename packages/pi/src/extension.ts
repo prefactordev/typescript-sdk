@@ -93,6 +93,14 @@ export function prefactorExtension(options: PrefactorExtensionOptions = {}): Ext
       recording = { credentials, session, tracer };
     };
 
+    const replaceRecording = async (ctx: ExtensionContext): Promise<void> => {
+      recording = null;
+      const credentials = await resolveCredentials(options);
+      if (credentials) {
+        startRecording(ctx, 'setup', credentials);
+      }
+    };
+
     pi.on(
       'session_start',
       guard('session_start', async (event, ctx) => {
@@ -107,18 +115,34 @@ export function prefactorExtension(options: PrefactorExtensionOptions = {}): Ext
       resolveCredentials: () => resolveCredentials(options),
       getRecording: () =>
         recording
-          ? { credentials: recording.credentials, lastError: recording.session.getLastError() }
+          ? {
+              credentials: recording.credentials,
+              lastError: recording.session.getLastError(),
+              startState: recording.session.getStartState(),
+            }
           : null,
       startRecording: async (ctx) => {
-        if (recording && !recording.session.hasFailedToStart()) {
+        const current = recording;
+        const state = current?.session.getStartState();
+        if (!current || state === 'failed') {
+          // A recording whose agent instance never started records nothing, so the saved
+          // credentials replace it.
+          await replaceRecording(ctx);
           return;
         }
-        // A recording whose agent instance never started records nothing, so new credentials
-        // replace it.
-        recording = null;
-        const credentials = await resolveCredentials(options);
-        if (credentials) {
-          startRecording(ctx, 'setup', credentials);
+        if (state === 'pending') {
+          // Setup can finish before the current registration does. If that registration then
+          // fails, switch this session to the saved credentials.
+          void current.session
+            .whenStartSettled()
+            .then(async (started) => {
+              if (!started && recording === current) {
+                await replaceRecording(ctx);
+              }
+            })
+            .catch((error: unknown) =>
+              logger.warn('Could not start recording with the saved credentials', error)
+            );
         }
       },
       createClient: (apiUrl, apiToken) => createHttpClient(apiUrl, apiToken, SDK_HEADER_ENTRY),

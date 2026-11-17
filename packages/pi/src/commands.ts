@@ -19,6 +19,7 @@ import {
   startDeviceLogin,
 } from './device-login.js';
 import { type AgentSummary, PrefactorApi } from './prefactor-api.js';
+import type { StartState } from './prefactor-session.js';
 
 export const DEFAULT_AGENT_NAME = 'pi';
 const DEFAULT_AGENT_DESCRIPTION = 'pi coding agent sessions';
@@ -37,7 +38,11 @@ export interface PrefactorCommandHost {
   /** Resolves the credentials the extension would use now. */
   resolveCredentials(): Promise<ResolvedCredentials | undefined>;
   /** The credentials and last request error of the session being recorded, if any. */
-  getRecording(): { credentials: ResolvedCredentials; lastError: unknown } | null;
+  getRecording(): {
+    credentials: ResolvedCredentials;
+    lastError: unknown;
+    startState: StartState;
+  } | null;
   /**
    * Starts recording the current session, when it is not recorded yet or its agent instance
    * failed to start.
@@ -136,6 +141,16 @@ async function setup(ctx: ExtensionCommandContext, host: PrefactorCommandHost): 
     return;
   }
   await host.startRecording(ctx);
+
+  const recording = host.getRecording();
+  if (active && recording && recording.credentials.apiToken !== active.apiToken) {
+    ctx.ui.notify(
+      recording.startState === 'pending'
+        ? 'This session keeps the Prefactor recording it is starting, and switches to the new credentials only if that recording fails to start. New sessions use the new credentials.'
+        : `This session keeps recording to ${recording.credentials.apiUrl}, agent ${recording.credentials.agentId ?? '(read from its token)'}. New sessions use the new credentials.`,
+      'info'
+    );
+  }
 }
 
 async function setupWithBrowser(

@@ -14,7 +14,7 @@ const DEPLOYMENT_TOKEN_TYPE = 'api_session_agent_deployment_scope';
 
 type Request = { method: string; path: string; auth: string | null; body: unknown };
 type Reply = { status?: number; body: unknown };
-type Route = (request: Request) => Reply | undefined;
+type Route = (request: Request) => Reply | Promise<Reply> | undefined;
 
 /** Never settles: stands in for the "waiting for approval" dialog the user leaves open. */
 const leaveOpen = () => new Promise(() => undefined);
@@ -42,7 +42,9 @@ describe('/prefactor', () => {
         body: init?.body ? JSON.parse(String(init.body)) : null,
       };
       requests.push(request);
-      const reply = routes.map((route) => route(request)).find((result) => result !== undefined);
+      const reply = await routes
+        .map((route) => route(request))
+        .find((result) => result !== undefined);
       if (!reply) {
         return new Response(JSON.stringify({ error: 'not_found' }), { status: 404 });
       }
@@ -305,6 +307,7 @@ describe('/prefactor', () => {
         getRecording: () => ({
           credentials: { source: 'file', apiUrl: API_URL, apiToken: 't' },
           lastError: new Error('HTTP request failed with status 500'),
+          startState: 'started',
         }),
       })
     );
@@ -329,6 +332,7 @@ describe('/prefactor', () => {
         getRecording: () => ({
           credentials: { source: 'file', apiUrl: API_URL, apiToken: 't', agentId: 'agent-a' },
           lastError: null,
+          startState: 'started',
         }),
       })
     );
@@ -386,6 +390,100 @@ describe('/prefactor', () => {
     expect(ctx.notifications.at(-1)).toContain('Last request to Prefactor failed');
 
     await runCommand('prefactor', 'setup', ctx);
+    await emit({ type: 'session_shutdown', reason: 'quit' }, ctx);
+
+    const withNewToken = requests.filter(
+      (request) => request.auth === `Bearer ${DEPLOYMENT_TOKEN}`
+    );
+    expect(withNewToken.map((request) => `${request.method} ${request.path}`)).toEqual([
+      'GET /api/v1/ping',
+      'POST /api/v1/agent_instance/register',
+      'POST /api/v1/agent_instance/id-1/start',
+      'POST /api/v1/agent_spans',
+      'POST /api/v1/agent_spans/id-3/finish',
+      'POST /api/v1/agent_instance/id-1/finish',
+    ]);
+    expect(withNewToken[3].body).toMatchObject({ details: { payload: { reason: 'setup' } } });
+  });
+
+  test('setup says the current session keeps recording with its own credentials', async () => {
+    process.env.PREFACTOR_API_URL = API_URL;
+    routes.push((request) =>
+      request.path === '/api/v1/ping'
+        ? { body: { details: { token_type: DEPLOYMENT_TOKEN_TYPE, agent_id: 'agent-b' } } }
+        : undefined
+    );
+    const ctx = createContext({
+      hasUI: true,
+      answers: ['Paste an agent-deployment token', DEPLOYMENT_TOKEN],
+    });
+
+    await run(
+      'setup',
+      ctx,
+      host({
+        getRecording: () => ({
+          credentials: {
+            source: 'environment',
+            apiUrl: API_URL,
+            apiToken: 'old',
+            agentId: 'agent-a',
+          },
+          lastError: null,
+          startState: 'started',
+        }),
+      })
+    );
+
+    expect(ctx.notifications.at(-1)).toBe(
+      `This session keeps recording to ${API_URL}, agent agent-a. New sessions use the new credentials.`
+    );
+  });
+
+  test('setup switches the session to the saved credentials when the pending recording later fails to start', async () => {
+    process.env.PREFACTOR_API_URL = API_URL;
+    writeFileSync(
+      credentialsPath(),
+      JSON.stringify({ api_url: API_URL, api_token: 'expired', agent_id: 'agent-7' })
+    );
+    let rejectOldRegistration: (() => void) | undefined;
+    const oldRegistration = new Promise<Reply>((resolve) => {
+      rejectOldRegistration = () => resolve({ status: 401, body: { code: 'bad_authtoken' } });
+    });
+    let nextId = 0;
+    routes.push((request) => {
+      if (request.auth === 'Bearer expired') {
+        return oldRegistration;
+      }
+      if (request.path === '/api/v1/ping') {
+        return { body: { details: { token_type: DEPLOYMENT_TOKEN_TYPE, agent_id: 'agent-7' } } };
+      }
+      nextId += 1;
+      return { body: { details: { id: `id-${nextId}` } } };
+    });
+    const { pi, emit, runCommand } = createPi();
+    prefactorExtension()(pi as never);
+    const ctx = createContext({
+      hasUI: true,
+      answers: [true, 'Paste an agent-deployment token', DEPLOYMENT_TOKEN],
+    });
+
+    await emit({ type: 'session_start', reason: 'startup' }, ctx);
+    await runCommand('prefactor', 'setup', ctx);
+    expect(ctx.notifications.at(-1)).toContain('switches to the new credentials only if');
+    expect(requests.filter((request) => request.path.endsWith('/register'))).toHaveLength(1);
+
+    rejectOldRegistration?.();
+    for (let attempt = 0; attempt < 50; attempt += 1) {
+      if (
+        requests.some(
+          (r) => r.auth === `Bearer ${DEPLOYMENT_TOKEN}` && r.path.endsWith('/register')
+        )
+      ) {
+        break;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 5));
+    }
     await emit({ type: 'session_shutdown', reason: 'quit' }, ctx);
 
     const withNewToken = requests.filter(
