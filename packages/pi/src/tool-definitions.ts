@@ -1,7 +1,7 @@
 import type { JsonSchema } from '@prefactor/core';
 
 /**
- * A pi built-in tool that has its own span type.
+ * Schema details for one of pi's built-in tools.
  */
 export interface ToolDefinition {
   description: string;
@@ -9,13 +9,13 @@ export interface ToolDefinition {
   template: string;
 }
 
-const TOOL_STATUS_SUFFIX = '{% if is_error %} (error){% endif %}';
+const TOOL_STATUS_SUFFIX = '{% if error %} (error){% endif %}';
 
 /**
  * Input schemas and summary templates for pi's built-in `read`, `write`, `edit` and `bash` tools.
  *
- * The schemas follow the argument shapes pi's tools declare. Other tools use the generic
- * `pi:tool` span type.
+ * The schemas follow the argument shapes pi's tools declare. Other tools record their arguments
+ * without a schema for them.
  */
 export const SUPPORTED_TOOL_DEFINITIONS: Record<string, ToolDefinition> = {
   read: {
@@ -29,7 +29,7 @@ export const SUPPORTED_TOOL_DEFINITIONS: Record<string, ToolDefinition> = {
       },
       required: ['path'],
     },
-    template: `read: {{ input.path | default: "(unknown file)" }}{% if input.offset %}:{{ input.offset }}{% endif %}{% if input.limit %} (limit {{ input.limit }}){% endif %}${TOOL_STATUS_SUFFIX}`,
+    template: `read: {{ params.path | default: "(unknown file)" }}{% if params.offset %}:{{ params.offset }}{% endif %}{% if params.limit %} (limit {{ params.limit }}){% endif %}${TOOL_STATUS_SUFFIX}`,
   },
   write: {
     description: 'Write or create files on the filesystem',
@@ -41,7 +41,7 @@ export const SUPPORTED_TOOL_DEFINITIONS: Record<string, ToolDefinition> = {
       },
       required: ['path', 'content'],
     },
-    template: `write: {{ input.path | default: "(unknown file)" }}${TOOL_STATUS_SUFFIX}`,
+    template: `write: {{ params.path | default: "(unknown file)" }}${TOOL_STATUS_SUFFIX}`,
   },
   edit: {
     description: 'Replace targeted text in a file',
@@ -63,7 +63,7 @@ export const SUPPORTED_TOOL_DEFINITIONS: Record<string, ToolDefinition> = {
       },
       required: ['path'],
     },
-    template: `edit: {{ input.path | default: "(unknown file)" }}{% if input.edits %} ({{ input.edits | size }} edits){% endif %}${TOOL_STATUS_SUFFIX}`,
+    template: `edit: {{ params.path | default: "(unknown file)" }}{% if params.edits %} ({{ params.edits | size }} edits){% endif %}${TOOL_STATUS_SUFFIX}`,
   },
   bash: {
     description: 'Execute a shell command',
@@ -75,14 +75,6 @@ export const SUPPORTED_TOOL_DEFINITIONS: Record<string, ToolDefinition> = {
       },
       required: ['command'],
     },
-    template: `bash: \`{% assign cmd = input.command | default: "(no command)" %}{% if cmd.size > 60 %}{{ cmd | slice: 0, 60 }}...{% else %}{{ cmd }}{% endif %}\`${TOOL_STATUS_SUFFIX}`,
+    template: `bash: \`{% assign cmd = params.command | default: "(no command)" %}{% if cmd.size > 60 %}{{ cmd | slice: 0, 60 }}...{% else %}{{ cmd }}{% endif %}\`${TOOL_STATUS_SUFFIX}`,
   },
 };
-
-/**
- * Returns the span type for a pi tool: `pi:tool:<name>` for supported built-in tools,
- * otherwise the generic `pi:tool`.
- */
-export function resolveToolSpanType(toolName: string): string {
-  return Object.hasOwn(SUPPORTED_TOOL_DEFINITIONS, toolName) ? `pi:tool:${toolName}` : 'pi:tool';
-}

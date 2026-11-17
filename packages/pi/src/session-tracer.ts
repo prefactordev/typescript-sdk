@@ -1,6 +1,6 @@
 import { serializeValue } from '@prefactor/core';
 import type { PrefactorSession, SpanHandle, SpanStatus } from './prefactor-session.js';
-import { resolveToolSpanType } from './tool-definitions.js';
+import { AGENT_SPAN_VERSION, FALLBACK_TOOL_SPAN_TYPE, TOOL_SPAN_PREFIX } from './schema.js';
 
 /** The fields of pi's assistant message that the tracer records. */
 export interface AssistantMessageLike {
@@ -26,6 +26,12 @@ export interface AssistantMessageLike {
   durationMs?: number;
 }
 
+/** The fields of pi's user message that the tracer records. */
+export interface UserMessageLike {
+  role: 'user';
+  content: unknown;
+}
+
 export interface SessionStartInfo {
   sessionId: string;
   cwd: string;
@@ -33,6 +39,8 @@ export interface SessionStartInfo {
   reason: string;
   provider?: string;
   model?: string;
+  /** Names of the tools pi has at session start. Other tools use the fallback span type. */
+  toolNames: string[];
 }
 
 export interface ToolExecutionStart {
@@ -46,7 +54,6 @@ export interface ToolExecutionEnd {
   toolCallId: string;
   result: unknown;
   isError: boolean;
-  durationMs?: number;
 }
 
 export interface TracerLimits {
@@ -54,19 +61,36 @@ export interface TracerLimits {
   maxOutputLength: number;
 }
 
+type Usage = NonNullable<AssistantMessageLike['usage']>;
+
 /**
- * Maps one pi session's events onto Prefactor spans:
- * `pi:session` > `pi:agent_run` > `pi:llm` and `pi:tool*`, with nested tool calls under the tool
- * that made them.
+ * Maps one pi session's events onto Prefactor's canonical agent spans, inside a `pi:session` root
+ * span:
+ *
+ * - `$agent:system_message` when a run starts with a system prompt that differs from the last one
+ *   recorded.
+ * - `$agent:user_turn` with its `$agent:user_message` for each user message, including steering
+ *   and follow-up messages.
+ * - `$agent:assistant_turn` for the assistant's work after a user turn, holding each response's
+ *   `$agent:llm_call`, its `$agent:assistant_thinking` and `$agent:assistant_message` blocks, and
+ *   `$agent:tool:<name>` tool executions. A tool called by another tool is a child of that tool.
+ *
+ * The assistant turn finishes at the end of the run, or when a steering message starts the next
+ * user turn. Start and finish times come from one clock that never repeats or goes back, so
+ * Prefactor orders spans as they happened, no span finishes before it starts, and no parent
+ * finishes before its children.
  */
 export class SessionTracer {
   private sessionSpan: SpanHandle | null = null;
-  private runSpan: SpanHandle | null = null;
-  private runFinalMessage: AssistantMessageLike | null = null;
-  private pendingPrompt: { prompt: string; images?: unknown[] } | null = null;
-  private contextMessages: unknown[] = [];
-  /** JSON of each message in the context last recorded on a `pi:llm` span. */
-  private recordedContext: string[] = [];
+  private assistantTurn: {
+    span: SpanHandle;
+    lastMessage: AssistantMessageLike | null;
+    usage: Usage | null;
+  } | null = null;
+  private userTurns = 0;
+  private recordedSystemPrompt: string | null = null;
+  private toolNames = new Set<string>();
+  private lastTimestamp = 0;
   private readonly toolSpans = new Map<string, SpanHandle>();
 
   constructor(
@@ -75,8 +99,10 @@ export class SessionTracer {
   ) {}
 
   sessionStart(info: SessionStartInfo): void {
+    this.toolNames = new Set(info.toolNames);
     this.sessionSpan = this.session.startSpan({
       schemaName: 'pi:session',
+      startedAt: this.timestamp(),
       payload: {
         session_id: info.sessionId,
         cwd: info.cwd,
@@ -88,95 +114,129 @@ export class SessionTracer {
     });
   }
 
-  /** Records the user prompt for the next agent run. */
-  beforeAgentStart(prompt: string, images?: unknown[]): void {
-    this.pendingPrompt = { prompt, ...(images?.length ? { images } : {}) };
-  }
-
-  agentStart(): void {
-    this.endRun('cancelled', { stop_reason: 'interrupted' });
-    const prompt = this.pendingPrompt;
-    this.pendingPrompt = null;
-    this.runFinalMessage = null;
-    this.runSpan = this.session.startSpan({
-      schemaName: 'pi:agent_run',
-      payload: prompt ? (this.input(prompt) as Record<string, unknown>) : {},
-      parent: this.sessionSpan,
-    });
-  }
-
-  agentEnd(): void {
-    const message = this.runFinalMessage;
-    if (!message) {
-      this.endRun('complete', {});
+  /**
+   * Starts a run. An assistant turn left open by a run that never ended is cancelled, and the
+   * system prompt is recorded when it differs from the last one recorded.
+   */
+  agentStart(systemPrompt: string): void {
+    this.endAssistantTurn('cancelled');
+    if (systemPrompt === this.recordedSystemPrompt) {
       return;
     }
-    this.endRun(statusFromStopReason(message.stopReason), {
-      response: this.output(textOf(message.content)),
-      ...(message.stopReason ? { stop_reason: message.stopReason } : {}),
-      ...(message.errorMessage ? { error_message: message.errorMessage } : {}),
+    this.recordedSystemPrompt = systemPrompt;
+    const at = this.timestamp();
+    this.session.recordSpan({
+      schemaName: '$agent:system_message',
+      parent: this.sessionSpan,
+      startedAt: at,
+      finishedAt: at,
+      status: 'complete',
+      payload: { _version: AGENT_SPAN_VERSION, text: this.input(systemPrompt) },
+      resultPayload: { _version: AGENT_SPAN_VERSION },
     });
   }
 
-  /** Stores the messages pi is about to send to the model. */
-  context(messages: unknown[]): void {
-    this.contextMessages = messages;
+  /** Finishes the run's assistant turn. */
+  agentEnd(): void {
+    this.endAssistantTurn();
   }
 
-  /** Records a finished assistant message as a `pi:llm` span. */
-  assistantMessage(message: AssistantMessageLike): void {
-    this.runFinalMessage = message;
+  /** Records a user message, which ends any open assistant turn and starts a user turn. */
+  userMessage(message: UserMessageLike): void {
+    this.endAssistantTurn();
+    this.userTurns += 1;
 
-    // Messages are compared by content because pi passes a fresh copy of the context each time.
-    // When the context no longer starts with what was recorded, for example after compaction or
-    // an extension replaced it, the whole context is recorded.
-    const current = this.contextMessages.map((entry) => JSON.stringify(entry));
-    const extendsRecorded =
-      current.length >= this.recordedContext.length &&
-      this.recordedContext.every((entry, index) => entry === current[index]);
-    const newMessages = extendsRecorded
-      ? this.contextMessages.slice(this.recordedContext.length)
-      : this.contextMessages;
-    this.recordedContext = current;
-
-    const finishedAt = message.timestamp + (message.durationMs ?? 0);
+    // The turn finishes with its message, which starts after it.
+    const turnAt = this.timestamp();
+    const messageAt = this.timestamp();
+    const turn = this.session.recordSpan({
+      schemaName: '$agent:user_turn',
+      parent: this.sessionSpan,
+      startedAt: turnAt,
+      finishedAt: messageAt,
+      status: 'complete',
+      payload: { _version: AGENT_SPAN_VERSION, turn: this.userTurns },
+      resultPayload: { _version: AGENT_SPAN_VERSION },
+    });
     this.session.recordSpan({
-      schemaName: 'pi:llm',
-      parent: this.runSpan ?? this.sessionSpan,
-      startedAt: message.timestamp,
-      finishedAt: message.durationMs === undefined ? Date.now() : finishedAt,
-      status: statusFromStopReason(message.stopReason),
+      schemaName: '$agent:user_message',
+      parent: turn,
+      startedAt: messageAt,
+      finishedAt: messageAt,
+      status: 'complete',
+      payload: { _version: AGENT_SPAN_VERSION, text: this.input(textOf(message.content)) },
+      resultPayload: { _version: AGENT_SPAN_VERSION },
+    });
+  }
+
+  /**
+   * Records a finished assistant message as an `$agent:llm_call` with its thinking and text
+   * blocks, in the open assistant turn, which it opens when there is none.
+   */
+  assistantMessage(message: AssistantMessageLike): void {
+    const turn = this.openAssistantTurn(message.timestamp);
+    turn.lastMessage = message;
+    if (message.usage) {
+      turn.usage = turn.usage ? addUsage(turn.usage, message.usage) : message.usage;
+    }
+
+    const startedAt = this.timestamp(message.timestamp);
+    const finishedAt = this.timestamp(
+      message.durationMs === undefined ? Date.now() : message.timestamp + message.durationMs
+    );
+    const status = statusFromStopReason(message.stopReason);
+    this.session.recordSpan({
+      schemaName: '$agent:llm_call',
+      parent: turn.span,
+      startedAt,
+      finishedAt,
+      status,
       payload: {
-        provider: message.provider,
-        model: message.model,
-        ...(message.api ? { api: message.api } : {}),
-        messages: this.input(newMessages),
+        _version: AGENT_SPAN_VERSION,
+        request: {
+          _version: AGENT_SPAN_VERSION,
+          model: message.model,
+          provider_name: message.provider,
+          ...(message.api ? { api: message.api } : {}),
+        },
       },
       resultPayload: {
-        content: this.output(message.content),
-        ...(message.stopReason ? { stop_reason: message.stopReason } : {}),
-        ...(message.errorMessage ? { error_message: message.errorMessage } : {}),
-        ...(message.responseModel ? { response_model: message.responseModel } : {}),
-        ...(message.responseId ? { response_id: message.responseId } : {}),
-        ...(message.usage ? usageOutputs(message.usage) : {}),
-        ...(message.durationMs !== undefined ? { duration_ms: message.durationMs } : {}),
+        _version: AGENT_SPAN_VERSION,
+        response: {
+          _version: AGENT_SPAN_VERSION,
+          ...(message.responseId ? { id: message.responseId } : {}),
+          model: message.responseModel ?? message.model,
+          provider_name: message.provider,
+          ...(message.stopReason ? { stop_reason: message.stopReason } : {}),
+          ...(message.usage ? { usage: canonicalUsage(message.usage) } : {}),
+          ...(message.usage?.cost ? { cost: costOutputs(message.usage.cost) } : {}),
+          timestamp_started: new Date(startedAt).toISOString(),
+          timestamp_completed: new Date(finishedAt).toISOString(),
+        },
+        ...(status === 'failed' ? { error: message.errorMessage ?? 'The model call failed.' } : {}),
       },
     });
+
+    for (const block of message.content) {
+      this.recordContentBlock(turn.span, block);
+    }
   }
 
   toolStart(event: ToolExecutionStart): void {
     const parent =
       (event.parentToolCallId ? this.toolSpans.get(event.parentToolCallId) : undefined) ??
-      this.runSpan ??
+      this.assistantTurn?.span ??
       this.sessionSpan;
+    const registered = this.toolNames.has(event.toolName);
     const span = this.session.startSpan({
-      schemaName: resolveToolSpanType(event.toolName),
+      schemaName: registered ? `${TOOL_SPAN_PREFIX}${event.toolName}` : FALLBACK_TOOL_SPAN_TYPE,
       parent,
+      startedAt: this.timestamp(),
       payload: {
-        tool_name: event.toolName,
-        tool_call_id: event.toolCallId,
-        ...(event.parentToolCallId ? { parent_tool_call_id: event.parentToolCallId } : {}),
-        input: this.input(event.args),
+        _version: AGENT_SPAN_VERSION,
+        tool_use_id: event.toolCallId,
+        ...(registered ? {} : { tool_name: event.toolName }),
+        params: this.input(event.args),
       },
     });
     this.toolSpans.set(event.toolCallId, span);
@@ -190,37 +250,147 @@ export class SessionTracer {
     this.toolSpans.delete(event.toolCallId);
 
     const result = (event.result ?? {}) as { content?: unknown; details?: unknown };
-    this.session.finishSpan(span, event.isError ? 'failed' : 'complete', {
-      ...(result.content !== undefined ? { content: this.output(result.content) } : {}),
-      ...(result.details !== undefined ? { details: this.output(result.details) } : {}),
-      is_error: event.isError,
-      ...(event.durationMs !== undefined ? { duration_ms: event.durationMs } : {}),
-    });
+    if (event.isError) {
+      this.session.finishSpan(
+        span,
+        'failed',
+        { _version: AGENT_SPAN_VERSION, error: this.output(errorText(result.content)) },
+        this.timestamp()
+      );
+      return;
+    }
+    this.session.finishSpan(
+      span,
+      'complete',
+      {
+        _version: AGENT_SPAN_VERSION,
+        result: {
+          ...(result.content !== undefined ? { content: this.output(result.content) } : {}),
+          ...(result.details !== undefined ? { details: this.output(result.details) } : {}),
+        },
+      },
+      this.timestamp()
+    );
   }
 
   /**
-   * Finishes every open span, then the session span. Open runs and tools are cancelled.
+   * Finishes every open span, then the session span. Open tools and the open assistant turn are
+   * cancelled.
    */
   sessionShutdown(reason: string): void {
-    for (const span of this.toolSpans.values()) {
-      this.session.finishSpan(span, 'cancelled', { is_error: true });
+    // Newest first, so a nested tool, which starts after the tool that called it, finishes first.
+    for (const span of [...this.toolSpans.values()].reverse()) {
+      this.session.finishSpan(
+        span,
+        'cancelled',
+        { _version: AGENT_SPAN_VERSION, error: 'The session ended before the tool finished.' },
+        this.timestamp()
+      );
     }
     this.toolSpans.clear();
-    this.endRun('cancelled', { stop_reason: 'shutdown' });
+    this.endAssistantTurn('cancelled');
 
     if (this.sessionSpan) {
-      this.session.finishSpan(this.sessionSpan, 'complete', { reason });
+      this.session.finishSpan(this.sessionSpan, 'complete', { reason }, this.timestamp());
       this.sessionSpan = null;
     }
   }
 
-  private endRun(status: SpanStatus, resultPayload: Record<string, unknown>): void {
-    if (!this.runSpan) {
+  private openAssistantTurn(at: number): NonNullable<SessionTracer['assistantTurn']> {
+    if (!this.assistantTurn) {
+      this.assistantTurn = {
+        span: this.session.startSpan({
+          schemaName: '$agent:assistant_turn',
+          parent: this.sessionSpan,
+          startedAt: this.timestamp(at),
+          payload: { _version: AGENT_SPAN_VERSION },
+        }),
+        lastMessage: null,
+        usage: null,
+      };
+    }
+    return this.assistantTurn;
+  }
+
+  /**
+   * Finishes the open assistant turn with the stop reason of its last response and the usage
+   * summed over its responses. The status follows the last response unless one is given.
+   */
+  private endAssistantTurn(status?: SpanStatus): void {
+    const turn = this.assistantTurn;
+    if (!turn) {
       return;
     }
-    this.session.finishSpan(this.runSpan, status, resultPayload);
-    this.runSpan = null;
-    this.runFinalMessage = null;
+    this.assistantTurn = null;
+    const stopReason = turn.lastMessage?.stopReason;
+    this.session.finishSpan(
+      turn.span,
+      status ?? statusFromStopReason(stopReason),
+      {
+        _version: AGENT_SPAN_VERSION,
+        ...(stopReason ? { stop_reason: stopReason } : {}),
+        ...(turn.usage ? { usage: canonicalUsage(turn.usage) } : {}),
+      },
+      this.timestamp()
+    );
+  }
+
+  private recordContentBlock(parent: SpanHandle, block: unknown): void {
+    if (typeof block !== 'object' || block === null) {
+      return;
+    }
+    const part = block as {
+      type?: unknown;
+      text?: unknown;
+      thinking?: unknown;
+      redacted?: unknown;
+    };
+    let span: { schemaName: string; payload: Record<string, unknown> } | null = null;
+    if (part.type === 'text' && typeof part.text === 'string' && part.text !== '') {
+      span = {
+        schemaName: '$agent:assistant_message',
+        payload: { _version: AGENT_SPAN_VERSION, text: this.output(part.text) },
+      };
+    } else if (part.type === 'thinking' && part.redacted === true) {
+      span = {
+        schemaName: '$agent:assistant_thinking',
+        payload: { _version: AGENT_SPAN_VERSION, type: 'opaque', text: '[redacted]' },
+      };
+    } else if (
+      part.type === 'thinking' &&
+      typeof part.thinking === 'string' &&
+      part.thinking !== ''
+    ) {
+      span = {
+        schemaName: '$agent:assistant_thinking',
+        payload: {
+          _version: AGENT_SPAN_VERSION,
+          type: 'transparent',
+          text: this.output(part.thinking),
+        },
+      };
+    }
+    if (!span) {
+      return;
+    }
+    const at = this.timestamp();
+    this.session.recordSpan({
+      ...span,
+      parent,
+      startedAt: at,
+      finishedAt: at,
+      status: 'complete',
+      resultPayload: { _version: AGENT_SPAN_VERSION },
+    });
+  }
+
+  /**
+   * Returns `at` (default now), moved later when needed so that it is after every timestamp
+   * returned before.
+   */
+  private timestamp(at: number = Date.now()): number {
+    this.lastTimestamp = Math.max(at, this.lastTimestamp + 1);
+    return this.lastTimestamp;
   }
 
   private input(value: unknown): unknown {
@@ -242,7 +412,14 @@ function statusFromStopReason(stopReason: string | undefined): SpanStatus {
   return 'complete';
 }
 
-function textOf(content: unknown[]): string {
+/** Joins the text parts of message content, which is a string or an array of parts. */
+function textOf(content: unknown): string {
+  if (typeof content === 'string') {
+    return content;
+  }
+  if (!Array.isArray(content)) {
+    return '';
+  }
   return content
     .filter(
       (part): part is { type: 'text'; text: string } =>
@@ -255,32 +432,44 @@ function textOf(content: unknown[]): string {
     .join('');
 }
 
-/**
- * Converts pi's usage to span outputs. Cache token counts go here because core's token usage has
- * no fields for them.
- */
-function usageOutputs(
-  usage: NonNullable<AssistantMessageLike['usage']>
-): Record<string, Record<string, number>> {
+function errorText(content: unknown): string {
+  return textOf(content) || 'The tool failed.';
+}
+
+function addUsage(total: Usage, usage: Usage): Usage {
+  const reasoning =
+    total.reasoning === undefined && usage.reasoning === undefined
+      ? undefined
+      : (total.reasoning ?? 0) + (usage.reasoning ?? 0);
   return {
-    usage: {
-      input: usage.input,
-      output: usage.output,
-      cache_read: usage.cacheRead,
-      cache_write: usage.cacheWrite,
-      ...(usage.reasoning !== undefined ? { reasoning: usage.reasoning } : {}),
-      total: usage.totalTokens,
-    },
-    ...(usage.cost
-      ? {
-          cost: {
-            input: usage.cost.input,
-            output: usage.cost.output,
-            cache_read: usage.cost.cacheRead,
-            cache_write: usage.cost.cacheWrite,
-            total: usage.cost.total,
-          },
-        }
-      : {}),
+    input: total.input + usage.input,
+    output: total.output + usage.output,
+    cacheRead: total.cacheRead + usage.cacheRead,
+    cacheWrite: total.cacheWrite + usage.cacheWrite,
+    ...(reasoning === undefined ? {} : { reasoning }),
+    totalTokens: total.totalTokens + usage.totalTokens,
+  };
+}
+
+/** Converts pi's usage to the canonical token fields. */
+function canonicalUsage(usage: Usage): Record<string, number> {
+  return {
+    _version: AGENT_SPAN_VERSION,
+    input_tokens: usage.input,
+    output_tokens: usage.output,
+    cache_read_input_tokens: usage.cacheRead,
+    cache_creation_input_tokens: usage.cacheWrite,
+    ...(usage.reasoning !== undefined ? { reasoning_tokens: usage.reasoning } : {}),
+    total_tokens: usage.totalTokens,
+  };
+}
+
+function costOutputs(cost: NonNullable<Usage['cost']>): Record<string, number> {
+  return {
+    input: cost.input,
+    output: cost.output,
+    cache_read: cost.cacheRead,
+    cache_write: cost.cacheWrite,
+    total: cost.total,
   };
 }

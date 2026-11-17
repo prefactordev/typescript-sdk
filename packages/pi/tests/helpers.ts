@@ -15,8 +15,14 @@ const ENV_KEYS = [
   'PI_CODING_AGENT_DIR',
 ];
 
+/** pi's built-in tools, as `getAllTools` lists them. */
+const DEFAULT_TOOLS = ['read', 'bash', 'edit', 'write'].map((name) => ({
+  name,
+  description: `The ${name} tool`,
+}));
+
 /** A stand-in for pi's `ExtensionAPI` that records handlers and commands. */
-export function createPi() {
+export function createPi(options: { tools?: Array<{ name: string; description: string }> } = {}) {
   const handlers = new Map<string, Handler[]>();
   const commands = new Map<string, Command>();
   const pi = {
@@ -26,6 +32,7 @@ export function createPi() {
     registerCommand(name: string, command: Command) {
       commands.set(name, command);
     },
+    getAllTools: () => options.tools ?? DEFAULT_TOOLS,
   };
   const emit = async (event: Record<string, unknown> & { type: string }, ctx: FakeContext) => {
     for (const handler of handlers.get(event.type) ?? []) {
@@ -133,6 +140,10 @@ export function createContext(options: {
     cwd: '/work/repo',
     model: { provider: 'anthropic', id: 'claude-sonnet' },
     sessionManager: { getSessionId: () => 'session-1' },
+    systemPrompt: 'You are pi.',
+    getSystemPrompt(): string {
+      return this.systemPrompt;
+    },
     ui: {
       notify: (message: string) => notifications.push(message),
       setWidget: (_key: string, content: WidgetContent) => widgets.push(content),

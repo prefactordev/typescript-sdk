@@ -21,6 +21,8 @@ const DEFAULT_SHUTDOWN_TIMEOUT_MS = 10_000;
  */
 export interface SpanHandle {
   readonly id: Promise<string | null>;
+  /** When the span started, in milliseconds since the epoch, as sent to Prefactor. */
+  readonly startedAt: number;
 }
 
 export type SpanStatus = 'complete' | 'failed' | 'cancelled';
@@ -166,6 +168,7 @@ export class PrefactorSession {
   startSpan(options: StartSpanOptions): SpanHandle {
     const startedAt = options.startedAt ?? Date.now();
     return {
+      startedAt,
       id: this.enqueue(() =>
         this.createSpan({
           ...options,
@@ -182,14 +185,21 @@ export class PrefactorSession {
    * Creates a span that has already finished, in one request.
    */
   recordSpan(options: RecordSpanOptions): SpanHandle {
-    return { id: this.enqueue(() => this.createSpan(options)) };
+    const startedAt = options.startedAt ?? Date.now();
+    return { startedAt, id: this.enqueue(() => this.createSpan({ ...options, startedAt })) };
   }
 
   /**
-   * Finishes a span created with {@link startSpan}.
+   * Finishes a span created with {@link startSpan} at `finishedAt`, or now when it is omitted.
+   * The finish time is never earlier than the span's start time.
    */
-  finishSpan(span: SpanHandle, status: SpanStatus, resultPayload: Record<string, unknown>): void {
-    const timestamp = new Date().toISOString();
+  finishSpan(
+    span: SpanHandle,
+    status: SpanStatus,
+    resultPayload: Record<string, unknown>,
+    finishedAt: number = Date.now()
+  ): void {
+    const timestamp = new Date(Math.max(finishedAt, span.startedAt)).toISOString();
     this.enqueue(async () => {
       const id = await span.id;
       if (!id) {
