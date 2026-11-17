@@ -48,7 +48,7 @@ The extension sends spans with a Prefactor agent-deployment token. When a sessio
 
 The agent id comes from the same source as the token. When that source has no agent id, the extension reads it from the token with `GET /api/v1/ping`. The API URL comes from the token's source or a later one, and defaults to `https://app.prefactorai.com`.
 
-The credentials file holds `api_url`, `api_token` (the deployment token), `agent_id`, `agent_name`, `environment_id`, `account_id`, `account_name` and `created_at`. It never holds an account token.
+The credentials file holds `api_url`, `api_token` (the deployment token), `agent_id`, `environment_id`, `account_id` and `created_at`. Setup with browser sign-in also saves `agent_name` and `account_name`. A pasted deployment token cannot read those names from Prefactor, so they are left out, and `/prefactor status` shows the agent and account ids instead. The file never holds an account token.
 
 When no token is found, the extension records nothing and tells you once how to set Prefactor up, so pi keeps working. In interactive and RPC modes the notice appears in pi. In print and JSON modes it is written to stderr.
 

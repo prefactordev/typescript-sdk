@@ -456,6 +456,7 @@ describe('/prefactor', () => {
             body: {
               details: {
                 token_type: DEPLOYMENT_TOKEN_TYPE,
+                account_id: 'account-1',
                 agent_id: 'agent-7',
                 environment_id: 'env-1',
               },
@@ -475,7 +476,10 @@ describe('/prefactor', () => {
       api_token: DEPLOYMENT_TOKEN,
       agent_id: 'agent-7',
       environment_id: 'env-1',
+      account_id: 'account-1',
     });
+    expect(readSaved()).not.toHaveProperty('agent_name');
+    expect(readSaved()).not.toHaveProperty('account_name');
     expect(ctx.notifications).toContain('The token you paste is visible on screen.');
   });
 
@@ -522,6 +526,24 @@ describe('/prefactor', () => {
     expect(message).toContain(
       'Last request to Prefactor failed: HTTP request failed with status 500'
     );
+  });
+
+  test('status shows the account and agent ids when the credentials file has no names', async () => {
+    writeFileSync(
+      credentialsPath(),
+      JSON.stringify({
+        api_url: API_URL,
+        api_token: 't',
+        agent_id: 'agent-7',
+        account_id: 'account-1',
+      })
+    );
+    const ctx = createContext({ hasUI: true });
+
+    await run('status', ctx);
+
+    expect(ctx.notifications[0]).toContain('Account: account-1');
+    expect(ctx.notifications[0]).toContain('Agent: agent-7');
   });
 
   test('status shows the active recording separately when no credentials are saved', async () => {
