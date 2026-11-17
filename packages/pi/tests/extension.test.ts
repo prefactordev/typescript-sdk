@@ -289,9 +289,15 @@ describe('prefactorExtension', () => {
     const now = spyOn(Date, 'now').mockReturnValue(5_000);
     try {
       const { pi, emit } = createPi();
-      prefactorExtension({ apiUrl: 'https://prefactor.example', apiToken: 't', agentId: 'a' })(
-        pi as never
-      );
+      let recorder: PrefactorRecorder | undefined;
+      prefactorExtension({
+        apiUrl: 'https://prefactor.example',
+        apiToken: 't',
+        agentId: 'a',
+        onSessionStart: (sessionRecorder) => {
+          recorder = sessionRecorder;
+        },
+      })(pi as never);
       const ctx = createContext({ hasUI: false });
       const reply = (content: unknown[], stopReason: string) => ({
         type: 'message_end',
@@ -316,6 +322,7 @@ describe('prefactorExtension', () => {
         },
         ctx
       );
+      recorder?.startSpan({ schemaName: 'app:step', parent: { toolCallId: 'call-2' } }).complete();
       await emit(
         { type: 'tool_execution_end', toolCallId: 'call-2', result: {}, isError: false },
         ctx

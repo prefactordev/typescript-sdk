@@ -304,7 +304,12 @@ export class SessionTracer {
     if (!this.customSpans.delete(span)) {
       return;
     }
-    this.session.finishSpan(span, status, this.output(result) as Record<string, unknown>);
+    this.session.finishSpan(
+      span,
+      status,
+      this.output(result) as Record<string, unknown>,
+      this.timestamp()
+    );
   }
 
   /**
@@ -313,7 +318,7 @@ export class SessionTracer {
    */
   sessionShutdown(reason: string): void {
     for (const span of this.customSpans) {
-      this.session.finishSpan(span, 'cancelled', {});
+      this.session.finishSpan(span, 'cancelled', {}, this.timestamp());
     }
     this.customSpans.clear();
     // Newest first, so a nested tool, which starts after the tool that called it, finishes first.
