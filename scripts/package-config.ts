@@ -54,6 +54,13 @@ export const PACKAGE_CONFIGS: PackageConfig[] = [
     generateVersionModule: true,
   },
   {
+    name: '@prefactor/pi',
+    path: 'packages/pi',
+    entrypoint: './packages/pi/src/index.ts',
+    external: ['@prefactor/core', '@earendil-works/pi-coding-agent'],
+    generateVersionModule: true,
+  },
+  {
     name: '@prefactor/openclaw-prefactor-plugin',
     path: 'packages/openclaw-prefactor-plugin',
     entrypoint: './packages/openclaw-prefactor-plugin/src/index.ts',
