@@ -151,7 +151,7 @@ jobs:
             extracted_bin: prefactor.exe
             requires_musl: false
             # The update swap stopped completing on runner image 20261112.217.1 with no CLI
-            # change; don't let it block releases while the diagnostics step finds out why.
+            # change; don't let it block releases.
             allow_failure: true
     runs-on: ${{ matrix.os }}
     continue-on-error: ${{ matrix.allow_failure == true }}
@@ -287,32 +287,6 @@ jobs:
           Stop-Process -Id $server.Id -Force -ErrorAction SilentlyContinue
           Write-Error "Expected installed CLI to update to $env:SMOKE_TAG"
           exit 1
-      - name: Collect update diagnostics (windows)
-        if: failure() && runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          $installRoot = Join-Path $env:RUNNER_TEMP 'prefactor-home\.prefactor'
-          Write-Output '--- prefactor processes'
-          Get-Process -Name 'prefactor*' -ErrorAction SilentlyContinue | Format-Table Id, ProcessName, StartTime, Path -AutoSize | Out-String -Width 300
-          Write-Output '--- install root'
-          Get-ChildItem -LiteralPath $installRoot -Recurse -Force -ErrorAction SilentlyContinue | Format-Table FullName, Length, LastWriteTime -AutoSize | Out-String -Width 300
-          Get-ChildItem -LiteralPath $installRoot -Filter '*.json' -ErrorAction SilentlyContinue | ForEach-Object { Write-Output "# $($_.FullName)"; Get-Content -LiteralPath $_.FullName }
-          Write-Output '--- update temp dirs'
-          Get-ChildItem -Path (Join-Path ([System.IO.Path]::GetTempPath()) 'prefactor-update-*') -Recurse -Force -ErrorAction SilentlyContinue | Format-Table FullName, Length, LastWriteTime -AutoSize | Out-String -Width 300
-          Write-Output '--- install state after another 60s (did the swap finish late?)'
-          Start-Sleep -Seconds 60
-          $env:USERPROFILE = Join-Path $env:RUNNER_TEMP 'prefactor-home'
-          & (Join-Path $installRoot 'bin\prefactor.exe') doctor 2>&1 | Out-String
-          foreach ($log in @(
-            'Microsoft-Windows-Windows Defender/Operational',
-            'Microsoft-Windows-CodeIntegrity/Operational',
-            'Microsoft-Windows-AppLocker/EXE and DLL',
-            'Application'
-          )) {
-            Write-Output "--- event log: $log (last 15 min)"
-            Get-WinEvent -FilterHashtable @{ LogName = $log; StartTime = (Get-Date).AddMinutes(-15) } -MaxEvents 30 -ErrorAction SilentlyContinue |
-              Format-List TimeCreated, Id, LevelDisplayName, Message | Out-String -Width 300
-          }
 
   release:
     runs-on: ubuntu-latest
