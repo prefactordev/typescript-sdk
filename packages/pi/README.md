@@ -158,4 +158,4 @@ Pressing Ctrl+C in print, JSON or RPC mode ends pi without running `session_shut
 ## Requirements
 
 - Node.js >= 22.19.0
-- pi (`@earendil-works/pi-coding-agent`) 1.1.0 or later
+- pi (`@earendil-works/pi-coding-agent`) 0.99.0 or later
