@@ -39,7 +39,7 @@ export interface ToolSchemaOptions {
   template?: string;
   /** JSON Schema of the tool's arguments, recorded as `params`. */
   params_schema?: JsonSchema;
-  /** JSON Schema of the tool's result, recorded as `result`. */
+  /** JSON Schema of the structured value the tool returns as `details`, recorded as `result.details`. */
   result_schema?: JsonSchema;
   data_risk?: DataRisk;
 }
@@ -114,11 +114,13 @@ function toolSchema(tool: SessionTool, options: ToolSchemaOptions = {}): SpanTyp
     }),
     result_schema: versioned(
       {
-        result: options.result_schema ?? {
+        result: {
           type: 'object',
           properties: {
             content: { type: 'array', description: 'Content returned to the model' },
-            details: { description: 'Structured details returned by the tool' },
+            details: options.result_schema ?? {
+              description: 'Structured details returned by the tool',
+            },
           },
         },
         error: { type: 'string' },

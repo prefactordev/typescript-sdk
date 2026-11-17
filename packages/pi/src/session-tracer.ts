@@ -299,17 +299,18 @@ export class SessionTracer {
     return span;
   }
 
-  /** Finishes a span from {@link startCustomSpan}. A span already finished is left as it is. */
+  /**
+   * Finishes a span from {@link startCustomSpan}. A span already finished is left as it is. When
+   * the result cannot be serialized, this throws and the span stays open, so a later call or
+   * shutdown can still finish it.
+   */
   finishCustomSpan(span: SpanHandle, status: SpanStatus, result: Record<string, unknown>): void {
-    if (!this.customSpans.delete(span)) {
+    if (!this.customSpans.has(span)) {
       return;
     }
-    this.session.finishSpan(
-      span,
-      status,
-      this.output(result) as Record<string, unknown>,
-      this.timestamp()
-    );
+    const resultPayload = this.output(result) as Record<string, unknown>;
+    this.session.finishSpan(span, status, resultPayload, this.timestamp());
+    this.customSpans.delete(span);
   }
 
   /**
@@ -317,7 +318,8 @@ export class SessionTracer {
    * assistant turn are cancelled.
    */
   sessionShutdown(reason: string): void {
-    for (const span of this.customSpans) {
+    // Newest first, so a custom span nested in another, which starts after it, finishes first.
+    for (const span of [...this.customSpans].reverse()) {
       this.session.finishSpan(span, 'cancelled', {}, this.timestamp());
     }
     this.customSpans.clear();

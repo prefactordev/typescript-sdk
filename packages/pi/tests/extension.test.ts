@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test';
 import { VERSION as PI_VERSION } from '@earendil-works/pi-coding-agent';
 import type { SpanTypeSchema } from '@prefactor/core';
+import { z } from 'zod';
 import { prefactorExtension, resetSetupNoticeForTests } from '../src/extension.js';
 import type { PrefactorRecorder } from '../src/recorder.js';
 import { createContext, createPi, isolateEnvironment } from './helpers.js';
@@ -562,12 +563,70 @@ describe('prefactorExtension', () => {
     expect(byName('$agent:tool:notify_slack')).toMatchObject({
       description: 'Send a Slack message',
       params_schema: { properties: { params: { properties: { channel: { type: 'string' } } } } },
-      result_schema: { properties: { result: { properties: { ts: { type: 'string' } } } } },
+      result_schema: {
+        properties: {
+          result: { properties: { details: { properties: { ts: { type: 'string' } } } } },
+        },
+      },
     });
     expect(schemas.at(-1)?.name).toBe('app:poll');
     expect(registration.agent_schema_version.quality_schemas).toEqual([qualitySchema]);
     expect(registration.agent_schema_version.alert_schemas).toEqual([alertSchema]);
     expect(spans().at(-1)?.schema_name).toBe('$agent:tool:notify_slack');
+  });
+
+  test('records tool results that match the result_schema registered for the tool', async () => {
+    const { pi, emit } = createPi({ tools: [{ name: 'notify_slack', description: 'Notify' }] });
+    prefactorExtension({
+      apiUrl: 'https://prefactor.example',
+      apiToken: 't',
+      agentId: 'a',
+      toolSchemas: {
+        notify_slack: {
+          result_schema: {
+            type: 'object',
+            properties: { ts: { type: 'string' } },
+            required: ['ts'],
+          },
+        },
+      },
+    })(pi as never);
+    const ctx = createContext({ hasUI: false });
+    await emit({ type: 'session_start', reason: 'startup' }, ctx);
+    await emit({ type: 'agent_start' }, ctx);
+    for (const [id, details] of [
+      ['call-1', { ts: '1700000000.0001' }],
+      ['call-2', { channel: '#signals' }],
+    ] as const) {
+      await emit(
+        { type: 'tool_execution_start', toolCallId: id, toolName: 'notify_slack', args: {} },
+        ctx
+      );
+      await emit(
+        {
+          type: 'tool_execution_end',
+          toolCallId: id,
+          result: { content: [{ type: 'text', text: 'sent' }], details },
+          isError: false,
+        },
+        ctx
+      );
+    }
+    await emit({ type: 'session_shutdown', reason: 'quit' }, ctx);
+
+    const schema = (
+      requests[0].body as { agent_schema_version: { span_type_schemas: SpanTypeSchema[] } }
+    ).agent_schema_version.span_type_schemas.find(
+      (entry) => entry.name === '$agent:tool:notify_slack'
+    )?.result_schema;
+    const validator = z.fromJSONSchema(schema as Parameters<typeof z.fromJSONSchema>[0]);
+    const created = spans();
+    const resultOf = (index: number) => finishOf(spanIdAt(index))?.result_payload;
+    const toolIndexes = created
+      .map((span, index) => (span.schema_name === '$agent:tool:notify_slack' ? index : -1))
+      .filter((index) => index >= 0);
+    expect(validator.safeParse(resultOf(toolIndexes[0])).success).toBe(true);
+    expect(validator.safeParse(resultOf(toolIndexes[1])).success).toBe(false);
   });
 
   test('registers no quality or alert schemas when none are given', async () => {
@@ -583,6 +642,55 @@ describe('prefactorExtension', () => {
       .agent_schema_version;
     expect(schemaVersion).not.toHaveProperty('quality_schemas');
     expect(schemaVersion).not.toHaveProperty('alert_schemas');
+  });
+
+  test('keeps a custom span open when its result cannot be recorded, and cancels children first at shutdown', async () => {
+    const warn = spyOn(console, 'warn').mockImplementation(() => undefined);
+    let recorder: PrefactorRecorder | undefined;
+    try {
+      const { pi, emit } = createPi();
+      prefactorExtension({
+        apiUrl: 'https://prefactor.example',
+        apiToken: 't',
+        agentId: 'a',
+        onSessionStart: (sessionRecorder) => {
+          recorder = sessionRecorder;
+        },
+      })(pi as never);
+      const ctx = createContext({ hasUI: false });
+      await emit({ type: 'session_start', reason: 'startup' }, ctx);
+      if (!recorder) {
+        throw new Error('onSessionStart was not called');
+      }
+      const circular: Record<string, unknown> = { items: 1 };
+      circular.self = circular;
+
+      const retried = recorder.startSpan({ schemaName: 'app:retried' });
+      retried.complete(circular);
+      retried.complete({ items: 2 });
+      const parent = recorder.startSpan({ schemaName: 'app:parent' });
+      const child = recorder.startSpan({ schemaName: 'app:child', parent });
+      child.complete(circular);
+      await emit({ type: 'session_shutdown', reason: 'quit' }, ctx);
+    } finally {
+      warn.mockRestore();
+    }
+
+    const created = spans();
+    const idOf = (schemaName: string) =>
+      spanIdAt(created.findIndex((span) => span.schema_name === schemaName));
+    const finishes = (schemaName: string) =>
+      requests.filter((request) => request.url.endsWith(`/agent_spans/${idOf(schemaName)}/finish`));
+    expect(finishes('app:retried').map((request) => request.body)).toMatchObject([
+      { status: 'complete', result_payload: { items: 2 } },
+    ]);
+    const parentFinish = finishOf(idOf('app:parent'));
+    const childFinish = finishOf(idOf('app:child'));
+    expect(parentFinish).toMatchObject({ status: 'cancelled' });
+    expect(childFinish).toMatchObject({ status: 'cancelled' });
+    expect(Date.parse(String(parentFinish?.timestamp))).toBeGreaterThan(
+      Date.parse(String(childFinish?.timestamp))
+    );
   });
 
   test('rejects span types that redefine the extension span types', () => {
