@@ -75,6 +75,34 @@ describe('resolveCredentials', () => {
     expect(await resolveCredentials({}, {}, filePath)).toBeUndefined();
   });
 
+  test('does not read the file when options or the environment supply a token and URL', async () => {
+    writeFileSync(filePath, '[]');
+    expect(
+      await resolveCredentials(
+        { apiUrl: 'https://code.example', apiToken: 'code-token' },
+        {},
+        filePath
+      )
+    ).toEqual({ source: 'options', apiUrl: 'https://code.example', apiToken: 'code-token' });
+    expect(
+      await resolveCredentials(
+        {},
+        { PREFACTOR_API_URL: 'https://env.example', PREFACTOR_API_TOKEN: 'env-token' },
+        filePath
+      )
+    ).toEqual({ source: 'environment', apiUrl: 'https://env.example', apiToken: 'env-token' });
+  });
+
+  test('falls back to the URL in the file for a token from the options', async () => {
+    writeFile({ api_url: 'https://file.example', api_token: 'file-token' });
+    const credentials = await resolveCredentials({ apiToken: 'code-token' }, {}, filePath);
+    expect(credentials).toEqual({
+      source: 'options',
+      apiUrl: 'https://file.example',
+      apiToken: 'code-token',
+    });
+  });
+
   test('rejects a credentials file that is not a JSON object', async () => {
     writeFileSync(filePath, '[]');
     await expect(resolveCredentials({}, {}, filePath)).rejects.toThrow(

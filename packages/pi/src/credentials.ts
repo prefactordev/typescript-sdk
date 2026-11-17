@@ -95,19 +95,39 @@ export async function resolveCredentials(
   env: NodeJS.ProcessEnv = process.env,
   credentialsFilePath: string = getCredentialsFilePath()
 ): Promise<ResolvedCredentials | undefined> {
-  const file = await readCredentialsFile(credentialsFilePath);
   const candidates: CredentialCandidate[] = [
-    { source: 'options', ...options },
+    {
+      source: 'options',
+      apiUrl: options.apiUrl,
+      apiToken: options.apiToken,
+      agentId: options.agentId,
+    },
     {
       source: 'environment',
       apiUrl: env.PREFACTOR_API_URL,
       apiToken: env.PREFACTOR_API_TOKEN,
       agentId: env.PREFACTOR_AGENT_ID,
     },
-    { source: 'file', apiUrl: file?.api_url, apiToken: file?.api_token, agentId: file?.agent_id },
   ];
 
-  const chosenIndex = candidates.findIndex((candidate) => nonEmpty(candidate.apiToken));
+  // The file is read only when a higher-priority source leaves a token or URL to find, so an
+  // unreadable file never blocks credentials from options or the environment.
+  let chosenIndex = candidates.findIndex((candidate) => nonEmpty(candidate.apiToken));
+  const needsFile =
+    chosenIndex === -1 || !candidates.slice(chosenIndex).some((c) => nonEmpty(c.apiUrl));
+  if (needsFile) {
+    const file = await readCredentialsFile(credentialsFilePath);
+    candidates.push({
+      source: 'file',
+      apiUrl: file?.api_url,
+      apiToken: file?.api_token,
+      agentId: file?.agent_id,
+    });
+    if (chosenIndex === -1) {
+      chosenIndex = candidates.findIndex((candidate) => nonEmpty(candidate.apiToken));
+    }
+  }
+
   const chosen = candidates[chosenIndex];
   if (!chosen?.apiToken) {
     return undefined;
