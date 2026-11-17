@@ -1,6 +1,6 @@
 /**
  * pi coding agent extension for Prefactor observability. Records each pi session as a Prefactor
- * agent instance, with spans for agent runs, LLM responses and tool executions.
+ * agent instance, as a conversation of user turns, assistant turns, LLM calls and tool executions.
  *
  * Install it into pi with `pi install npm:@prefactor/pi`, or load it in code through pi's
  * `extensionFactories`. See the package README for setup.

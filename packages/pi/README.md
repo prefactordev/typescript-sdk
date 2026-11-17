@@ -1,6 +1,6 @@
 # @prefactor/pi
 
-A [pi](https://pi.dev) extension that records pi sessions in Prefactor. Each pi session becomes one Prefactor agent instance, with spans for its agent runs, LLM responses and tool calls.
+A [pi](https://pi.dev) extension that records pi sessions in Prefactor. Each pi session becomes one Prefactor agent instance, which Prefactor shows as a conversation of user turns, assistant turns, LLM calls and tool calls.
 
 > **Sensitive data:** the extension records prompts, completions and tool results as they are, without redaction. Coding sessions often contain source code, credentials and other secrets, so do not use it for sessions that handle data you cannot send to Prefactor.
 
@@ -123,15 +123,22 @@ The `pi` command always records pi's release version, because it loads the exten
 
 ## What gets recorded
 
+pi's work is recorded with Prefactor's canonical agent span types, the ones Prefactor's hosted agents use, so each session opens in Prefactor's conversation view.
+
 | Span type | Covers | Recorded |
 | --- | --- | --- |
-| `pi:session` | One pi session | Session id, working directory, mode, start reason and model; shutdown reason |
-| `pi:agent_run` | One agent run, from `agent_start` to `agent_end` | User prompt and images; final response text, stop reason and error |
-| `pi:llm` | One assistant message | Provider, model and the messages added to the context since the previous LLM call; content, stop reason, token usage (including cache read and cache write tokens), cost and duration |
-| `pi:tool:read`, `pi:tool:write`, `pi:tool:edit`, `pi:tool:bash` | pi's built-in tools | Arguments; result content, details, error flag and duration |
-| `pi:tool` | Any other tool | As for the built-in tools |
+| `pi:session` | One pi session, the root of every other span | Session id, working directory, mode, start reason and model; shutdown reason |
+| `$agent:system_message` | The system prompt | The prompt in effect when a run starts, recorded when it differs from the last one recorded |
+| `$agent:user_turn` | One user message | The number of the turn in the session |
+| `$agent:user_message` | A prompt, steering message or follow-up message, in its user turn | The message text |
+| `$agent:assistant_turn` | The assistant's work after a user turn | Stop reason of the last response and the token usage summed over the turn's responses |
+| `$agent:llm_call` | One assistant response, in its assistant turn | Provider, model and API; response id and model, stop reason, token usage (including cache read and cache write tokens), cost and times, or the error |
+| `$agent:assistant_thinking`, `$agent:assistant_message` | Each thinking and text block of a response, in its assistant turn | The block's text |
+| `$agent:tool:<name>` | One tool execution, in its assistant turn | Tool call id and arguments; the result content and details, or the error |
 
-LLM responses and tool calls are children of their agent run. A tool call made by another tool, such as a codemode script, is a child of that tool's span.
+Each tool pi has when the session starts gets its own `$agent:tool:<name>` span type. A tool added later, for example by an extension during the session, is recorded as `$agent:tool:pi:other` with its name in `tool_name`. A tool call made by another tool, such as a codemode script, is a child of that tool's span.
+
+The assistant turn finishes when the run ends, or when a steering message starts the next user turn while the run continues.
 
 The agent version is pi's release version, or `agentVersion` for agents built on pi's SDK. The working directory on each session lets you tell apart sessions from different repositories that report to the same agent.
 
@@ -141,7 +148,7 @@ Long strings are truncated to `PREFACTOR_MAX_INPUT_LENGTH` and `PREFACTOR_MAX_OU
 
 The session appears in Prefactor as soon as it starts. Each span is sent as soon as it starts or finishes, and the agent instance is finished when pi runs `session_shutdown`.
 
-Pressing Ctrl+C in print, JSON or RPC mode ends pi without running `session_shutdown`. Spans that had already finished are recorded. The open agent run, the session span and the agent instance stay active in Prefactor.
+Pressing Ctrl+C in print, JSON or RPC mode ends pi without running `session_shutdown`. Spans that had already finished are recorded. The open assistant turn, the session span and the agent instance stay active in Prefactor.
 
 ## Examples
 

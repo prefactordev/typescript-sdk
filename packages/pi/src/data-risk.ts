@@ -52,10 +52,30 @@ const SHELL_DATA_CATEGORIES: DataCategories = {
   organisational_confidential: 'included',
 };
 
+const CONFIDENTIAL_CONTENT_RISK: DataRisk = {
+  action_profile: UNKNOWN_ACTIONS,
+  params_data_categories: createDataCategories('confidential', 'unknown'),
+  result_data_categories: createDataCategories('confidential', 'unknown'),
+};
+
+const MODEL_OUTPUT_RISK: DataRisk = {
+  action_profile: { ...UNKNOWN_ACTIONS, create_data: 'allowed' },
+  params_data_categories: createDataCategories('confidential', 'unknown'),
+  result_data_categories: createDataCategories('internal', 'unknown'),
+};
+
+/** Data risk of a tool that has no span type of its own in {@link DEFAULT_SPAN_TYPE_RISK}. */
+export const UNKNOWN_TOOL_RISK: DataRisk = {
+  action_profile: UNKNOWN_ACTIONS,
+  params_data_categories: createDataCategories('unknown', 'unknown'),
+  result_data_categories: createDataCategories('unknown', 'unknown'),
+};
+
 /**
  * Default data risk settings for each pi span type, taken from the OpenClaw plugin's defaults:
- * session from its session span, agent run from its user message span (the run holds the prompt),
- * LLM from its assistant response span, and tools from its tool spans, with `bash` as `exec`.
+ * session from its session span, system prompt and user turns from its user message span, the
+ * assistant's turns, LLM calls and output from its assistant response span, and tools from its
+ * tool spans, with `bash` as `exec`.
  */
 export const DEFAULT_SPAN_TYPE_RISK: Record<string, DataRisk> = {
   'pi:session': {
@@ -63,22 +83,14 @@ export const DEFAULT_SPAN_TYPE_RISK: Record<string, DataRisk> = {
     params_data_categories: createDataCategories('internal', 'unknown'),
     result_data_categories: createDataCategories('internal', 'unknown'),
   },
-  'pi:agent_run': {
-    action_profile: UNKNOWN_ACTIONS,
-    params_data_categories: createDataCategories('confidential', 'unknown'),
-    result_data_categories: createDataCategories('confidential', 'unknown'),
-  },
-  'pi:llm': {
-    action_profile: { ...UNKNOWN_ACTIONS, create_data: 'allowed' },
-    params_data_categories: createDataCategories('confidential', 'unknown'),
-    result_data_categories: createDataCategories('internal', 'unknown'),
-  },
-  'pi:tool': {
-    action_profile: UNKNOWN_ACTIONS,
-    params_data_categories: createDataCategories('unknown', 'unknown'),
-    result_data_categories: createDataCategories('unknown', 'unknown'),
-  },
-  'pi:tool:read': {
+  '$agent:system_message': CONFIDENTIAL_CONTENT_RISK,
+  '$agent:user_turn': CONFIDENTIAL_CONTENT_RISK,
+  '$agent:user_message': CONFIDENTIAL_CONTENT_RISK,
+  '$agent:assistant_turn': MODEL_OUTPUT_RISK,
+  '$agent:llm_call': MODEL_OUTPUT_RISK,
+  '$agent:assistant_message': MODEL_OUTPUT_RISK,
+  '$agent:assistant_thinking': MODEL_OUTPUT_RISK,
+  '$agent:tool:read': {
     action_profile: {
       create_data: 'disallowed',
       read_data: 'allowed',
@@ -90,7 +102,7 @@ export const DEFAULT_SPAN_TYPE_RISK: Record<string, DataRisk> = {
     params_data_categories: FILE_DATA_CATEGORIES,
     result_data_categories: FILE_DATA_CATEGORIES,
   },
-  'pi:tool:write': {
+  '$agent:tool:write': {
     action_profile: {
       create_data: 'allowed',
       read_data: 'disallowed',
@@ -102,7 +114,7 @@ export const DEFAULT_SPAN_TYPE_RISK: Record<string, DataRisk> = {
     params_data_categories: { ...FILE_DATA_CATEGORIES, authentication_and_secrets: 'unknown' },
     result_data_categories: { ...FILE_DATA_CATEGORIES, authentication_and_secrets: 'unknown' },
   },
-  'pi:tool:edit': {
+  '$agent:tool:edit': {
     action_profile: {
       create_data: 'disallowed',
       read_data: 'disallowed',
@@ -114,7 +126,7 @@ export const DEFAULT_SPAN_TYPE_RISK: Record<string, DataRisk> = {
     params_data_categories: FILE_DATA_CATEGORIES,
     result_data_categories: FILE_DATA_CATEGORIES,
   },
-  'pi:tool:bash': {
+  '$agent:tool:bash': {
     action_profile: {
       create_data: 'unknown',
       read_data: 'allowed',

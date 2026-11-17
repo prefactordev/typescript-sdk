@@ -13,7 +13,11 @@ import {
 } from './credentials.js';
 import { createHttpClient, PrefactorSession } from './prefactor-session.js';
 import { buildAgentSchemaVersion } from './schema.js';
-import { type AssistantMessageLike, SessionTracer } from './session-tracer.js';
+import {
+  type AssistantMessageLike,
+  SessionTracer,
+  type UserMessageLike,
+} from './session-tracer.js';
 import { PACKAGE_NAME, PACKAGE_VERSION } from './version.js';
 
 const logger = getLogger('pi');
@@ -37,8 +41,8 @@ export interface PrefactorExtensionOptions extends PrefactorCredentialOptions {
 let setupNoticeShown = false;
 
 /**
- * Creates a pi extension that records each pi session in Prefactor as one agent instance, with
- * spans for agent runs, LLM responses and tool executions.
+ * Creates a pi extension that records each pi session in Prefactor as one agent instance, as a
+ * conversation of user turns, assistant turns, LLM calls and tool executions.
  *
  * When no Prefactor token is found, the extension records nothing and tells the user once how to
  * set Prefactor up, so pi keeps working.
@@ -69,6 +73,7 @@ export function prefactorExtension(options: PrefactorExtensionOptions = {}): Ext
       // Validate the configuration before the session queues its registration, so a bad setting
       // cannot leave an agent instance that nothing finishes.
       const config = createConfig();
+      const tools = pi.getAllTools();
       const session = new PrefactorSession({
         apiUrl: credentials.apiUrl,
         apiToken: credentials.apiToken,
@@ -78,7 +83,7 @@ export function prefactorExtension(options: PrefactorExtensionOptions = {}): Ext
           name: AGENT_NAME,
           description: AGENT_DESCRIPTION,
         },
-        agentSchemaVersion: buildAgentSchemaVersion(),
+        agentSchemaVersion: buildAgentSchemaVersion(tools),
         sdkHeaderEntry: SDK_HEADER_ENTRY,
         onError: (error) =>
           notify(ctx, `Prefactor could not record this session: ${describe(error)}`),
@@ -95,6 +100,7 @@ export function prefactorExtension(options: PrefactorExtensionOptions = {}): Ext
         reason,
         provider: ctx.model?.provider,
         model: ctx.model?.id,
+        toolNames: tools.map((tool) => tool.name),
       });
       recording = { credentials, session, tracer };
     };
@@ -156,29 +162,19 @@ export function prefactorExtension(options: PrefactorExtensionOptions = {}): Ext
     });
 
     pi.on(
-      'before_agent_start',
-      guard('before_agent_start', (event) => {
-        if (event.messageType === 'user') {
-          recording?.tracer.beforeAgentStart(event.prompt, event.images);
-        }
-      })
-    );
-    pi.on(
       'agent_start',
-      guard('agent_start', () => recording?.tracer.agentStart())
+      guard('agent_start', (_event, ctx) => recording?.tracer.agentStart(ctx.getSystemPrompt()))
     );
     pi.on(
       'agent_end',
       guard('agent_end', () => recording?.tracer.agentEnd())
     );
     pi.on(
-      'context',
-      guard('context', (event) => recording?.tracer.context(event.messages))
-    );
-    pi.on(
       'message_end',
       guard('message_end', (event) => {
-        if (event.message.role === 'assistant') {
+        if (event.message.role === 'user') {
+          recording?.tracer.userMessage(event.message as unknown as UserMessageLike);
+        } else if (event.message.role === 'assistant') {
           recording?.tracer.assistantMessage(event.message as unknown as AssistantMessageLike);
         }
       })
