@@ -505,6 +505,8 @@ async function setupWithPastedToken(
     api_token: token,
     agent_id: details.agent_id,
     ...(details.environment_id ? { environment_id: details.environment_id } : {}),
+    // A deployment token cannot read its agent's or account's name, so only ids are saved.
+    ...(details.account_id ? { account_id: details.account_id } : {}),
     created_at: new Date().toISOString(),
   });
   ctx.ui.notify(`Connected pi to the Prefactor agent ${details.agent_id}.`, 'info');
@@ -530,7 +532,9 @@ async function status(ctx: ExtensionCommandContext, host: PrefactorCommandHost):
     lines.push(
       `New sessions use credentials from the ${SOURCE_LABELS[credentials.source]}${credentials.source === 'file' ? ` (${getCredentialsFilePath()})` : ''}:`,
       `  API URL: ${credentials.apiUrl}`,
-      ...(file?.account_name ? [`  Account: ${file.account_name}`] : []),
+      ...(file?.account_name || file?.account_id
+        ? [`  Account: ${file.account_name ?? file.account_id}`]
+        : []),
       `  Agent: ${file?.agent_name ?? credentials.agentId ?? '(read from the token)'}`
     );
   } else {

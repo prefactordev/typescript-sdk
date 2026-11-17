@@ -17,6 +17,7 @@ export interface EnvironmentSummary {
 
 export interface PingDetails {
   token_type?: string;
+  account_id?: string;
   agent_id?: string;
   environment_id?: string;
   agent_deployment_id?: string;
