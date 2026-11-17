@@ -25,6 +25,9 @@ export interface SpanHandle {
 
 export type SpanStatus = 'complete' | 'failed' | 'cancelled';
 
+/** Whether the agent instance has started: still registering, started, or failed to start. */
+export type StartState = 'pending' | 'started' | 'failed';
+
 export interface PrefactorSessionOptions {
   apiUrl: string;
   apiToken: string;
@@ -106,6 +109,7 @@ export class PrefactorSession {
   private readonly onError?: (error: unknown) => void;
   private readonly shutdownTimeoutMs: number;
   private errorReported = false;
+  private startState: StartState = 'pending';
   private finished = false;
   private lastError: unknown = null;
 
@@ -133,6 +137,19 @@ export class PrefactorSession {
       await this.instanceClient.start(id, { timestamp: startedAt });
       return id;
     });
+    void this.instanceId.then((id) => {
+      this.startState = id === null ? 'failed' : 'started';
+    });
+  }
+
+  /** Whether the agent instance has started. A session that failed to start records nothing. */
+  getStartState(): StartState {
+    return this.startState;
+  }
+
+  /** Resolves once starting the agent instance has succeeded (`true`) or failed (`false`). */
+  async whenStartSettled(): Promise<boolean> {
+    return (await this.instanceId) !== null;
   }
 
   /**

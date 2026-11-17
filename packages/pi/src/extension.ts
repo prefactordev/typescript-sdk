@@ -5,13 +5,13 @@ import {
   VERSION as PI_VERSION,
 } from '@earendil-works/pi-coding-agent';
 import { createConfig, getLogger } from '@prefactor/core';
+import { registerPrefactorCommand } from './commands.js';
 import {
-  getCredentialsFilePath,
   type PrefactorCredentialOptions,
   type ResolvedCredentials,
   resolveCredentials,
 } from './credentials.js';
-import { PrefactorSession } from './prefactor-session.js';
+import { createHttpClient, PrefactorSession } from './prefactor-session.js';
 import { buildAgentSchemaVersion } from './schema.js';
 import { type AssistantMessageLike, SessionTracer } from './session-tracer.js';
 import { PACKAGE_NAME, PACKAGE_VERSION } from './version.js';
@@ -39,8 +39,11 @@ let setupNoticeShown = false;
  */
 export function prefactorExtension(options: PrefactorExtensionOptions = {}): ExtensionFactory {
   return (pi: ExtensionAPI) => {
-    let session: PrefactorSession | null = null;
-    let tracer: SessionTracer | null = null;
+    let recording: {
+      credentials: ResolvedCredentials;
+      session: PrefactorSession;
+      tracer: SessionTracer;
+    } | null = null;
 
     const guard =
       <T extends unknown[]>(name: string, handler: (...args: T) => void | Promise<void>) =>
@@ -52,89 +55,143 @@ export function prefactorExtension(options: PrefactorExtensionOptions = {}): Ext
         }
       };
 
+    const startRecording = (
+      ctx: ExtensionContext,
+      reason: string,
+      credentials: ResolvedCredentials
+    ): void => {
+      // Validate the configuration before the session queues its registration, so a bad setting
+      // cannot leave an agent instance that nothing finishes.
+      const config = createConfig();
+      const session = new PrefactorSession({
+        apiUrl: credentials.apiUrl,
+        apiToken: credentials.apiToken,
+        agentId: credentials.agentId,
+        agentVersion: {
+          external_identifier: PI_VERSION,
+          name: AGENT_NAME,
+          description: AGENT_DESCRIPTION,
+        },
+        agentSchemaVersion: buildAgentSchemaVersion(),
+        sdkHeaderEntry: SDK_HEADER_ENTRY,
+        onError: (error) =>
+          notify(ctx, `Prefactor could not record this session: ${describe(error)}`),
+      });
+
+      const tracer = new SessionTracer(session, {
+        maxInputLength: config.maxInputLength,
+        maxOutputLength: config.maxOutputLength,
+      });
+      tracer.sessionStart({
+        sessionId: ctx.sessionManager.getSessionId(),
+        cwd: ctx.cwd,
+        mode: ctx.mode,
+        reason,
+        provider: ctx.model?.provider,
+        model: ctx.model?.id,
+      });
+      recording = { credentials, session, tracer };
+    };
+
+    const replaceRecording = async (ctx: ExtensionContext): Promise<void> => {
+      recording = null;
+      const credentials = await resolveCredentials(options);
+      if (credentials) {
+        startRecording(ctx, 'setup', credentials);
+      }
+    };
+
     pi.on(
       'session_start',
       guard('session_start', async (event, ctx) => {
         const credentials = await loadCredentials(options, ctx);
-        if (!credentials) {
-          return;
+        if (credentials) {
+          startRecording(ctx, event.reason, credentials);
         }
-
-        session = new PrefactorSession({
-          apiUrl: credentials.apiUrl,
-          apiToken: credentials.apiToken,
-          agentId: credentials.agentId,
-          agentVersion: {
-            external_identifier: PI_VERSION,
-            name: AGENT_NAME,
-            description: AGENT_DESCRIPTION,
-          },
-          agentSchemaVersion: buildAgentSchemaVersion(),
-          sdkHeaderEntry: SDK_HEADER_ENTRY,
-          onError: (error) =>
-            notify(ctx, `Prefactor could not record this session: ${describe(error)}`),
-        });
-
-        const config = createConfig();
-        tracer = new SessionTracer(session, {
-          maxInputLength: config.maxInputLength,
-          maxOutputLength: config.maxOutputLength,
-        });
-        tracer.sessionStart({
-          sessionId: ctx.sessionManager.getSessionId(),
-          cwd: ctx.cwd,
-          mode: ctx.mode,
-          reason: event.reason,
-          provider: ctx.model?.provider,
-          model: ctx.model?.id,
-        });
       })
     );
+
+    registerPrefactorCommand(pi, {
+      resolveCredentials: () => resolveCredentials(options),
+      getRecording: () =>
+        recording
+          ? {
+              credentials: recording.credentials,
+              lastError: recording.session.getLastError(),
+              startState: recording.session.getStartState(),
+            }
+          : null,
+      startRecording: async (ctx) => {
+        const current = recording;
+        const state = current?.session.getStartState();
+        if (!current || state === 'failed') {
+          // A recording whose agent instance never started records nothing, so the saved
+          // credentials replace it.
+          await replaceRecording(ctx);
+          return;
+        }
+        if (state === 'pending') {
+          // Setup can finish before the current registration does. If that registration then
+          // fails, switch this session to the saved credentials.
+          void current.session
+            .whenStartSettled()
+            .then(async (started) => {
+              if (!started && recording === current) {
+                await replaceRecording(ctx);
+              }
+            })
+            .catch((error: unknown) =>
+              logger.warn('Could not start recording with the saved credentials', error)
+            );
+        }
+      },
+      createClient: (apiUrl, apiToken) => createHttpClient(apiUrl, apiToken, SDK_HEADER_ENTRY),
+      clientVersion: `${PACKAGE_NAME}@${PACKAGE_VERSION}`,
+    });
 
     pi.on(
       'before_agent_start',
       guard('before_agent_start', (event) => {
         if (event.messageType === 'user') {
-          tracer?.beforeAgentStart(event.prompt, event.images);
+          recording?.tracer.beforeAgentStart(event.prompt, event.images);
         }
       })
     );
     pi.on(
       'agent_start',
-      guard('agent_start', () => tracer?.agentStart())
+      guard('agent_start', () => recording?.tracer.agentStart())
     );
     pi.on(
       'agent_end',
-      guard('agent_end', () => tracer?.agentEnd())
+      guard('agent_end', () => recording?.tracer.agentEnd())
     );
     pi.on(
       'context',
-      guard('context', (event) => tracer?.context(event.messages))
+      guard('context', (event) => recording?.tracer.context(event.messages))
     );
     pi.on(
       'message_end',
       guard('message_end', (event) => {
         if (event.message.role === 'assistant') {
-          tracer?.assistantMessage(event.message as unknown as AssistantMessageLike);
+          recording?.tracer.assistantMessage(event.message as unknown as AssistantMessageLike);
         }
       })
     );
     pi.on(
       'tool_execution_start',
-      guard('tool_execution_start', (event) => tracer?.toolStart(event))
+      guard('tool_execution_start', (event) => recording?.tracer.toolStart(event))
     );
     pi.on(
       'tool_execution_end',
-      guard('tool_execution_end', (event) => tracer?.toolEnd(event))
+      guard('tool_execution_end', (event) => recording?.tracer.toolEnd(event))
     );
     pi.on(
       'session_shutdown',
       guard('session_shutdown', async (event) => {
-        tracer?.sessionShutdown(event.reason);
-        tracer = null;
-        const current = session;
-        session = null;
-        await current?.finish();
+        const current = recording;
+        recording = null;
+        current?.tracer.sessionShutdown(event.reason);
+        await current?.session.finish();
       })
     );
   };
@@ -155,8 +212,10 @@ async function loadCredentials(
     setupNoticeShown = true;
     notify(
       ctx,
-      'Prefactor is not set up, so this session is not recorded. Set PREFACTOR_API_TOKEN ' +
-        `(and optionally PREFACTOR_API_URL and PREFACTOR_AGENT_ID), or save credentials to ${getCredentialsFilePath()}.`
+      ctx.hasUI
+        ? 'Prefactor is not set up. Run /prefactor setup to connect pi to Prefactor.'
+        : 'Prefactor is not set up, so this session is not recorded. Set PREFACTOR_API_URL, ' +
+            'PREFACTOR_API_TOKEN and PREFACTOR_AGENT_ID, or run /prefactor setup in interactive pi.'
     );
   }
   return credentials;
