@@ -127,6 +127,7 @@
       "version": "0.0.0",
       "dependencies": {
         "@prefactor/core": "workspace:*",
+        "zod": "^4.0.0",
       },
       "devDependencies": {
         "@earendil-works/pi-coding-agent": "1.5.2",
@@ -134,8 +135,8 @@
         "@types/bun": "1.3.14",
       },
       "peerDependencies": {
-        "@earendil-works/pi-coding-agent": "*",
-        "@earendil-works/pi-tui": "*",
+        "@earendil-works/pi-coding-agent": ">=1.1.0",
+        "@earendil-works/pi-tui": ">=1.1.0",
       },
     },
   },
@@ -1430,6 +1431,8 @@
     "@prefactor/openclaw-prefactor-plugin/@types/node": ["@types/node@22.19.15", "", { "dependencies": { "undici-types": "~6.21.0" } }, "sha512-F0R/h2+dsy5wJAUe3tAU6oqa2qbWY5TpNfL/RGmo1y38hiyO1w3x2jPtt76wmuaJI4DQnOBu21cNXQ2STIUUWg=="],
 
     "@prefactor/openclaw-prefactor-plugin/zod": ["zod@4.4.3", "", {}, "sha512-ytENFjIJFl2UwYglde2jchW2Hwm4GJFLDiSXWdTrJQBIN9Fcyp7n4DhxJEiWNAJMV1/BqWfW/kkg71UDcHJyTQ=="],
+
+    "@prefactor/pi/zod": ["zod@4.4.3", "", {}, "sha512-ytENFjIJFl2UwYglde2jchW2Hwm4GJFLDiSXWdTrJQBIN9Fcyp7n4DhxJEiWNAJMV1/BqWfW/kkg71UDcHJyTQ=="],
 
     "accepts/mime-types": ["mime-types@3.0.2", "", { "dependencies": { "mime-db": "^1.54.0" } }, "sha512-Lbgzdk0h4juoQ9fCKXW4by0UJqj+nOOrI9MJ1sSj4nI8aI2eo1qmvQEie4VD1glsS250n15LsWsYtCugiStS5A=="],
 
