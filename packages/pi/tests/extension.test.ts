@@ -284,6 +284,79 @@ describe('prefactorExtension', () => {
     });
   });
 
+  test('never finishes a span before its start or a parent before its children when events share a millisecond', async () => {
+    const now = spyOn(Date, 'now').mockReturnValue(5_000);
+    try {
+      const { pi, emit } = createPi();
+      prefactorExtension({ apiUrl: 'https://prefactor.example', apiToken: 't', agentId: 'a' })(
+        pi as never
+      );
+      const ctx = createContext({ hasUI: false });
+      const reply = (content: unknown[], stopReason: string) => ({
+        type: 'message_end',
+        message: { ...assistantMessage(content, stopReason), timestamp: 5_000, durationMs: 0 },
+      });
+
+      await emit({ type: 'session_start', reason: 'startup' }, ctx);
+      await emit({ type: 'agent_start' }, ctx);
+      await emit(user('go'), ctx);
+      await emit(reply([{ type: 'toolCall', id: 'call-1', name: 'bash' }], 'toolUse'), ctx);
+      await emit(
+        { type: 'tool_execution_start', toolCallId: 'call-1', toolName: 'bash', args: {} },
+        ctx
+      );
+      await emit(
+        {
+          type: 'tool_execution_start',
+          toolCallId: 'call-2',
+          toolName: 'read',
+          args: {},
+          parentToolCallId: 'call-1',
+        },
+        ctx
+      );
+      await emit(
+        { type: 'tool_execution_end', toolCallId: 'call-2', result: {}, isError: false },
+        ctx
+      );
+      await emit(
+        { type: 'tool_execution_end', toolCallId: 'call-1', result: {}, isError: false },
+        ctx
+      );
+      await emit(reply([{ type: 'text', text: 'done' }], 'stop'), ctx);
+      await emit({ type: 'agent_end', messages: [] }, ctx);
+      await emit({ type: 'agent_start' }, ctx);
+      await emit(user('again'), ctx);
+      await emit(
+        { type: 'tool_execution_start', toolCallId: 'call-3', toolName: 'bash', args: {} },
+        ctx
+      );
+      await emit({ type: 'session_shutdown', reason: 'quit' }, ctx);
+    } finally {
+      now.mockRestore();
+    }
+
+    const created = spans();
+    const times = created.map((span, index) => {
+      const id = spanIdAt(index);
+      const finishedAt = span.finished_at ?? finishOf(id)?.timestamp;
+      return {
+        id,
+        parent: span.parent_span_id,
+        start: Date.parse(String(span.started_at)),
+        finish: Date.parse(String(finishedAt)),
+      };
+    });
+    expect(times.every((span) => Number.isFinite(span.finish))).toBe(true);
+    for (const span of times) {
+      expect(span.finish).toBeGreaterThanOrEqual(span.start);
+      const parent = times.find((candidate) => candidate.id === span.parent);
+      if (parent) {
+        expect(parent.finish).toBeGreaterThanOrEqual(span.finish);
+      }
+    }
+  });
+
   test('registers a span type for each tool pi has at session start, and a fallback', async () => {
     const { pi, emit } = createPi({
       tools: [

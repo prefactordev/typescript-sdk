@@ -76,7 +76,9 @@ type Usage = NonNullable<AssistantMessageLike['usage']>;
  *   `$agent:tool:<name>` tool executions. A tool called by another tool is a child of that tool.
  *
  * The assistant turn finishes at the end of the run, or when a steering message starts the next
- * user turn. Start times are kept strictly increasing, so Prefactor orders spans as they happened.
+ * user turn. Start and finish times come from one clock that never repeats or goes back, so
+ * Prefactor orders spans as they happened, no span finishes before it starts, and no parent
+ * finishes before its children.
  */
 export class SessionTracer {
   private sessionSpan: SpanHandle | null = null;
@@ -144,17 +146,18 @@ export class SessionTracer {
     this.endAssistantTurn();
     this.userTurns += 1;
 
+    // The turn finishes with its message, which starts after it.
     const turnAt = this.timestamp();
+    const messageAt = this.timestamp();
     const turn = this.session.recordSpan({
       schemaName: '$agent:user_turn',
       parent: this.sessionSpan,
       startedAt: turnAt,
-      finishedAt: turnAt,
+      finishedAt: messageAt,
       status: 'complete',
       payload: { _version: AGENT_SPAN_VERSION, turn: this.userTurns },
       resultPayload: { _version: AGENT_SPAN_VERSION },
     });
-    const messageAt = this.timestamp();
     this.session.recordSpan({
       schemaName: '$agent:user_message',
       parent: turn,
@@ -248,19 +251,26 @@ export class SessionTracer {
 
     const result = (event.result ?? {}) as { content?: unknown; details?: unknown };
     if (event.isError) {
-      this.session.finishSpan(span, 'failed', {
-        _version: AGENT_SPAN_VERSION,
-        error: this.output(errorText(result.content)),
-      });
+      this.session.finishSpan(
+        span,
+        'failed',
+        { _version: AGENT_SPAN_VERSION, error: this.output(errorText(result.content)) },
+        this.timestamp()
+      );
       return;
     }
-    this.session.finishSpan(span, 'complete', {
-      _version: AGENT_SPAN_VERSION,
-      result: {
-        ...(result.content !== undefined ? { content: this.output(result.content) } : {}),
-        ...(result.details !== undefined ? { details: this.output(result.details) } : {}),
+    this.session.finishSpan(
+      span,
+      'complete',
+      {
+        _version: AGENT_SPAN_VERSION,
+        result: {
+          ...(result.content !== undefined ? { content: this.output(result.content) } : {}),
+          ...(result.details !== undefined ? { details: this.output(result.details) } : {}),
+        },
       },
-    });
+      this.timestamp()
+    );
   }
 
   /**
@@ -269,16 +279,18 @@ export class SessionTracer {
    */
   sessionShutdown(reason: string): void {
     for (const span of this.toolSpans.values()) {
-      this.session.finishSpan(span, 'cancelled', {
-        _version: AGENT_SPAN_VERSION,
-        error: 'The session ended before the tool finished.',
-      });
+      this.session.finishSpan(
+        span,
+        'cancelled',
+        { _version: AGENT_SPAN_VERSION, error: 'The session ended before the tool finished.' },
+        this.timestamp()
+      );
     }
     this.toolSpans.clear();
     this.endAssistantTurn('cancelled');
 
     if (this.sessionSpan) {
-      this.session.finishSpan(this.sessionSpan, 'complete', { reason });
+      this.session.finishSpan(this.sessionSpan, 'complete', { reason }, this.timestamp());
       this.sessionSpan = null;
     }
   }
@@ -310,11 +322,16 @@ export class SessionTracer {
     }
     this.assistantTurn = null;
     const stopReason = turn.lastMessage?.stopReason;
-    this.session.finishSpan(turn.span, status ?? statusFromStopReason(stopReason), {
-      _version: AGENT_SPAN_VERSION,
-      ...(stopReason ? { stop_reason: stopReason } : {}),
-      ...(turn.usage ? { usage: canonicalUsage(turn.usage) } : {}),
-    });
+    this.session.finishSpan(
+      turn.span,
+      status ?? statusFromStopReason(stopReason),
+      {
+        _version: AGENT_SPAN_VERSION,
+        ...(stopReason ? { stop_reason: stopReason } : {}),
+        ...(turn.usage ? { usage: canonicalUsage(turn.usage) } : {}),
+      },
+      this.timestamp()
+    );
   }
 
   private recordContentBlock(parent: SpanHandle, block: unknown): void {

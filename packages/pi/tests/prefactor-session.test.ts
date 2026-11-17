@@ -90,6 +90,23 @@ describe('PrefactorSession', () => {
     });
   });
 
+  test('never sends a finish time earlier than the span start', async () => {
+    const requester = new FakeRequester();
+    const session = new PrefactorSession(OPTIONS, requester);
+
+    const span = session.startSpan({ schemaName: 'pi:session', payload: {}, startedAt: 2_000 });
+    session.finishSpan(span, 'complete', {}, 1_500);
+    const later = session.startSpan({ schemaName: 'pi:session', payload: {}, startedAt: 2_000 });
+    session.finishSpan(later, 'complete', {}, 2_500);
+    await session.flush();
+
+    const finishes = requester.requests.filter((request) => request.path.endsWith('/finish'));
+    expect(finishes.map((request) => request.body?.timestamp)).toEqual([
+      new Date(2_000).toISOString(),
+      new Date(2_500).toISOString(),
+    ]);
+  });
+
   test('reads the agent id from ping when none is given', async () => {
     const requester = new FakeRequester();
     const session = new PrefactorSession({ ...OPTIONS, agentId: undefined }, requester);
