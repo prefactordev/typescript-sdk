@@ -588,6 +588,31 @@ describe('prefactorExtension', () => {
     ).toThrow('spanTypeSchemas cannot redefine');
   });
 
+  test('logs a rejected onSessionStart promise and keeps recording', async () => {
+    const warn = spyOn(console, 'warn').mockImplementation(() => undefined);
+    try {
+      const { pi, emit } = createPi();
+      prefactorExtension({
+        apiUrl: 'https://prefactor.example',
+        apiToken: 't',
+        agentId: 'a',
+        onSessionStart: async () => {
+          await Promise.resolve();
+          throw new Error('setup failed');
+        },
+      })(pi as never);
+      const ctx = createContext({ hasUI: false });
+      await emit({ type: 'session_start', reason: 'startup' }, ctx);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      await emit({ type: 'session_shutdown', reason: 'quit' }, ctx);
+
+      expect(String(warn.mock.calls.at(-1)?.[0])).toContain('The onSessionStart callback failed');
+      expect(spans().map((span) => span.schema_name)).toEqual(['pi:session']);
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
   test('records custom spans, quality and alerts through the session recorder', async () => {
     const { pi, emit } = createPi();
     let recorder: PrefactorRecorder | undefined;

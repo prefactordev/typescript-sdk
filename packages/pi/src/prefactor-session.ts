@@ -9,6 +9,7 @@ import {
   HttpClient,
   type HttpRequester,
   type HttpTransportConfig,
+  serializeValue,
 } from '@prefactor/core';
 
 const logger = getLogger('pi');
@@ -218,10 +219,11 @@ export class PrefactorSession {
    * removes the recorded value for that name.
    */
   recordQuality(name: string, payload: Record<string, unknown> | null): void {
+    const sent = snapshot(payload);
     this.enqueue(async () => {
       const instanceId = await this.instanceId;
       if (instanceId) {
-        await this.instanceClient.recordQuality(instanceId, { name, payload });
+        await this.instanceClient.recordQuality(instanceId, { name, payload: sent });
       }
     });
   }
@@ -231,13 +233,14 @@ export class PrefactorSession {
    */
   raiseAlert(name: string, severity: AlertSeverity, payload: Record<string, unknown>): void {
     const raisedAt = new Date().toISOString();
+    const sent = snapshot(payload);
     this.enqueue(async () => {
       const instanceId = await this.instanceId;
       if (instanceId) {
         await this.instanceClient.raiseAlert(instanceId, {
           name,
           severity,
-          payload,
+          payload: sent,
           raised_at: raisedAt,
         });
       }
@@ -361,4 +364,12 @@ export class PrefactorSession {
       },
     };
   }
+}
+
+/**
+ * Deep-copies a payload when it is queued, so later changes the caller makes to the object are
+ * not sent.
+ */
+function snapshot<T extends Record<string, unknown> | null>(payload: T): T {
+  return serializeValue(payload, null) as T;
 }

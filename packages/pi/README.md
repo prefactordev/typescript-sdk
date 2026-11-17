@@ -119,7 +119,7 @@ try {
 | `qualitySchemas` | Quality schemas for quality recorded on the session's agent instance |
 | `alertSchemas` | Alert schemas for alerts raised on the session's agent instance |
 | `toolSchemas` | Span type details by tool name: `title`, `description`, `template`, `params_schema` (the tool's arguments), `result_schema` (the tool's result) and `data_risk`. The tool keeps its `$agent:tool:<name>` span type, so Prefactor still shows it as a tool call, and a tool listed here gets that span type even when it is added after the session starts. |
-| `onSessionStart` | Called with the session's recorder when the extension starts recording a session. See [Adding to the record](#adding-to-the-record). |
+| `onSessionStart` | Called with the session's recorder when the extension starts recording a session. It may be async; pi does not wait for it, and a rejection is logged. See [Adding to the record](#adding-to-the-record). |
 
 The session lifecycle depends on two calls:
 

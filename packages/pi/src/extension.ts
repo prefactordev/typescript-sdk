@@ -48,9 +48,10 @@ export interface PrefactorExtensionOptions extends PrefactorCredentialOptions, S
   agentVersionDescription?: string;
   /**
    * Called when the extension starts recording a session, with the recorder for that session.
-   * Not called when no Prefactor token is found.
+   * Not called when no Prefactor token is found. pi does not wait for a returned promise, and a
+   * rejection is logged.
    */
-  onSessionStart?: (recorder: PrefactorRecorder, ctx: ExtensionContext) => void;
+  onSessionStart?: (recorder: PrefactorRecorder, ctx: ExtensionContext) => void | Promise<void>;
 }
 
 let setupNoticeShown = false;
@@ -143,10 +144,12 @@ export function prefactorExtension(options: PrefactorExtensionOptions = {}): Ext
       const { recorder, stop } = createRecorder(session, tracer);
       recording = { credentials, session, tracer, stopRecorder: stop };
       if (options.onSessionStart) {
-        try {
-          options.onSessionStart(recorder, ctx);
-        } catch (error) {
+        const reportFailure = (error: unknown) =>
           logger.warn('The onSessionStart callback failed', error);
+        try {
+          void Promise.resolve(options.onSessionStart(recorder, ctx)).catch(reportFailure);
+        } catch (error) {
+          reportFailure(error);
         }
       }
     };
