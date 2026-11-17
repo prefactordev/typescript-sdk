@@ -1,48 +1,9 @@
 import { afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 import { VERSION as PI_VERSION } from '@earendil-works/pi-coding-agent';
 import { prefactorExtension, resetSetupNoticeForTests } from '../src/extension.js';
+import { createContext, createPi, isolateEnvironment } from './helpers.js';
 
-type Handler = (event: Record<string, unknown>, ctx: FakeContext) => unknown;
-type FakeContext = ReturnType<typeof createContext>;
 type SentRequest = { url: string; body: Record<string, unknown> | null };
-
-const ENV_KEYS = [
-  'PREFACTOR_API_URL',
-  'PREFACTOR_API_TOKEN',
-  'PREFACTOR_AGENT_ID',
-  'PI_CODING_AGENT_DIR',
-];
-
-function createPi() {
-  const handlers = new Map<string, Handler[]>();
-  const pi = {
-    on(event: string, handler: Handler) {
-      handlers.set(event, [...(handlers.get(event) ?? []), handler]);
-    },
-  };
-  const emit = async (event: Record<string, unknown> & { type: string }, ctx: FakeContext) => {
-    for (const handler of handlers.get(event.type) ?? []) {
-      await handler(event, ctx);
-    }
-  };
-  return { pi, emit };
-}
-
-function createContext(options: { hasUI: boolean }) {
-  const notifications: string[] = [];
-  return {
-    notifications,
-    hasUI: options.hasUI,
-    mode: options.hasUI ? 'tui' : 'print',
-    cwd: '/work/repo',
-    model: { provider: 'anthropic', id: 'claude-sonnet' },
-    sessionManager: { getSessionId: () => 'session-1' },
-    ui: { notify: (message: string) => notifications.push(message) },
-  };
-}
 
 function assistantMessage(content: unknown[], stopReason: string) {
   return {
@@ -66,18 +27,12 @@ function assistantMessage(content: unknown[], stopReason: string) {
 }
 
 describe('prefactorExtension', () => {
-  let dir: string;
-  let savedEnv: Record<string, string | undefined>;
+  let restoreEnvironment: () => void;
   let requests: SentRequest[];
   let fetchSpy: ReturnType<typeof spyOn>;
 
   beforeEach(() => {
-    savedEnv = Object.fromEntries(ENV_KEYS.map((key) => [key, process.env[key]]));
-    for (const key of ENV_KEYS) {
-      delete process.env[key];
-    }
-    dir = mkdtempSync(join(tmpdir(), 'prefactor-pi-extension-'));
-    process.env.PI_CODING_AGENT_DIR = dir;
+    restoreEnvironment = isolateEnvironment().restore;
     resetSetupNoticeForTests();
 
     requests = [];
@@ -97,14 +52,7 @@ describe('prefactorExtension', () => {
 
   afterEach(() => {
     fetchSpy.mockRestore();
-    rmSync(dir, { recursive: true, force: true });
-    for (const [key, value] of Object.entries(savedEnv)) {
-      if (value === undefined) {
-        delete process.env[key];
-      } else {
-        process.env[key] = value;
-      }
-    }
+    restoreEnvironment();
   });
 
   const spans = () =>
@@ -309,7 +257,9 @@ describe('prefactorExtension', () => {
 
     expect(requests).toEqual([]);
     expect(ctx.notifications).toHaveLength(1);
-    expect(ctx.notifications[0]).toContain('Prefactor is not set up');
+    expect(ctx.notifications[0]).toBe(
+      'Prefactor is not set up. Run /prefactor setup to connect pi to Prefactor.'
+    );
   });
 
   test('writes notices to stderr when pi has no UI', async () => {

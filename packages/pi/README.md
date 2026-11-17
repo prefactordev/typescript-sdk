@@ -16,25 +16,39 @@ To try it for one run without adding it to your settings:
 pi -e npm:@prefactor/pi
 ```
 
+## Connect pi to Prefactor
+
+Run this inside pi:
+
+```text
+/prefactor setup
+```
+
+It signs you in through Prefactor in the browser. pi shows the sign-in code, the link and a QR code, so you can approve on another device when pi runs over SSH or in a container. You then choose the Prefactor agent pi reports to, or create one named "pi", and the environment when the agent has more than one deployment. Setup creates an agent-deployment token for that agent and environment, checks it, and saves it to `~/.pi/agent/prefactor.json` with file mode `0600`.
+
+The account token from the sign-in is kept in memory only. Setup revokes it once the deployment token is saved, or when setup stops early. If revoking fails, setup keeps the deployment token and tells you to revoke the account token under Account settings in Prefactor.
+
+If the server does not offer browser sign-in, or you choose to, setup asks you to paste an agent-deployment token instead. The token is visible on screen while you paste it.
+
+| Command | Does |
+| --- | --- |
+| `/prefactor setup` | Connects pi to Prefactor. Asks first when credentials already exist. |
+| `/prefactor status` | Shows where the credentials come from, the API URL, the account and agent, and whether the last request to Prefactor succeeded. |
+| `/prefactor logout` | Deletes the credentials file. Credentials from code or the environment are not affected. |
+
+The commands need dialogs, so they work in interactive and RPC modes. In print and JSON modes, use the environment variables below.
+
 ## Credentials
 
 The extension sends spans with a Prefactor agent-deployment token. When a session starts, it reads credentials from the first of these sources that supplies a token:
 
 1. Options passed to `prefactorExtension()` in code.
 2. The environment variables `PREFACTOR_API_URL`, `PREFACTOR_API_TOKEN` and `PREFACTOR_AGENT_ID`.
-3. The credentials file `~/.pi/agent/prefactor.json`. It follows pi's `PI_CODING_AGENT_DIR` setting when that is set.
+3. The credentials file written by `/prefactor setup`, `~/.pi/agent/prefactor.json`. It follows pi's `PI_CODING_AGENT_DIR` setting when that is set.
 
 The agent id comes from the same source as the token. When that source has no agent id, the extension reads it from the token with `GET /api/v1/ping`. The API URL comes from the token's source or a later one, and defaults to `https://app.prefactorai.com`.
 
-The credentials file holds:
-
-```json
-{
-  "api_url": "https://app.prefactorai.com",
-  "api_token": "<agent-deployment token>",
-  "agent_id": "<agent id>"
-}
-```
+The credentials file holds `api_url`, `api_token` (the deployment token), `agent_id`, `agent_name`, `environment_id`, `account_id`, `account_name` and `created_at`. It never holds an account token.
 
 When no token is found, the extension records nothing and tells you once how to set Prefactor up, so pi keeps working. In interactive and RPC modes the notice appears in pi. In print and JSON modes it is written to stderr.
 

@@ -1,5 +1,5 @@
-import { readFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { chmod, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
+import { dirname, join } from 'node:path';
 import { getAgentDir } from '@earendil-works/pi-coding-agent';
 
 export const DEFAULT_API_URL = 'https://app.prefactorai.com';
@@ -37,6 +37,7 @@ export interface CredentialsFile {
   api_url?: string;
   api_token?: string;
   agent_id?: string;
+  agent_name?: string;
   environment_id?: string;
   account_id?: string;
   account_name?: string;
@@ -80,6 +81,40 @@ export async function readCredentialsFile(
     throw new Error(`${path} does not hold a JSON object`);
   }
   return parsed as CredentialsFile;
+}
+
+/**
+ * Writes the credentials file with file mode `0600`, replacing any existing file.
+ */
+export async function writeCredentialsFile(
+  contents: CredentialsFile,
+  path: string = getCredentialsFilePath()
+): Promise<void> {
+  await mkdir(dirname(path), { recursive: true });
+  const temporaryPath = `${path}.${process.pid}.tmp`;
+  await writeFile(temporaryPath, `${JSON.stringify(contents, null, 2)}\n`, { mode: 0o600 });
+  // The mode passed to writeFile is masked by the umask, so set it explicitly.
+  await chmod(temporaryPath, 0o600);
+  await rename(temporaryPath, path);
+}
+
+/**
+ * Deletes the credentials file.
+ *
+ * @returns Whether a file was deleted.
+ */
+export async function deleteCredentialsFile(
+  path: string = getCredentialsFilePath()
+): Promise<boolean> {
+  try {
+    await rm(path);
+    return true;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+      return false;
+    }
+    throw error;
+  }
 }
 
 /**
