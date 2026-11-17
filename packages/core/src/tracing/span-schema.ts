@@ -46,6 +46,15 @@ export interface QualitySchema {
 }
 
 /**
+ * Named schema definition for an alert.
+ *
+ * Each entry in `AgentSchemaVersion.alert_schemas` names an alert that can be
+ * raised on an agent instance, with the JSON schema its payload must match.
+ * It has the same fields as {@link QualitySchema}.
+ */
+export type AlertSchema = QualitySchema;
+
+/**
  * Agent schema version payload sent during agent instance registration.
  * Contains the set of span type schemas that define this agent's tracing contract.
  */
@@ -56,4 +65,6 @@ export interface AgentSchemaVersion {
   span_type_schemas: SpanTypeSchema[];
   /** Named quality schemas for instance evaluations. */
   quality_schemas?: QualitySchema[];
+  /** Named alert schemas for alerts raised on instances. */
+  alert_schemas?: AlertSchema[];
 }

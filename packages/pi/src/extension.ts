@@ -12,7 +12,13 @@ import {
   resolveCredentials,
 } from './credentials.js';
 import { createHttpClient, PrefactorSession } from './prefactor-session.js';
-import { buildAgentSchemaVersion } from './schema.js';
+import { createRecorder, type PrefactorRecorder } from './recorder.js';
+import {
+  buildAgentSchemaVersion,
+  isReservedSpanType,
+  registeredToolNames,
+  type SchemaExtensions,
+} from './schema.js';
 import {
   type AssistantMessageLike,
   SessionTracer,
@@ -22,20 +28,24 @@ import { PACKAGE_NAME, PACKAGE_VERSION } from './version.js';
 
 const logger = getLogger('pi');
 
-const AGENT_NAME = 'pi';
-const AGENT_DESCRIPTION = 'pi coding agent sessions recorded by @prefactor/pi';
 const SDK_HEADER_ENTRY = `${PACKAGE_NAME}@${PACKAGE_VERSION} @earendil-works/pi-coding-agent@${PI_VERSION}`;
 
 /**
  * Options for {@link prefactorExtension}. Each credential falls back to the `PREFACTOR_*`
  * environment variables, then to the credentials file in pi's agent directory.
  */
-export interface PrefactorExtensionOptions extends PrefactorCredentialOptions {
+export interface PrefactorExtensionOptions extends PrefactorCredentialOptions, SchemaExtensions {
   /**
    * Agent version recorded for each session, for agents built on pi's SDK. Defaults to the
    * version of the pi framework, which is also what the `pi` command uses.
    */
   agentVersion?: string;
+  /**
+   * Called when the extension starts recording a session, with the recorder for that session.
+   * Not called when no Prefactor token is found. pi does not wait for a returned promise, and a
+   * rejection is logged.
+   */
+  onSessionStart?: (recorder: PrefactorRecorder, ctx: ExtensionContext) => void | Promise<void>;
 }
 
 let setupNoticeShown = false;
@@ -44,16 +54,39 @@ let setupNoticeShown = false;
  * Creates a pi extension that records each pi session in Prefactor as one agent instance, as a
  * conversation of user turns, assistant turns, LLM calls and tool executions.
  *
+ * Agents built on pi's SDK can add span types, quality schemas and alert schemas through the
+ * options, and record custom spans, quality and alerts through the recorder that
+ * `onSessionStart` receives.
+ *
  * When no Prefactor token is found, the extension records nothing and tells the user once how to
  * set Prefactor up, so pi keeps working.
  */
 export function prefactorExtension(options: PrefactorExtensionOptions = {}): ExtensionFactory {
+  const reserved = (options.spanTypeSchemas ?? []).filter((schema) =>
+    isReservedSpanType(schema.name)
+  );
+  if (reserved.length > 0) {
+    throw new Error(
+      `spanTypeSchemas cannot redefine the extension's span types: ${reserved
+        .map((schema) => schema.name)
+        .join(', ')}. Use toolSchemas to describe a tool's span type.`
+    );
+  }
+
   return (pi: ExtensionAPI) => {
     let recording: {
       credentials: ResolvedCredentials;
       session: PrefactorSession;
       tracer: SessionTracer;
+      stopRecorder: () => void;
     } | null = null;
+
+    const endRecording = (): typeof recording => {
+      const current = recording;
+      recording = null;
+      current?.stopRecorder();
+      return current;
+    };
 
     const guard =
       <T extends unknown[]>(name: string, handler: (...args: T) => void | Promise<void>) =>
@@ -78,12 +111,8 @@ export function prefactorExtension(options: PrefactorExtensionOptions = {}): Ext
         apiUrl: credentials.apiUrl,
         apiToken: credentials.apiToken,
         agentId: credentials.agentId,
-        agentVersion: {
-          external_identifier: options.agentVersion ?? PI_VERSION,
-          name: AGENT_NAME,
-          description: AGENT_DESCRIPTION,
-        },
-        agentSchemaVersion: buildAgentSchemaVersion(tools),
+        agentVersion: { external_identifier: options.agentVersion ?? PI_VERSION },
+        agentSchemaVersion: buildAgentSchemaVersion(tools, options),
         sdkHeaderEntry: SDK_HEADER_ENTRY,
         onError: (error) =>
           notify(ctx, `Prefactor could not record this session: ${describe(error)}`),
@@ -100,13 +129,23 @@ export function prefactorExtension(options: PrefactorExtensionOptions = {}): Ext
         reason,
         provider: ctx.model?.provider,
         model: ctx.model?.id,
-        toolNames: tools.map((tool) => tool.name),
+        toolNames: registeredToolNames(tools, options.toolSchemas),
       });
-      recording = { credentials, session, tracer };
+      const { recorder, stop } = createRecorder(session, tracer);
+      recording = { credentials, session, tracer, stopRecorder: stop };
+      if (options.onSessionStart) {
+        const reportFailure = (error: unknown) =>
+          logger.warn('The onSessionStart callback failed', error);
+        try {
+          void Promise.resolve(options.onSessionStart(recorder, ctx)).catch(reportFailure);
+        } catch (error) {
+          reportFailure(error);
+        }
+      }
     };
 
     const replaceRecording = async (ctx: ExtensionContext): Promise<void> => {
-      recording = null;
+      endRecording();
       const credentials = await resolveCredentials(options);
       if (credentials) {
         startRecording(ctx, 'setup', credentials);
@@ -190,8 +229,7 @@ export function prefactorExtension(options: PrefactorExtensionOptions = {}): Ext
     pi.on(
       'session_shutdown',
       guard('session_shutdown', async (event) => {
-        const current = recording;
-        recording = null;
+        const current = endRecording();
         current?.tracer.sessionShutdown(event.reason);
         await current?.session.finish();
       })

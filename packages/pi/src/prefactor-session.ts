@@ -3,11 +3,13 @@ import {
   type AgentInstanceRegisterPayload,
   type AgentSchemaVersion,
   AgentSpanClient,
+  type AlertSeverity,
   buildRuntimeEnvironment,
   getLogger,
   HttpClient,
   type HttpRequester,
   type HttpTransportConfig,
+  serializeValue,
 } from '@prefactor/core';
 
 const logger = getLogger('pi');
@@ -35,7 +37,8 @@ export interface PrefactorSessionOptions {
   apiToken: string;
   /** Prefactor agent id. Read from the token with `GET /api/v1/ping` when omitted. */
   agentId?: string;
-  agentVersion: { external_identifier: string; name: string; description: string };
+  /** The agent version, identified by its external identifier. */
+  agentVersion: { external_identifier: string };
   agentSchemaVersion: AgentSchemaVersion;
   /** Space-separated `package@version` entries sent in the SDK header and runtime environment. */
   sdkHeaderEntry: string;
@@ -213,6 +216,39 @@ export class PrefactorSession {
   }
 
   /**
+   * Records a quality payload on the agent instance for a named quality schema. A null payload
+   * removes the recorded value for that name.
+   */
+  recordQuality(name: string, payload: Record<string, unknown> | null): void {
+    const sent = snapshot(payload);
+    this.enqueue(async () => {
+      const instanceId = await this.instanceId;
+      if (instanceId) {
+        await this.instanceClient.recordQuality(instanceId, { name, payload: sent });
+      }
+    });
+  }
+
+  /**
+   * Raises a named alert on the agent instance, timestamped now.
+   */
+  raiseAlert(name: string, severity: AlertSeverity, payload: Record<string, unknown>): void {
+    const raisedAt = new Date().toISOString();
+    const sent = snapshot(payload);
+    this.enqueue(async () => {
+      const instanceId = await this.instanceId;
+      if (instanceId) {
+        await this.instanceClient.raiseAlert(instanceId, {
+          name,
+          severity,
+          payload: sent,
+          raised_at: raisedAt,
+        });
+      }
+    });
+  }
+
+  /**
    * Finishes the agent instance after every queued request, and waits for it to be sent, but no
    * longer than the shutdown timeout. Requests still queued after the timeout keep running in the
    * background. Calling it more than once has no further effect.
@@ -329,4 +365,12 @@ export class PrefactorSession {
       },
     };
   }
+}
+
+/**
+ * Deep-copies a payload when it is queued, so later changes the caller makes to the object are
+ * not sent.
+ */
+function snapshot<T extends Record<string, unknown> | null>(payload: T): T {
+  return serializeValue(payload, null) as T;
 }

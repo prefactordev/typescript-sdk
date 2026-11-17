@@ -35,7 +35,7 @@ const OPTIONS: PrefactorSessionOptions = {
   apiUrl: 'https://prefactor.example',
   apiToken: 'token',
   agentId: 'agent-1',
-  agentVersion: { external_identifier: '1.5.2', name: 'pi', description: 'pi' },
+  agentVersion: { external_identifier: '1.5.2' },
   agentSchemaVersion: { external_identifier: 'schema', span_type_schemas: [] },
   sdkHeaderEntry: '@prefactor/pi@0.0.0',
 };
@@ -104,6 +104,26 @@ describe('PrefactorSession', () => {
     expect(finishes.map((request) => request.body?.timestamp)).toEqual([
       new Date(2_000).toISOString(),
       new Date(2_500).toISOString(),
+    ]);
+  });
+
+  test('sends quality and alert payloads as they were when queued', async () => {
+    const requester = new FakeRequester();
+    const session = new PrefactorSession(OPTIONS, requester);
+
+    const payload = { sources_failed: 1, detail: { source: 'reddit' } };
+    session.recordQuality('run_quality', payload);
+    session.raiseAlert('monitor_broken', 'error', payload);
+    session.recordQuality('run_quality', null);
+    payload.sources_failed = 0;
+    payload.detail.source = 'x';
+    await session.flush();
+
+    const bodies = requester.requests.slice(2).map((request) => request.body);
+    expect(bodies).toMatchObject([
+      { name: 'run_quality', payload: { sources_failed: 1, detail: { source: 'reddit' } } },
+      { name: 'monitor_broken', payload: { sources_failed: 1, detail: { source: 'reddit' } } },
+      { name: 'run_quality', payload: null },
     ]);
   });
 

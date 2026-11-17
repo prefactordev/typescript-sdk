@@ -192,6 +192,35 @@ describe('HTTP endpoint clients', () => {
     });
   });
 
+  test('agent instance client raise_alert posts the alert for the instance', async () => {
+    const calls: RequestCall[] = [];
+    const httpClient = {
+      request: async <TResponse>(path: string, options: HttpRequestOptions = {}) => {
+        calls.push({ path, options });
+        return { details: { id: 'alert-1' } } as TResponse;
+      },
+    };
+
+    const client = new AgentInstanceClient(httpClient);
+
+    const response = await client.raiseAlert('agent-instance-1', {
+      name: 'monitor_broken',
+      severity: 'error',
+      payload: { reason: 'source failed' },
+    });
+
+    expect(response.details.id).toBe('alert-1');
+    expect(calls[0].path).toBe('/api/v1/alerts/raise');
+    expect(calls[0].options.method).toBe('POST');
+    expect(calls[0].options.body).toEqual({
+      agent_instance_id: 'agent-instance-1',
+      name: 'monitor_broken',
+      severity: 'error',
+      payload: { reason: 'source failed' },
+      idempotency_key: expect.stringMatching(UUID_V4_REGEX),
+    });
+  });
+
   test('agent span client posts create and finish to expected endpoints', async () => {
     const calls: RequestCall[] = [];
     const httpClient = {

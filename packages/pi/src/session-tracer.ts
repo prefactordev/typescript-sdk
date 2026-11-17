@@ -92,6 +92,7 @@ export class SessionTracer {
   private toolNames = new Set<string>();
   private lastTimestamp = 0;
   private readonly toolSpans = new Map<string, SpanHandle>();
+  private readonly customSpans = new Set<SpanHandle>();
 
   constructor(
     private readonly session: PrefactorSession,
@@ -274,10 +275,54 @@ export class SessionTracer {
   }
 
   /**
-   * Finishes every open span, then the session span. Open tools and the open assistant turn are
-   * cancelled.
+   * Starts a span of one of the developer's span types. Its parent is `parent`, else the span of
+   * the tool call `toolCallId` while that call runs, else the open assistant turn, else the
+   * session span.
+   */
+  startCustomSpan(options: {
+    schemaName: string;
+    payload: Record<string, unknown>;
+    parent?: SpanHandle;
+    toolCallId?: string;
+  }): SpanHandle {
+    const span = this.session.startSpan({
+      schemaName: options.schemaName,
+      parent:
+        options.parent ??
+        (options.toolCallId ? this.toolSpans.get(options.toolCallId) : undefined) ??
+        this.assistantTurn?.span ??
+        this.sessionSpan,
+      startedAt: this.timestamp(),
+      payload: this.input(options.payload) as Record<string, unknown>,
+    });
+    this.customSpans.add(span);
+    return span;
+  }
+
+  /**
+   * Finishes a span from {@link startCustomSpan}. A span already finished is left as it is. When
+   * the result cannot be serialized, this throws and the span stays open, so a later call or
+   * shutdown can still finish it.
+   */
+  finishCustomSpan(span: SpanHandle, status: SpanStatus, result: Record<string, unknown>): void {
+    if (!this.customSpans.has(span)) {
+      return;
+    }
+    const resultPayload = this.output(result) as Record<string, unknown>;
+    this.session.finishSpan(span, status, resultPayload, this.timestamp());
+    this.customSpans.delete(span);
+  }
+
+  /**
+   * Finishes every open span, then the session span. Open custom spans, tools and the open
+   * assistant turn are cancelled.
    */
   sessionShutdown(reason: string): void {
+    // Newest first, so a custom span nested in another, which starts after it, finishes first.
+    for (const span of [...this.customSpans].reverse()) {
+      this.session.finishSpan(span, 'cancelled', {}, this.timestamp());
+    }
+    this.customSpans.clear();
     // Newest first, so a nested tool, which starts after the tool that called it, finishes first.
     for (const span of [...this.toolSpans.values()].reverse()) {
       this.session.finishSpan(
