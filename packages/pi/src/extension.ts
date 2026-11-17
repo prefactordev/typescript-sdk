@@ -26,7 +26,13 @@ const SDK_HEADER_ENTRY = `${PACKAGE_NAME}@${PACKAGE_VERSION} @earendil-works/pi-
  * Options for {@link prefactorExtension}. Each credential falls back to the `PREFACTOR_*`
  * environment variables, then to the credentials file in pi's agent directory.
  */
-export interface PrefactorExtensionOptions extends PrefactorCredentialOptions {}
+export interface PrefactorExtensionOptions extends PrefactorCredentialOptions {
+  /**
+   * Agent version recorded for each session, for agents built on pi's SDK. Defaults to the
+   * version of the pi framework, which is also what the `pi` command uses.
+   */
+  agentVersion?: string;
+}
 
 let setupNoticeShown = false;
 
@@ -68,7 +74,7 @@ export function prefactorExtension(options: PrefactorExtensionOptions = {}): Ext
         apiToken: credentials.apiToken,
         agentId: credentials.agentId,
         agentVersion: {
-          external_identifier: PI_VERSION,
+          external_identifier: options.agentVersion ?? PI_VERSION,
           name: AGENT_NAME,
           description: AGENT_DESCRIPTION,
         },

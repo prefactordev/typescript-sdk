@@ -22,7 +22,8 @@
     "example:livekit": "bun examples/livekit/simple-session.ts",
     "example:ai": "bun examples/ai-sdk/simple-agent.ts",
     "example:ai-schema": "bun examples/ai-sdk/custom-schema.ts",
-    "example:pi": "bun examples/pi/print-mode.ts"
+    "example:pi": "bun examples/pi/print-mode.ts",
+    "example:pi-sdk": "bun examples/pi/sdk-agent.ts"
   },
   "devDependencies": {
     "@ai-sdk/anthropic": "^3.0.58",
@@ -30,14 +31,16 @@
     "@biomejs/biome": "2.3.11",
     "@changesets/changelog-github": "^0.7.0",
     "@changesets/cli": "^2.31.0",
+    "@earendil-works/pi-coding-agent": "1.5.2",
     "@langchain/anthropic": "^1.3.23",
     "@langchain/core": "^1.1.32",
     "@livekit/agents": "^1.6.2",
     "@prefactor/ai": "workspace:*",
     "@prefactor/claude": "workspace:*",
     "@prefactor/core": "workspace:*",
-    "@prefactor/livekit": "workspace:*",
     "@prefactor/langchain": "workspace:*",
+    "@prefactor/livekit": "workspace:*",
+    "@prefactor/pi": "workspace:*",
     "@types/bun": "1.3.14",
     "@types/node": "^20.19.37",
     "ai": "^6.0.116",

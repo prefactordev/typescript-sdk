@@ -52,6 +52,75 @@ The credentials file holds `api_url`, `api_token` (the deployment token), `agent
 
 When no token is found, the extension records nothing and tells you once how to set Prefactor up, so pi keeps working. In interactive and RPC modes the notice appears in pi. In print and JSON modes it is written to stderr.
 
+## Agents built on pi's SDK
+
+Agents built with `@earendil-works/pi-coding-agent` load the same extension in code through `extensionFactories`, and each session is recorded as one agent instance. Install the package alongside pi:
+
+```bash
+npm install @prefactor/pi @earendil-works/pi-coding-agent
+```
+
+```typescript
+import {
+  type CreateAgentSessionRuntimeFactory,
+  createAgentSessionFromServices,
+  createAgentSessionRuntime,
+  createAgentSessionServices,
+  getAgentDir,
+  SessionManager,
+} from '@earendil-works/pi-coding-agent';
+import { prefactorExtension } from '@prefactor/pi';
+
+const createRuntime: CreateAgentSessionRuntimeFactory = async ({ cwd, sessionManager, sessionStartEvent }) => {
+  const services = await createAgentSessionServices({
+    cwd,
+    resourceLoaderOptions: {
+      extensionFactories: [
+        prefactorExtension({
+          apiUrl: 'https://app.prefactorai.com',
+          apiToken: process.env.MY_PREFACTOR_TOKEN,
+          agentVersion: '2.3.0',
+        }),
+      ],
+    },
+  });
+  return {
+    ...(await createAgentSessionFromServices({ services, sessionManager, sessionStartEvent })),
+    services,
+    diagnostics: services.diagnostics,
+  };
+};
+
+const runtime = await createAgentSessionRuntime(createRuntime, {
+  cwd: process.cwd(),
+  agentDir: getAgentDir(),
+  sessionManager: SessionManager.inMemory(),
+});
+
+try {
+  await runtime.session.bindExtensions({});
+  await runtime.session.prompt('What files are in the current directory?');
+} finally {
+  await runtime.dispose();
+}
+```
+
+`prefactorExtension()` takes these options. Each credential falls back to its environment variable, then to the credentials file, as described under [Credentials](#credentials).
+
+| Option | Meaning |
+| --- | --- |
+| `apiUrl` | Prefactor API URL |
+| `apiToken` | Agent-deployment token |
+| `agentId` | Prefactor agent id, read from the token when omitted |
+| `agentVersion` | Agent version recorded for each session. Defaults to the version of the pi framework. |
+
+The session lifecycle depends on two calls:
+
+- `session.bindExtensions()` emits `session_start`, which starts the agent instance. Nothing is recorded until it is called.
+- `AgentSessionRuntime.dispose()` emits `session_shutdown`, which finishes the agent instance after the remaining spans are sent. `AgentSession.dispose()` on its own does not emit `session_shutdown`, so with `createAgentSession()` the agent instance stays active in Prefactor. Use `AgentSessionRuntime` as above when the instance should be finished.
+
+The `pi` command always records pi's release version, because it loads the extension without options.
+
 ## What gets recorded
 
 | Span type | Covers | Recorded |
@@ -64,7 +133,7 @@ When no token is found, the extension records nothing and tells you once how to 
 
 LLM responses and tool calls are children of their agent run. A tool call made by another tool, such as a codemode script, is a child of that tool's span.
 
-The agent version is pi's release version. The working directory on each session lets you tell apart sessions from different repositories that report to the same agent.
+The agent version is pi's release version, or `agentVersion` for agents built on pi's SDK. The working directory on each session lets you tell apart sessions from different repositories that report to the same agent.
 
 Long strings are truncated to `PREFACTOR_MAX_INPUT_LENGTH` and `PREFACTOR_MAX_OUTPUT_LENGTH` characters (10,000 by default).
 
@@ -74,9 +143,10 @@ The session appears in Prefactor as soon as it starts. Each span is sent as soon
 
 Pressing Ctrl+C in print, JSON or RPC mode ends pi without running `session_shutdown`. Spans that had already finished are recorded. The open agent run, the session span and the agent instance stay active in Prefactor.
 
-## Example
+## Examples
 
-[`examples/pi/print-mode.ts`](../../examples/pi/print-mode.ts) runs `pi` once in print mode with the extension loaded from this repository.
+- [`examples/pi/print-mode.ts`](../../examples/pi/print-mode.ts) runs `pi` once in print mode with the extension loaded from this repository.
+- [`examples/pi/sdk-agent.ts`](../../examples/pi/sdk-agent.ts) builds an agent on pi's SDK and records its session.
 
 ## Requirements
 

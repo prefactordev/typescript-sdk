@@ -263,6 +263,22 @@ describe('prefactorExtension', () => {
     expect(requests).toEqual([]);
   });
 
+  test('records the agent version given in the options instead of the pi version', async () => {
+    const { pi, emit } = createPi();
+    prefactorExtension({
+      apiUrl: 'https://prefactor.example',
+      apiToken: 'token',
+      agentId: 'agent-1',
+      agentVersion: '2.3.0',
+    })(pi as never);
+    const ctx = createContext({ hasUI: false });
+
+    await emit({ type: 'session_start', reason: 'startup' }, ctx);
+    await emit({ type: 'session_shutdown', reason: 'quit' }, ctx);
+
+    expect(requests[0].body).toMatchObject({ agent_version: { external_identifier: '2.3.0' } });
+  });
+
   test('records nothing and shows the setup notice once when no token is found', async () => {
     const ctx = createContext({ hasUI: true });
     for (let index = 0; index < 2; index += 1) {
