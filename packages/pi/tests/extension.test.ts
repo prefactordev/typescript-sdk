@@ -357,6 +357,52 @@ describe('prefactorExtension', () => {
     }
   });
 
+  test('cancels open nested tools before the tools that called them at shutdown', async () => {
+    const { pi, emit } = createPi();
+    prefactorExtension({ apiUrl: 'https://prefactor.example', apiToken: 't', agentId: 'a' })(
+      pi as never
+    );
+    const ctx = createContext({ hasUI: false });
+
+    await emit({ type: 'session_start', reason: 'startup' }, ctx);
+    await emit({ type: 'agent_start' }, ctx);
+    await emit(user('go'), ctx);
+    await emit(
+      {
+        type: 'message_end',
+        message: assistantMessage([{ type: 'toolCall', id: 'call-1', name: 'bash' }], 'toolUse'),
+      },
+      ctx
+    );
+    await emit(
+      { type: 'tool_execution_start', toolCallId: 'call-1', toolName: 'bash', args: {} },
+      ctx
+    );
+    await emit(
+      {
+        type: 'tool_execution_start',
+        toolCallId: 'call-2',
+        toolName: 'read',
+        args: {},
+        parentToolCallId: 'call-1',
+      },
+      ctx
+    );
+    await emit({ type: 'session_shutdown', reason: 'quit' }, ctx);
+
+    const created = spans();
+    const parentIndex = created.findIndex((span) => span.schema_name === '$agent:tool:bash');
+    const childIndex = created.findIndex((span) => span.schema_name === '$agent:tool:read');
+    expect(created[childIndex].parent_span_id).toBe(spanIdAt(parentIndex));
+    const parent = finishOf(spanIdAt(parentIndex));
+    const child = finishOf(spanIdAt(childIndex));
+    expect(parent).toMatchObject({ status: 'cancelled' });
+    expect(child).toMatchObject({ status: 'cancelled' });
+    expect(Date.parse(String(parent?.timestamp))).toBeGreaterThan(
+      Date.parse(String(child?.timestamp))
+    );
+  });
+
   test('registers a span type for each tool pi has at session start, and a fallback', async () => {
     const { pi, emit } = createPi({
       tools: [

@@ -278,7 +278,8 @@ export class SessionTracer {
    * cancelled.
    */
   sessionShutdown(reason: string): void {
-    for (const span of this.toolSpans.values()) {
+    // Newest first, so a nested tool, which starts after the tool that called it, finishes first.
+    for (const span of [...this.toolSpans.values()].reverse()) {
       this.session.finishSpan(
         span,
         'cancelled',
