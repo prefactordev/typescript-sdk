@@ -112,9 +112,7 @@ try {
 | `apiUrl` | Prefactor API URL |
 | `apiToken` | Agent-deployment token |
 | `agentId` | Prefactor agent id, read from the token when omitted |
-| `agentVersion` | Agent version recorded for each session. Defaults to the version of the pi framework. |
-| `agentVersionName` | Name of the agent version. Defaults to `pi`. |
-| `agentVersionDescription` | Description of the agent version. Defaults to a description of the pi coding agent. |
+| `agentVersion` | Identifies the agent version recorded for each session. Defaults to the version of the pi framework. Prefactor identifies agent versions by this value alone; the extension sends no name or description for them. |
 | `spanTypeSchemas` | Span types for the agent's own spans, added to the schema version the extension registers. They cannot redefine `pi:session` or the `$agent:*` span types. |
 | `qualitySchemas` | Quality schemas for quality recorded on the session's agent instance |
 | `alertSchemas` | Alert schemas for alerts raised on the session's agent instance |
@@ -139,8 +137,6 @@ let recorder: PrefactorRecorder | undefined;
 
 const extension = prefactorExtension({
   agentVersion: '2.3.0',
-  agentVersionName: 'signal monitor',
-  agentVersionDescription: 'Polls sources and posts signals to Slack',
   spanTypeSchemas: [
     {
       name: 'signal:poll_source',

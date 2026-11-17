@@ -37,7 +37,8 @@ export interface PrefactorSessionOptions {
   apiToken: string;
   /** Prefactor agent id. Read from the token with `GET /api/v1/ping` when omitted. */
   agentId?: string;
-  agentVersion: { external_identifier: string; name: string; description: string };
+  /** The agent version, identified by its external identifier. */
+  agentVersion: { external_identifier: string };
   agentSchemaVersion: AgentSchemaVersion;
   /** Space-separated `package@version` entries sent in the SDK header and runtime environment. */
   sdkHeaderEntry: string;

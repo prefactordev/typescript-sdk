@@ -147,7 +147,7 @@ describe('prefactorExtension', () => {
     expect(requests[0].url).toBe('https://prefactor.example/api/v1/agent_instance/register');
     expect(requests[0].body).toMatchObject({
       agent_id: 'agent-1',
-      agent_version: { external_identifier: PI_VERSION, name: 'pi' },
+      agent_version: { external_identifier: PI_VERSION },
     });
     expect(requests.at(-1)?.url).toMatch(/\/api\/v1\/agent_instance\/id-1\/finish$/);
 
@@ -503,7 +503,7 @@ describe('prefactorExtension', () => {
     });
   });
 
-  test('adds the developer schemas, tool span details and agent version details to the registration', async () => {
+  test('adds the developer schemas and tool span details to the registration', async () => {
     const { pi, emit } = createPi({ tools: [{ name: 'bash', description: 'Run a command' }] });
     const qualitySchema = { name: 'app:run_quality', schema: { type: 'object' } };
     const alertSchema = { name: 'app:broken', schema: { type: 'object' } };
@@ -511,8 +511,7 @@ describe('prefactorExtension', () => {
       apiUrl: 'https://prefactor.example',
       apiToken: 't',
       agentId: 'a',
-      agentVersionName: 'signal monitor',
-      agentVersionDescription: 'Watches sources',
+      agentVersion: '2.3.0',
       spanTypeSchemas: [{ name: 'app:poll', params_schema: { type: 'object' } }],
       qualitySchemas: [qualitySchema],
       alertSchemas: [alertSchema],
@@ -547,10 +546,9 @@ describe('prefactorExtension', () => {
         alert_schemas: unknown[];
       };
     };
-    expect(registration.agent_version).toMatchObject({
-      name: 'signal monitor',
-      description: 'Watches sources',
-    });
+    expect(registration.agent_version.external_identifier).toBe('2.3.0');
+    expect(registration.agent_version).not.toHaveProperty('name');
+    expect(registration.agent_version).not.toHaveProperty('description');
     const schemas = registration.agent_schema_version.span_type_schemas;
     const byName = (name: string) => schemas.find((schema) => schema.name === name);
     expect(byName('$agent:tool:bash')?.template).toBe('shell');

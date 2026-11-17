@@ -28,8 +28,6 @@ import { PACKAGE_NAME, PACKAGE_VERSION } from './version.js';
 
 const logger = getLogger('pi');
 
-const AGENT_NAME = 'pi';
-const AGENT_DESCRIPTION = 'pi coding agent sessions recorded by @prefactor/pi';
 const SDK_HEADER_ENTRY = `${PACKAGE_NAME}@${PACKAGE_VERSION} @earendil-works/pi-coding-agent@${PI_VERSION}`;
 
 /**
@@ -42,10 +40,6 @@ export interface PrefactorExtensionOptions extends PrefactorCredentialOptions, S
    * version of the pi framework, which is also what the `pi` command uses.
    */
   agentVersion?: string;
-  /** Name of the agent version. Defaults to `pi`. */
-  agentVersionName?: string;
-  /** Description of the agent version. Defaults to a description of the pi coding agent. */
-  agentVersionDescription?: string;
   /**
    * Called when the extension starts recording a session, with the recorder for that session.
    * Not called when no Prefactor token is found. pi does not wait for a returned promise, and a
@@ -117,11 +111,7 @@ export function prefactorExtension(options: PrefactorExtensionOptions = {}): Ext
         apiUrl: credentials.apiUrl,
         apiToken: credentials.apiToken,
         agentId: credentials.agentId,
-        agentVersion: {
-          external_identifier: options.agentVersion ?? PI_VERSION,
-          name: options.agentVersionName ?? AGENT_NAME,
-          description: options.agentVersionDescription ?? AGENT_DESCRIPTION,
-        },
+        agentVersion: { external_identifier: options.agentVersion ?? PI_VERSION },
         agentSchemaVersion: buildAgentSchemaVersion(tools, options),
         sdkHeaderEntry: SDK_HEADER_ENTRY,
         onError: (error) =>

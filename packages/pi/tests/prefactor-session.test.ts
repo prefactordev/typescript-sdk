@@ -35,7 +35,7 @@ const OPTIONS: PrefactorSessionOptions = {
   apiUrl: 'https://prefactor.example',
   apiToken: 'token',
   agentId: 'agent-1',
-  agentVersion: { external_identifier: '1.5.2', name: 'pi', description: 'pi' },
+  agentVersion: { external_identifier: '1.5.2' },
   agentSchemaVersion: { external_identifier: 'schema', span_type_schemas: [] },
   sdkHeaderEntry: '@prefactor/pi@0.0.0',
 };
