@@ -1,5 +1,11 @@
 # @prefactor/pi
 
+## 0.1.2
+
+### Patch Changes
+
+- [#104](https://github.com/prefactordev/typescript-sdk/pull/104) [`5f9b554`](https://github.com/prefactordev/typescript-sdk/commit/5f9b55406ccfc6d5e5a4f70013b19f798c027f06) Thanks [@joshgillies](https://github.com/joshgillies)! - pi now lists the extension as `@prefactor/pi` in its startup extensions list instead of `@prefactor/pi:dist`. The package registers a small `extensions/index.js` entry that re-exports the built extension, because pi names a packaged extension after its entry file's folder.
+
 ## 0.1.1
 
 ### Patch Changes
