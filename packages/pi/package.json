@@ -14,11 +14,12 @@
     }
   },
   "files": [
-    "dist"
+    "dist",
+    "extensions"
   ],
   "pi": {
     "extensions": [
-      "./dist/index.js"
+      "./extensions/index.js"
     ]
   },
   "keywords": [

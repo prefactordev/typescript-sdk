@@ -1,10 +1,12 @@
 import { describe, expect, test } from 'bun:test';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 type Manifest = {
   dependencies?: Record<string, string>;
   peerDependencies?: Record<string, string>;
+  files?: string[];
+  pi?: { extensions?: string[] };
 };
 
 function readManifest(packageDir: string): Manifest {
@@ -22,6 +24,20 @@ describe('@prefactor/pi package manifest', () => {
 
     for (const [name, range] of Object.entries(core.peerDependencies ?? {})) {
       expect(pi.dependencies?.[name]).toBe(range);
+    }
+  });
+
+  // pi labels a packaged extension by its entry's path, dropping a leading `extensions/` folder,
+  // so an entry there shows as the package name instead of `@prefactor/pi:dist`.
+  test('registers published extension entries under extensions/', () => {
+    const pi = readManifest('pi');
+    const entries = pi.pi?.extensions ?? [];
+
+    expect(entries).toEqual(['./extensions/index.js']);
+    for (const entry of entries) {
+      const folder = entry.replace(/^\.\//, '').split('/')[0];
+      expect(pi.files).toContain(folder);
+      expect(existsSync(join(import.meta.dir, '..', entry))).toBe(true);
     }
   });
 });
