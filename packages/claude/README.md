@@ -147,4 +147,4 @@ The Claude integration automatically captures:
 ## Requirements
 
 - Node.js >= 22.0.0
-- `@anthropic-ai/claude-agent-sdk` ^0.2.0
+- `@anthropic-ai/claude-agent-sdk` ^0.2.0 || ^0.3.0

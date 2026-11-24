@@ -24,7 +24,7 @@ This package depends on `@prefactor/core` for tracing infrastructure.
   - `transformParams`: Wraps tool execute functions to capture tool spans
   - `wrapGenerate`: Intercepts non-streaming LLM calls
   - `wrapStream`: Intercepts streaming LLM calls
-- Supports AI SDK versions `^6.0.0`.
+- Supports AI SDK versions `^6.0.0` and `^7.0.0`.
 - When working with the AI SDK, use the Skill provided in `.agents/skills/ai-sdk`
 
 ## Span conventions

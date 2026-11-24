@@ -541,6 +541,27 @@ describe('createTracedQuery', () => {
     expect(typeof wrapped.close).toBe('function');
   });
 
+  test('forwards control methods it does not know about, bound to the original query', async () => {
+    class QueryWithPrivateState {
+      #usage = { tokens: 42 };
+      async getFutureControl(): Promise<{ tokens: number }> {
+        return this.#usage;
+      }
+    }
+    const original = Object.assign(new QueryWithPrivateState(), createMockQueryStream());
+    const middleware = createTracedQuery(
+      (() => original) as unknown as ClaudeQuery,
+      createMockTracer().tracer,
+      createAgentManagerStub() as never,
+      { agentIdentifier: 'claude-test' },
+      createClaudeRuntimeController()
+    );
+
+    const wrapped = middleware.tracedQuery({ prompt: 'test' }) as unknown as QueryWithPrivateState;
+
+    expect(await wrapped.getFutureControl()).toEqual({ tokens: 42 });
+  });
+
   test('captures assistant content and closes the final llm span on result', async () => {
     const mock = createMockTracer();
     const middleware = createTracedQuery(

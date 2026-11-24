@@ -391,8 +391,12 @@ describe('HttpTransport', () => {
     await transport.close();
 
     expect(spanPayloads).toHaveLength(2);
-    expect((spanPayloads[0]?.payload as Record<string, unknown>).span_id).toBe('parent-span');
-    expect((spanPayloads[1]?.payload as Record<string, unknown>).span_id).toBe('child-span');
+    expect((spanPayloads[0]?.payload as Record<string, unknown> | undefined)?.span_id).toBe(
+      'parent-span'
+    );
+    expect((spanPayloads[1]?.payload as Record<string, unknown> | undefined)?.span_id).toBe(
+      'child-span'
+    );
     expect(spanPayloads[1]?.parent_span_id).toBe('backend-parent');
   });
 

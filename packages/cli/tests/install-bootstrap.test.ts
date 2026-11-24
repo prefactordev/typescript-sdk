@@ -298,25 +298,23 @@ printf '%s\n' prefactor-ok
         existing: ['.bash_login', '.profile'],
         expected: '.bash_login',
       },
-    ] as const)('$unameS $shell with $existing writes the export to $expected', async ({
-      unameS,
-      shell,
-      existing,
-      expected,
-    }) => {
-      for (const name of existing) {
-        writeFileSync(join(tempRoot, name), '# existing\n');
-      }
+    ] as const)(
+      '$unameS $shell with $existing writes the export to $expected',
+      async ({ unameS, shell, existing, expected }) => {
+        for (const name of existing) {
+          writeFileSync(join(tempRoot, name), '# existing\n');
+        }
 
-      const result = await runInstall({ shell, unameS });
-      expect(result.code).toBe(0);
-      expect(readFileSync(join(tempRoot, expected), 'utf8')).toContain(exportLine);
-      for (const name of ['.bashrc', '.bash_profile', '.bash_login', '.profile']) {
-        if (name !== expected && !(existing as readonly string[]).includes(name)) {
-          expect(existsSync(join(tempRoot, name))).toBe(false);
+        const result = await runInstall({ shell, unameS });
+        expect(result.code).toBe(0);
+        expect(readFileSync(join(tempRoot, expected), 'utf8')).toContain(exportLine);
+        for (const name of ['.bashrc', '.bash_profile', '.bash_login', '.profile']) {
+          if (name !== expected && !(existing as readonly string[]).includes(name)) {
+            expect(existsSync(join(tempRoot, name))).toBe(false);
+          }
         }
       }
-    });
+    );
 
     test('does not add a second export when the startup file already references the bin dir', async () => {
       const zshrc = join(tempRoot, '.zshrc');
