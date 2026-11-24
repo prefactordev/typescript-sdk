@@ -161,16 +161,18 @@ function decorateQueryStream(
   generator: AsyncGenerator<SDKMessage, void>,
   cleanupRun: () => void
 ): Query {
+  const returnAndCleanup = async (value?: undefined) => {
+    try {
+      return await generator.return(value);
+    } finally {
+      cleanupRun();
+    }
+  };
+
   const iteratorOverrides: Record<PropertyKey, unknown> = {
     [Symbol.asyncIterator]: () => generator,
     next: generator.next.bind(generator),
-    return: async (value?: undefined) => {
-      try {
-        return await generator.return(value);
-      } finally {
-        cleanupRun();
-      }
-    },
+    return: returnAndCleanup,
     throw: async (error?: unknown) => {
       try {
         return await generator.throw(error);
@@ -179,6 +181,18 @@ function decorateQueryStream(
       }
     },
   };
+
+  // `await using` must finish our spans and release the run, not just dispose the raw query.
+  const asyncDispose = (Symbol as { asyncDispose?: symbol }).asyncDispose;
+  if (asyncDispose) {
+    iteratorOverrides[asyncDispose] = async () => {
+      await returnAndCleanup();
+      const disposeOriginal = (stream as unknown as Record<symbol, unknown>)[asyncDispose];
+      if (typeof disposeOriginal === 'function') {
+        await disposeOriginal.call(stream);
+      }
+    };
+  }
 
   return new Proxy(stream, {
     get(target, property) {
