@@ -748,3 +748,49 @@ describe('ai middleware tool instrumentation', () => {
     ]);
   });
 });
+
+describe('ai middleware token usage', () => {
+  test.each([
+    ['AI SDK v5 flat counts', { inputTokens: 12, outputTokens: 7, totalTokens: 19 }],
+    [
+      'AI SDK v6+ nested totals',
+      {
+        inputTokens: { total: 12, noCache: 12, cacheRead: 0, cacheWrite: 0 },
+        outputTokens: { total: 7, text: 7, reasoning: 0 },
+      },
+    ],
+  ])('records token usage from %s', async (_label, usage) => {
+    const ended: Array<{ span: Span; options?: { tokenUsage?: unknown } }> = [];
+    const tracer: Tracer = {
+      startSpan: (options) =>
+        createSpan(`span-${options.spanType}`, options.spanType, options.inputs),
+      endSpan: (span, options) => {
+        ended.push({ span, options: options as { tokenUsage?: unknown } });
+      },
+      close: async () => {},
+      startAgentInstance: () => {},
+      finishAgentInstance: () => {},
+    } as unknown as Tracer;
+
+    const middleware = createPrefactorMiddleware(tracer) as {
+      wrapGenerate?: (arg: unknown) => Promise<unknown>;
+    };
+    await middleware.wrapGenerate?.({
+      doGenerate: async () => ({
+        content: [{ type: 'text', text: 'hi' }],
+        finishReason: 'stop',
+        usage,
+        warnings: [],
+      }),
+      params: {},
+      model: { provider: 'test', modelId: 'test' },
+    });
+
+    const llmEnd = ended.find((entry) => entry.span.spanType === 'ai-sdk:llm');
+    expect(llmEnd?.options?.tokenUsage).toEqual({
+      promptTokens: 12,
+      completionTokens: 7,
+      totalTokens: 19,
+    });
+  });
+});

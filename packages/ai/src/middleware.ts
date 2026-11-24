@@ -543,8 +543,8 @@ function extractStructuredTokenUsage(usage: Record<string, unknown>): TokenUsage
     return undefined;
   }
 
-  const promptTokens = getNestedTokenTotal(usage.inputTokens);
-  const completionTokens = getNestedTokenTotal(usage.outputTokens);
+  const promptTokens = getTokenCount(usage.inputTokens);
+  const completionTokens = getTokenCount(usage.outputTokens);
   return {
     promptTokens,
     completionTokens,
@@ -566,7 +566,11 @@ function extractLegacyTokenUsage(usage: Record<string, unknown>): TokenUsage | u
   };
 }
 
-function getNestedTokenTotal(value: unknown): number {
+/** Reads a token count as a plain number (AI SDK v5) or a `{ total }` object (v6+). */
+function getTokenCount(value: unknown): number {
+  if (typeof value === 'number') {
+    return value;
+  }
   return isRecord(value) && typeof value.total === 'number' ? value.total : 0;
 }
 

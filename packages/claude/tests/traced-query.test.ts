@@ -512,6 +512,43 @@ describe('createTracedQuery', () => {
     controlled.finish();
   });
 
+  test('finishes the agent span and releases the run when disposed with await using', async () => {
+    const mock = createMockTracer();
+    const controlled = createControlledQueryStream();
+    let originalDisposed = false;
+    Object.assign(controlled.stream, {
+      [Symbol.asyncDispose]: async () => {
+        originalDisposed = true;
+      },
+    });
+    const middleware = createTracedQuery(
+      (() => controlled.stream) as ClaudeQuery,
+      mock.tracer,
+      createAgentManagerStub() as never,
+      { agentIdentifier: 'claude-test' },
+      createClaudeRuntimeController()
+    );
+
+    {
+      await using query = middleware.tracedQuery({ prompt: 'first' });
+      controlled.push({
+        type: 'system',
+        subtype: 'init',
+        session_id: 'session-1',
+        model: 'claude-sonnet',
+      } as SDKMessage);
+      await query.next();
+    }
+
+    const agentEnd = mock.ended.find((entry) => entry.span.spanType === 'claude:agent');
+    expect(agentEnd?.outputs).toEqual({
+      'claude.finishReason': 'interrupted',
+    });
+    expect(originalDisposed).toBe(true);
+    expect(() => middleware.tracedQuery({ prompt: 'second' })).not.toThrow();
+    controlled.finish();
+  });
+
   test('forwards query control methods to the underlying stream', async () => {
     const calls: string[] = [];
     const middleware = createTracedQuery(
@@ -539,6 +576,27 @@ describe('createTracedQuery', () => {
     expect(calls).toEqual(['accountInfo', 'supportedModels']);
     expect(typeof wrapped.interrupt).toBe('function');
     expect(typeof wrapped.close).toBe('function');
+  });
+
+  test('forwards control methods it does not know about, bound to the original query', async () => {
+    class QueryWithPrivateState {
+      #usage = { tokens: 42 };
+      async getFutureControl(): Promise<{ tokens: number }> {
+        return this.#usage;
+      }
+    }
+    const original = Object.assign(new QueryWithPrivateState(), createMockQueryStream());
+    const middleware = createTracedQuery(
+      (() => original) as unknown as ClaudeQuery,
+      createMockTracer().tracer,
+      createAgentManagerStub() as never,
+      { agentIdentifier: 'claude-test' },
+      createClaudeRuntimeController()
+    );
+
+    const wrapped = middleware.tracedQuery({ prompt: 'test' }) as unknown as QueryWithPrivateState;
+
+    expect(await wrapped.getFutureControl()).toEqual({ tokens: 42 });
   });
 
   test('captures assistant content and closes the final llm span on result', async () => {

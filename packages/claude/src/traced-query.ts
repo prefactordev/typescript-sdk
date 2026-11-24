@@ -152,21 +152,27 @@ export function createClaudeRuntimeController(): ClaudeRuntimeController {
   };
 }
 
+/**
+ * Replaces the iterator protocol with the traced generator and forwards every other
+ * property to the original Query, so control methods from any SDK version pass through.
+ */
 function decorateQueryStream(
   stream: Query,
   generator: AsyncGenerator<SDKMessage, void>,
   cleanupRun: () => void
 ): Query {
-  return {
+  const returnAndCleanup = async (value?: undefined) => {
+    try {
+      return await generator.return(value);
+    } finally {
+      cleanupRun();
+    }
+  };
+
+  const iteratorOverrides: Record<PropertyKey, unknown> = {
     [Symbol.asyncIterator]: () => generator,
     next: generator.next.bind(generator),
-    return: async (value?: undefined) => {
-      try {
-        return await generator.return(value);
-      } finally {
-        cleanupRun();
-      }
-    },
+    return: returnAndCleanup,
     throw: async (error?: unknown) => {
       try {
         return await generator.throw(error);
@@ -174,25 +180,30 @@ function decorateQueryStream(
         cleanupRun();
       }
     },
-    interrupt: stream.interrupt.bind(stream),
-    setPermissionMode: stream.setPermissionMode.bind(stream),
-    setModel: stream.setModel.bind(stream),
-    setMaxThinkingTokens: stream.setMaxThinkingTokens.bind(stream),
-    applyFlagSettings: stream.applyFlagSettings.bind(stream),
-    initializationResult: stream.initializationResult.bind(stream),
-    supportedCommands: stream.supportedCommands.bind(stream),
-    supportedModels: stream.supportedModels.bind(stream),
-    supportedAgents: stream.supportedAgents.bind(stream),
-    mcpServerStatus: stream.mcpServerStatus.bind(stream),
-    accountInfo: stream.accountInfo.bind(stream),
-    rewindFiles: stream.rewindFiles.bind(stream),
-    reconnectMcpServer: stream.reconnectMcpServer.bind(stream),
-    toggleMcpServer: stream.toggleMcpServer.bind(stream),
-    setMcpServers: stream.setMcpServers.bind(stream),
-    streamInput: stream.streamInput.bind(stream),
-    stopTask: stream.stopTask.bind(stream),
-    close: stream.close.bind(stream),
   };
+
+  // `await using` must finish our spans and release the run, not just dispose the raw query.
+  const asyncDispose = (Symbol as { asyncDispose?: symbol }).asyncDispose;
+  if (asyncDispose) {
+    iteratorOverrides[asyncDispose] = async () => {
+      await returnAndCleanup();
+      const disposeOriginal = (stream as unknown as Record<symbol, unknown>)[asyncDispose];
+      if (typeof disposeOriginal === 'function') {
+        await disposeOriginal.call(stream);
+      }
+    };
+  }
+
+  return new Proxy(stream, {
+    get(target, property) {
+      if (Object.hasOwn(iteratorOverrides, property)) {
+        return iteratorOverrides[property];
+      }
+
+      const value: unknown = Reflect.get(target, property, target);
+      return typeof value === 'function' ? value.bind(target) : value;
+    },
+  });
 }
 
 async function* tapStream(
