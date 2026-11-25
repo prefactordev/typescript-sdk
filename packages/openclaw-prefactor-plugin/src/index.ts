@@ -23,7 +23,7 @@
  *
  * - **Gateway**: `gateway_start`, `gateway_stop`
  * - **Session**: `session_start`, `session_end`
- * - **Agent**: `before_agent_start`, `agent_end`
+ * - **Agent**: `before_prompt_build` (`before_agent_start` on older OpenClaw), `agent_end`
  * - **Compaction**: `before_compaction`, `after_compaction`
  * - **Tool**: `before_tool_call`, `after_tool_call`, `tool_result_persist`
  * - **Message**: `message_received`, `message_sending`, `message_sent`
@@ -49,7 +49,7 @@
  * @packageDocumentation
  */
 
-import type { OpenClawPluginApi } from 'openclaw/plugin-sdk';
+import type { OpenClawPluginApi } from 'openclaw/plugin-sdk/plugin-entry';
 import { z } from 'zod';
 import packageJson from '../package.json' with { type: 'json' };
 import { type Agent, type AgentConfig, createAgent } from './agent.js';
@@ -209,27 +209,23 @@ export default function register(api: OpenClawPluginApi) {
     });
   });
 
-  api.on('before_prompt_build', (event, ctx) => {
-    const sessionKey = ctx.sessionKey || 'unknown';
-    logger.info('before_prompt_build', {
-      sessionKey,
-      ctxKeys: Object.keys(ctx),
-      ctx: JSON.stringify(ctx).slice(0, 500),
-      eventKeys: Object.keys(event),
-      messageCount: event.messages?.length || 0,
-    });
-  });
-
-  api.on('before_agent_start', (event, ctx) => {
+  /**
+   * Starts the user_message and agent_run spans for a run. OpenClaw versions that fire
+   * both start hooks call this twice per run; the buffered message is consumed once and
+   * the second call reuses the open agent_run span.
+   */
+  const startAgentRun = (
+    hook: string,
+    event: { messages?: unknown[] },
+    ctx: { sessionKey?: string }
+  ): void => {
     const sessionKey = ctx.sessionKey;
     if (!sessionKey) {
-      logger.warn('prefactor_skipped_no_session_key', {
-        hook: 'before_agent_start',
-      });
+      logger.warn('prefactor_skipped_no_session_key', { hook });
       return;
     }
 
-    logger.info('before_agent_start', {
+    logger.info(hook, {
       sessionKey,
       ctxKeys: Object.keys(ctx),
       ctx: JSON.stringify(ctx).slice(0, 500),
@@ -240,23 +236,32 @@ export default function register(api: OpenClawPluginApi) {
     const userMsg = pendingUserMessage;
     pendingUserMessage = null;
 
-    const work = async () => {
-      if (userMsg) {
-        await sessionManager.createUserMessageSpan(sessionKey, { raw: userMsg });
-      }
-      const messages = (event.messages ?? []).slice(-3);
-      await sessionManager.createAgentRunSpan(sessionKey, {
+    const messages = (event.messages ?? []).slice(-3);
+    sessionManager
+      .startAgentRun(sessionKey, userMsg ? { raw: userMsg } : null, {
         event: { ...event, messages },
         ctx,
+      })
+      .catch((err) => {
+        logger.error('prefactor_agent_run_span_failed', {
+          sessionKey,
+          error: err instanceof Error ? err.message : String(err),
+        });
       });
-    };
+  };
 
-    work().catch((err) => {
-      logger.error('prefactor_agent_run_span_failed', {
-        sessionKey,
-        error: err instanceof Error ? err.message : String(err),
-      });
-    });
+  api.on('before_prompt_build', (event, ctx) => {
+    startAgentRun('before_prompt_build', event, ctx);
+  });
+
+  // OpenClaw before 2026.8 has `before_agent_start`, and early versions lack
+  // `before_prompt_build`. Newer versions log this registration as an ignored unknown hook.
+  const onLegacyHook = api.on.bind(api) as unknown as (
+    hookName: 'before_agent_start',
+    handler: (event: { messages?: unknown[] }, ctx: { sessionKey?: string }) => void
+  ) => void;
+  onLegacyHook('before_agent_start', (event, ctx) => {
+    startAgentRun('before_agent_start', event, ctx);
   });
 
   api.on('llm_input', (event, ctx) => {
@@ -605,15 +610,6 @@ export default function register(api: OpenClawPluginApi) {
   });
 
   // ==================== SUBAGENT LIFECYCLE ====================
-
-  api.on('subagent_spawning', (event, _ctx) => {
-    logger.info('subagent_spawning', {
-      childSessionKey: event.childSessionKey,
-      agentId: event.agentId,
-      label: event.label,
-      mode: event.mode,
-    });
-  });
 
   api.on('subagent_delivery_target', (event, _ctx) => {
     logger.info('subagent_delivery_target', {

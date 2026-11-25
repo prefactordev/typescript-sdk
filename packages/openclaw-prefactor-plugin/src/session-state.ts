@@ -163,6 +163,23 @@ export class SessionStateManager {
     return this.queue.enqueue(sessionKey, () => this._createAgentRunSpan(sessionKey, payload));
   }
 
+  /**
+   * Records the optional user message and opens (or reuses) the agent_run span as one
+   * queued operation, so a `closeAgentRunSpan` queued meanwhile runs after both.
+   */
+  async startAgentRun(
+    sessionKey: string,
+    userMessage: Record<string, unknown> | null,
+    payload: Record<string, unknown>
+  ): Promise<string | null> {
+    return this.queue.enqueue(sessionKey, async () => {
+      if (userMessage) {
+        await this._createUserMessageSpan(sessionKey, userMessage);
+      }
+      return this._createAgentRunSpan(sessionKey, payload);
+    });
+  }
+
   async closeAgentRunSpan(
     sessionKey: string,
     status: 'complete' | 'cancelled' | 'failed' = 'complete'

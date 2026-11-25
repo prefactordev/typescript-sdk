@@ -31,6 +31,11 @@ openclaw config set plugins.entries.openclaw-prefactor-plugin.config.apiToken "$
 openclaw config set plugins.entries.openclaw-prefactor-plugin.config.apiUrl "${PREFACTOR_API_URL}"
 ```
 
+5. Allow the plugin to observe conversations. Recent OpenClaw versions only deliver agent and LLM hooks (`before_prompt_build`, `llm_input`, `llm_output`, `agent_end`) to non-bundled plugins with this permission; without it, OpenClaw skips those hooks and agent runs aren't traced:
+```bash
+openclaw config set plugins.entries.openclaw-prefactor-plugin.hooks.allowConversationAccess true
+```
+
 ## Configuration
 
 Enable the plugin in `~/.openclaw/.openclaw.json`:
@@ -41,6 +46,9 @@ Enable the plugin in `~/.openclaw/.openclaw.json`:
     "entries": {
       "openclaw-prefactor-plugin": {
         "enabled": true,
+        "hooks": {
+          "allowConversationAccess": true
+        },
         "config": {
           "agentId": "${PREFACTOR_AGENT_ID}",
           "apiToken": "${PREFACTOR_API_TOKEN}",
@@ -121,7 +129,7 @@ The plugin creates the following span hierarchy:
 
 ## Hook Handlers
 
-The plugin registers 14 hooks with OpenClaw:
+The plugin registers these hooks with OpenClaw, plus others used only for logging:
 
 | Hook | Category | Action |
 |------|----------|--------|
@@ -129,14 +137,15 @@ The plugin registers 14 hooks with OpenClaw:
 | `gateway_stop` | Gateway | Emergency cleanup |
 | `session_start` | Session | Logging |
 | `session_end` | Session | Close all spans, finish agent instance |
-| `before_agent_start` | Agent | Create user_message + agent_run spans |
+| `before_prompt_build` | Agent | Create user_message + agent_run spans |
+| `before_agent_start` | Agent | Same as `before_prompt_build`, for OpenClaw versions before 2026.8 |
 | `agent_end` | Agent | Close agent_run, create assistant_response |
 | `before_compaction` | Compaction | Logging |
 | `after_compaction` | Compaction | Logging |
 | `before_tool_call` | Tool | Create tool_call span |
 | `after_tool_call` | Tool | Logging (hook is broken in OpenClaw) |
 | `tool_result_persist` | Tool | Close tool_call span |
-| `message_received` | Message | Buffer message for before_agent_start |
+| `message_received` | Message | Buffer message for the agent run start hook |
 | `message_sending` | Message | Logging |
 | `message_sent` | Message | Logging |
 
