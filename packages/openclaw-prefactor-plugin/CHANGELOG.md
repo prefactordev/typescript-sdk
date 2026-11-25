@@ -1,5 +1,11 @@
 # @prefactor/openclaw-prefactor-plugin
 
+## 2.0.2
+
+### Patch Changes
+
+- [#109](https://github.com/prefactordev/typescript-sdk/pull/109) [`4604986`](https://github.com/prefactordev/typescript-sdk/commit/4604986727a079d5cfddcd1d22202d5280fce7a3) Thanks [@simonrussell](https://github.com/simonrussell)! - Trace agent runs on OpenClaw 2026.8 and later. Those versions removed the `before_agent_start` hook the plugin used to start the `user_message` and `agent_run` spans, so agent runs went untraced. The plugin now starts them from `before_prompt_build`, and still listens to `before_agent_start` so older OpenClaw versions keep working. It also stops registering the removed `subagent_spawning` hook. On recent OpenClaw, set `plugins.entries.openclaw-prefactor-plugin.hooks.allowConversationAccess` to `true`, or OpenClaw won't deliver the agent and LLM hooks the plugin traces.
+
 ## 2.0.1
 
 ### Patch Changes
