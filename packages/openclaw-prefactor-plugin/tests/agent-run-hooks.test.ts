@@ -85,4 +85,16 @@ describe('agent run start hooks', () => {
     expect(createdSpanSchemas.filter((s) => s === 'openclaw:user_message')).toHaveLength(1);
     expect(createdSpanSchemas.filter((s) => s === 'openclaw:agent_run')).toHaveLength(1);
   });
+
+  test('agent_end right after both start hooks does not leave a second agent run open', async () => {
+    const handlers = registerWithFakeApi();
+
+    fire(handlers, 'message_received', { from: 'user-1', content: 'hello' });
+    fire(handlers, 'before_agent_start', { messages: [] });
+    fire(handlers, 'before_prompt_build', { prompt: 'hello', messages: [] });
+    fire(handlers, 'agent_end', { success: true, messages: [] });
+    await waitForSpans(4);
+
+    expect(createdSpanSchemas.filter((s) => s === 'openclaw:agent_run')).toHaveLength(1);
+  });
 });

@@ -23,7 +23,7 @@
  *
  * - **Gateway**: `gateway_start`, `gateway_stop`
  * - **Session**: `session_start`, `session_end`
- * - **Agent**: `before_agent_start`, `agent_end`
+ * - **Agent**: `before_prompt_build` (`before_agent_start` on older OpenClaw), `agent_end`
  * - **Compaction**: `before_compaction`, `after_compaction`
  * - **Tool**: `before_tool_call`, `after_tool_call`, `tool_result_persist`
  * - **Message**: `message_received`, `message_sending`, `message_sent`
@@ -212,7 +212,7 @@ export default function register(api: OpenClawPluginApi) {
   /**
    * Starts the user_message and agent_run spans for a run. OpenClaw versions that fire
    * both start hooks call this twice per run; the buffered message is consumed once and
-   * `createAgentRunSpan` reuses the open agent_run span.
+   * the second call reuses the open agent_run span.
    */
   const startAgentRun = (
     hook: string,
@@ -236,23 +236,18 @@ export default function register(api: OpenClawPluginApi) {
     const userMsg = pendingUserMessage;
     pendingUserMessage = null;
 
-    const work = async () => {
-      if (userMsg) {
-        await sessionManager.createUserMessageSpan(sessionKey, { raw: userMsg });
-      }
-      const messages = (event.messages ?? []).slice(-3);
-      await sessionManager.createAgentRunSpan(sessionKey, {
+    const messages = (event.messages ?? []).slice(-3);
+    sessionManager
+      .startAgentRun(sessionKey, userMsg ? { raw: userMsg } : null, {
         event: { ...event, messages },
         ctx,
+      })
+      .catch((err) => {
+        logger.error('prefactor_agent_run_span_failed', {
+          sessionKey,
+          error: err instanceof Error ? err.message : String(err),
+        });
       });
-    };
-
-    work().catch((err) => {
-      logger.error('prefactor_agent_run_span_failed', {
-        sessionKey,
-        error: err instanceof Error ? err.message : String(err),
-      });
-    });
   };
 
   api.on('before_prompt_build', (event, ctx) => {
